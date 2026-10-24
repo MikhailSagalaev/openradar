@@ -1141,4 +1141,36 @@ describe('http server', () => {
 
     await runtime.store.close();
   });
+
+  it('renders extension guide page, download endpoint, ping, and footer link', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: 'true' });
+    const app = createApp(runtime);
+
+    // 1. Ping endpoint
+    const pingRes = await app.request('/api/ping');
+    expect(pingRes.status).toBe(200);
+    const pingJson = await pingRes.json();
+    expect(pingJson.ok).toBe(true);
+
+    // 2. Extension guide page is accessible and contains instructions & download link
+    const extRes = await app.request('/extension');
+    expect(extRes.status).toBe(200);
+    const html = await extRes.text();
+    expect(html).toContain('Расширение для браузера');
+    expect(html).toContain('/extension/download');
+    expect(html).toContain('chrome://extensions/');
+
+    // 3. Footer on main page contains extension link
+    const indexRes = await app.request('/');
+    expect(indexRes.status).toBe(200);
+    const indexHtml = await indexRes.text();
+    expect(indexHtml).toContain('href="/extension"');
+
+    // 4. Download endpoint returns application/zip
+    const downloadRes = await app.request('/extension/download');
+    expect(downloadRes.status).toBe(200);
+    expect(downloadRes.headers.get('content-type')).toContain('application/zip');
+
+    await runtime.store.close();
+  });
 });

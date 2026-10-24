@@ -90,6 +90,7 @@ export interface ExtensionPageData {
   webhookSources: SourceRecord[];
   auth?: AuthDisplay;
   lang?: SupportedLang;
+  isAuthed?: boolean;
 }
 
 const KIND_LABELS: Record<string, string> = {
@@ -935,6 +936,7 @@ ${input.body}
       <p class="muted" style="margin:0">${escapeHtml(t.footerLicense)}</p>
     </div>
     <div class="footer-nav">
+      <a href="/extension">${escapeHtml(t.extensionGuide)}</a>
       <a href="https://github.com/MikhailSagalaev/radar-oss" target="_blank" rel="noopener noreferrer">GitHub</a>
       <a href="https://github.com/MikhailSagalaev/radar-oss/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">${escapeHtml(t.licenseLink)}</a>
       <a href="/feed.rss">${escapeHtml(t.rssFeed)}</a>
@@ -1783,7 +1785,7 @@ export function renderNotFound(version: string, lang: SupportedLang = 'ru'): str
 }
 
 export function renderExtensionPage(data: ExtensionPageData): string {
-  const { version, webhookSources, auth, lang } = data;
+  const { version, webhookSources, auth, lang, isAuthed } = data;
   const script = `<script>
 document.addEventListener('DOMContentLoaded', () => {
   const urlEl = document.getElementById('detected-url');
@@ -1815,23 +1817,29 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>`;
 
-  const sourcesList = webhookSources.length
-    ? webhookSources
-        .map(
-          (s) => `
-      <div style="background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div>
-          <div style="font-weight:600;font-size:13px">${escapeHtml(s.title)}</div>
-          <div class="muted small">ID: <code id="src-id-${escapeHtml(s.id)}">${escapeHtml(s.id)}</code></div>
-        </div>
-        <button class="btn ghost" data-copy="src-id-${escapeHtml(s.id)}" type="button" style="font-size:11px;padding:4px 8px">Копировать ID</button>
-      </div>`
-        )
-        .join('')
-    : `<div class="empty" style="padding:20px 14px">
-        <div style="font-weight:600;margin-bottom:4px">Нет активного Webhook-источника</div>
-        <div class="muted small" style="margin-bottom:12px">Создайте источник типа Webhook, чтобы принимать лиды из браузера.</div>
-        <a class="btn" href="/sources/new">Создать источник Webhook</a>
+  const sourcesList = isAuthed
+    ? (webhookSources.length
+        ? webhookSources
+            .map(
+              (s) => `
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div>
+              <div style="font-weight:600;font-size:13px">${escapeHtml(s.title)}</div>
+              <div class="muted small">ID: <code id="src-id-${escapeHtml(s.id)}">${escapeHtml(s.id)}</code></div>
+            </div>
+            <button class="btn ghost" data-copy="src-id-${escapeHtml(s.id)}" type="button" style="font-size:11px;padding:4px 8px">Копировать ID</button>
+          </div>`
+            )
+            .join('')
+        : `<div class="empty" style="padding:20px 14px">
+            <div style="font-weight:600;margin-bottom:4px">Нет активного Webhook-источника</div>
+            <div class="muted small" style="margin-bottom:12px">Создайте источник типа Webhook, чтобы принимать лиды из браузера.</div>
+            <a class="btn" href="/sources/new">Создать источник Webhook</a>
+          </div>`)
+    : `<div style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px">
+        <div style="font-weight:600;font-size:12.5px;margin-bottom:4px">Параметры источников</div>
+        <div class="muted small" style="margin-bottom:12px">Чтобы увидеть список ваших Webhook-источников и скопировать их ID, войдите в панель управления.</div>
+        <a class="btn ghost" href="/login" style="font-size:12px;padding:5px 12px;text-decoration:none">Войти в систему →</a>
       </div>`;
 
   const body = `

@@ -539,16 +539,20 @@ export function createApp(runtime: Runtime): Hono {
   });
 
   app.get('/extension', async (c) => {
-    if (!await canRead(c, runtime)) return c.redirect('/login');
     const lang = resolveLang(c);
-    const allSources = await runtime.store.listSources();
-    const webhookSources = allSources.filter((s) => s.kind === 'webhook' && s.enabled);
+    const isAuthed = await canRead(c, runtime);
+    let webhookSources: SourceRecord[] = [];
+    if (isAuthed) {
+      const allSources = await runtime.store.listSources();
+      webhookSources = allSources.filter((s) => s.kind === 'webhook' && s.enabled);
+    }
     return c.html(
       renderExtensionPage({
         version: VERSION,
         webhookSources,
         auth: await getAuthDisplay(c, runtime),
         lang,
+        isAuthed,
       }),
     );
   });

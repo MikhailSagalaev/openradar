@@ -91,6 +91,7 @@ export interface Translations {
   rssFeed: string;
   s3Delta: string;
   systemStatus: string;
+  extensionGuide: string;
   // Submit page
   submitTitle: string;
   submitSubtitle: string;
@@ -207,6 +208,7 @@ export const RU: Translations = {
   rssFeed: 'RSS фид',
   s3Delta: 'S3 Delta Stream',
   systemStatus: 'Статус системы',
+  extensionGuide: 'Расширение для браузера',
   submitTitle: 'Добавить по ссылке',
   submitSubtitle: 'Автоматический сбор описания вакансии или заказа через разметку страницы',
   urlPlaceholder: 'Вставьте ссылку на вакансию или заказ (например, hh.ru, habr.com, vc.ru...)',
@@ -320,6 +322,7 @@ export const EN: Translations = {
   rssFeed: 'RSS feed',
   s3Delta: 'S3 Delta Stream',
   systemStatus: 'System status',
+  extensionGuide: 'Browser Extension',
   submitTitle: 'Submit by URL',
   submitSubtitle: 'Automated extraction of job or gig details using page schema',
   urlPlaceholder: 'Paste link to vacancy or order (e.g. hh.ru, habr.com, vc.ru...)',
