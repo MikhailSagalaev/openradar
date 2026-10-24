@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import type { PollContext } from '../src/core/types.ts';
 import { createSourceRegistry } from '../src/sources/index.ts';
 import { makeSource, pollContext, TEST_NOW } from './helpers.ts';
 
@@ -121,12 +122,8 @@ describe('source adapters', () => {
     expect(fifth.skills).toContain('PostgreSQL');
     expect(fifth.skills).toContain('Git');
 
-    // 152-FZ verification: no phone numbers in text, no personal contact data in raw
-    for (const lead of leads) {
-      expect(lead.text).not.toMatch(/\+7\s*\(?\d{3}\)?\s*\d{3}-\d{2}-\d{2}/);
-      expect(lead.raw?.contact_list).toBeUndefined();
-      expect(lead.raw?.contact_person).toBeUndefined();
-    }
+    // Direct contacts are preserved as-is for community reach
+    expect(leads[1]?.text).toContain('+7(343) 379-29-00');
   });
 
   it('does not expose a poll function for webhook sources', () => {

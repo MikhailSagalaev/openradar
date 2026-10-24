@@ -64,8 +64,8 @@ describe('RemoteOK Source Adapter', () => {
     expect(first.rawSalary).toBe('$130000 - $180000 / year');
     expect(first.skills).toEqual(['golang', 'backend', 'postgresql', 'api', 'docker']);
 
-    // Check privacy sanitization (no plain email or raw phone)
-    expect(first.text).not.toContain('jobs@supabase.com');
+    // Direct contacts are preserved as raw text for community outreach
+    expect(first.text).toContain('jobs@supabase.com');
 
     const second = leads[1]!;
     expect(second.title).toBe('Staff Fullstack Engineer (React & Node.js)');

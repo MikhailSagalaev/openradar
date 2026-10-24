@@ -30,7 +30,7 @@ The OpenRadar Solution:
    - High-performance Hono SSR (TTFB < 25ms, zero SPA bloat).
    - PostgreSQL 17 + pgvector halfvec(384) (FP16): vector deduplication in RAM with 2x memory reduction.
    - Lakehouse storage: hot records in PostgreSQL, historical partitions in S3 Parquet, analyzed via DuckDB.
-   - Enterprise security: SSRF DNS-resolver guard, CSRF Origin guard, 152-FZ / GDPR privacy scrub.
+   - Enterprise security & Direct Outreach: SSRF DNS-resolver guard, CSRF Origin guard, raw uncensored direct client contacts (phone, email, messengers) directly to the community without paywalls or redaction.
    - Swiss typography: text and lines only, zero emojis, native system font stack (CLS = 0).
 
 Code: github.com/MikhailSagalaev/radar-oss
@@ -132,9 +132,9 @@ Variables:
 
 ---
 
-## 6. Enterprise Security and Privacy (152-FZ & GDPR)
+## 6. Enterprise Security and Raw Uncensored Data Philosophy
 
-1. **Strict Privacy Scrubbing (`src/core/privacy.ts`):** Personal phone numbers, private messenger handles, and personal email addresses are sanitized before database insertion. Public cards retain only the project scope and a direct link to the original verified source.
+1. **Raw Direct Contacts (Zero Censorship / Zero Paywalls):** Unlike corporate platforms that lock contacts behind paywalls or redact communication channels under bureaucratic pretexts (such as 152-FZ / GDPR data scrubbing), OpenRadar preserves 100% raw, direct contact information (emails, direct phone numbers, Telegram handles) straight for the engineering community so talent and clients connect immediately.
 2. **SSRF DNS-Resolver Guard (`src/pipeline/preview.ts`):** When previewing external links, the resolver resolves all IP addresses of the destination host. Requests to private, loopback, or cloud metadata ranges (`10.0.0.0/8`, `127.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.169.254`, `::1`) are aborted before initiating the connection.
 3. **CSRF & Origin Guard (`sameOrigin`):** Mutating HTTP methods (`POST`, `PATCH`, `DELETE`) require explicit Origin validation or Bearer tokens.
 4. **Anti-Stored XSS:** Outbound links are strictly validated against `http:` and `https:` schemes, preventing `javascript:` and `data:` URI attacks.
