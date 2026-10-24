@@ -7,10 +7,18 @@ import type { Lead } from '../core/types.ts';
 import type { Store } from '../core/store.ts';
 import { estimateJaccardFromSketches } from '../core/fingerprint.ts';
 
+// Small per-URL cache so the public endpoint does not re-scan the store on every hit.
+const CACHE_TTL_MS = 60_000;
+const cache = new Map<string, { at: number; result: XrayResponse }>();
+
 export interface XrayMarketStats {
   median_salary: number;
   percentile_25: number;
   percentile_75: number;
+  /** How many real salary points backed the percentiles. */
+  sample_size: number;
+  /** True when the sample is too small: the percentiles are placeholders. */
+  insufficient_data: boolean;
   similar_count: number;
   duplicate_count: number;
 }
@@ -41,6 +49,10 @@ const COMMON_TECH_KEYWORDS = [
 
 export async function computeXray(url: string, store: Store): Promise<XrayResponse> {
   const normUrl = url.trim().replace(/\/+$/, '');
+  const cached = cache.get(normUrl);
+  if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
+    return cached.result;
+  }
   const allLeads = await store.listLeads({ limit: 300 });
 
   // 1. Locate matching lead by url or canonicalUrl
@@ -88,8 +100,9 @@ export async function computeXray(url: string, store: Store): Promise<XrayRespon
   let p25 = 2200;
   let median = 3200;
   let p75 = 4500;
+  const insufficientData = salaries.length < 3;
 
-  if (salaries.length >= 3) {
+  if (!insufficientData) {
     p25 = salaries[Math.floor(salaries.length * 0.25)] ?? 2200;
     median = salaries[Math.floor(salaries.length * 0.50)] ?? 3200;
     p75 = salaries[Math.floor(salaries.length * 0.75)] ?? 4500;
@@ -135,7 +148,7 @@ export async function computeXray(url: string, store: Store): Promise<XrayRespon
     }
   }
 
-  return {
+  const response: XrayResponse = {
     found: Boolean(matchedLead),
     lead: matchedLead
       ? {
@@ -153,9 +166,14 @@ export async function computeXray(url: string, store: Store): Promise<XrayRespon
       median_salary: median,
       percentile_25: p25,
       percentile_75: p75,
+      sample_size: salaries.length,
+      insufficient_data: insufficientData,
       similar_count: similarLeads.length,
       duplicate_count: duplicateCount,
     },
     source_trust: sourceTrust,
   };
+  if (cache.size > 500) cache.clear();
+  cache.set(normUrl, { at: Date.now(), result: response });
+  return response;
 }

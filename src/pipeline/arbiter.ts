@@ -3,14 +3,41 @@
  * Background verification and slashing engine against scam and false reporting.
  */
 
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { assertSafeUrl } from '../core/ssrf.ts';
+import { decryptPrivateKey, encryptPrivateKey } from '../net/keys.ts';
 import type { Lead, LeadStatus } from '../core/types.ts';
 import type { Store, MeshNodeRecord } from '../core/store.ts';
-import { generateKeyPair, type KeyPair } from '../net/keys.ts';
+import { generateKeyPair, importPrivateKey, type KeyPair } from '../net/keys.ts';
 import { buildLeadAttestationEvent, RadarEventKinds } from '../net/protocol.ts';
 import { computeMinHashSketch, estimateJaccardFromSketches } from '../core/fingerprint.ts';
 
 export type ArbiterVerdict = 'active' | 'closed' | 'scam' | 'inconclusive';
+
+/**
+ * Loads the persistent arbiter identity (encrypted at rest with the passphrase,
+ * AES-256-GCM + scrypt) or creates one on first run. A stable key is required
+ * so Web-of-Trust can attribute attestations to this node.
+ */
+export function loadOrCreateServerKeys(
+  passphrase: string,
+  dataDir = process.env.RADAR_DATA_DIR || join(process.cwd(), 'data'),
+): KeyPair {
+  const keyPath = join(dataDir, 'arbiter-key.enc.json');
+  if (existsSync(keyPath)) {
+    const storage = JSON.parse(readFileSync(keyPath, 'utf8'));
+    return importPrivateKey(decryptPrivateKey(storage, passphrase));
+  }
+  const keypair = generateKeyPair();
+  if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
+  writeFileSync(
+    keyPath,
+    JSON.stringify({ npub: keypair.npub, ...encryptPrivateKey(keypair.privKey, passphrase) }, null, 2),
+    { mode: 0o600 },
+  );
+  return keypair;
+}
 
 export interface ArbiterEvaluation {
   verdict: ArbiterVerdict;
@@ -71,6 +98,21 @@ export function evaluateContentDeterministically(
     };
   }
 
+  // MinHash divergence check runs BEFORE stop-patterns: on an SPA shell,
+  // redirect or login-wall the patterns would match unrelated site chrome.
+  if (statusCode >= 200 && statusCode < 300 && originalMinHash) {
+    const pageSketch = computeMinHashSketch(htmlOrText);
+    const similarity = estimateJaccardFromSketches(pageSketch, originalMinHash);
+    if (similarity < 0.35) {
+      return {
+        verdict: 'inconclusive',
+        confidence: 0.50,
+        reason: `MinHash divergence (J=${similarity.toFixed(2)} < 0.35): probable SPA skeleton, redirect or login-wall`,
+        httpCode: statusCode,
+      };
+    }
+  }
+
   for (const pattern of SCAM_STOP_PATTERNS) {
     if (pattern.test(htmlOrText)) {
       return {
@@ -94,19 +136,6 @@ export function evaluateContentDeterministically(
   }
 
   if (statusCode >= 200 && statusCode < 300) {
-    if (originalMinHash) {
-      const pageSketch = computeMinHashSketch(htmlOrText);
-      const similarity = estimateJaccardFromSketches(pageSketch, originalMinHash);
-      if (similarity < 0.35) {
-        return {
-          verdict: 'inconclusive',
-          confidence: 0.50,
-          reason: `MinHash divergence (J=${similarity.toFixed(2)} < 0.35): probable SPA skeleton, redirect or login-wall`,
-          httpCode: statusCode,
-        };
-      }
-    }
-
     return {
       verdict: 'active',
       confidence: 0.90,
@@ -115,8 +144,9 @@ export function evaluateContentDeterministically(
     };
   }
 
+  // 403/429 (bot protection), 5xx and anything else must never kill a lead.
   return {
-    verdict: 'active',
+    verdict: 'inconclusive',
     confidence: 0.50,
     reason: `Undetermined response status ${statusCode}`,
     httpCode: statusCode,
@@ -236,14 +266,14 @@ export async function evaluateUrl(
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes('abort') || msg.includes('timeout')) {
       return {
-        verdict: 'closed',
-        confidence: 0.70,
+        verdict: 'inconclusive',
+        confidence: 0.50,
         reason: `Request timeout (${timeoutMs}ms)`,
       };
     }
     return {
-      verdict: 'closed',
-      confidence: 0.85,
+      verdict: 'inconclusive',
+      confidence: 0.50,
       reason: `Connection error: ${msg}`,
     };
   } finally {
@@ -347,8 +377,10 @@ export async function arbitrateLead(
       });
     } else if (evaluation.verdict === 'active') {
       lead.verification_state = 'verified_active';
-      // Restore status if it was prematurely rejected by community votes
-      if (lead.status === 'rejected') {
+      // Restore status only for mesh-exclusive leads: connector-sourced leads
+      // may be 'rejected' by the operator funnel or community votes, and the
+      // arbiter must not override that decision.
+      if (lead.is_mesh_exclusive && lead.status === 'rejected') {
         lead.status = 'new';
         await ctx.store.updateLeadStatus(lead.id, 'new');
       }
@@ -361,14 +393,15 @@ export async function arbitrateLead(
           const node = await ctx.store.getMeshNode(pubkey);
           if (node) {
             const slashedTrust = Math.max(0.01, node.trust_score * 0.5);
+            const nextFalseReports = (node.false_reports_count ?? 0) + 1;
             await ctx.store.upsertMeshNode({
               pubkey: node.pubkey,
               npub: node.npub,
               trust_score: slashedTrust,
+              false_reports_count: nextFalseReports,
             });
-            // Update node fields
             node.trust_score = slashedTrust;
-            node.false_reports_count += 1;
+            node.false_reports_count = nextFalseReports;
           }
         }
       }

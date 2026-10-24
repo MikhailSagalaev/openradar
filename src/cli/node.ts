@@ -6,7 +6,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { generateKeyPair, importPrivateKey, type KeyPair } from '../net/keys.ts';
+import {
+  decryptPrivateKey,
+  encryptPrivateKey,
+  generateKeyPair,
+  importPrivateKey,
+  type KeyPair,
+} from '../net/keys.ts';
 import { RelayPool, DEFAULT_RELAYS } from '../net/relay-pool.ts';
 import {
   buildRadarLeadEvent,
@@ -37,19 +43,35 @@ export function resolveOrCreateNodeKey(customKeyPath?: string): KeyPair {
     return importPrivateKey(envPriv);
   }
 
+  const passphrase = process.env.RADAR_NODE_PASSPHRASE;
   const defaultDir = join(homedir(), '.radar');
   const keyPath = customKeyPath || join(defaultDir, 'node_key.json');
 
   if (existsSync(keyPath)) {
     try {
       const data = JSON.parse(readFileSync(keyPath, 'utf8'));
+      if (data.ciphertext) {
+        if (!passphrase) {
+          throw new Error(`Key file ${keyPath} is encrypted: set RADAR_NODE_PASSPHRASE to decrypt it`);
+        }
+        return importPrivateKey(decryptPrivateKey(data, passphrase));
+      }
+      // Legacy plaintext key file (v0.5.0 and earlier)
       if (data.privKey) {
         return importPrivateKey(data.privKey);
       }
-    } catch {}
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('RADAR_NODE_PASSPHRASE')) throw err;
+    }
   }
 
-  // Generate a fresh keypair and persist it
+  if (!passphrase) {
+    throw new Error(
+      'RADAR_NODE_PASSPHRASE is required to encrypt the node key file (or provide RADAR_NODE_PRIVKEY/NSEC directly)',
+    );
+  }
+
+  // Generate a fresh keypair and persist it encrypted (AES-256-GCM + scrypt)
   const keypair = generateKeyPair();
   try {
     if (!existsSync(defaultDir)) {
@@ -60,10 +82,9 @@ export function resolveOrCreateNodeKey(customKeyPath?: string): KeyPair {
       JSON.stringify(
         {
           npub: keypair.npub,
-          nsec: keypair.nsec,
           pubKey: keypair.pubKey,
-          privKey: keypair.privKey,
           createdAt: new Date().toISOString(),
+          ...encryptPrivateKey(keypair.privKey, passphrase),
         },
         null,
         2,

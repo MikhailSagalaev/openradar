@@ -193,21 +193,14 @@ export async function buildAndSignExtensionLead(leadData, keypair) {
   };
 
   const id = await computeEventId(unsigned);
-  // Pseudo-Schnorr signature for sandbox/fallback or external NIP-07
-  let sig = await sha256Hex(`${id}:${keypair.privKey}`).then((h) => h + h);
 
-  if (typeof window !== 'undefined' && (window).nostr && (window).nostr.signEvent) {
-    try {
-      const signedByNip07 = await (window).nostr.signEvent(unsigned);
-      return signedByNip07;
-    } catch {
-      // Fallback to local key
-    }
+  // Signing requires a NIP-07 signer (window.nostr, e.g. Alby). There is no
+  // local fallback: a pseudo-signature would make events trivially forgeable.
+  if (typeof window === 'undefined' || !(window).nostr || !(window).nostr.signEvent) {
+    throw new Error(
+      'NIP-07 signer required: install a Nostr wallet extension (window.nostr) to publish radar/1 events',
+    );
   }
 
-  return {
-    ...unsigned,
-    id,
-    sig,
-  };
+  return await (window).nostr.signEvent(unsigned);
 }

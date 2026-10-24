@@ -83,10 +83,11 @@ describe('AI Arbiter (Grokipedia Pattern & Slashing)', () => {
       });
     }
 
-    // Live vacancy
+    // Live vacancy (mesh-exclusive: the arbiter owns its lifecycle)
     const lead = createMockLead({
       id: 'lead-live-target',
       status: 'rejected', // Was prematurely rejected by community votes
+      is_mesh_exclusive: true,
     });
     await store.insertLead(lead);
 
@@ -119,6 +120,32 @@ describe('AI Arbiter (Grokipedia Pattern & Slashing)', () => {
       const node = await store.getMeshNode(pubkey);
       expect(node).not.toBeNull();
       expect(node!.trust_score).toBeCloseTo(0.30, 2);
+    }
+  });
+
+  it('never kills a lead on connection errors or bot-protection statuses', async () => {
+    const store = new MemoryStore();
+
+    const networkFailures: Array<typeof fetch> = [
+      (async () => { throw new Error('ECONNRESET'); }) as any,
+      (async () => { throw new Error('The operation was aborted'); }) as any,
+      (async () => new Response('Blocked', { status: 403 })) as any,
+      (async () => new Response('Slow down', { status: 429 })) as any,
+      (async () => new Response('Boom', { status: 500 })) as any,
+    ];
+
+    for (let i = 0; i < networkFailures.length; i++) {
+      const lead = createMockLead({ id: `lead-net-${i}` });
+      await store.insertLead(lead);
+      const evaluation = await arbitrateLead(lead.id, {
+        store,
+        fetchImpl: networkFailures[i]!,
+      });
+      expect(evaluation.verdict).toBe('inconclusive');
+      const updated = await store.getLead(lead.id);
+      expect(updated?.verification_state).not.toBe('killed_closed');
+      expect(updated?.verification_state).not.toBe('killed_scam');
+      expect(updated?.status).not.toBe('rejected');
     }
   });
 

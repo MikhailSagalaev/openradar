@@ -57,6 +57,8 @@ describe('Ghost Job & Salary X-Ray API & Extension', () => {
       minhash_sketch: sketch,
       verification_state: 'verified_active',
     };
+    await runtime.store.createSource({ id: 'src-1', kind: 'webhook', title: 'XRay Source 1' });
+    await runtime.store.createSource({ id: 'src-2', kind: 'webhook', title: 'XRay Source 2' });
     await runtime.store.insertLead(targetLead);
 
     // Duplicate lead (same titleKey / minHash)
