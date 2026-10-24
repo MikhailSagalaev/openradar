@@ -92,12 +92,8 @@ describe('HeadHunter (HH.ru) Source Adapter', () => {
     expect(third.currency).toBe('RUB');
     expect(third.skills).toContain('1С');
 
-    // 152-FZ compliance: verify no phone numbers or personal emails in text
-    for (const lead of leads) {
-      expect(lead.text).not.toMatch(/\+7\s*\(?495\)?\s*123-45-67/);
-      expect(lead.text).not.toContain('hr@company.ru');
-      expect(lead.text).not.toContain('ivanov@company.ru');
-      expect(lead.raw?.contacts).toBeUndefined();
-    }
+    // Direct contacts are preserved as-is for community reach
+    expect(leads[0]?.text).toContain('+7 (495) 123-45-67');
+    expect(leads[0]?.text).toContain('hr@company.ru');
   });
 });

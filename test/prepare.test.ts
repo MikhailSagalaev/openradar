@@ -38,7 +38,7 @@ describe('prepareRawLead', () => {
     expect(prepared.text.endsWith('…')).toBe(true);
   });
 
-  it('strips personal contacts from any adapter text (152-ФЗ)', () => {
+  it('preserves direct personal contacts in raw lead text without censorship', () => {
     const prepared = prepareRawLead(
       {
         sourceId: source.id,
@@ -48,8 +48,7 @@ describe('prepareRawLead', () => {
       source,
       TEST_NOW,
     );
-    expect(prepared.text).not.toContain('ivanov@gmail.com');
-    expect(prepared.text).not.toContain('+7 999 123-45-67');
-    expect(prepared.text).toContain('152-ФЗ');
+    expect(prepared.text).toContain('ivanov@gmail.com');
+    expect(prepared.text).toContain('+7 999 123-45-67');
   });
 });
