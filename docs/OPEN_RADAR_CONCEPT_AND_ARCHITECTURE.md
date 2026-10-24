@@ -2,7 +2,7 @@
 
 > **Манифест, продуктовая концепция и инженерная архитектура проекта**  
 > **Версия документа:** 1.0 (Октябрь 2026)  
-> **Live Demo:** [https://radar.91.229.8.32.nip.io](https://radar.91.229.8.32.nip.io)  
+> **Live Demo:** [https://openradar.fun](https://openradar.fun)  
 > **Исходный код:** [github.com/MikhailSagalaev/radar-oss](https://github.com/MikhailSagalaev/radar-oss)
 
 ---
@@ -151,7 +151,7 @@ $$\text{Community} = \frac{U - J - 3S}{U + J + S + 2} \in [-1, 1]$$
 Проект прошёл стадию концепта и **уже развёрнут и протестирован на боевом сервере**:
 
 - **Стек:** Node.js 22 LTS, TypeScript, Hono, PostgreSQL 17 + `pgvector halfvec(384)`, Docker Compose.
-- **Публичный адрес:** [https://radar.91.229.8.32.nip.io](https://radar.91.229.8.32.nip.io) (просмотр открыт, действия — после входа).
+- **Публичный адрес:** [https://openradar.fun](https://openradar.fun) (просмотр открыт, действия — после входа).
 - **Авторизация:** вход через GitHub OAuth; голосование и добавление лидов через `/submit` доступны только зарегистрированным участникам — один голос на сигнал с весом 1.0 (`lead_votes`), репутационный движок — следующий шаг.
 - **База данных:** Полная миграция на PostgreSQL 17 (SQLite вычищен), события пайплайна пишутся в `outbox_events` (консюмер для хаб-синхронизации — в роадмапе), сессии в HttpOnly/Secure cookies.
 - **Поиск:** Полнотекстовый GIN-индекс с русским стеммингом (`to_tsvector`).

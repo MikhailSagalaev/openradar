@@ -72,7 +72,7 @@ flowchart TD
     end
 
     subgraph Frontends ["5. Интерфейсы и экосистема"]
-        WEB["Публичная веб-витрина\nhttps://radar.91.229.8.32.nip.io"]
+        WEB["Публичная веб-витрина\nhttps://openradar.fun"]
         BOT["Telegram-бот подписок и мгновенных алертов"]
         EXTENSION["Chrome / Firefox Web Store Extension"]
         SELF_HOSTED["Автономные узлы пользователей (Radar Node)"]
@@ -97,7 +97,7 @@ flowchart TD
 - [x] Воронка откликов (`new` → `interesting` → `applied` → `in_work` → `rejected`) и обратная связь (+10/-20).
 - [x] Полнотекстовый поиск с русским стеммингом через GIN `to_tsvector`.
 - [x] Параллельный конкурентный опрос источников (`pLimit`).
-- [x] Открытый гостевой доступ (`RADAR_PUBLIC_READ=true`) на `https://radar.91.229.8.32.nip.io`.
+- [x] Открытый гостевой доступ (`RADAR_PUBLIC_READ=true`) на `https://openradar.fun`.
 - [x] Автоматизация релизов в GitHub Actions (Docker + ZIP расширения).
 - [x] Миграция схемы сообщества: разделение `job` / `gig`, таблицы `app_users`, `lead_votes`, `lead_duplicates`.
 
