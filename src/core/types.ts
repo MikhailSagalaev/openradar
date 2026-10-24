@@ -107,6 +107,14 @@ export interface VoteResult {
   score: number;
 }
 
+export type VerificationState =
+  | 'unverified'
+  | 'attested'
+  | 'under_review'
+  | 'verified_active'
+  | 'killed_scam'
+  | 'killed_closed';
+
 export interface Lead extends RawLead {
   id: string;
   canonicalUrl?: string;
@@ -121,6 +129,13 @@ export interface Lead extends RawLead {
   votes_down?: number;
   votes_scam?: number;
   votes_closed?: number;
+  publisher_pubkey?: string;
+  nostr_event_id?: string;
+  minhash_sketch?: string;
+  verification_state?: VerificationState;
+  attestation_count?: number;
+  is_mesh_exclusive?: boolean;
+  unlocked_at?: string;
 }
 
 export interface PollContext {

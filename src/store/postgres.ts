@@ -15,13 +15,18 @@ import type {
 } from '../core/types.ts';
 import type {
   CreateSourceInput,
+  LeadAttestationInput,
+  LeadAttestationRecord,
   LeadDeliveryRecord,
   ListLeadsOptions,
+  MeshNodeInput,
+  MeshNodeRecord,
   Store,
   UpdateSourceInput,
   UpsertGitHubUserInput,
   UserRecord,
   UserVoteResult,
+  ViewerAccessContext,
 } from '../core/store.ts';
 
 import { checkMigrations } from './migrator.ts';
@@ -642,6 +647,17 @@ export class PostgresStore implements Store {
       votes_down: r.votes_down !== null && r.votes_down !== undefined ? Number(r.votes_down) : 0,
       votes_scam: r.votes_scam !== null && r.votes_scam !== undefined ? Number(r.votes_scam) : 0,
       votes_closed: r.votes_closed !== null && r.votes_closed !== undefined ? Number(r.votes_closed) : 0,
+      publisher_pubkey: r.publisher_pubkey || undefined,
+      nostr_event_id: r.nostr_event_id || undefined,
+      minhash_sketch: r.minhash_sketch
+        ? (Buffer.isBuffer(r.minhash_sketch)
+            ? r.minhash_sketch.toString('base64url')
+            : String(r.minhash_sketch))
+        : undefined,
+      verification_state: r.verification_state || 'unverified',
+      attestation_count: r.attestation_count !== null && r.attestation_count !== undefined ? Number(r.attestation_count) : 0,
+      is_mesh_exclusive: Boolean(r.is_mesh_exclusive),
+      unlocked_at: r.unlocked_at ? new Date(r.unlocked_at).toISOString() : undefined,
     };
   }
 
@@ -896,5 +912,188 @@ export class PostgresStore implements Store {
       [retentionDays]
     );
     return res.rowCount ?? 0;
+  }
+
+  async upsertMeshNode(node: MeshNodeInput): Promise<MeshNodeRecord> {
+    const res = await this.pool.query(
+      `INSERT INTO mesh_nodes (
+        pubkey, npub, github_username, github_gist_url, nip05_domain, trust_score, last_seen_at
+      ) VALUES ($1, $2, $3, $4, $5, COALESCE($6, 0.05), NOW())
+      ON CONFLICT (pubkey) DO UPDATE SET
+        github_username = COALESCE(EXCLUDED.github_username, mesh_nodes.github_username),
+        github_gist_url = COALESCE(EXCLUDED.github_gist_url, mesh_nodes.github_gist_url),
+        nip05_domain = COALESCE(EXCLUDED.nip05_domain, mesh_nodes.nip05_domain),
+        trust_score = COALESCE(EXCLUDED.trust_score, mesh_nodes.trust_score),
+        last_seen_at = NOW()
+      RETURNING *`,
+      [
+        node.pubkey.toLowerCase(),
+        node.npub,
+        node.github_username ?? null,
+        node.github_gist_url ?? null,
+        node.nip05_domain ?? null,
+        node.trust_score ?? null,
+      ]
+    );
+    const r = res.rows[0];
+    return {
+      pubkey: r.pubkey,
+      npub: r.npub,
+      github_username: r.github_username || undefined,
+      github_gist_url: r.github_gist_url || undefined,
+      nip05_domain: r.nip05_domain || undefined,
+      trust_score: Number(r.trust_score),
+      valid_leads_7d: Number(r.valid_leads_7d),
+      valid_attestations_24h: Number(r.valid_attestations_24h),
+      false_reports_count: Number(r.false_reports_count),
+      created_at: new Date(r.created_at).toISOString(),
+      last_seen_at: new Date(r.last_seen_at).toISOString(),
+    };
+  }
+
+  async updateLeadVerification(id: string, verificationState: import('../core/types.ts').VerificationState): Promise<void> {
+    await this.pool.query(`UPDATE leads SET verification_state = $1 WHERE id = $2`, [verificationState, id]);
+  }
+
+  async getMeshNode(pubkey: string): Promise<MeshNodeRecord | null> {
+    const res = await this.pool.query(`SELECT * FROM mesh_nodes WHERE pubkey = $1`, [pubkey.toLowerCase()]);
+    if (!res.rows[0]) return null;
+    const r = res.rows[0];
+    return {
+      pubkey: r.pubkey,
+      npub: r.npub,
+      github_username: r.github_username || undefined,
+      github_gist_url: r.github_gist_url || undefined,
+      nip05_domain: r.nip05_domain || undefined,
+      trust_score: Number(r.trust_score),
+      valid_leads_7d: Number(r.valid_leads_7d),
+      valid_attestations_24h: Number(r.valid_attestations_24h),
+      false_reports_count: Number(r.false_reports_count),
+      created_at: new Date(r.created_at).toISOString(),
+      last_seen_at: new Date(r.last_seen_at).toISOString(),
+    };
+  }
+
+  async recordAttestation(attestation: LeadAttestationInput): Promise<LeadAttestationRecord> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const res = await client.query(
+        `INSERT INTO lead_attestations (
+          nostr_event_id, lead_id, signer_pubkey, kind, signal_or_status, recomputed_hash, confidence, raw_event
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+        ON CONFLICT (lead_id, signer_pubkey, kind) DO UPDATE SET
+          signal_or_status = EXCLUDED.signal_or_status,
+          recomputed_hash = EXCLUDED.recomputed_hash,
+          confidence = EXCLUDED.confidence,
+          raw_event = EXCLUDED.raw_event
+        RETURNING *`,
+        [
+          attestation.nostr_event_id,
+          attestation.lead_id,
+          attestation.signer_pubkey.toLowerCase(),
+          attestation.kind,
+          attestation.signal_or_status,
+          attestation.recomputed_hash ?? null,
+          attestation.confidence ?? 1.0,
+          JSON.stringify(attestation.raw_event),
+        ]
+      );
+
+      if (attestation.kind === 30405 && attestation.signal_or_status === 'verified') {
+        await client.query(
+          `UPDATE leads SET attestation_count = attestation_count + 1, verification_state = 'attested'
+           WHERE id = $1 AND verification_state = 'unverified'`,
+          [attestation.lead_id]
+        );
+      } else {
+        await client.query(
+          `UPDATE leads SET attestation_count = attestation_count + 1 WHERE id = $1`,
+          [attestation.lead_id]
+        );
+      }
+      await client.query('COMMIT');
+      const r = res.rows[0];
+      return {
+        id: Number(r.id),
+        nostr_event_id: r.nostr_event_id,
+        lead_id: r.lead_id,
+        signer_pubkey: r.signer_pubkey,
+        kind: r.kind,
+        signal_or_status: r.signal_or_status,
+        recomputed_hash: r.recomputed_hash || undefined,
+        confidence: Number(r.confidence),
+        raw_event: r.raw_event,
+        created_at: new Date(r.created_at).toISOString(),
+      };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async enqueueArbiterCheck(leadId: string, triggerReason: string): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `INSERT INTO arbiter_queue (lead_id, trigger_reason, attempts, next_run_at)
+         VALUES ($1, $2, 0, NOW())
+         ON CONFLICT (lead_id) DO UPDATE SET trigger_reason = $2, next_run_at = NOW()`,
+        [leadId, triggerReason]
+      );
+      await client.query(
+        `UPDATE leads SET verification_state = 'under_review'
+         WHERE id = $1 AND verification_state NOT IN ('killed_scam', 'killed_closed')`,
+        [leadId]
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getLeadsForFeed(viewerContext: ViewerAccessContext, options: ListLeadsOptions = {}): Promise<Lead[]> {
+    const limit = options.limit || 50;
+    const conditions: string[] = [];
+    const params: any[] = [];
+    let idx = 1;
+
+    conditions.push(`verification_state NOT IN ('killed_scam', 'killed_closed')`);
+
+    const isPrivileged =
+      viewerContext.isAdmin ||
+      viewerContext.hasValidAttestations24h ||
+      (viewerContext.trustScore ?? 0) >= 0.2;
+
+    if (!isPrivileged) {
+      conditions.push(`is_mesh_exclusive = FALSE`);
+      conditions.push(`unlocked_at <= NOW()`);
+    }
+
+    if (options.status) {
+      conditions.push(`status = $${idx++}`);
+      params.push(options.status);
+    }
+    if (options.sourceId) {
+      conditions.push(`source_id = $${idx++}`);
+      params.push(options.sourceId);
+    }
+    if (options.type) {
+      conditions.push(`type = $${idx++}`);
+      params.push(options.type);
+    }
+
+    const whereClause = `WHERE ${conditions.join(' AND ')}`;
+    params.push(limit);
+    const query = `SELECT * FROM leads ${whereClause} ORDER BY created_at DESC LIMIT $${idx}`;
+
+    const res = await this.pool.query(query, params);
+    return res.rows.map((r) => this.rowToLead(r));
   }
 }
