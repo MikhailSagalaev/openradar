@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.3
+
+- Kwork adapter: closed-API mode. When `RADAR_KWORK_LOGIN` / `RADAR_KWORK_PASSWORD`
+  are set, it signs in through the Kwork mobile API (signIn -> token -> POST /projects,
+  the same protocol as pykwork/kwork-api) and reads stable JSON instead of page markup.
+  Falls back to the anonymous page-state parser (and to the API on the next poll if
+  a single API run fails).
+
 ## 0.4.2
 
 - Growth layer: search-driven SEO landing pages (`/catalog/:slug`, 10 pages like

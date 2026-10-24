@@ -28,7 +28,7 @@ const envSchema = z.object({
   RADAR_HOST_PORT: z.coerce.number().int().positive().optional(),
   RADAR_USER_AGENT: z
     .string()
-    .default('RadarBot/0.4.2 (+https://github.com/MikhailSagalaev/radar-oss)'),
+    .default('RadarBot/0.4.3 (+https://github.com/MikhailSagalaev/radar-oss)'),
   RADAR_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
   RADAR_POLL_INTERVAL_SEC: z.coerce.number().int().positive().default(300),
   RADAR_POLL_CONCURRENCY: z.coerce.number().int().positive().default(4),
