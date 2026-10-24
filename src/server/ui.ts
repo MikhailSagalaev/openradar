@@ -205,27 +205,6 @@ main {
   border-radius: 4px;
   padding: 1px 5px;
 }
-.mesh-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 500;
-  color: #10b981;
-  background: rgba(16, 185, 129, 0.08);
-  border: 1px solid rgba(16, 185, 129, 0.25);
-  border-radius: 4px;
-  padding: 1px 7px;
-  letter-spacing: 0.02em;
-}
-.mesh-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #10b981;
-  display: inline-block;
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
-}
 .quick-stack-bar {
   display: flex;
   align-items: center;
@@ -1005,7 +984,6 @@ ${input.head ?? ''}
   <div class="top-brand-group">
     <a class="brand" href="/">OpenRadar</a>
     <span class="version">v${escapeHtml(input.version)}</span>
-    <span class="mesh-indicator" title="radar/1 Nostr protocol mesh: 7 nodes connected"><span class="mesh-dot"></span>Mesh: онлайн (7 узлов)</span>
   </div>
   <nav class="nav">
     ${nav('leads', t.navLeads, '/')}
