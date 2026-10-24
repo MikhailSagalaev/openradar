@@ -17,6 +17,8 @@ export interface LeadsPageData {
   version: string;
   auth?: AuthDisplay;
   lang?: SupportedLang;
+  lockedCount?: number;
+  isRealtime?: boolean;
 }
 
 export interface SourcesPageData {
@@ -502,6 +504,21 @@ dialog::backdrop {
   color: var(--ink);
   text-decoration: underline;
   text-underline-offset: 4px;
+}
+.mesh-lag-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 10px 16px;
+  margin: 12px 0 16px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.mesh-lag-notice strong {
+  color: var(--ink);
 }
 .type-tab.active {
   color: var(--ink);
@@ -1275,9 +1292,17 @@ export function renderLeadsPage(data: LeadsPageData): string {
           <button class="btn" data-poll="/api/poll">${escapeHtml(t.pollAll)}</button>
         </div>`;
 
+  const lagBanner = (data.lockedCount && data.lockedCount > 0 && !data.isRealtime)
+    ? `<div class="mesh-lag-notice">
+        <span>Вам временно недоступны <strong>${data.lockedCount}</strong> эксклюзивных заказов из Mesh-сети (12-часовой лаг для гостей).</span>
+        <a href="/extension" class="btn btn-sm">Подключить узел</a>
+      </div>`
+    : '';
+
   const body = `
 <div class="search-hero">
   <div class="type-tabs">${tabs}</div>
+  ${lagBanner}
   <form class="search-form" method="get" action="/">
     ${type ? `<input type="hidden" name="type" value="${escapeHtml(type)}">` : ''}
     ${status ? `<input type="hidden" name="status" value="${escapeHtml(status)}">` : ''}

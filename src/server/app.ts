@@ -29,6 +29,7 @@ import {
   type SourceFormValues,
 } from './ui.ts';
 import { resolveLang, type SupportedLang } from './i18n.ts';
+import { determineAccessTier, filterLeadsForViewer } from '../core/access-tier.ts';
 import { SEO_CATALOG, findCatalogEntry, renderCatalogPage, renderRobotsTxt, renderSitemapXml } from './seo.ts';
 import { extractPreviewFromHtml, validateSubmissionUrl } from './preview.ts';
 
@@ -523,17 +524,26 @@ export function createApp(runtime: Runtime): Hono {
       }),
     ]);
 
+    const user = await currentUser(c, runtime);
+    const nodePubkey = c.req.header('x-radar-node-pubkey');
+    const node = (nodePubkey && runtime.store.getMeshNode) ? await runtime.store.getMeshNode(nodePubkey) : null;
+    const admin = await isAdmin(c, runtime);
+    const tier = determineAccessTier({ user, meshNode: node, isAdmin: admin });
+    const { visibleLeads, lockedCount } = filterLeadsForViewer(leads, tier);
+
     return c.html(
       renderLeadsPage({
         stats,
         health,
-        leads,
+        leads: visibleLeads,
         query,
         status,
         type: type ?? '',
         version: VERSION,
         auth: await getAuthDisplay(c, runtime),
         lang,
+        lockedCount,
+        isRealtime: tier.isRealtime,
       }),
     );
   });

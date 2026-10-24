@@ -587,6 +587,25 @@ function buildProgram(): Command {
       }
     });
 
+  const nodeCommand = program.command('node').description('OpenRadar Mesh Node operations');
+
+  nodeCommand
+    .command('start')
+    .description('Start the decentralized crawler/validator node')
+    .option('--relays <urls...>', 'Custom Nostr relay URLs')
+    .option('--key <path>', 'Path to custom node_key.json')
+    .option('--interval <sec>', 'Poll interval in seconds', '300')
+    .option('--once', 'Run single pass and exit')
+    .action(async (options: { relays?: string[]; key?: string; interval?: string; once?: boolean }) => {
+      const { runMeshNode } = await import('./node.ts');
+      await runMeshNode({
+        relays: options.relays,
+        keyFile: options.key,
+        pollIntervalSec: options.interval ? Number(options.interval) : 300,
+        once: options.once,
+      });
+    });
+
   return program;
 }
 
