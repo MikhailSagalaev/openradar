@@ -1,0 +1,21 @@
+{
+  "success": true,
+  "response": [
+    {
+      "id": 301,
+      "name": "Доработать интернет-магазин на WordPress",
+      "description": "Нужны правки в корзине и оплата Тинькофф",
+      "kworkPrice": 12000,
+      "category_id": 11,
+      "user": { "username": "shop_owner" }
+    },
+    {
+      "id": 302,
+      "name": "Парсер товаров с маркетплейса",
+      "description": "Собрать 5000 товаров с ценами и фото",
+      "priceLimit": 25000,
+      "category_id": 11,
+      "username": "data_guy"
+    }
+  ]
+}
