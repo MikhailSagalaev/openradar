@@ -115,7 +115,7 @@ Use an app password, not the main account password. `--mark-seen` is off by defa
 | `rss` | official | works | a feed URL |
 | `imap` | user-provided | works | host, user and an env var with the password |
 | `telegram` | public | works | a public channel username; reads `t.me/s/` |
-| `kwork` | public | works, fragile | no account; parses the embedded page state |
+| `kwork` | public / auth | works | optional: `RADAR_KWORK_LOGIN`/`PASSWORD` switch it to the closed mobile API (stable JSON); without them it parses the page state |
 | `trudvsem` | official | works | none; Работа России (Минтруд) Open API |
 | `hh` | official | works | none for reading; a Bearer token or residential IP helps against the hh.ru WAF |
 | `remoteok` | official | works | none; returns the full jobs list |
