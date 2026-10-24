@@ -41,24 +41,43 @@ export function determineAccessTier(params: DetermineAccessTierParams): AccessTi
   }
 
   const node = params.meshNode;
+  if (node?.is_banned) {
+    return {
+      tier: 'free_rider',
+      isRealtime: false,
+      reason: 'Node is banned due to cheater slashing',
+      validLeads7d: 0,
+      validAttestations24h: 0,
+      trustScore: 0,
+    };
+  }
+
   const validLeads7d = node?.valid_leads_7d ?? 0;
   const validAttestations24h = node?.valid_attestations_24h ?? 0;
   const trustScore = node?.trust_score ?? 0;
 
+  // GitHub 7-Day Trial: ActiveContributor status via GitHub trust is valid strictly for the first 7 days
+  const verifiedTime = node?.github_verified_at ?? node?.created_at;
+  const isWithinGithubTrial = verifiedTime
+    ? (Date.now() - new Date(verifiedTime).getTime()) <= 7 * 86400 * 1000
+    : false;
+
   // Active Contributor requirements:
   // - >= 3 valid leads submitted in past 7 days, OR
   // - >= 10 valid attestations performed in past 24h, OR
-  // - trust_score >= 0.20 (e.g. verified GitHub identity)
+  // - trust_score >= 0.20 strictly within the first 7 days of GitHub verification
   const isContributor =
     validLeads7d >= 3 ||
     validAttestations24h >= 10 ||
-    trustScore >= 0.20;
+    (isWithinGithubTrial && trustScore >= 0.20);
 
   if (isContributor) {
     return {
       tier: 'active_contributor',
       isRealtime: true,
-      reason: 'Verified contributor (Tit-for-Tat quorum met)',
+      reason: isWithinGithubTrial && validLeads7d < 3 && validAttestations24h < 10
+        ? 'Verified contributor (GitHub 7-day trial active)'
+        : 'Verified contributor (Tit-for-Tat quorum met)',
       validLeads7d,
       validAttestations24h,
       trustScore,

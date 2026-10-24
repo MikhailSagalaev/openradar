@@ -72,11 +72,13 @@ export interface MeshNodeRecord {
   npub: string;
   github_username?: string;
   github_gist_url?: string;
+  github_verified_at?: string;
   nip05_domain?: string;
   trust_score: number;
   valid_leads_7d: number;
   valid_attestations_24h: number;
   false_reports_count: number;
+  is_banned?: boolean;
   created_at: string;
   last_seen_at: string;
 }
@@ -86,8 +88,11 @@ export interface MeshNodeInput {
   npub: string;
   github_username?: string;
   github_gist_url?: string;
+  github_verified_at?: string;
   nip05_domain?: string;
   trust_score?: number;
+  is_banned?: boolean;
+  false_reports_count?: number;
 }
 
 export interface LeadAttestationRecord {

@@ -121,4 +121,62 @@ describe('AI Arbiter (Grokipedia Pattern & Slashing)', () => {
       expect(node!.trust_score).toBeCloseTo(0.30, 2);
     }
   });
+
+  it('prevents false slashing on SPA / login-wall pages returning HTTP 200 (MinHash divergence)', async () => {
+    const store = new MemoryStore();
+    const serverKeys = generateKeyPair();
+
+    const honestReporter = generateKeyPair();
+    await store.upsertMeshNode({
+      pubkey: honestReporter.pubKey,
+      npub: honestReporter.npub,
+      trust_score: 0.80,
+    });
+
+    const { computeMinHashSketch } = await import('../src/core/fingerprint.ts');
+    const originalText = 'Architecting distributed consensus algorithms with Raft and Paxos in Rust.';
+    const originalSketch = computeMinHashSketch(originalText);
+
+    const lead = createMockLead({
+      id: 'lead-spa-target',
+      text: originalText,
+      minhash_sketch: originalSketch,
+      status: 'rejected',
+    });
+    await store.insertLead(lead);
+
+    // Mock SPA empty shell / login wall returning HTTP 200 OK
+    const mockSpaFetch = async () =>
+      new Response(
+        '<!DOCTYPE html><html><head><title>App Login</title></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>',
+        {
+          status: 200,
+          headers: { 'Content-Type': 'text/html' },
+        },
+      );
+
+    const evaluation = await arbitrateLead(
+      lead.id,
+      {
+        store,
+        serverKeys,
+        fetchImpl: mockSpaFetch as any,
+      },
+      [honestReporter.pubKey],
+    );
+
+    // Must be inconclusive, NOT active
+    expect(evaluation.verdict).toBe('inconclusive');
+    expect(evaluation.reason).toContain('MinHash divergence');
+
+    // Lead must be marked as under_review
+    const updated = await store.getLead(lead.id);
+    expect(updated?.verification_state).toBe('under_review');
+
+    // Reporter MUST NOT be slashed (trust_score remains intact at 0.80)
+    const node = await store.getMeshNode(honestReporter.pubKey);
+    expect(node).not.toBeNull();
+    expect(node!.trust_score).toBe(0.80);
+    expect(node!.false_reports_count).toBe(0);
+  });
 });
