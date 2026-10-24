@@ -114,4 +114,42 @@ describe('extension content script JobPosting extractor', () => {
     expect(data.selection).toBe('Selected spec fragment');
     expect(data.detectedType).toBe('gig');
   });
+
+  it('generates secp256k1 keys and performs local PII scrubbing for mesh broadcast', async () => {
+    // @ts-ignore
+    const { getOrCreateExtensionKey, scrubPIILocal, buildAndSignExtensionLead } = await import('../extension/crypto.js');
+
+    const keypair = await getOrCreateExtensionKey();
+    expect(keypair.pubKey).toMatch(/^[0-9a-f]{64}$/);
+    expect(keypair.privKey).toMatch(/^[0-9a-f]{64}$/);
+    expect(keypair.npub).toMatch(/^npub1/);
+    expect(keypair.nsec).toMatch(/^nsec1/);
+
+    const scrubbed = scrubPIILocal(
+      'Ищем Go разработчика. Пишите в тг @alex_lead или на alex@work.com. Телефон +7 999 111-22-33.',
+      'https://habr.com/vacancies/123',
+    );
+    expect(scrubbed.hasHiddenContacts).toBe(true);
+    expect(scrubbed.isActionable).toBe(true);
+    expect(scrubbed.text).not.toContain('@alex_lead');
+    expect(scrubbed.text).not.toContain('alex@work.com');
+    expect(scrubbed.text).not.toContain('+7 999 111-22-33');
+
+    const event = await buildAndSignExtensionLead(
+      {
+        title: 'Senior Go Engineer',
+        text: scrubbed.text,
+        url: 'https://habr.com/vacancies/123',
+        type: 'job',
+        company: 'Habr Corp',
+      },
+      keypair,
+    );
+
+    expect(event.kind).toBe(30402);
+    expect(event.pubkey).toBe(keypair.pubKey);
+    expect(event.id).toMatch(/^[0-9a-f]{64}$/);
+    expect(event.sig).toBeDefined();
+    expect(event.tags).toContainEqual(['u', 'https://habr.com/vacancies/123']);
+  });
 });

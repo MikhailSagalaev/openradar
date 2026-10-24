@@ -141,6 +141,12 @@ export async function ingestRawLead(
     return { status: 'rejected', lead, reasons };
   }
 
+  // Broadcast in real-time to active B2B Firehose subscribers
+  try {
+    const { broadcastToFirehose } = await import('../server/firehose.ts');
+    broadcastToFirehose(lead);
+  } catch {}
+
   const registeredSinks = deps.sinks.list().map((s) => s.kind);
   if (deps.store.initLeadDeliveries && registeredSinks.length > 0) {
     await deps.store.initLeadDeliveries(lead.id, registeredSinks);
