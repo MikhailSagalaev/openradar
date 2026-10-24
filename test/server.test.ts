@@ -1089,6 +1089,24 @@ describe('http server', () => {
     expect(ruHtml).toContain('Источники');
     expect(ruHtml).toContain('Добавить по ссылке');
 
+    // 4. Auto-detects English from browser Accept-Language header when no cookie is set
+    const autoEnPage = await app.request('/', {
+      headers: { 'accept-language': 'en-US,en;q=0.9,ru;q=0.8' },
+    });
+    expect(autoEnPage.status).toBe(200);
+    const autoEnHtml = await autoEnPage.text();
+    expect(autoEnHtml).toContain('lang="en"');
+    expect(autoEnHtml).toContain('href="/lang/ru"');
+    expect(autoEnHtml).toContain('href="/lang/en"');
+
+    // 5. Auto-detects Russian from browser Accept-Language header
+    const autoRuPage = await app.request('/', {
+      headers: { 'accept-language': 'ru-RU,ru;q=0.9,en-US;q=0.8' },
+    });
+    expect(autoRuPage.status).toBe(200);
+    const autoRuHtml = await autoRuPage.text();
+    expect(autoRuHtml).toContain('lang="ru"');
+
     await runtime.store.close();
   });
 
@@ -1143,7 +1161,7 @@ describe('http server', () => {
   });
 
   it('renders extension guide page, download endpoint, ping, and footer link', async () => {
-    const runtime = makeRuntime({ RADAR_PUBLIC_READ: 'true' });
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true });
     const app = createApp(runtime);
 
     // 1. Ping endpoint

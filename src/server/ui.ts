@@ -799,8 +799,12 @@ legend {
   padding: 2px 8px;
   font-size: 11.5px;
   font-weight: 500;
+  font-style: italic;
   color: var(--ink);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+.tag-inline {
+  font-style: italic;
 }
 pre.token {
   background: var(--surface);
@@ -942,6 +946,11 @@ ${input.body}
       <a href="/feed.rss">${escapeHtml(t.rssFeed)}</a>
       <a href="/api/delta">${escapeHtml(t.s3Delta)}</a>
       <a href="/health">${escapeHtml(t.systemStatus)}</a>
+      <span class="lang-switch" style="display:inline-flex;align-items:center;gap:5px;margin-left:6px">
+        <a href="/lang/ru" style="${lang === 'ru' ? 'font-weight:700;color:var(--ink)' : 'color:var(--muted)'}">RU</a>
+        <span style="color:var(--line-strong)">/</span>
+        <a href="/lang/en" style="${lang === 'en' ? 'font-weight:700;color:var(--ink)' : 'color:var(--muted)'}">EN</a>
+      </span>
     </div>
   </div>
 </footer>
@@ -1149,7 +1158,7 @@ function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru'):
     details.push(signals.join(', '));
   }
   if (lead.skills?.length) {
-    details.push(escapeHtml(lead.skills.slice(0, 5).join(', ')));
+    details.push(`<span class="tag-inline">${escapeHtml(lead.skills.slice(0, 5).join(', '))}</span>`);
   }
 
   const subLine = details.length
@@ -1489,9 +1498,9 @@ ${cautionBanner}
     </dl>
     ${lead.skills?.length ? `
       <h2 style="margin-top:20px">${escapeHtml(t.skills)}</h2>
-      <p class="small muted" style="line-height:1.6;margin-top:6px">
-        ${escapeHtml(lead.skills.join(', '))}
-      </p>` : ''}
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+        ${lead.skills.map((s) => `<span class="tag">${escapeHtml(s)}</span>`).join('')}
+      </div>` : ''}
   </aside>
 </div>`;
 

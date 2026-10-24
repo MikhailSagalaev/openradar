@@ -360,6 +360,35 @@ export function getTranslations(lang: SupportedLang = 'ru'): Translations {
   return lang === 'en' ? EN : RU;
 }
 
+export function detectBrowserLang(header?: string): SupportedLang {
+  if (!header) return 'ru';
+  const tokens = header
+    .split(',')
+    .map((part) => {
+      const parts = part.trim().split(';');
+      const langCode = parts[0]?.trim() || '';
+      const qPart = parts[1];
+      const code = langCode.toLowerCase().split('-')[0]?.trim() || '';
+      let q = 1.0;
+      if (qPart && qPart.trim().startsWith('q=')) {
+        const parsedQ = parseFloat(qPart.trim().slice(2));
+        if (!isNaN(parsedQ)) q = parsedQ;
+      }
+      return { code, q };
+    })
+    .sort((a, b) => b.q - a.q);
+
+  for (const token of tokens) {
+    if (token.code === 'ru' || token.code === 'be' || token.code === 'uk' || token.code === 'kk') {
+      return 'ru';
+    }
+    if (token.code === 'en') {
+      return 'en';
+    }
+  }
+  return 'ru';
+}
+
 export function resolveLang(c: Context): SupportedLang {
   const queryLang = c.req.query('lang');
   if (queryLang === 'en' || queryLang === 'ru') {
@@ -376,9 +405,5 @@ export function resolveLang(c: Context): SupportedLang {
   if (cookieLang === 'en' || cookieLang === 'ru') {
     return cookieLang;
   }
-  const accept = c.req.header('accept-language')?.toLowerCase() ?? '';
-  if (accept.startsWith('en')) {
-    return 'en';
-  }
-  return 'ru';
+  return detectBrowserLang(c.req.header('accept-language'));
 }
