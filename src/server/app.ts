@@ -96,9 +96,12 @@ async function getAuthDisplay(c: Context, runtime: Runtime): Promise<AuthDisplay
   return undefined;
 }
 
-function loginPage(error?: string, githubEnabled = false): string {
+function loginPage(error?: string, githubEnabled = false, returnTo?: string): string {
+  const ghHref = returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')
+    ? `/auth/github?returnTo=${encodeURIComponent(returnTo)}`
+    : '/auth/github';
   const githubButton = githubEnabled
-    ? `<a class="github-btn" href="/auth/github">Войти через GitHub</a>
+    ? `<a class="github-btn" href="${escapeHtml(ghHref)}">Войти через GitHub</a>
 <div class="divider"><span>или</span></div>`
     : '';
   const githubStyle = githubEnabled
@@ -444,7 +447,7 @@ export function createApp(runtime: Runtime): Hono {
     if (!runtime.env.RADAR_ADMIN_TOKEN && !githubOAuthConfigured(runtime)) return c.redirect('/');
     if (await isAdmin(c, runtime)) return c.redirect('/');
     if (await currentUser(c, runtime)) return c.redirect('/');
-    return c.html(loginPage(c.req.query('error'), githubOAuthConfigured(runtime)));
+    return c.html(loginPage(c.req.query('error'), githubOAuthConfigured(runtime), c.req.query('returnTo')));
   });
 
   app.get('/auth/github', (c) => startGitHubOAuth(c, runtime));
