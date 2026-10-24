@@ -1191,4 +1191,33 @@ describe('http server', () => {
 
     await runtime.store.close();
   });
+
+  it('preserves returnTo context during GitHub OAuth login', async () => {
+    const runtime = makeRuntime({
+      GITHUB_CLIENT_ID: 'test-client-id',
+      GITHUB_CLIENT_SECRET: 'test-client-secret',
+    });
+    const app = createApp(runtime);
+
+    // 1. GET /login with returnTo renders GitHub link with returnTo
+    const loginPageRes = await app.request('/login?returnTo=/leads/lead-42');
+    expect(loginPageRes.status).toBe(200);
+    const loginHtml = await loginPageRes.text();
+    expect(loginHtml).toContain('/auth/github?returnTo=%2Fleads%2Flead-42');
+
+    // 2. GET /auth/github with valid returnTo sets cookie and redirects to GitHub
+    const authRes = await app.request('/auth/github?returnTo=/leads/lead-42');
+    expect(authRes.status).toBe(302);
+    const location = authRes.headers.get('location') || '';
+    expect(location).toContain('https://github.com/login/oauth/authorize');
+    const setCookie = authRes.headers.get('set-cookie') || '';
+    expect(setCookie).toContain('radar_oauth_return_to=%2Fleads%2Flead-42');
+
+    // 3. Reject open redirects: //evil.com or http://evil.com should not be saved as returnTo
+    const evilRes = await app.request('/auth/github?returnTo=https://evil.com');
+    const evilCookie = evilRes.headers.get('set-cookie') || '';
+    expect(evilCookie).not.toContain('radar_oauth_return_to');
+
+    await runtime.store.close();
+  });
 });

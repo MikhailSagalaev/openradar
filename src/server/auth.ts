@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import type { Runtime } from '../runtime.ts';
 
 const STATE_COOKIE = 'radar_oauth_state';
+const RETURN_TO_COOKIE = 'radar_oauth_return_to';
 const STATE_TTL_SEC = 600;
 const SESSION_TTL_SEC = 30 * 24 * 3600;
 
@@ -37,6 +38,18 @@ export function startGitHubOAuth(c: Context, runtime: Runtime): Response {
     path: '/auth/github/callback',
     maxAge: STATE_TTL_SEC,
   });
+
+  const rawReturnTo = c.req.query('returnTo');
+  if (rawReturnTo && rawReturnTo.startsWith('/') && !rawReturnTo.startsWith('//')) {
+    setCookie(c, RETURN_TO_COOKIE, rawReturnTo, {
+      httpOnly: true,
+      sameSite: 'Lax',
+      secure: secureCookie(c),
+      path: '/auth/github/callback',
+      maxAge: STATE_TTL_SEC,
+    });
+  }
+
   const authorizeUrl = new URL('https://github.com/login/oauth/authorize');
   authorizeUrl.searchParams.set('client_id', runtime.env.GITHUB_CLIENT_ID!);
   authorizeUrl.searchParams.set('redirect_uri', `${baseUrlOf(c)}/auth/github/callback`);
@@ -106,5 +119,11 @@ export async function handleGitHubCallback(c: Context, runtime: Runtime): Promis
     path: '/',
     maxAge: SESSION_TTL_SEC,
   });
-  return c.redirect('/');
+  const returnTo = getCookie(c, RETURN_TO_COOKIE);
+  deleteCookie(c, RETURN_TO_COOKIE, { path: '/auth/github/callback' });
+
+  const safeTarget = returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')
+    ? returnTo
+    : '/';
+  return c.redirect(safeTarget);
 }

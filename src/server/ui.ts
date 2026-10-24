@@ -979,7 +979,7 @@ export function layout(input: {
     ? input.auth.handle
       ? `<span class="auth-handle">${escapeHtml(input.auth.handle)}</span><a class="chip" href="/logout">${escapeHtml(t.signOut)}</a>`
       : `<a class="chip" href="/logout">${escapeHtml(t.signOut)}</a>`
-    : `<a class="chip" href="/login">${escapeHtml(t.signIn)}</a>`;
+    : `<a class="chip auth-signin-link" href="/login">${escapeHtml(t.signIn)}</a>`;
 
   return `<!doctype html>
 <html lang="${lang}">
@@ -1036,18 +1036,30 @@ ${input.body}
   </p>
   <div style="display:flex;justify-content:flex-end;gap:10px">
     <button class="btn ghost" type="button" onclick="document.getElementById('auth-vote-dialog').close()">${escapeHtml(t.cancel)}</button>
-    <a class="btn" href="/auth/github">${escapeHtml(t.signInGithub)}</a>
+    <a class="btn" id="auth-vote-github-btn" href="/auth/github">${escapeHtml(t.signInGithub)}</a>
   </div>
 </dialog>
 <script>
 function openAuthVoteModal() {
   const dlg = document.getElementById('auth-vote-dialog');
+  const btn = document.getElementById('auth-vote-github-btn');
+  if (btn) {
+    btn.href = '/auth/github?returnTo=' + encodeURIComponent(window.location.pathname + window.location.search);
+  }
   if (dlg && typeof dlg.showModal === 'function') {
     dlg.showModal();
   } else {
-    window.location.href = '/login';
+    window.location.href = '/login?returnTo=' + encodeURIComponent(window.location.pathname + window.location.search);
   }
 }
+document.addEventListener('DOMContentLoaded', function() {
+  const links = document.querySelectorAll('.auth-signin-link');
+  links.forEach(function(l) {
+    if (window.location.pathname !== '/login') {
+      l.href = '/login?returnTo=' + encodeURIComponent(window.location.pathname + window.location.search);
+    }
+  });
+});
 </script>
 <dialog id="add-source-dialog" style="border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);padding:24px;max-width:480px;width:calc(100vw - 32px);box-shadow:0 16px 40px rgba(0,0,0,0.18)">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
