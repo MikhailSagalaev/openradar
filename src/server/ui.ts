@@ -213,6 +213,18 @@ main {
   margin-top: 10px;
   font-size: 12px;
 }
+@media (max-width: 640px) {
+  .quick-stack-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .quick-stack-bar::-webkit-scrollbar {
+    display: none;
+  }
+}
 .quick-stack-label {
   color: var(--muted);
   font-weight: 500;
@@ -1554,6 +1566,7 @@ document.getElementById('copy-lead')?.addEventListener('click', async (event) =>
   <div class="actions lead-actions">
     ${cleanUrl ? `<a class="btn" href="${escapeHtml(cleanUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t.openOriginal)}</a>` : ''}
     <button class="btn ghost" id="copy-lead" type="button">${escapeHtml(t.copyText)}</button>
+    <button class="btn ghost" id="copy-link" type="button" onclick="navigator.clipboard.writeText(window.location.href);const orig=this.textContent;this.textContent='Ссылка скопирована!';setTimeout(()=>this.textContent=orig,2000)">Скопировать ссылку</button>
   </div>
 </div>
 
