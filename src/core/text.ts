@@ -146,4 +146,5 @@ export function normalizeTechTokens(input: string): string {
     .replace(/(^|[^a-zA-Z0-9_])golang(?=[^a-zA-Z0-9_]|$)/gi, '$1golang_tech');
 }
 
-export { sanitizePrivacy, extractSubnet24 } from './privacy.ts';
+export { sanitizePrivacy, scrubPII, extractSubnet24 } from './privacy.ts';
+export type { SourceMetadata, ScrubResult } from './privacy.ts';
