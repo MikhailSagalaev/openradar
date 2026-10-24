@@ -5,7 +5,7 @@
 > **Production Demo:** [openradar.fun](https://openradar.fun)  
 > **Mirror / Direct Server:** [radar.91.229.8.32.nip.io](https://radar.91.229.8.32.nip.io)  
 > **License:** Apache 2.0 (Open Source)  
-> **Status:** Production-ready MVP (95/95 automated tests passing, 0 TypeScript errors)
+> **Status:** Production-ready MVP (104/104 automated tests passing, 0 TypeScript errors)
 
 ---
 
@@ -179,7 +179,7 @@ OpenRadar preserves an open-source core (Apache 2.0) while monetizing high-value
 |---|---|---|
 | **Core Server** | Production | Node.js 22 LTS, TypeScript, Hono SSR, Docker Compose |
 | **Database** | Production | PostgreSQL 17 with `pgvector` FP16 halfvec |
-| **Automated Tests** | 100% Pass | 95 tests across unit, integration, and E2E suites |
+| **Automated Tests** | 100% Pass | 104 tests across 14 test suites (unit, integration, E2E) |
 | **Static Analysis** | 0 Errors | Strict TypeScript (`tsc --noEmit`) |
 | **Active Adapters** | Production | HeadHunter API, RemoteOK, Работа России Open API, Habr, Kwork, FL.ru, RSS/Atom, IMAP, Webhooks |
 | **Browser Extension**| Production | Manifest V3 with `schema.org/JobPosting` parser |
