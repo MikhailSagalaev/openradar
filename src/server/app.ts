@@ -409,7 +409,8 @@ export function createApp(runtime: Runtime): Hono {
       const isIngest =
         c.req.path.startsWith('/api/ingest') ||
         c.req.path === '/api/preview' ||
-        c.req.path === '/api/submit';
+        c.req.path === '/api/submit' ||
+        c.req.path === '/mcp';
       const hasBearerAuth = Boolean(c.req.header('authorization') || c.req.header('x-radar-token'));
       if (!isIngest && !hasBearerAuth) {
         if (!sameOrigin(c)) {
