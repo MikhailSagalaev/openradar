@@ -8,7 +8,7 @@ OpenRadar — открытая, честная и децентрализован
 
 [Философия и Дорожная карта проекта](docs/ROADMAP_AND_PHILOSOPHY.md) | [Концепция и Архитектура](docs/OPEN_RADAR_CONCEPT_AND_ARCHITECTURE.md) | [Руководство контрибьютора](CONTRIBUTING.md)
 
-**Live Demo:** [https://openradar.fun](https://openradar.fun) (гостевой режим открыт без авторизации).
+**Live Demo:** [https://openradar.fun](https://openradar.fun) — просмотр открыт, голосование и добавление лидов после входа через GitHub..
 
 ---
 
