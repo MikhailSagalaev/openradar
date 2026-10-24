@@ -1058,4 +1058,87 @@ describe('http server', () => {
     expect(start.headers.get('location')).toContain('/login?error=');
     await unconfigured.store.close();
   });
+
+  it('supports English and Russian language switching via /lang and cookies', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true });
+    const app = createApp(runtime);
+
+    // 1. Language switch route sets openradar_lang cookie
+    const langRes = await app.request('/lang/en');
+    expect(langRes.status).toBe(302);
+    const setCookie = langRes.headers.get('set-cookie') ?? '';
+    expect(setCookie).toContain('openradar_lang=en');
+
+    // 2. Visiting with lang=en renders English UI strings
+    const enPage = await app.request('/?lang=en');
+    expect(enPage.status).toBe(200);
+    const enHtml = await enPage.text();
+    expect(enHtml).toContain('lang="en"');
+    expect(enHtml).toContain('Leads');
+    expect(enHtml).toContain('Sources');
+    expect(enHtml).toContain('Submit by URL');
+
+    // 3. Visiting with cookie openradar_lang=ru renders Russian UI strings
+    const ruPage = await app.request('/', {
+      headers: { cookie: 'openradar_lang=ru' },
+    });
+    expect(ruPage.status).toBe(200);
+    const ruHtml = await ruPage.text();
+    expect(ruHtml).toContain('lang="ru"');
+    expect(ruHtml).toContain('Заказы');
+    expect(ruHtml).toContain('Источники');
+    expect(ruHtml).toContain('Добавить по ссылке');
+
+    await runtime.store.close();
+  });
+
+  it('handles unauthenticated community votes with auth modal and reject redirect', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true });
+    const app = createApp(runtime);
+
+    const source = await runtime.store.createSource({
+      kind: 'rss',
+      title: 'Feed',
+      config: { url: 'https://example.com/rss' },
+    });
+    const lead = {
+      id: 'lead-unauth-test',
+      sourceId: source.id,
+      title: 'Test Web Lead',
+      text: 'Need frontend developer with TypeScript skills',
+      url: 'https://example.com/job/123',
+      fingerprint: 'fp-unauth-test',
+      titleKey: 'test web lead',
+      status: 'new' as const,
+      score: 85,
+      type: 'gig' as const,
+      reasons: ['title:dev'],
+      createdAt: new Date().toISOString(),
+    };
+    await runtime.store.insertLead(lead);
+
+    // 1. Viewing lead page without auth renders modal trigger and dialog
+    const leadRes = await app.request(`/leads/${lead.id}`);
+    expect(leadRes.status).toBe(200);
+    const html = await leadRes.text();
+    expect(html).toContain('auth-vote-dialog');
+    expect(html).toContain('openAuthVoteModal()');
+    expect(html).toContain('Открыть оригинал ↗');
+    expect(html).toContain('Копировать текст');
+    expect(html).toContain('class="actions lead-actions"');
+
+    // 2. Attempting to vote without auth returns login_required
+    const voteApiRes = await app.request(`/leads/${lead.id}/vote`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: 'http://localhost',
+        host: 'localhost',
+      },
+      body: JSON.stringify({ signal: 'useful' }),
+    });
+    expect(voteApiRes.status).toBe(401);
+
+    await runtime.store.close();
+  });
 });

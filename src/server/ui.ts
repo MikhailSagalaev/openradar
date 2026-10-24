@@ -1,5 +1,6 @@
 import type { Lead, RunRecord, SourceHealth, SourceRecord, Stats } from '../core/types.ts';
 import { escapeHtml, firstLine } from '../core/text.ts';
+import { type SupportedLang, getTranslations } from './i18n.ts';
 
 export interface AuthDisplay {
   /** GitHub handle when the session belongs to a registered user. */
@@ -15,12 +16,14 @@ export interface LeadsPageData {
   type?: string;
   version: string;
   auth?: AuthDisplay;
+  lang?: SupportedLang;
 }
 
 export interface SourcesPageData {
   health: SourceHealth[];
   version: string;
   auth?: AuthDisplay;
+  lang?: SupportedLang;
 }
 
 export interface SourcePageData {
@@ -31,6 +34,7 @@ export interface SourcePageData {
   version: string;
   notice?: string;
   auth?: AuthDisplay;
+  lang?: SupportedLang;
 }
 
 export interface LeadPageData {
@@ -38,6 +42,7 @@ export interface LeadPageData {
   source?: SourceRecord;
   version: string;
   auth?: AuthDisplay;
+  lang?: SupportedLang;
 }
 
 export interface SourceFormValues {
@@ -70,18 +75,21 @@ export interface NewSourcePageData {
   sourceId?: string;
   error?: string;
   auth?: AuthDisplay;
+  lang?: SupportedLang;
 }
 
 export interface CreatedSourcePageData {
   version: string;
   source: SourceRecord;
   token: string;
+  lang?: SupportedLang;
 }
 
 export interface ExtensionPageData {
   version: string;
   webhookSources: SourceRecord[];
   auth?: AuthDisplay;
+  lang?: SupportedLang;
 }
 
 const KIND_LABELS: Record<string, string> = {
@@ -162,10 +170,32 @@ main {
 .top {
   display: flex;
   align-items: center;
-  gap: 20px;
+  justify-content: space-between;
+  gap: 16px;
   padding: 18px 0;
   border-bottom: 1px solid var(--line);
   margin-bottom: 32px;
+}
+.top-brand-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.lang-switch {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+.lang-switch:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+  text-decoration: none;
 }
 .brand {
   font-weight: 700;
@@ -295,6 +325,43 @@ a:hover { text-decoration: underline; }
   box-shadow: 0 0 0 1px var(--ink), 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 .search button { flex: 0 0 auto; }
+@keyframes rowEntrance {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes skeletonShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--line) 25%, var(--surface-hover) 50%, var(--line) 75%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.5s ease-in-out infinite;
+  border-radius: 4px;
+}
+dialog[open] {
+  animation: modalEntrance 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes modalEntrance {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+}
 .list { border-top: 1px solid var(--line); }
 .row {
   display: grid;
@@ -304,8 +371,20 @@ a:hover { text-decoration: underline; }
   border-bottom: 1px solid var(--line);
   text-decoration: none;
   color: inherit;
-  transition: opacity 0.12s ease;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  animation: rowEntrance 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
+.row:nth-child(1) { animation-delay: 0.02s; }
+.row:nth-child(2) { animation-delay: 0.04s; }
+.row:nth-child(3) { animation-delay: 0.06s; }
+.row:nth-child(4) { animation-delay: 0.08s; }
+.row:nth-child(5) { animation-delay: 0.10s; }
+.row:nth-child(6) { animation-delay: 0.12s; }
+.row:nth-child(7) { animation-delay: 0.14s; }
+.row:nth-child(8) { animation-delay: 0.16s; }
+.row:nth-child(9) { animation-delay: 0.18s; }
+.row:nth-child(10) { animation-delay: 0.20s; }
+.row:nth-child(n+11) { animation-delay: 0.22s; }
 .row:hover {
   text-decoration: none;
   opacity: 0.72;
@@ -391,17 +470,17 @@ a:hover { text-decoration: underline; }
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
-  padding: 12px 16px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  margin-bottom: 24px;
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  margin-bottom: 28px;
 }
 .funnel-btn {
   background: transparent;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 4px;
   padding: 5px 10px;
   font-size: 12px;
   font-weight: 500;
@@ -411,7 +490,7 @@ a:hover { text-decoration: underline; }
 }
 .funnel-btn:hover {
   color: var(--ink);
-  border-color: var(--line-strong);
+  border-color: var(--ink);
 }
 .funnel-btn.active {
   background: var(--ink);
@@ -447,15 +526,15 @@ a:hover { text-decoration: underline; }
 }
 .community-votes {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
   flex-wrap: wrap;
 }
 .vote-btn {
-  background: var(--surface);
+  background: transparent;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 5px 10px;
+  border-radius: 4px;
+  padding: 5px 11px;
   font: inherit;
   font-size: 12px;
   font-weight: 500;
@@ -468,7 +547,8 @@ a:hover { text-decoration: underline; }
 }
 .vote-btn:hover {
   background: var(--surface-hover);
-  border-color: var(--line-strong);
+  border-color: var(--ink);
+  transform: translateY(-1px);
 }
 .vote-btn:active {
   transform: scale(0.97);
@@ -514,8 +594,8 @@ a:hover { text-decoration: underline; }
   background: var(--ink);
   color: var(--bg);
   border: 1px solid var(--ink);
-  border-radius: 6px;
-  padding: 6px 12px;
+  border-radius: 4px;
+  padding: 6px 14px;
   font: inherit;
   font-size: 12.5px;
   font-weight: 500;
@@ -528,30 +608,32 @@ a:hover { text-decoration: underline; }
 .btn:hover {
   opacity: 0.9;
   text-decoration: none;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
 }
 .btn:active { transform: scale(0.97); }
 .btn.ghost {
   background: transparent;
   color: var(--ink);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   box-shadow: none;
 }
 .btn.ghost:hover {
   background: var(--surface-hover);
-  border-color: var(--line-strong);
+  border-color: var(--ink);
   opacity: 1;
+  transform: translateY(-1px);
 }
 .btn.ghost:active { transform: scale(0.97); }
 .btn.danger { border-style: dashed; }
 .btn:disabled { opacity: 0.4; cursor: default; }
 .empty {
   border: 1px dashed var(--line);
-  border-radius: 8px;
-  padding: 40px 20px;
+  border-radius: 4px;
+  padding: 44px 20px;
   text-align: center;
   color: var(--muted);
-  background: var(--surface);
+  background: transparent;
 }
 .empty h2 {
   color: var(--ink);
@@ -675,10 +757,10 @@ legend {
   cursor: pointer;
 }
 .preview-card {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface);
-  padding: 24px 24px 32px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  padding: 24px 0 32px;
   display: grid;
   gap: 16px;
   margin-top: 16px;
@@ -702,12 +784,10 @@ legend {
   margin-bottom: 20px;
 }
 .ai-box {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  background: transparent;
+  border-left: 2px solid var(--ink);
+  padding: 2px 0 2px 16px;
+  margin-bottom: 28px;
 }
 .tag {
   display: inline-flex;
@@ -776,19 +856,24 @@ footer {
 }
 @media (max-width: 700px) {
   main { padding: 0 16px 56px; }
-  .top { flex-wrap: wrap; gap: 10px 14px; }
-  .nav { order: 3; width: 100%; margin-left: 0; }
-  .actions { margin-left: 0; }
-  .page-head { flex-direction: column; align-items: flex-start; }
-  .detail-grid { grid-template-columns: 1fr; gap: 24px; }
+  .top { flex-wrap: wrap; gap: 12px; }
+  .nav { order: 3; width: 100%; margin-left: 0; padding-top: 8px; border-top: 1px solid var(--line); gap: 16px; }
+  .actions { margin-left: auto; }
+  .page-head { flex-direction: column; align-items: flex-start; gap: 14px; }
+  .lead-actions { width: 100%; display: flex; gap: 8px; }
+  .lead-actions .btn { flex: 1 1 auto; text-align: center; padding: 8px 12px; }
+  .detail-grid { grid-template-columns: 1fr; gap: 28px; }
   .grid { grid-template-columns: 1fr; }
-  .search { margin-left: 0; width: 100%; min-width: 0; max-width: calc(100vw - 32px); }
-  .search input { flex: 1 1 0; width: 0; min-width: 0; }
-  .filters { display: grid; grid-template-columns: 1fr; align-items: stretch; gap: 8px; max-width: calc(100vw - 32px); }
-  .chips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; max-width: calc(100vw - 32px); gap: 6px; }
-  .chip { text-align: center; padding: 4px 6px; }
-  .row { grid-template-columns: 1fr; gap: 8px; padding: 10px 6px; }
+  .search-hero { margin: 8px 0 20px; gap: 12px; }
+  .search-bar { width: 100%; }
+  .search-bar input { flex: 1 1 0; min-width: 0; }
+  .type-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+  .chips { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; padding-bottom: 4px; width: 100%; }
+  .chip { white-space: nowrap; }
+  .row { grid-template-columns: 1fr; gap: 6px; padding: 14px 0; }
   .row-side { justify-content: flex-start; }
+  .funnel-bar { flex-direction: column; align-items: stretch; gap: 12px; }
+  .community-votes { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; padding-bottom: 4px; }
 }
 `;
 
@@ -800,18 +885,25 @@ function layout(input: {
   actions?: string;
   script?: string;
   auth?: AuthDisplay;
+  lang?: SupportedLang;
 }): string {
+  const lang = input.lang ?? 'ru';
+  const t = getTranslations(lang);
   const nav = (key: 'leads' | 'sources' | 'extension', label: string, href: string): string =>
     `<a href="${href}"${input.active === key ? ' class="active"' : ''}>${label}</a>`;
 
   const authChip = input.auth
     ? input.auth.handle
-      ? `<span class="auth-handle">${escapeHtml(input.auth.handle)}</span><a class="chip" href="/logout">Выйти</a>`
-      : `<a class="chip" href="/logout">Выйти</a>`
-    : `<a class="chip" href="/login">Войти</a>`;
+      ? `<span class="auth-handle">${escapeHtml(input.auth.handle)}</span><a class="chip" href="/logout">${escapeHtml(t.signOut)}</a>`
+      : `<a class="chip" href="/logout">${escapeHtml(t.signOut)}</a>`
+    : `<a class="chip" href="/login">${escapeHtml(t.signIn)}</a>`;
+
+  const nextLang = lang === 'ru' ? 'en' : 'ru';
+  const langTitle = lang === 'ru' ? 'Switch to English' : 'Переключить на русский';
+  const langToggle = `<a class="lang-switch" href="/lang/${nextLang}" title="${langTitle}">${nextLang.toUpperCase()}</a>`;
 
   return `<!doctype html>
-<html lang="ru">
+<html lang="${lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -821,11 +913,14 @@ function layout(input: {
 <body>
 <main>
 <header class="top">
-  <a class="brand" href="/">OpenRadar</a>
-  <span class="version">v${escapeHtml(input.version)}</span>
+  <div class="top-brand-group">
+    <a class="brand" href="/">OpenRadar</a>
+    <span class="version">v${escapeHtml(input.version)}</span>
+    ${langToggle}
+  </div>
   <nav class="nav">
-    ${nav('leads', 'Заказы', '/')}
-    ${nav('sources', 'Источники', '/sources')}
+    ${nav('leads', t.navLeads, '/')}
+    ${nav('sources', t.navSources, '/sources')}
   </nav>
   <div class="actions">${input.actions ?? ''}${authChip}</div>
 </header>
@@ -833,53 +928,76 @@ ${input.body}
 <footer>
   <div class="footer-wrap">
     <div>
-      <p class="footer-brand"><b>OpenRadar</b> — открытый децентрализованный агрегатор заказов и вакансий.</p>
-      <p class="muted" style="margin:0">Свободное программное обеспечение. Лицензия Apache 2.0.</p>
+      <p class="footer-brand"><b>OpenRadar</b> — ${escapeHtml(t.footerDesc)}</p>
+      <p class="muted" style="margin:0">${escapeHtml(t.footerLicense)}</p>
     </div>
     <div class="footer-nav">
       <a href="https://github.com/MikhailSagalaev/radar-oss" target="_blank" rel="noopener noreferrer">GitHub</a>
-      <a href="https://github.com/MikhailSagalaev/radar-oss/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">Лицензия Apache 2.0</a>
-      <a href="/feed.rss">RSS фид</a>
-      <a href="/api/delta">S3 Delta Stream</a>
-      <a href="/health">Статус системы</a>
+      <a href="https://github.com/MikhailSagalaev/radar-oss/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">${escapeHtml(t.licenseLink)}</a>
+      <a href="/feed.rss">${escapeHtml(t.rssFeed)}</a>
+      <a href="/api/delta">${escapeHtml(t.s3Delta)}</a>
+      <a href="/health">${escapeHtml(t.systemStatus)}</a>
     </div>
   </div>
 </footer>
 </main>
-<dialog id="add-source-dialog" style="border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);padding:24px;max-width:480px;width:90vw;box-shadow:0 16px 40px rgba(0,0,0,0.18)">
+<dialog id="auth-vote-dialog" style="border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);padding:24px;max-width:440px;width:calc(100vw - 32px);box-shadow:0 16px 40px rgba(0,0,0,0.2)">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <h3 style="margin:0;font-size:16px;font-weight:600">${escapeHtml(t.voteAuthTitle)}</h3>
+    <button type="button" onclick="document.getElementById('auth-vote-dialog').close()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:22px;line-height:1;padding:0">&times;</button>
+  </div>
+  <p class="muted" style="font-size:13px;line-height:1.6;margin:0 0 20px">
+    ${escapeHtml(t.voteAuthDesc)}
+  </p>
+  <div style="display:flex;justify-content:flex-end;gap:10px">
+    <button class="btn ghost" type="button" onclick="document.getElementById('auth-vote-dialog').close()">${escapeHtml(t.cancel)}</button>
+    <a class="btn" href="/auth/github">${escapeHtml(t.signInGithub)}</a>
+  </div>
+</dialog>
+<script>
+function openAuthVoteModal() {
+  const dlg = document.getElementById('auth-vote-dialog');
+  if (dlg && typeof dlg.showModal === 'function') {
+    dlg.showModal();
+  } else {
+    window.location.href = '/login';
+  }
+}
+</script>
+<dialog id="add-source-dialog" style="border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);padding:24px;max-width:480px;width:calc(100vw - 32px);box-shadow:0 16px 40px rgba(0,0,0,0.18)">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
-    <h3 style="margin:0;font-size:16px;font-weight:600">Добавить источник</h3>
+    <h3 style="margin:0;font-size:16px;font-weight:600">${escapeHtml(t.addSource)}</h3>
     <button type="button" onclick="document.getElementById('add-source-dialog').close()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1">&times;</button>
   </div>
   <form method="post" action="/sources" style="display:grid;gap:14px">
     <div style="display:grid;gap:5px">
-      <label style="font-size:12px;color:var(--muted)">Технологический протокол</label>
+      <label style="font-size:12px;color:var(--muted)">${escapeHtml(t.protocol)}</label>
       <select name="kind" id="dlg-kind" style="padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit" onchange="
         const val = this.value;
         document.getElementById('dlg-url-grp').style.display = val === 'rss' ? 'grid' : 'none';
         document.getElementById('dlg-tg-grp').style.display = val === 'telegram' ? 'grid' : 'none';
       ">
-        <option value="rss">RSS / Atom фид</option>
-        <option value="webhook">Входящий Webhook</option>
-        <option value="telegram">Telegram канал / паблик</option>
-        <option value="imap">Email ящик (IMAP)</option>
+        <option value="rss">RSS / Atom</option>
+        <option value="webhook">Webhook</option>
+        <option value="telegram">Telegram</option>
+        <option value="imap">IMAP</option>
       </select>
     </div>
     <div style="display:grid;gap:5px">
-      <label style="font-size:12px;color:var(--muted)">Название источника</label>
+      <label style="font-size:12px;color:var(--muted)">${escapeHtml(t.sourceName)}</label>
       <input name="title" required placeholder="Например: Мой блог или Закрытая рассылка" style="padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit">
     </div>
     <div id="dlg-url-grp" style="display:grid;gap:5px">
-      <label style="font-size:12px;color:var(--muted)">URL фида</label>
+      <label style="font-size:12px;color:var(--muted)">${escapeHtml(t.urlFeed)}</label>
       <input name="url" placeholder="https://example.com/feed.xml" style="padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit">
     </div>
     <div id="dlg-tg-grp" style="display:none;gap:5px">
-      <label style="font-size:12px;color:var(--muted)">Канал Telegram</label>
+      <label style="font-size:12px;color:var(--muted)">${escapeHtml(t.channelTelegram)}</label>
       <input name="channel" placeholder="freelance_orders" style="padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit">
     </div>
     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
-      <button class="btn ghost" type="button" onclick="document.getElementById('add-source-dialog').close()">Отмена</button>
-      <button class="btn" type="submit">Создать</button>
+      <button class="btn ghost" type="button" onclick="document.getElementById('add-source-dialog').close()">${escapeHtml(t.cancel)}</button>
+      <button class="btn" type="submit">${escapeHtml(t.createSource)}</button>
     </div>
   </form>
 </dialog>
@@ -908,22 +1026,23 @@ document.querySelectorAll('[data-poll]').forEach((button) => {
 });
 </script>`;
 
-function formatRelative(value: string | undefined): string {
+function formatRelative(value: string | undefined, lang: SupportedLang = 'ru'): string {
   if (!value) return '—';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
   const diffSec = Math.max(0, Math.round((Date.now() - date.getTime()) / 1000));
-  if (diffSec < 60) return 'только что';
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)} мин назад`;
-  if (diffSec < 86_400) return `${Math.floor(diffSec / 3600)} ч назад`;
-  return `${Math.floor(diffSec / 86_400)} дн назад`;
+  const t = getTranslations(lang);
+  if (diffSec < 60) return t.justNow;
+  if (diffSec < 3600) return t.minsAgo(Math.floor(diffSec / 60));
+  if (diffSec < 86_400) return t.hoursAgo(Math.floor(diffSec / 3600));
+  return t.daysAgo(Math.floor(diffSec / 86_400));
 }
 
-function formatDate(value: string | undefined): string {
+function formatDate(value: string | undefined, lang: SupportedLang = 'ru'): string {
   if (!value) return '—';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
-  return new Intl.DateTimeFormat('ru-RU', {
+  return new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'ru-RU', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -945,11 +1064,21 @@ function plural(value: number, forms: [string, string, string]): string {
   return forms[2];
 }
 
-function statusLabel(status: string): string {
-  return STATUS_LABELS[status] ?? status;
+function statusLabel(status: string, lang: SupportedLang = 'ru'): string {
+  const t = getTranslations(lang);
+  switch (status) {
+    case 'new': return t.statusNew;
+    case 'interesting': return t.statusInteresting;
+    case 'applied': return t.statusApplied;
+    case 'in_work': return t.statusInWork;
+    case 'delivered': return t.statusDelivered;
+    case 'rejected': return t.statusRejected;
+    case 'failed': return t.statusFailed;
+    default: return STATUS_LABELS[status] ?? status;
+  }
 }
 
-function statusDot(status: string): string {
+function statusDot(status: string, lang: SupportedLang = 'ru'): string {
   const cls =
     status === 'in_work' || status === 'delivered'
       ? 'ok'
@@ -960,7 +1089,7 @@ function statusDot(status: string): string {
           : status === 'rejected'
             ? 'err'
             : '';
-  return `<span class="dot ${cls}"></span>${escapeHtml(statusLabel(status))}`;
+  return `<span class="dot ${cls}"></span>${escapeHtml(statusLabel(status, lang))}`;
 }
 
 function healthStatus(health: SourceHealth): { dot: string; label: string } {
@@ -983,30 +1112,31 @@ function leadTitle(lead: Lead): string {
   return lead.title.trim() || firstLine(lead.text, 100) || 'Без заголовка';
 }
 
-function leadRow(lead: Lead, source?: SourceRecord): string {
+function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru'): string {
+  const t = getTranslations(lang);
   const meta = [
-    lead.type === 'job' ? 'Вакансия' : 'Заказ',
+    lead.type === 'job' ? t.jobType : t.gigType,
     source?.title,
     lead.category,
-    lead.city ?? (lead.isRemote !== false ? 'Удаленно' : undefined),
+    lead.city ?? (lead.isRemote !== false ? t.remote : undefined),
     lead.rawSalary || (typeof lead.budget === 'number' ? formatBudget(lead.budget) : undefined),
-    formatRelative(lead.createdAt),
+    formatRelative(lead.createdAt, lang),
   ]
     .filter(Boolean)
     .join(' · ');
 
   const signals: string[] = [];
   if (lead.score >= 80) {
-    signals.push('высокий рейтинг');
+    signals.push(t.signalHighScore);
   }
   if (lead.normalizedUsdMin || lead.budget || lead.rawSalary) {
-    signals.push('вилка в рынке');
+    signals.push(t.signalMarketBudget);
   }
   if (lead.reasons?.some((r) => r.includes('direct') || r.includes('employer')) || (lead.author && !lead.author.toLowerCase().includes('агентство'))) {
-    signals.push('прямой заказчик');
+    signals.push(t.signalDirectEmployer);
   }
   if ((lead.votes_scam ?? 0) >= 1 && lead.status !== 'rejected') {
-    signals.push('<span class="text-warn">возможен скам</span>');
+    signals.push(`<span class="text-warn">${escapeHtml(t.signalPossibleScam)}</span>`);
   }
 
   const details: string[] = [];
@@ -1029,13 +1159,14 @@ function leadRow(lead: Lead, source?: SourceRecord): string {
     </div>
     <div class="row-side">
       <span class="score">${lead.score}</span>
-      <span>${statusDot(lead.status)}</span>
+      <span>${statusDot(lead.status, lang)}</span>
     </div>
   </a>`;
 }
 
-function leadsTable(leads: Lead[], sourceById?: Map<string, SourceRecord>): string {
-  if (!leads.length) return '<div class="empty">Лидов пока нет.</div>';
+function leadsTable(leads: Lead[], sourceById?: Map<string, SourceRecord>, lang: SupportedLang = 'ru'): string {
+  const t = getTranslations(lang);
+  if (!leads.length) return `<div class="empty">${escapeHtml(t.emptyTitle)}</div>`;
   const rows = leads
     .map((lead) => {
       const source = sourceById?.get(lead.sourceId);
@@ -1045,13 +1176,13 @@ function leadsTable(leads: Lead[], sourceById?: Map<string, SourceRecord>): stri
           <div class="small muted">${escapeHtml([source?.title, lead.city].filter(Boolean).join(' · '))}</div>
         </td>
         <td class="small">${formatBudget(lead.budget)}</td>
-        <td class="small">${statusDot(lead.status)}</td>
-        <td class="small muted">${formatRelative(lead.createdAt)}</td>
+        <td class="small">${statusDot(lead.status, lang)}</td>
+        <td class="small muted">${formatRelative(lead.createdAt, lang)}</td>
       </tr>`;
     })
     .join('');
   return `<table>
-    <thead><tr><th>Скор</th><th>Заказ</th><th>Бюджет</th><th>Статус</th><th>Когда</th></tr></thead>
+    <thead><tr><th>${escapeHtml(t.score)}</th><th>${escapeHtml(t.gigType)}</th><th>${escapeHtml(t.budget)}</th><th>Статус</th><th>${escapeHtml(t.published)}</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
 }
@@ -1060,7 +1191,9 @@ function runsTable(
   runs: RunRecord[],
   sourceById?: Map<string, SourceRecord>,
   showSource = true,
+  lang: SupportedLang = 'ru',
 ): string {
+  const t = getTranslations(lang);
   if (!runs.length) return '<div class="empty">Запусков ещё не было.</div>';
   const rows = runs
     .map((run) => {
@@ -1072,35 +1205,36 @@ function runsTable(
         <td>${run.duplicates}</td>
         <td>${run.rejected}</td>
         <td>${run.delivered}</td>
-        <td class="small muted">${formatRelative(run.startedAt)}</td>
+        <td class="small muted">${formatRelative(run.startedAt, lang)}</td>
         <td class="small error">${escapeHtml(run.error ?? '')}</td>
       </tr>`;
     })
     .join('');
   return `<table>
-    <thead><tr>${showSource ? '<th>Источник</th>' : ''}<th>Найдено</th><th>Новых</th><th>Дубли</th><th>Отклонено</th><th>Доставлено</th><th>Когда</th><th>Ошибка</th></tr></thead>
+    <thead><tr>${showSource ? `<th>${escapeHtml(t.source)}</th>` : ''}<th>Найдено</th><th>Новых</th><th>Дубли</th><th>Отклонено</th><th>Доставлено</th><th>Когда</th><th>Ошибка</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
 }
 
 export function renderLeadsPage(data: LeadsPageData): string {
-  const { stats, health, leads, query, status, type = '', version } = data;
+  const { stats, health, leads, query, status, type = '', version, lang = 'ru' } = data;
+  const t = getTranslations(lang);
   const sourceById = new Map(health.map((item) => [item.source.id, item.source]));
 
   const typeTabs: Array<{ key: string; label: string }> = [
-    { key: '', label: 'Все' },
-    { key: 'gig', label: 'Заказы' },
-    { key: 'job', label: 'Вакансии' },
+    { key: '', label: t.all },
+    { key: 'gig', label: t.gigs },
+    { key: 'job', label: t.jobs },
   ];
 
   const statusFilters: Array<{ key: string; label: string }> = [
-    { key: '', label: 'Все' },
-    { key: 'new', label: 'Новые' },
-    { key: 'interesting', label: 'Интересно' },
-    { key: 'applied', label: 'Отклики' },
-    { key: 'in_work', label: 'В работе' },
-    { key: 'delivered', label: 'Доставленные' },
-    { key: 'rejected', label: 'Отклонённые' },
+    { key: '', label: t.statusAll },
+    { key: 'new', label: t.statusNew },
+    { key: 'interesting', label: t.statusInteresting },
+    { key: 'applied', label: t.statusApplied },
+    { key: 'in_work', label: t.statusInWork },
+    { key: 'delivered', label: t.statusDelivered },
+    { key: 'rejected', label: t.statusRejected },
   ];
 
   const hrefForType = (nextType: string): string => {
@@ -1142,19 +1276,19 @@ export function renderLeadsPage(data: LeadsPageData): string {
     )
     .join('');
 
-  const rows = leads.map((lead) => leadRow(lead, sourceById.get(lead.sourceId))).join('');
+  const rows = leads.map((lead) => leadRow(lead, sourceById.get(lead.sourceId), lang)).join('');
 
   const empty =
     stats.sources === 0
       ? `<div class="empty">
-          <h2>Начните с источника</h2>
-          <p>RSS, IMAP или webhook. Дальше Radar сам собирает заказы, убирает дубли и присылает только подходящие.</p>
-          <button class="btn" type="button" onclick="document.getElementById('add-source-dialog')?.showModal()">Добавить источник</button>
+          <h2>${escapeHtml(t.emptyTitle)}</h2>
+          <p>${escapeHtml(t.emptyDesc)}</p>
+          <button class="btn" type="button" onclick="document.getElementById('add-source-dialog')?.showModal()">${escapeHtml(t.addSource)}</button>
         </div>`
       : `<div class="empty">
-          <h2>Лидов пока нет</h2>
-          <p>Источники уже настроены. Запустите опрос — первые заказы появятся здесь.</p>
-          <button class="btn" data-poll="/api/poll">Опросить все</button>
+          <h2>${escapeHtml(t.emptyTitle)}</h2>
+          <p>${escapeHtml(t.emptyDesc)}</p>
+          <button class="btn" data-poll="/api/poll">${escapeHtml(t.pollAll)}</button>
         </div>`;
 
   const body = `
@@ -1164,9 +1298,9 @@ export function renderLeadsPage(data: LeadsPageData): string {
     ${type ? `<input type="hidden" name="type" value="${escapeHtml(type)}">` : ''}
     ${status ? `<input type="hidden" name="status" value="${escapeHtml(status)}">` : ''}
     <div class="search-bar">
-      <input name="q" id="search-input" value="${escapeHtml(query)}" placeholder="Поиск по задачам, навыкам (C++, C#, .NET, Python), городам... (нажмите / для фокуса)" aria-label="Поиск по заказам">
-      <button class="btn" type="submit">Найти</button>
-      <a class="btn ghost" href="${escapeHtml(rssHref)}" target="_blank" rel="noopener" title="RSS лента для этого поиска">RSS</a>
+      <input name="q" id="search-input" value="${escapeHtml(query)}" placeholder="${escapeHtml(t.searchPlaceholder)}" aria-label="${escapeHtml(t.searchBtn)}">
+      <button class="btn" type="submit">${escapeHtml(t.searchBtn)}</button>
+      <a class="btn ghost" href="${escapeHtml(rssHref)}" target="_blank" rel="noopener" title="RSS">RSS</a>
     </div>
   </form>
   <div class="chips">${chips}</div>
@@ -1186,21 +1320,22 @@ window.addEventListener('keydown', (e) => {
 </script>`;
 
   const pageTitle = query
-    ? `${query} — Поиск`
+    ? `${query} — ${t.searchBtn}`
     : type === 'job'
-    ? 'Вакансии'
+    ? t.jobs
     : type === 'gig'
-    ? 'Заказы'
-    : 'Заказы';
+    ? t.gigs
+    : t.navLeads;
 
   return layout({
     title: pageTitle,
     version,
     active: 'leads',
     body,
-    actions: '<a class="btn" href="/submit">Добавить по ссылке</a>',
+    actions: `<a class="btn" href="/submit">${escapeHtml(t.submitByUrl)}</a>`,
     script: searchHotkeyScript,
     auth: data.auth,
+    lang,
   });
 }
 
@@ -1216,7 +1351,8 @@ function safeHttpUrl(url: string | undefined): string | undefined {
 }
 
 export function renderLeadPage(data: LeadPageData): string {
-  const { lead, source, version, auth } = data;
+  const { lead, source, version, auth, lang = 'ru' } = data;
+  const t = getTranslations(lang);
   const isUser = Boolean(auth?.handle);
   const isAdminSession = Boolean(auth) && !auth?.handle;
   const copyScript = `<script>
@@ -1224,9 +1360,11 @@ document.getElementById('copy-lead')?.addEventListener('click', async (event) =>
   const button = event.currentTarget;
   try {
     await navigator.clipboard.writeText(document.getElementById('lead-text')?.innerText ?? '');
-    button.textContent = 'Скопировано';
+    const prev = button.textContent;
+    button.textContent = '${escapeHtml(t.copied)}';
+    setTimeout(() => { button.textContent = prev; }, 2000);
   } catch {
-    button.textContent = 'Не удалось';
+    button.textContent = '${escapeHtml(t.copyFailed)}';
   }
 });
 </script>`;
@@ -1240,15 +1378,15 @@ document.getElementById('copy-lead')?.addEventListener('click', async (event) =>
   const aiBox = (aiSummary || aiCategory || aiSkills)
     ? `<div class="ai-box">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
-          <span style="font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">AI Анализ заказа</span>
-          ${aiConfidence ? `<span class="muted small">${Math.round(Number(aiConfidence) * 100)}% совпадение</span>` : ''}
+          <span style="font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">${escapeHtml(t.aiAnalysis)}</span>
+          ${aiConfidence ? `<span class="muted small">${Math.round(Number(aiConfidence) * 100)}% ${escapeHtml(t.aiMatch)}</span>` : ''}
         </div>
         ${aiSummary ? `<p style="font-weight:600;margin:0 0 10px">${escapeHtml(aiSummary)}</p>` : ''}
         <div class="muted small" style="margin-top:6px;line-height:1.5">
           ${[
-            aiCategory ? `Категория: <b style="color:var(--ink)">${escapeHtml(aiCategory)}</b>` : '',
-            aiUrgency ? `Срочность: <b style="color:var(--ink)">${escapeHtml(aiUrgency)}</b>` : '',
-            aiSkills ? `Стек: ${escapeHtml(aiSkills.split(',').map((s) => s.trim()).join(', '))}` : '',
+            aiCategory ? `${escapeHtml(t.category)}: <b style="color:var(--ink)">${escapeHtml(aiCategory)}</b>` : '',
+            aiUrgency ? `${escapeHtml(t.urgency)}: <b style="color:var(--ink)">${escapeHtml(aiUrgency)}</b>` : '',
+            aiSkills ? `${escapeHtml(t.stack)}: ${escapeHtml(aiSkills.split(',').map((s) => s.trim()).join(', '))}` : '',
           ].filter(Boolean).join(' · ')}
         </div>
       </div>`
@@ -1258,7 +1396,7 @@ document.getElementById('copy-lead')?.addEventListener('click', async (event) =>
 
   const cautionBanner = ((lead.votes_scam ?? 0) >= 1 && lead.status !== 'rejected')
     ? `<div class="caution-banner">
-        Внимание: участники сообщества отметили этот заказ как подозрительный. Тщательно проверяйте заказчика перед началом работы.
+        ${escapeHtml(t.cautionFlag)}
       </div>`
     : '';
 
@@ -1271,47 +1409,47 @@ document.getElementById('copy-lead')?.addEventListener('click', async (event) =>
 
   const adminControls = isAdminSession
     ? `<form method="post" action="/leads/${escapeHtml(lead.id)}/status" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-    <span class="small muted" style="margin-right:4px">Статус:</span>
-    <button name="status" value="new" class="funnel-btn ${lead.status === 'new' ? 'active' : ''}">Новый</button>
-    <button name="status" value="interesting" class="funnel-btn ${lead.status === 'interesting' ? 'active' : ''}">Интересно</button>
-    <button name="status" value="applied" class="funnel-btn ${lead.status === 'applied' ? 'active' : ''}">Откликнулся</button>
-    <button name="status" value="in_work" class="funnel-btn ${lead.status === 'in_work' ? 'active' : ''}">В работе</button>
-    <button name="status" value="rejected" class="funnel-btn ${lead.status === 'rejected' ? 'active' : ''}">Отклонён</button>
+    <span class="small muted" style="margin-right:4px">${escapeHtml(t.details)}:</span>
+    <button name="status" value="new" class="funnel-btn ${lead.status === 'new' ? 'active' : ''}">${escapeHtml(t.statusNew)}</button>
+    <button name="status" value="interesting" class="funnel-btn ${lead.status === 'interesting' ? 'active' : ''}">${escapeHtml(t.statusInteresting)}</button>
+    <button name="status" value="applied" class="funnel-btn ${lead.status === 'applied' ? 'active' : ''}">${escapeHtml(t.statusApplied)}</button>
+    <button name="status" value="in_work" class="funnel-btn ${lead.status === 'in_work' ? 'active' : ''}">${escapeHtml(t.statusInWork)}</button>
+    <button name="status" value="rejected" class="funnel-btn ${lead.status === 'rejected' ? 'active' : ''}">${escapeHtml(t.statusRejected)}</button>
   </form>
   <form method="post" action="/leads/${escapeHtml(lead.id)}/feedback" style="display:flex;gap:6px;align-items:center">
-    <span class="small muted" style="margin-right:4px">Оценка:</span>
-    <button name="feedback" value="up" class="btn ghost small" title="Подходит">+10 Подходит</button>
-    <button name="feedback" value="down" class="btn ghost small" title="Мусор">-20 Мусор</button>
+    <span class="small muted" style="margin-right:4px">${escapeHtml(t.score)}:</span>
+    <button name="feedback" value="up" class="btn ghost small" title="Подходит">+10</button>
+    <button name="feedback" value="down" class="btn ghost small" title="Мусор">-20</button>
   </form>`
     : '';
 
   const voteControls = isUser
     ? `<form method="post" action="/leads/${escapeHtml(lead.id)}/vote" class="community-votes">
-    <span class="small muted" style="margin-right:4px">Сообщество:</span>
-    <button name="signal" value="useful" class="vote-btn" type="submit">Полезно <span class="vote-count">${lead.votes_up ?? 0}</span></button>
-    <button name="signal" value="junk" class="vote-btn" type="submit">Мусор <span class="vote-count">${lead.votes_down ?? 0}</span></button>
-    <button name="signal" value="scam" class="vote-btn vote-btn-danger" type="submit">Скам <span class="vote-count">${lead.votes_scam ?? 0}</span></button>
-    <button name="signal" value="closed" class="vote-btn" type="submit">Закрыто <span class="vote-count">${lead.votes_closed ?? 0}</span></button>
+    <span class="small muted" style="margin-right:4px">${escapeHtml(t.community)}:</span>
+    <button name="signal" value="useful" class="vote-btn" type="submit">${escapeHtml(t.useful)} <span class="vote-count">${lead.votes_up ?? 0}</span></button>
+    <button name="signal" value="junk" class="vote-btn" type="submit">${escapeHtml(t.junk)} <span class="vote-count">${lead.votes_down ?? 0}</span></button>
+    <button name="signal" value="scam" class="vote-btn vote-btn-danger" type="submit">${escapeHtml(t.scam)} <span class="vote-count">${lead.votes_scam ?? 0}</span></button>
+    <button name="signal" value="closed" class="vote-btn" type="submit">${escapeHtml(t.closed)} <span class="vote-count">${lead.votes_closed ?? 0}</span></button>
   </form>`
     : `<div class="community-votes">
-    <span class="small muted" style="margin-right:4px">Сообщество:</span>
-    <span class="vote-btn">Полезно <span class="vote-count">${lead.votes_up ?? 0}</span></span>
-    <span class="vote-btn">Мусор <span class="vote-count">${lead.votes_down ?? 0}</span></span>
-    <span class="vote-btn vote-btn-danger">Скам <span class="vote-count">${lead.votes_scam ?? 0}</span></span>
-    <span class="vote-btn">Закрыто <span class="vote-count">${lead.votes_closed ?? 0}</span></span>
-    <a class="chip" href="/login">Войти через GitHub, чтобы голосовать</a>
+    <span class="small muted" style="margin-right:4px">${escapeHtml(t.community)}:</span>
+    <button type="button" class="vote-btn" onclick="openAuthVoteModal()">${escapeHtml(t.useful)} <span class="vote-count">${lead.votes_up ?? 0}</span></button>
+    <button type="button" class="vote-btn" onclick="openAuthVoteModal()">${escapeHtml(t.junk)} <span class="vote-count">${lead.votes_down ?? 0}</span></button>
+    <button type="button" class="vote-btn vote-btn-danger" onclick="openAuthVoteModal()">${escapeHtml(t.scam)} <span class="vote-count">${lead.votes_scam ?? 0}</span></button>
+    <button type="button" class="vote-btn" onclick="openAuthVoteModal()">${escapeHtml(t.closed)} <span class="vote-count">${lead.votes_closed ?? 0}</span></button>
+    <button type="button" class="chip" onclick="openAuthVoteModal()">${escapeHtml(t.signInToVote)}</button>
   </div>`;
 
   const body = `
-<a class="back" href="/">Все заказы</a>
+<a class="back" href="/">${escapeHtml(t.backToLeads)}</a>
 <div class="page-head">
   <div>
     <h1>${escapeHtml(leadTitle(lead))}</h1>
-    <p class="muted small">${statusDot(lead.status)} · ${formatRelative(lead.createdAt)}</p>
+    <p class="muted small">${statusDot(lead.status, lang)} · ${formatRelative(lead.createdAt, lang)}</p>
   </div>
-  <div class="actions">
-    ${cleanUrl ? `<a class="btn" href="${escapeHtml(cleanUrl)}" target="_blank" rel="noopener noreferrer">Открыть оригинал</a>` : ''}
-    <button class="btn ghost" id="copy-lead" type="button">Копировать текст</button>
+  <div class="actions lead-actions">
+    ${cleanUrl ? `<a class="btn" href="${escapeHtml(cleanUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t.openOriginal)}</a>` : ''}
+    <button class="btn ghost" id="copy-lead" type="button">${escapeHtml(t.copyText)}</button>
   </div>
 </div>
 
@@ -1325,27 +1463,27 @@ ${cautionBanner}
 <div class="detail-grid">
   <section>
     ${aiBox}
-    <h2>Текст заказа</h2>
+    <h2>${escapeHtml(t.leadDescription)}</h2>
     <p class="lead-text" id="lead-text">${escapeHtml(lead.text)}</p>
-    ${lead.reasons.length ? `<h2 style="margin-top:26px">Почему так</h2><ul class="reasons">${lead.reasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join('')}</ul>` : ''}
+    ${lead.reasons.length ? `<h2 style="margin-top:26px">${escapeHtml(t.scoreReasons)}</h2><ul class="reasons">${lead.reasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join('')}</ul>` : ''}
   </section>
   <aside>
-    <h2>Детали</h2>
+    <h2>${escapeHtml(t.details)}</h2>
     <dl class="meta-list">
-      <div><dt>Тип</dt><dd>${lead.type === 'job' ? 'Вакансия' : 'Заказ'}</dd></div>
-      <div><dt>Голоса</dt><dd>+${lead.votes_up ?? 0} / -${lead.votes_down ?? 0} / скам: ${lead.votes_scam ?? 0} / закрыто: ${lead.votes_closed ?? 0}</dd></div>
-      <div><dt>Источник</dt><dd>${source ? `<a href="/sources/${escapeHtml(source.id)}">${escapeHtml(source.title)}</a>` : escapeHtml(lead.sourceId)}</dd></div>
-      ${lead.category ? `<div><dt>Категория</dt><dd><b>${escapeHtml(lead.category)}</b></dd></div>` : ''}
-      <div><dt>Локация</dt><dd>${escapeHtml(lead.city ?? (lead.isRemote !== false ? 'Удалённо' : '—'))}</dd></div>
-      <div><dt>Формат</dt><dd>${lead.isRemote !== false ? 'Удалённая работа' : 'На объекте / Офлайн'}</dd></div>
-      <div><dt>Бюджет</dt><dd>${salaryDisplay}${usdEstimate}</dd></div>
-      <div><dt>Скор</dt><dd>${lead.score}</dd></div>
-      <div><dt>Опубликован</dt><dd>${formatDate(lead.publishedAt)}</dd></div>
-      <div><dt>Добавлен</dt><dd>${formatDate(lead.createdAt)}</dd></div>
-      ${lead.author ? `<div><dt>Автор</dt><dd>${escapeHtml(lead.author)}</dd></div>` : ''}
+      <div><dt>${escapeHtml(t.type)}</dt><dd>${lead.type === 'job' ? escapeHtml(t.jobType) : escapeHtml(t.gigType)}</dd></div>
+      <div><dt>${escapeHtml(t.votes)}</dt><dd>+${lead.votes_up ?? 0} / -${lead.votes_down ?? 0} / ${escapeHtml(t.scam)}: ${lead.votes_scam ?? 0} / ${escapeHtml(t.closed)}: ${lead.votes_closed ?? 0}</dd></div>
+      <div><dt>${escapeHtml(t.source)}</dt><dd>${source ? `<a href="/sources/${escapeHtml(source.id)}">${escapeHtml(source.title)}</a>` : escapeHtml(lead.sourceId)}</dd></div>
+      ${lead.category ? `<div><dt>${escapeHtml(t.category)}</dt><dd><b>${escapeHtml(lead.category)}</b></dd></div>` : ''}
+      <div><dt>${escapeHtml(t.location)}</dt><dd>${escapeHtml(lead.city ?? (lead.isRemote !== false ? t.remote : '—'))}</dd></div>
+      <div><dt>${escapeHtml(t.format)}</dt><dd>${lead.isRemote !== false ? escapeHtml(t.remoteFormat) : escapeHtml(t.onsiteFormat)}</dd></div>
+      <div><dt>${escapeHtml(t.budget)}</dt><dd>${salaryDisplay}${usdEstimate}</dd></div>
+      <div><dt>${escapeHtml(t.score)}</dt><dd>${lead.score}</dd></div>
+      <div><dt>${escapeHtml(t.published)}</dt><dd>${formatDate(lead.publishedAt, lang)}</dd></div>
+      <div><dt>${escapeHtml(t.added)}</dt><dd>${formatDate(lead.createdAt, lang)}</dd></div>
+      ${lead.author ? `<div><dt>${escapeHtml(t.author)}</dt><dd>${escapeHtml(lead.author)}</dd></div>` : ''}
     </dl>
     ${lead.skills?.length ? `
-      <h2 style="margin-top:20px">Навыки и стек</h2>
+      <h2 style="margin-top:20px">${escapeHtml(t.skills)}</h2>
       <p class="small muted" style="line-height:1.6;margin-top:6px">
         ${escapeHtml(lead.skills.join(', '))}
       </p>` : ''}
@@ -1359,11 +1497,13 @@ ${cautionBanner}
     body,
     script: copyScript,
     auth: data.auth,
+    lang,
   });
 }
 
 export function renderSourcesPage(data: SourcesPageData): string {
-  const { health, version } = data;
+  const { health, version, lang = 'ru' } = data;
+  const t = getTranslations(lang);
   const rows = health
     .map((item) => {
       const status = healthStatus(item);
@@ -1371,7 +1511,7 @@ export function renderSourcesPage(data: SourcesPageData): string {
       return `<a class="row" href="/sources/${escapeHtml(item.source.id)}">
         <div>
           <div class="row-title">${escapeHtml(item.source.title)}</div>
-          <div class="row-meta">${escapeHtml(KIND_LABELS[item.source.kind] ?? item.source.kind)} · <span class="dot ${status.dot}"></span>${status.label} · ${formatRelative(item.lastRun?.startedAt)}</div>
+          <div class="row-meta">${escapeHtml(KIND_LABELS[item.source.kind] ?? item.source.kind)} · <span class="dot ${status.dot}"></span>${status.label} · ${formatRelative(item.lastRun?.startedAt, lang)}</div>
           ${error ? `<div class="row-meta error">${escapeHtml(error)}</div>` : ''}
         </div>
         <div class="row-side">${item.last24h.found} / ${item.last24h.inserted} / ${item.last24h.delivered}</div>
@@ -1393,25 +1533,27 @@ export function renderSourcesPage(data: SourcesPageData): string {
   const body = `
 <div class="page-head">
   <div>
-    <h1>Источники</h1>
+    <h1>${escapeHtml(t.navSources)}</h1>
     <p class="muted small">${health.length} ${plural(health.length, ['источник', 'источника', 'источников'])} · ${health.filter((item) => item.source.enabled).length} активных · 24ч: найдено / новых / доставлено</p>
   </div>
 </div>
 <div class="list">${rows || empty}</div>`;
 
   return layout({
-    title: 'Источники',
+    title: t.navSources,
     version,
     active: 'sources',
     body,
     actions:
-      '<form method="post" action="/sources/presets" style="display:inline"><button class="btn ghost" type="submit">Загрузить биржи</button></form><a class="btn" href="/sources/new">Добавить источник</a>',
+      `<form method="post" action="/sources/presets" style="display:inline"><button class="btn ghost" type="submit">Загрузить биржи</button></form><a class="btn" href="/sources/new">${escapeHtml(t.addSource)}</a>`,
     auth: data.auth,
+    lang,
   });
 }
 
 export function renderSourcePage(data: SourcePageData): string {
-  const { source, health, leads, runs, version, notice } = data;
+  const { source, health, leads, runs, version, notice, lang = 'ru' } = data;
+  const t = getTranslations(lang);
   const status = healthStatus(health);
   const config = configEntries(source.config)
     .map(([key, value]) => `<div><dt>${escapeHtml(key)}</dt><dd>${escapeHtml(value)}</dd></div>`)
@@ -1422,7 +1564,7 @@ export function renderSourcePage(data: SourcePageData): string {
     : '';
 
   const body = `
-<a class="back" href="/sources">← Источники</a>
+<a class="back" href="/sources">← ${escapeHtml(t.navSources)}</a>
 ${notice ? `<div class="notice">${escapeHtml(notice)}</div>` : ''}
 <div class="page-head">
   <div>
@@ -1437,7 +1579,7 @@ ${metricRow([
   { value: health.last24h.delivered, label: 'доставлено' },
   { value: health.last24h.rejected, label: 'отклонено' },
   { value: `${health.successRate}%`, label: 'успешных запусков' },
-  { value: formatRelative(health.lastRun?.startedAt), label: 'последний запуск' },
+  { value: formatRelative(health.lastRun?.startedAt, lang), label: 'последний запуск' },
 ])}
 
 <section>
@@ -1448,12 +1590,12 @@ ${metricRow([
 
 <section>
   <h2>Лиды источника</h2>
-  ${leadsTable(leads)}
+  ${leadsTable(leads, undefined, lang)}
 </section>
 
 <section>
   <h2>Запуски</h2>
-  ${runsTable(runs, undefined, false)}
+  ${runsTable(runs, undefined, false, lang)}
 </section>`;
 
   return layout({
@@ -1471,6 +1613,7 @@ ${metricRow([
       </form>`,
     script: POLL_SCRIPT,
     auth: data.auth,
+    lang,
   });
 }
 
@@ -1600,11 +1743,12 @@ syncKind();
     body,
     actions: '<a class="btn ghost" href="/sources">Отмена</a>',
     auth: data.auth,
+    lang: data.lang,
   });
 }
 
 export function renderSourceCreatedPage(data: CreatedSourcePageData): string {
-  const { source, token, version } = data;
+  const { source, token, version, lang } = data;
   const body = `
 <a class="back" href="/sources">← Источники</a>
 <div class="page-head">
@@ -1621,19 +1765,22 @@ export function renderSourceCreatedPage(data: CreatedSourcePageData): string {
     version,
     active: 'sources',
     body,
+    lang,
   });
 }
 
-export function renderNotFound(version: string): string {
+export function renderNotFound(version: string, lang: SupportedLang = 'ru'): string {
+  const t = getTranslations(lang);
   return layout({
-    title: 'Не найдено',
+    title: t.emptyTitle,
     version,
-    body: `<div class="page-head"><div><h1>Не найдено</h1><p class="muted small">Страница или источник не существует.</p></div></div><a class="btn" href="/">К лидам</a>`,
+    body: `<div class="page-head"><div><h1>${escapeHtml(t.emptyTitle)}</h1><p class="muted small">${escapeHtml(t.emptyDesc)}</p></div></div><a class="btn" href="/">${escapeHtml(t.backToLeads)}</a>`,
+    lang,
   });
 }
 
 export function renderExtensionPage(data: ExtensionPageData): string {
-  const { version, webhookSources, auth } = data;
+  const { version, webhookSources, auth, lang } = data;
   const script = `<script>
 document.addEventListener('DOMContentLoaded', () => {
   const urlEl = document.getElementById('detected-url');
@@ -1738,6 +1885,7 @@ document.addEventListener('DOMContentLoaded', () => {
     body,
     script,
     auth,
+    lang,
   });
 }
 
@@ -1746,117 +1894,130 @@ export interface SubmitPageData {
   auth?: AuthDisplay;
   userHandle?: string;
   githubEnabled?: boolean;
+  lang?: SupportedLang;
 }
 
 export function renderSubmitPage(data: SubmitPageData): string {
-  const { version, userHandle, githubEnabled } = data;
+  const { version, userHandle, githubEnabled, lang = 'ru' } = data;
+  const t = getTranslations(lang);
 
   if (!userHandle) {
     const githubButton = githubEnabled
-      ? '<a class="btn" href="/auth/github">Войти через GitHub</a>'
-      : '<p class="muted small">На этом сервере не настроен GitHub OAuth (переменные GITHUB_CLIENT_ID и GITHUB_CLIENT_SECRET).</p>';
+      ? `<a class="btn" href="/auth/github">${escapeHtml(t.signInGithub)}</a>`
+      : `<p class="muted small">${escapeHtml(t.noOAuthConfig)}</p>`;
     const guestBody = `
-<a class="back" href="/">← Все заказы</a>
+<a class="back" href="/">${escapeHtml(t.backToLeads)}</a>
 <div class="empty" style="margin-top:24px">
-  <h2>Добавление заказов — для участников</h2>
-  <p>Чтобы база OpenRadar оставалась доверенной, добавлять лиды могут только зарегистрированные участники. Войдите через GitHub — это займёт секунды.</p>
+  <h2>${escapeHtml(t.submitGuestTitle)}</h2>
+  <p>${escapeHtml(t.submitGuestDesc)}</p>
   <div style="display:flex;gap:8px;justify-content:center;margin-top:14px">${githubButton}</div>
 </div>`;
     return layout({
-      title: 'Добавить по ссылке',
+      title: t.submitTitle,
       version,
       active: 'leads',
       body: guestBody,
       auth: data.auth,
+      lang,
     });
   }
 
   const body = `
-<a class="back" href="/">← Все заказы</a>
+<a class="back" href="/">${escapeHtml(t.backToLeads)}</a>
 <div class="page-head">
   <div>
-    <h1>Добавить по ссылке</h1>
-    <p class="muted small">Автоматический сбор описания вакансии или заказа через разметку страницы</p>
+    <h1>${escapeHtml(t.submitTitle)}</h1>
+    <p class="muted small">${escapeHtml(t.submitSubtitle)}</p>
   </div>
 </div>
 
 <form id="submit-form" method="post" action="/submit" class="form" style="max-width:760px">
   <div style="display:flex;gap:10px;align-items:flex-start">
     <div style="flex:1">
-      <input id="url-input" name="url" type="url" placeholder="Вставьте ссылку на вакансию или заказ (например, hh.ru, habr.com, vc.ru...)" required autofocus style="width:100%;padding:10px 14px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit;font-size:13.5px">
+      <input id="url-input" name="url" type="url" placeholder="${escapeHtml(t.urlPlaceholder)}" required autofocus style="width:100%;padding:10px 14px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit;font-size:13.5px">
       <div id="fetch-status" class="hint" style="margin-top:6px;min-height:18px"></div>
     </div>
-    <button id="fetch-btn" type="button" class="btn" style="padding:10px 18px;white-space:nowrap">Получить данные</button>
+    <button id="fetch-btn" type="button" class="btn" style="padding:10px 18px;white-space:nowrap">${escapeHtml(t.fetchData)}</button>
+  </div>
+
+  <div id="preview-skeleton" style="display:none;padding:24px 0 32px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+    <div class="skeleton" style="height:18px;width:30%;margin-bottom:18px"></div>
+    <div class="skeleton" style="height:36px;width:100%;margin-bottom:14px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div class="skeleton" style="height:34px;width:100%"></div>
+      <div class="skeleton" style="height:34px;width:100%"></div>
+    </div>
+    <div class="skeleton" style="height:100px;width:100%"></div>
   </div>
 
   <div id="preview-card" class="preview-card">
     <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:12px">
-      <span style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600;color:var(--muted)">Предпросмотр данных</span>
+      <span style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600;color:var(--muted)">${escapeHtml(t.previewHeader)}</span>
       <div class="type-selector">
         <label class="radio-label">
           <input type="radio" name="leadType" value="gig" id="type-gig" checked>
-          <span>Заказ</span>
+          <span>${escapeHtml(t.gigType)}</span>
         </label>
         <label class="radio-label">
           <input type="radio" name="leadType" value="job" id="type-job">
-          <span>Вакансия</span>
+          <span>${escapeHtml(t.jobType)}</span>
         </label>
       </div>
     </div>
 
     <div class="field">
-      <label for="title-input">Заголовок</label>
+      <label for="title-input">${escapeHtml(t.titleLabel)}</label>
       <input id="title-input" name="title" required placeholder="Например, Разработчик веб-интерфейсов">
     </div>
 
     <div class="grid">
       <div class="field">
-        <label for="author-input">Компания / Автор</label>
+        <label for="author-input">${escapeHtml(t.authorLabel)}</label>
         <input id="author-input" name="author" placeholder="Компания или заказчик">
       </div>
       <div class="field">
-        <label for="category-input">Категория</label>
+        <label for="category-input">${escapeHtml(t.categoryLabel)}</label>
         <input id="category-input" name="category" placeholder="Например: Разработка и IT, Дизайн, Маркетинг...">
       </div>
     </div>
 
     <div class="grid">
       <div class="field">
-        <label for="city-input">Город / Локация</label>
+        <label for="city-input">${escapeHtml(t.locationLabel)}</label>
         <input id="city-input" name="city" placeholder="Москва, Ставрополь или Удалённо">
       </div>
       <div class="field" style="display:flex;align-items:center;padding-top:20px">
         <label class="radio-label" style="font-size:13px;cursor:pointer">
           <input type="checkbox" id="is-remote-input" name="isRemote" value="true" checked style="accent-color:var(--ink);width:16px;height:16px">
-          <span>Удалённая работа</span>
+          <span>${escapeHtml(t.isRemoteLabel)}</span>
         </label>
       </div>
     </div>
 
     <div class="grid">
       <div class="field">
-        <label for="budget-input">Бюджет / Вилка</label>
+        <label for="budget-input">${escapeHtml(t.budgetLabel)}</label>
         <input id="budget-input" name="budget" type="number" placeholder="Например, 150000">
       </div>
       <div class="field">
-        <label for="currency-input">Валюта</label>
+        <label for="currency-input">${escapeHtml(t.currencyLabel)}</label>
         <input id="currency-input" name="currency" value="RUB" placeholder="RUB, USD, EUR">
       </div>
     </div>
 
     <div class="field">
-      <label for="skills-input">Навыки и стек</label>
-      <input id="skills-input" name="skills" placeholder="Например: TypeScript, React, Node.js, PostgreSQL (через запятую)">
+      <label for="skills-input">${escapeHtml(t.skillsLabel)}</label>
+      <input id="skills-input" name="skills" placeholder="TypeScript, React, Node.js, PostgreSQL...">
     </div>
 
     <div class="field">
-      <label for="text-input">Текст / Описание</label>
+      <label for="text-input">${escapeHtml(t.descLabel)}</label>
       <textarea id="text-input" name="text" rows="8" required placeholder="Описание вакансии или проекта..." style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit;font-size:13px;line-height:1.5;resize:vertical"></textarea>
     </div>
 
     <div style="display:flex;align-items:center;justify-content:space-between;padding-top:16px;margin-top:12px">
       <div id="submit-status" style="font-size:12px;color:var(--muted)"></div>
-      <button id="submit-btn" type="button" class="btn" style="padding:10px 24px;font-size:13.5px">Опубликовать в OpenRadar</button>
+      <button id="submit-btn" type="button" class="btn" style="padding:10px 24px;font-size:13.5px">${escapeHtml(t.publish)}</button>
     </div>
   </div>
 </form>`;
@@ -1866,6 +2027,8 @@ export function renderSubmitPage(data: SubmitPageData): string {
   const urlInput = document.getElementById('url-input');
   const fetchBtn = document.getElementById('fetch-btn');
   const fetchStatus = document.getElementById('fetch-status');
+  const previewCard = document.getElementById('preview-card');
+  const previewSkeleton = document.getElementById('preview-skeleton');
   const titleInput = document.getElementById('title-input');
   const authorInput = document.getElementById('author-input');
   const categoryInput = document.getElementById('category-input');
@@ -1896,8 +2059,10 @@ export function renderSubmitPage(data: SubmitPageData): string {
     fetching = true;
     lastUrl = raw;
     fetchBtn.disabled = true;
-    fetchStatus.textContent = 'Загрузка данных по ссылке...';
+    fetchStatus.textContent = '${escapeHtml(t.fetching)}';
     fetchStatus.style.color = 'var(--muted)';
+    if (previewSkeleton) previewSkeleton.style.display = 'block';
+    if (previewCard) previewCard.style.opacity = '0.5';
 
     try {
       const res = await fetch('/api/preview', {
@@ -1934,6 +2099,8 @@ export function renderSubmitPage(data: SubmitPageData): string {
     } finally {
       fetching = false;
       fetchBtn.disabled = false;
+      if (previewSkeleton) previewSkeleton.style.display = 'none';
+      if (previewCard) previewCard.style.opacity = '1';
     }
   }
 
@@ -1981,7 +2148,7 @@ export function renderSubmitPage(data: SubmitPageData): string {
     }
 
     submitBtn.disabled = true;
-    submitStatus.textContent = 'Публикация...';
+    submitStatus.textContent = '${escapeHtml(t.publishing)}';
     submitStatus.style.color = 'var(--muted)';
 
     const payload = {
@@ -2031,12 +2198,13 @@ export function renderSubmitPage(data: SubmitPageData): string {
 </script>`;
 
   return layout({
-    title: 'Добавить по ссылке',
+    title: t.submitTitle,
     version,
     active: 'leads',
     body,
     script,
     auth: data.auth,
+    lang,
   });
 }
 

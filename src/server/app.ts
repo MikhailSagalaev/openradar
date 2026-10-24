@@ -26,6 +26,7 @@ import {
   renderSubmitPage,
   type SourceFormValues,
 } from './ui.ts';
+import { resolveLang, type SupportedLang } from './i18n.ts';
 import { extractPreviewFromHtml, validateSubmissionUrl } from './preview.ts';
 
 function tokenFromRequest(c: Context): string | undefined {
@@ -476,8 +477,22 @@ export function createApp(runtime: Runtime): Hono {
     return c.redirect('/login');
   });
 
+  app.get('/lang/:lang', (c) => {
+    const raw = c.req.param('lang');
+    const target: SupportedLang = raw === 'en' ? 'en' : 'ru';
+    setCookie(c, 'openradar_lang', target, {
+      path: '/',
+      maxAge: 31536000,
+      sameSite: 'Lax',
+    });
+    const returnUrl = c.req.query('return') || c.req.header('referer') || '/';
+    const safeReturn = returnUrl.startsWith('/') && !returnUrl.startsWith('//') ? returnUrl : '/';
+    return c.redirect(safeReturn);
+  });
+
   app.get('/', async (c) => {
     if (!await canRead(c, runtime)) return c.redirect('/login');
+    const lang = resolveLang(c);
     const rawStatus = c.req.query('status') ?? '';
     const status = [
       'new',
@@ -515,12 +530,14 @@ export function createApp(runtime: Runtime): Hono {
         type: type ?? '',
         version: VERSION,
         auth: await getAuthDisplay(c, runtime),
+        lang,
       }),
     );
   });
 
   app.get('/extension', async (c) => {
     if (!await canRead(c, runtime)) return c.redirect('/login');
+    const lang = resolveLang(c);
     const allSources = await runtime.store.listSources();
     const webhookSources = allSources.filter((s) => s.kind === 'webhook' && s.enabled);
     return c.html(
@@ -528,12 +545,14 @@ export function createApp(runtime: Runtime): Hono {
         version: VERSION,
         webhookSources,
         auth: await getAuthDisplay(c, runtime),
+        lang,
       }),
     );
   });
 
   app.get('/submit', async (c) => {
     if (!await canRead(c, runtime)) return c.redirect('/login');
+    const lang = resolveLang(c);
     const user = await currentUser(c, runtime);
     return c.html(
       renderSubmitPage({
@@ -541,6 +560,7 @@ export function createApp(runtime: Runtime): Hono {
         auth: await getAuthDisplay(c, runtime),
         userHandle: user?.handle,
         githubEnabled: githubOAuthConfigured(runtime),
+        lang,
       }),
     );
   });
@@ -604,11 +624,13 @@ export function createApp(runtime: Runtime): Hono {
 
   app.get('/sources', async (c) => {
     if (!await canRead(c, runtime)) return c.redirect('/login');
+    const lang = resolveLang(c);
     return c.html(
       renderSourcesPage({
         health: await runtime.store.getSourceHealth(),
         version: VERSION,
         auth: await getAuthDisplay(c, runtime),
+        lang,
       }),
     );
   });
@@ -637,6 +659,7 @@ export function createApp(runtime: Runtime): Hono {
 
   app.get('/sources/new', async (c) => {
     if (!await isAdmin(c, runtime)) return c.redirect('/login');
+    const lang = resolveLang(c);
     return c.html(
       renderNewSourcePage({
         version: VERSION,
@@ -646,14 +669,16 @@ export function createApp(runtime: Runtime): Hono {
         action: '/sources',
         submitLabel: 'Создать источник',
         auth: await getAuthDisplay(c, runtime),
+        lang,
       }),
     );
   });
 
   app.get('/sources/:id/edit', async (c) => {
     if (!await isAdmin(c, runtime)) return c.redirect('/login');
+    const lang = resolveLang(c);
     const source = await runtime.store.getSource(c.req.param('id'));
-    if (!source) return c.html(renderNotFound(VERSION), 404);
+    if (!source) return c.html(renderNotFound(VERSION, lang), 404);
     return c.html(
       renderNewSourcePage({
         version: VERSION,
@@ -664,6 +689,7 @@ export function createApp(runtime: Runtime): Hono {
         submitLabel: 'Сохранить',
         sourceId: source.id,
         auth: await getAuthDisplay(c, runtime),
+        lang,
       }),
     );
   });
@@ -753,8 +779,9 @@ export function createApp(runtime: Runtime): Hono {
 
   app.get('/sources/:id', async (c) => {
     if (!await canRead(c, runtime)) return c.redirect('/login');
+    const lang = resolveLang(c);
     const source = await runtime.store.getSource(c.req.param('id'));
-    if (!source) return c.html(renderNotFound(VERSION), 404);
+    if (!source) return c.html(renderNotFound(VERSION, lang), 404);
     const allHealth = await runtime.store.getSourceHealth();
     const health = allHealth.find((item) => item.source.id === source.id) ?? {
       source,
@@ -787,14 +814,16 @@ export function createApp(runtime: Runtime): Hono {
               ? 'Изменения сохранены.'
               : undefined,
         auth: await getAuthDisplay(c, runtime),
+        lang,
       }),
     );
   });
 
   app.get('/leads/:id', async (c) => {
     if (!await canRead(c, runtime)) return c.redirect('/login');
+    const lang = resolveLang(c);
     const lead = await runtime.store.getLead(c.req.param('id'));
-    if (!lead) return c.html(renderNotFound(VERSION), 404);
+    if (!lead) return c.html(renderNotFound(VERSION, lang), 404);
     const source = await runtime.store.getSource(lead.sourceId);
     return c.html(
       renderLeadPage({
@@ -802,6 +831,7 @@ export function createApp(runtime: Runtime): Hono {
         source: source ?? undefined,
         version: VERSION,
         auth: await getAuthDisplay(c, runtime),
+        lang,
       }),
     );
   });
@@ -837,9 +867,14 @@ export function createApp(runtime: Runtime): Hono {
 
   app.post('/leads/:id/vote', rateLimit({ windowMs: 60_000, max: 30 }), async (c) => {
     const user = await currentUser(c, runtime);
-    if (!user) return c.redirect('/login');
-    const id = c.req.param('id') as string;
     const contentType = c.req.header('content-type') || '';
+    if (!user) {
+      if (contentType.includes('application/json') || c.req.header('accept')?.includes('application/json')) {
+        return c.json({ error: 'login_required' }, 401);
+      }
+      return c.redirect(`/leads/${c.req.param('id')}?login_required=1`);
+    }
+    const id = c.req.param('id') as string;
     let signal: string | undefined;
     if (contentType.includes('application/json')) {
       const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
