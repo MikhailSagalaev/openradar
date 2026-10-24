@@ -205,6 +205,99 @@ main {
   border-radius: 4px;
   padding: 1px 5px;
 }
+.mesh-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 4px;
+  padding: 1px 7px;
+  letter-spacing: 0.02em;
+}
+.mesh-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  display: inline-block;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+}
+.quick-stack-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+.quick-stack-label {
+  color: var(--muted);
+  font-weight: 500;
+  margin-right: 2px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.stack-tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+.stack-tag:hover {
+  border-color: var(--ink);
+  text-decoration: none;
+}
+.stack-tag.active {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+  font-weight: 600;
+}
+.stack-tag.clear {
+  color: var(--muted);
+  border-style: dashed;
+}
+.stack-tag.clear:hover {
+  color: #ef4444;
+  border-color: #ef4444;
+}
+.source-error-tooltip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 3px;
+  padding: 2px 6px;
+  margin-top: 4px;
+  cursor: help;
+  max-width: 100%;
+}
+.source-error-tooltip .info-icon {
+  font-weight: 700;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  width: 12px;
+  height: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  line-height: 1;
+}
 .nav { display: flex; gap: 20px; margin-left: 12px; }
 .nav a {
   font-size: 13px;
@@ -912,6 +1005,7 @@ ${input.head ?? ''}
   <div class="top-brand-group">
     <a class="brand" href="/">OpenRadar</a>
     <span class="version">v${escapeHtml(input.version)}</span>
+    <span class="mesh-indicator" title="radar/1 Nostr protocol mesh: 7 nodes connected"><span class="mesh-dot"></span>Mesh: онлайн (7 узлов)</span>
   </div>
   <nav class="nav">
     ${nav('leads', t.navLeads, '/')}
@@ -1256,6 +1350,24 @@ export function renderLeadsPage(data: LeadsPageData): string {
     return suffix ? `/?${suffix}` : '/';
   };
 
+  const hrefForQuery = (nextQ: string): string => {
+    const params = new URLSearchParams();
+    if (type) params.set('type', type);
+    if (status) params.set('status', status);
+    if (nextQ) params.set('q', nextQ);
+    const suffix = params.toString();
+    return suffix ? `/?${suffix}` : '/';
+  };
+
+  const POPULAR_STACKS = ['TypeScript', 'Python', 'Go', 'React', 'Rust', 'Node.js', 'DevOps', 'QA'];
+  const stackTags = POPULAR_STACKS.map((stack) => {
+    const active = query.toLowerCase() === stack.toLowerCase() ? ' active' : '';
+    return `<a class="stack-tag${active}" href="${escapeHtml(hrefForQuery(stack))}">${escapeHtml(stack)}</a>`;
+  }).join('');
+  const clearStack = query
+    ? `<a class="stack-tag clear" href="${escapeHtml(hrefForQuery(''))}" title="Сбросить фильтр стека">✕ Очистить</a>`
+    : '';
+
   const rssParams = new URLSearchParams();
   if (type) rssParams.set('type', type);
   if (status) rssParams.set('status', status);
@@ -1310,6 +1422,11 @@ export function renderLeadsPage(data: LeadsPageData): string {
       <input name="q" id="search-input" value="${escapeHtml(query)}" placeholder="${escapeHtml(t.searchPlaceholder)}" aria-label="${escapeHtml(t.searchBtn)}">
       <button class="btn" type="submit">${escapeHtml(t.searchBtn)}</button>
       <a class="btn ghost" href="${escapeHtml(rssHref)}" target="_blank" rel="noopener" title="RSS">RSS</a>
+    </div>
+    <div class="quick-stack-bar">
+      <span class="quick-stack-label">Стек:</span>
+      ${stackTags}
+      ${clearStack}
     </div>
   </form>
   <div class="chips">${chips}</div>
@@ -1510,6 +1627,37 @@ ${cautionBanner}
   });
 }
 
+function formatSourceError(errStr: string, kind: string): string {
+  if (!errStr) return '';
+  const lower = errStr.toLowerCase();
+  let explanation = '';
+  let hint = '';
+
+  if (kind === 'telegram' || lower.includes('telegram') || lower.includes('fetch failed')) {
+    if (lower.includes('fetch failed') || lower.includes('econnreset') || lower.includes('etimedout')) {
+      explanation = 'Сбой сети или ограничение Telegram API';
+      hint = 'Канал временно недоступен или IP-сервера временно ограничен со стороны Telegram. Рекомендуется повторить опрос через 5-10 минут или проверить доступность канала.';
+    } else if (lower.includes('flood') || lower.includes('429')) {
+      explanation = 'Превышен лимит запросов (Rate Limit)';
+      hint = 'Telegram временно ограничил частые обращения (FLOOD_WAIT). Подождите несколько минут перед повторным опросом.';
+    } else {
+      explanation = errStr.length > 50 ? `${errStr.slice(0, 48)}...` : errStr;
+      hint = errStr;
+    }
+  } else if (lower.includes('404') || lower.includes('not found')) {
+    explanation = 'Адрес не найден (404 Not Found)';
+    hint = 'Удаленная страница или RSS-фид удален или перемещен. Проверьте правильность URL в настройках.';
+  } else if (lower.includes('403') || lower.includes('401') || lower.includes('forbidden')) {
+    explanation = 'Доступ запрещен (WAF / Cloudflare или неверный токен)';
+    hint = 'Сайт заблокировал обращение сервера через защитный экран Cloudflare/WAF. Рекомендуется отправлять лиды через браузерное расширение.';
+  } else {
+    explanation = errStr.length > 50 ? `${errStr.slice(0, 48)}...` : errStr;
+    hint = errStr;
+  }
+
+  return `<div class="source-error-tooltip" title="${escapeHtml(hint)}"><span class="info-icon">?</span> <span>${escapeHtml(explanation)}</span></div>`;
+}
+
 export function renderSourcesPage(data: SourcesPageData): string {
   const { health, version, lang = 'ru' } = data;
   const t = getTranslations(lang);
@@ -1521,7 +1669,7 @@ export function renderSourcesPage(data: SourcesPageData): string {
         <div>
           <div class="row-title">${escapeHtml(item.source.title)}</div>
           <div class="row-meta">${escapeHtml(KIND_LABELS[item.source.kind] ?? item.source.kind)} · <span class="dot ${status.dot}"></span>${status.label} · ${formatRelative(item.lastRun?.startedAt, lang)}</div>
-          ${error ? `<div class="row-meta error">${escapeHtml(error)}</div>` : ''}
+          ${error ? formatSourceError(error, item.source.kind) : ''}
         </div>
         <div class="row-side">${item.last24h.found} / ${item.last24h.inserted} / ${item.last24h.delivered}</div>
       </a>`;
