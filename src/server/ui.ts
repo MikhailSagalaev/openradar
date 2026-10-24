@@ -877,7 +877,7 @@ footer {
 }
 `;
 
-function layout(input: {
+export function layout(input: {
   title: string;
   version: string;
   active?: 'leads' | 'sources' | 'extension';
@@ -886,6 +886,8 @@ function layout(input: {
   script?: string;
   auth?: AuthDisplay;
   lang?: SupportedLang;
+  /** Extra <head> content: canonical, meta description, feed discovery. */
+  head?: string;
 }): string {
   const lang = input.lang ?? 'ru';
   const t = getTranslations(lang);
@@ -908,6 +910,7 @@ function layout(input: {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(input.title)} · OpenRadar</title>
+${input.head ?? ''}
 <style>${STYLE}</style>
 </head>
 <body>

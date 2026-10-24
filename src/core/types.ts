@@ -42,6 +42,9 @@ export interface Env {
   RADAR_PUBLIC_READ: boolean;
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
+  RADAR_PUBLIC_URL?: string;
+  RADAR_DIGEST_CHAT_ID?: string;
+  RADAR_DIGEST_INTERVAL_HOURS: number;
   RADAR_RETENTION_DAYS: number;
   RADAR_LOG_LEVEL: LogLevel;
   PORT: number;

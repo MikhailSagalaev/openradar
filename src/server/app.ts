@@ -27,6 +27,7 @@ import {
   type SourceFormValues,
 } from './ui.ts';
 import { resolveLang, type SupportedLang } from './i18n.ts';
+import { SEO_CATALOG, findCatalogEntry, renderCatalogPage, renderRobotsTxt, renderSitemapXml } from './seo.ts';
 import { extractPreviewFromHtml, validateSubmissionUrl } from './preview.ts';
 
 function tokenFromRequest(c: Context): string | undefined {
@@ -1245,6 +1246,45 @@ export function createApp(runtime: Runtime): Hono {
   app.get('/feed.rss', serveFeed);
   app.get('/feed.xml', serveFeed);
   app.get('/api/feed.rss', serveFeed);
+
+  const seoBaseUrl = (c: Context): string => {
+    const host = c.req.header('host') || '127.0.0.1:8787';
+    const proto = c.req.header('x-forwarded-proto') || 'http';
+    return `${proto}://${host}`;
+  };
+
+  app.get('/robots.txt', (c) => {
+    return c.text(renderRobotsTxt(seoBaseUrl(c)), 200, {
+      'content-type': 'text/plain; charset=utf-8',
+    });
+  });
+
+  app.get('/sitemap.xml', (c) => {
+    return c.text(renderSitemapXml(seoBaseUrl(c)), 200, {
+      'content-type': 'application/xml; charset=utf-8',
+    });
+  });
+
+  // Search-driven landing pages: indexable, each one doubles as an RSS subscription.
+  app.get('/catalog/:slug', async (c) => {
+    const entry = findCatalogEntry(c.req.param('slug') as string);
+    if (!entry) return c.html(renderNotFound(VERSION), 404);
+
+    const leads = (await runtime.store.listLeads({
+      limit: 30,
+      query: entry.q,
+      type: entry.type,
+    })).filter((lead) => lead.status !== 'rejected' && lead.status !== 'failed').slice(0, 20);
+
+    return c.html(
+      renderCatalogPage({
+        entry,
+        leads: await canRead(c, runtime) ? leads : [],
+        baseUrl: seoBaseUrl(c),
+        version: VERSION,
+      }),
+    );
+  });
 
   app.get('/api/delta', async (c) => {
     if (!await canRead(c, runtime)) return c.json({ error: 'unauthorized' }, 401);

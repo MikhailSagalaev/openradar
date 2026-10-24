@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.2
+
+- Growth layer: search-driven SEO landing pages (`/catalog/:slug`, 10 pages like
+  "Заказы на разработку"), `robots.txt` and `sitemap.xml`; every landing doubles
+  as an RSS subscription with feed auto-discovery.
+- Telegram digest: top fresh leads sent to `RADAR_DIGEST_CHAT_ID` every
+  `RADAR_DIGEST_INTERVAL_HOURS` (default 6) via the existing bot token.
+- Stored lead text is capped at 3000 chars (new leads + migration 007 backfill),
+  and `sanitizePrivacy` is applied centrally in `prepareRawLead` so phone/email
+  from any source or submission never reach the public base (152-ФЗ).
+- Lead type heuristics: URLs/titles like Habr Career vacancies are typed `job`;
+  migration 007 backfills historical rows, so the "Вакансии" tab is no longer
+  limited to RemoteOK.
+
 ## 0.4.1
 
 - CI runs the suite twice: against the in-memory store and against a real PostgreSQL 17 + pgvector service (`RADAR_TEST_STORE=postgres`, per-test schema reset via `test/postgres-setup.ts`).

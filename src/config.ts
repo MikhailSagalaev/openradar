@@ -28,7 +28,7 @@ const envSchema = z.object({
   RADAR_HOST_PORT: z.coerce.number().int().positive().optional(),
   RADAR_USER_AGENT: z
     .string()
-    .default('RadarBot/0.4.1 (+https://github.com/MikhailSagalaev/radar-oss)'),
+    .default('RadarBot/0.4.2 (+https://github.com/MikhailSagalaev/radar-oss)'),
   RADAR_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
   RADAR_POLL_INTERVAL_SEC: z.coerce.number().int().positive().default(300),
   RADAR_POLL_CONCURRENCY: z.coerce.number().int().positive().default(4),
@@ -44,6 +44,9 @@ const envSchema = z.object({
   RADAR_PUBLIC_READ: booleanFromEnv(false),
   GITHUB_CLIENT_ID: optionalString,
   GITHUB_CLIENT_SECRET: optionalString,
+  RADAR_PUBLIC_URL: optionalString,
+  RADAR_DIGEST_CHAT_ID: optionalString,
+  RADAR_DIGEST_INTERVAL_HOURS: z.coerce.number().int().positive().default(6),
   RADAR_RETENTION_DAYS: z.coerce.number().int().positive().default(180),
   RADAR_LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   PORT: z.coerce.number().int().positive().default(8787),

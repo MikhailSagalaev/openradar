@@ -1,6 +1,7 @@
 import type { Logger } from '../core/types.ts';
 import { pollAll, type PollDeps } from './poll.ts';
 import { processOutbox } from './outbox.ts';
+import { runDigestIfDue } from './digest.ts';
 
 const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000;
 
@@ -46,6 +47,19 @@ export class PollRunner {
           }
 
           await this.runMaintenanceIfDue();
+
+          try {
+            await runDigestIfDue({
+              store: this.deps.store,
+              env: this.deps.env,
+              logger: this.deps.logger.child('digest'),
+              fetchImpl: this.deps.fetchImpl ?? fetch,
+            });
+          } catch (error) {
+            this.logger.warn('digest job failed', {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
         } catch (error) {
           this.logger.error('scheduled cycle failed', {
             error: error instanceof Error ? error.message : String(error),

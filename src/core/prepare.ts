@@ -1,8 +1,8 @@
 import { cleanTitle, extractBudget, extractCity } from './extract.ts';
 import { fingerprintOf, titleKeyOf } from './fingerprint.ts';
 import { normalizeSalary } from './salary.ts';
-import { toPlainText } from './text.ts';
-import type { RawLead, SourceRecord } from './types.ts';
+import { sanitizePrivacy, toPlainText, truncate } from './text.ts';
+import type { LeadType, RawLead, SourceRecord } from './types.ts';
 import { canonicalizeUrl, isHttpUrl } from './url.ts';
 
 export interface PreparedLead extends RawLead {
@@ -10,6 +10,16 @@ export interface PreparedLead extends RawLead {
   titleKey: string;
   fingerprint: string;
   publishedAtDate: Date;
+}
+
+/** Hard cap on the stored description: we keep the essence, not a mirror copy. */
+const MAX_TEXT_LENGTH = 3000;
+
+const JOB_HINT = /ваканс|vacanc|career|hiring|в\s+штат|оклад|трудоустр|соискател/i;
+
+function detectLeadType(raw: RawLead, title: string, url?: string): LeadType {
+  if (raw.type === 'job' || raw.type === 'gig') return raw.type;
+  return JOB_HINT.test(`${title} ${url ?? ''}`) ? 'job' : 'gig';
 }
 
 function parsePublishedAt(value: string | undefined, now: Date): Date {
@@ -25,9 +35,10 @@ export function prepareRawLead(
   source: SourceRecord,
   now: Date,
 ): PreparedLead {
-  const text = toPlainText(raw.text || '');
+  // PII is stripped centrally so every adapter and user submission is covered (152-ФЗ).
+  const text = sanitizePrivacy(toPlainText(raw.text || ''));
   const title = cleanTitle(raw.title, text);
-  const normalizedText = text || title;
+  const normalizedText = truncate(text || title, MAX_TEXT_LENGTH);
   const url = raw.url?.trim();
   const safeHttpUrl = url && isHttpUrl(url) ? url : undefined;
   const canonicalUrl = safeHttpUrl ? canonicalizeUrl(safeHttpUrl) : undefined;
@@ -60,6 +71,7 @@ export function prepareRawLead(
     ...raw,
     title,
     text: normalizedText,
+    type: detectLeadType(raw, title, canonicalUrl ?? safeHttpUrl),
     url: canonicalUrl ?? safeHttpUrl,
     canonicalUrl,
     budget,
