@@ -182,22 +182,6 @@ main {
   align-items: center;
   gap: 10px;
 }
-.lang-switch {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  padding: 2px 6px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  color: var(--muted);
-  text-decoration: none;
-  transition: all 0.15s ease;
-}
-.lang-switch:hover {
-  color: var(--ink);
-  border-color: var(--ink);
-  text-decoration: none;
-}
 .brand {
   font-weight: 700;
   letter-spacing: -0.03em;
@@ -790,21 +774,12 @@ legend {
   padding: 2px 0 2px 16px;
   margin-bottom: 28px;
 }
-.tag {
-  display: inline-flex;
-  align-items: center;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  padding: 2px 8px;
-  font-size: 11.5px;
-  font-weight: 500;
-  font-style: italic;
-  color: var(--ink);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-}
+.tag,
 .tag-inline {
+  display: inline;
   font-style: italic;
+  color: var(--muted);
+  font-size: 12.5px;
 }
 pre.token {
   background: var(--surface);
@@ -905,10 +880,6 @@ export function layout(input: {
       : `<a class="chip" href="/logout">${escapeHtml(t.signOut)}</a>`
     : `<a class="chip" href="/login">${escapeHtml(t.signIn)}</a>`;
 
-  const nextLang = lang === 'ru' ? 'en' : 'ru';
-  const langTitle = lang === 'ru' ? 'Switch to English' : 'Переключить на русский';
-  const langToggle = `<a class="lang-switch" href="/lang/${nextLang}" title="${langTitle}">${nextLang.toUpperCase()}</a>`;
-
   return `<!doctype html>
 <html lang="${lang}">
 <head>
@@ -924,7 +895,6 @@ ${input.head ?? ''}
   <div class="top-brand-group">
     <a class="brand" href="/">OpenRadar</a>
     <span class="version">v${escapeHtml(input.version)}</span>
-    ${langToggle}
   </div>
   <nav class="nav">
     ${nav('leads', t.navLeads, '/')}
@@ -946,7 +916,7 @@ ${input.body}
       <a href="/feed.rss">${escapeHtml(t.rssFeed)}</a>
       <a href="/api/delta">${escapeHtml(t.s3Delta)}</a>
       <a href="/health">${escapeHtml(t.systemStatus)}</a>
-      <span class="lang-switch" style="display:inline-flex;align-items:center;gap:5px;margin-left:6px">
+      <span style="display:inline-flex;align-items:center;gap:5px;margin-left:6px">
         <a href="/lang/ru" style="${lang === 'ru' ? 'font-weight:700;color:var(--ink)' : 'color:var(--muted)'}">RU</a>
         <span style="color:var(--line-strong)">/</span>
         <a href="/lang/en" style="${lang === 'en' ? 'font-weight:700;color:var(--ink)' : 'color:var(--muted)'}">EN</a>
@@ -1498,8 +1468,8 @@ ${cautionBanner}
     </dl>
     ${lead.skills?.length ? `
       <h2 style="margin-top:20px">${escapeHtml(t.skills)}</h2>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
-        ${lead.skills.map((s) => `<span class="tag">${escapeHtml(s)}</span>`).join('')}
+      <div style="margin-top:8px;line-height:1.6">
+        ${lead.skills.map((s) => `<span class="tag">${escapeHtml(s)}</span>`).join(', ')}
       </div>` : ''}
   </aside>
 </div>`;
@@ -1794,7 +1764,95 @@ export function renderNotFound(version: string, lang: SupportedLang = 'ru'): str
 }
 
 export function renderExtensionPage(data: ExtensionPageData): string {
-  const { version, webhookSources, auth, lang, isAuthed } = data;
+  const { version, webhookSources, auth, lang = 'ru', isAuthed } = data;
+  const isEn = lang === 'en';
+
+  const texts = isEn
+    ? {
+        title: 'Browser Extension',
+        subtitle: 'One-click lead capture from any website, job board, or chat directly into your OpenRadar base.',
+        downloadZip: 'Download extension.zip',
+        installTitle: 'Fast Installation (Manifest V3)',
+        step1Title: '1. Download and unpack the archive',
+        step1Desc: 'Click the <b>Download extension.zip</b> button above or take the <code>extension/</code> folder from the repository. Extract it anywhere on your computer.',
+        step2Title: '2. Open Extension Management in browser',
+        step2Desc: 'In Chrome, Edge, Yandex Browser, or Brave, navigate to <code>chrome://extensions/</code> and enable the <b>Developer mode</b> toggle in the top-right corner.',
+        step3Title: '3. Load unpacked extension',
+        step3Desc: 'Click <b>Load unpacked</b> and select the extracted folder. The OpenRadar icon will appear in your browser toolbar.',
+        step4Title: '4. Configure server URL and token',
+        step4Desc: 'Click the OpenRadar icon → expand <b>Connection settings</b>. Copy the server address and source ID from the panel on the right, enter your source webhook token, and click <b>Test</b>.',
+        usageTitle: 'How to Use',
+        fullPageTitle: 'Full page capture (Alt+Shift+R)',
+        fullPageDesc: 'On any job posting or gig page, press <b>Alt+Shift+R</b> or click the toolbar icon. The extension parses the title, URL, and page content. If <code>schema.org/JobPosting</code> metadata is present (HeadHunter, SuperJob, LinkedIn), salary, company, location, and skills are extracted automatically.',
+        selectionTitle: 'Text selection capture (Context menu)',
+        selectionDesc: 'Select any text on a freelance board or chat (FL, Kwork, Habr Freelance, Telegram Web, Avito) → Right click:',
+        selectionItem1: '<b>"Send gig to Radar"</b> — saves the lead with type "Gig".',
+        selectionItem2: '<b>"Send job to Radar"</b> — saves the lead with type "Job".',
+        selectionAfter: 'A desktop notification will confirm the submission; clicking it opens the lead card directly.',
+        attributionTitle: 'Contributor attribution',
+        attributionDesc: 'In the extension settings, specify your username. Captured leads will display your attribution handle.',
+        privacyTitle: 'Security and Privacy',
+        privacyDesc: 'The extension is fully local and open source. Your token and settings remain solely within your local browser storage (<code>chrome.storage.local</code>) and are sent exclusively to your own OpenRadar server. The extension never tracks your browsing history and only activates on shortcut press or menu click.',
+        settingsTitle: 'Connection Settings',
+        pingChecking: 'Checking server connection...',
+        serverUrl: 'OpenRadar Server URL',
+        copyUrl: 'Copy server URL',
+        webhookSourcesTitle: 'Webhook Sources',
+        webhookSourcesDesc: 'Select an active webhook source and copy its ID into the extension:',
+        copyId: 'Copy ID',
+        noSourcesTitle: 'No active Webhook source',
+        noSourcesDesc: 'Create a Webhook source in OpenRadar to receive leads from the browser extension.',
+        createSource: 'Create Webhook source',
+        authRequiredTitle: 'Source Parameters',
+        authRequiredDesc: 'Sign in to view your Webhook sources and copy their IDs.',
+        signInLink: 'Sign in →',
+        whereTokenTitle: 'Where to find the source token?',
+        whereTokenDesc: 'The source token is shown when creating the source or via CLI:<br><code>node bin/radar.js source add --kind webhook --title "Browser"</code><br>If forgotten, generate a new Webhook source.',
+        copied: 'Copied!',
+      }
+    : {
+        title: 'Расширение для браузера',
+        subtitle: 'Захват вакансий и заказов в один клик с любых сайтов, бирж и чатов прямо в вашу базу OpenRadar.',
+        downloadZip: 'Скачать extension.zip',
+        installTitle: 'Быстрая установка (Manifest V3)',
+        step1Title: '1. Скачайте и распакуйте архив',
+        step1Desc: 'Нажмите кнопку <b>«Скачать extension.zip»</b> выше или возьмите готовую папку <code>extension/</code> из репозитория проекта. Распакуйте её в удобное место на диске.',
+        step2Title: '2. Откройте управление расширениями в браузере',
+        step2Desc: 'В адресной строке Chrome, Edge, Яндекс.Браузера или Brave введите: <code>chrome://extensions/</code> и включите тумблер <b>«Режим разработчика»</b> (в правом верхнем углу).',
+        step3Title: '3. Загрузите распакованное расширение',
+        step3Desc: 'Нажмите <b>«Загрузить распакованное расширение»</b> (Load unpacked) и выберите распакованную папку. На панели появится иконка OpenRadar.',
+        step4Title: '4. Настройте адрес сервера и токен',
+        step4Desc: 'Кликните по иконке OpenRadar → раскройте <b>«Настройки подключения»</b>. Скопируйте адрес сервера и ID источника из блока справа, введите секретный токен источника и нажмите <b>«Проверить»</b>.',
+        usageTitle: 'Как пользоваться расширением',
+        fullPageTitle: 'Отправка всей страницы (горячие клавиши Alt+Shift+R)',
+        fullPageDesc: 'Находясь на любой странице с вакансией или заказом, нажмите <b>Alt+Shift+R</b> или иконку на панели. Расширение автоматически считает заголовок, URL и описание. Если на сайте есть разметка <code>schema.org/JobPosting</code> (HH, SuperJob, LinkedIn), расширение автоматически определит зарплату, компанию, город и стек навыков.',
+        selectionTitle: 'Отправка фрагмента текста (Контекстное меню)',
+        selectionDesc: 'Выделите мышью любой текст на бирже (Kwork, FL, Habr Freelance, Telegram Web, Avito, чаты) → Нажмите правую кнопку мыши:',
+        selectionItem1: '<b>«Отправить заказ в Radar»</b> — сохранит лид с типом «Заказ» (Gig).',
+        selectionItem2: '<b>«Отправить вакансию в Radar»</b> — сохранит лид с типом «Вакансия» (Job).',
+        selectionAfter: 'После отправки в браузере появится уведомление, по клику на которое сразу откроется карточка лида.',
+        attributionTitle: 'Подпись и авторство лидов',
+        attributionDesc: 'В поле «Ваш никнейм (@telegram)» укажите свой ник. Все переданные вами лиды будут сохранены с подписью контрибьютора комьюнити, что позволяет отслеживать активность команды.',
+        privacyTitle: 'Безопасность и приватность',
+        privacyDesc: 'Расширение полностью локальное и Open Source. Токен и настройки хранятся только в защищённом хранилище вашего браузера (<code>chrome.storage.local</code>) и отправляются исключительно на ваш собственный сервер OpenRadar. Расширение не собирает историю посещений и активно только при нажатии горячих клавиш или выборе в меню.',
+        settingsTitle: 'Параметры для настройки',
+        pingChecking: 'Проверка доступности сервера...',
+        serverUrl: 'Адрес сервера OpenRadar',
+        copyUrl: 'Копировать адрес сервера',
+        webhookSourcesTitle: 'Источники Webhook',
+        webhookSourcesDesc: 'Выберите подходящий источник и скопируйте его ID в расширение:',
+        copyId: 'Копировать ID',
+        noSourcesTitle: 'Нет активного Webhook-источника',
+        noSourcesDesc: 'Создайте источник типа Webhook, чтобы принимать лиды из браузера.',
+        createSource: 'Создать источник Webhook',
+        authRequiredTitle: 'Параметры источников',
+        authRequiredDesc: 'Чтобы увидеть список ваших Webhook-источников и скопировать их ID, войдите в панель управления.',
+        signInLink: 'Войти в систему →',
+        whereTokenTitle: 'Где взять токен источника?',
+        whereTokenDesc: 'Токен источника генерируется один раз при создании источника командой CLI:<br><code>node bin/radar.js source add --kind webhook --title "Browser"</code><br>Если вы забыли токен, создайте новый источник Webhook в панели управления.',
+        copied: 'Скопировано!',
+      };
+
   const script = `<script>
 document.addEventListener('DOMContentLoaded', () => {
   const urlEl = document.getElementById('detected-url');
@@ -1805,7 +1863,7 @@ document.addEventListener('DOMContentLoaded', () => {
     .then((d) => {
       const pingEl = document.getElementById('ping-status');
       if (pingEl && d.ok) {
-        pingEl.textContent = 'Сервер онлайн (v' + (d.version || '') + ')';
+        pingEl.textContent = '${isEn ? 'Server online (v' : 'Сервер онлайн (v'}' + (d.version || '') + ')';
         pingEl.style.color = '#059669';
       }
     })
@@ -1818,7 +1876,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (target) {
         await navigator.clipboard.writeText(target.textContent || target.value || '');
         const prev = btn.textContent;
-        btn.textContent = 'Скопировано!';
+        btn.textContent = '${texts.copied}';
         setTimeout(() => { btn.textContent = prev; }, 2000);
       }
     });
@@ -1831,116 +1889,116 @@ document.addEventListener('DOMContentLoaded', () => {
         ? webhookSources
             .map(
               (s) => `
-          <div style="background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="border-top:1px solid var(--line);padding:10px 0;display:flex;justify-content:space-between;align-items:center">
             <div>
               <div style="font-weight:600;font-size:13px">${escapeHtml(s.title)}</div>
               <div class="muted small">ID: <code id="src-id-${escapeHtml(s.id)}">${escapeHtml(s.id)}</code></div>
             </div>
-            <button class="btn ghost" data-copy="src-id-${escapeHtml(s.id)}" type="button" style="font-size:11px;padding:4px 8px">Копировать ID</button>
+            <button class="btn ghost" data-copy="src-id-${escapeHtml(s.id)}" type="button" style="font-size:11px;padding:4px 8px">${escapeHtml(texts.copyId)}</button>
           </div>`
             )
             .join('')
-        : `<div class="empty" style="padding:20px 14px">
-            <div style="font-weight:600;margin-bottom:4px">Нет активного Webhook-источника</div>
-            <div class="muted small" style="margin-bottom:12px">Создайте источник типа Webhook, чтобы принимать лиды из браузера.</div>
-            <a class="btn" href="/sources/new">Создать источник Webhook</a>
+        : `<div style="border-top:1px solid var(--line);padding-top:12px">
+            <div style="font-weight:600;margin-bottom:4px">${escapeHtml(texts.noSourcesTitle)}</div>
+            <div class="muted small" style="margin-bottom:12px">${escapeHtml(texts.noSourcesDesc)}</div>
+            <a class="btn" href="/sources/new">${escapeHtml(texts.createSource)}</a>
           </div>`)
-    : `<div style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px">
-        <div style="font-weight:600;font-size:12.5px;margin-bottom:4px">Параметры источников</div>
-        <div class="muted small" style="margin-bottom:12px">Чтобы увидеть список ваших Webhook-источников и скопировать их ID, войдите в панель управления.</div>
-        <a class="btn ghost" href="/login" style="font-size:12px;padding:5px 12px;text-decoration:none">Войти в систему →</a>
+    : `<div style="border-top:1px solid var(--line);padding-top:12px">
+        <div style="font-weight:600;font-size:12.5px;margin-bottom:4px">${escapeHtml(texts.authRequiredTitle)}</div>
+        <div class="muted small" style="margin-bottom:12px">${escapeHtml(texts.authRequiredDesc)}</div>
+        <a class="btn ghost" href="/login" style="font-size:12px;padding:5px 12px;text-decoration:none">${escapeHtml(texts.signInLink)}</a>
       </div>`;
 
   const body = `
 <div class="page-head" style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
   <div>
-    <h1>Расширение для браузера</h1>
-    <p class="muted small">Захват вакансий и заказов в один клик с любых сайтов, бирж и чатов прямо в вашу базу OpenRadar.</p>
+    <h1>${escapeHtml(texts.title)}</h1>
+    <p class="muted small">${escapeHtml(texts.subtitle)}</p>
   </div>
   <div style="display:flex;gap:10px;align-items:center">
     <a class="btn primary" href="/extension/download" style="display:inline-flex;align-items:center;gap:7px;font-weight:600;text-decoration:none">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Скачать extension.zip
+      ${escapeHtml(texts.downloadZip)}
     </a>
   </div>
 </div>
 
 <div class="detail-grid">
   <section>
-    <h2>Быстрая установка (Manifest V3)</h2>
-    <div style="display:grid;gap:12px;margin-bottom:28px">
-      <div style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px">
-        <div style="font-weight:600;margin-bottom:4px">1. Скачайте и распакуйте архив</div>
-        <div class="muted small">Нажмите кнопку <b>«Скачать extension.zip»</b> выше или возьмите готовую папку <code>extension/</code> из репозитория проекта. Распакуйте её в удобное место на диске.</div>
-      </div>
-      <div style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px">
-        <div style="font-weight:600;margin-bottom:4px">2. Откройте управление расширениями в браузере</div>
-        <div class="muted small">В адресной строке Chrome, Edge, Яндекс.Браузера или Brave введите: <code>chrome://extensions/</code> и включите тумблер <b>«Режим разработчика»</b> (в правом верхнем углу).</div>
-      </div>
-      <div style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px">
-        <div style="font-weight:600;margin-bottom:4px">3. Загрузите распакованное расширение</div>
-        <div class="muted small">Нажмите <b>«Загрузить распакованное расширение»</b> (Load unpacked) и выберите распакованную папку. На панели появится иконка OpenRadar!</div>
-      </div>
-      <div style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px">
-        <div style="font-weight:600;margin-bottom:4px">4. Настройте адрес сервера и токен</div>
-        <div class="muted small">Кликните по иконке OpenRadar → раскройте <b>«Настройки подключения»</b>. Скопируйте адрес сервера и ID источника из блока справа, введите секретный токен источника и нажмите <b>«Проверить»</b>.</div>
-      </div>
-    </div>
+    <h2>${escapeHtml(texts.installTitle)}</h2>
+    <ol style="margin:0 0 32px;padding:0;list-style:none;display:grid;gap:16px">
+      <li style="border-top:1px solid var(--line);padding-top:12px">
+        <div style="font-weight:600;margin-bottom:4px">${texts.step1Title}</div>
+        <div class="muted small">${texts.step1Desc}</div>
+      </li>
+      <li style="border-top:1px solid var(--line);padding-top:12px">
+        <div style="font-weight:600;margin-bottom:4px">${texts.step2Title}</div>
+        <div class="muted small">${texts.step2Desc}</div>
+      </li>
+      <li style="border-top:1px solid var(--line);padding-top:12px">
+        <div style="font-weight:600;margin-bottom:4px">${texts.step3Title}</div>
+        <div class="muted small">${texts.step3Desc}</div>
+      </li>
+      <li style="border-top:1px solid var(--line);padding-top:12px">
+        <div style="font-weight:600;margin-bottom:4px">${texts.step4Title}</div>
+        <div class="muted small">${texts.step4Desc}</div>
+      </li>
+    </ol>
 
-    <h2>Как пользоваться расширением</h2>
-    <div style="display:grid;gap:12px;margin-bottom:28px">
-      <div style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px">
-        <div style="font-weight:600;margin-bottom:4px">⚡ Отправка всей страницы (горячие клавиши Alt+Shift+R)</div>
-        <div class="muted small">Находясь на любой странице с вакансией или заказом, нажмите <b>Alt+Shift+R</b> или иконку на панели. Расширение автоматически считает заголовок, URL и описание. Если на сайте есть разметка <code>schema.org/JobPosting</code> (HH, SuperJob, LinkedIn), расширение автоматически определит зарплату, компанию, город и стек навыков!</div>
+    <h2>${escapeHtml(texts.usageTitle)}</h2>
+    <div style="margin:0 0 32px;display:grid;gap:16px">
+      <div style="border-top:1px solid var(--line);padding-top:12px">
+        <div style="font-weight:600;margin-bottom:4px">${texts.fullPageTitle}</div>
+        <div class="muted small">${texts.fullPageDesc}</div>
       </div>
-      <div style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px">
-        <div style="font-weight:600;margin-bottom:4px">✂️ Отправка фрагмента текста (Контекстное меню)</div>
-        <div class="muted small">Выделите мышью любой текст на бирже (Kwork, FL, Habr Freelance, Telegram Web, Avito, чаты) → Нажмите правую кнопку мыши:
-          <ul style="margin:6px 0 0 16px;padding:0">
-            <li><b>«Отправить заказ в Radar»</b> — сохранит лид с типом «Заказ» (Gig).</li>
-            <li><b>«Отправить вакансию в Radar»</b> — сохранит лид с типом «Вакансия» (Job).</li>
+      <div style="border-top:1px solid var(--line);padding-top:12px">
+        <div style="font-weight:600;margin-bottom:4px">${texts.selectionTitle}</div>
+        <div class="muted small">
+          ${texts.selectionDesc}
+          <ul style="margin:6px 0 0 18px;padding:0">
+            <li>${texts.selectionItem1}</li>
+            <li>${texts.selectionItem2}</li>
           </ul>
-        После отправки в браузере появится уведомление, по клику на которое сразу откроется карточка лида!</div>
+          <div style="margin-top:6px">${texts.selectionAfter}</div>
+        </div>
       </div>
-      <div style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px">
-        <div style="font-weight:600;margin-bottom:4px">🏷 Подпись и авторство лидов</div>
-        <div class="muted small">В поле «Ваш никнейм (@telegram)» укажите свой ник. Все переданные вами лиды будут сохранены с подписью контрибьютора комьюнити, что позволяет отслеживать активность команды.</div>
+      <div style="border-top:1px solid var(--line);padding-top:12px">
+        <div style="font-weight:600;margin-bottom:4px">${texts.attributionTitle}</div>
+        <div class="muted small">${texts.attributionDesc}</div>
       </div>
     </div>
 
-    <h2>Безопасность и приватность</h2>
-    <div style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px">
-      <div class="muted small">Расширение полностью локальное и Open Source. Токен и настройки хранятся только в защищённом хранилище вашего браузера (<code>chrome.storage.local</code>) и отправляются исключительно на ваш собственный сервер OpenRadar. Расширение не собирает историю посещений и активно только при нажатии горячих клавиш или выборе в меню.</div>
+    <h2>${escapeHtml(texts.privacyTitle)}</h2>
+    <div style="border-top:1px solid var(--line);padding-top:12px;margin-bottom:32px">
+      <div class="muted small">${texts.privacyDesc}</div>
     </div>
   </section>
 
   <aside>
-    <h2>Параметры для настройки</h2>
-    <div id="ping-status" style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:12px">Проверка доступности сервера...</div>
+    <h2>${escapeHtml(texts.settingsTitle)}</h2>
+    <div id="ping-status" style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:12px">${escapeHtml(texts.pingChecking)}</div>
 
     <dl class="meta-list" style="margin-bottom:16px">
       <div>
-        <dt>Адрес сервера OpenRadar</dt>
+        <dt>${escapeHtml(texts.serverUrl)}</dt>
         <dd><code id="detected-url">http://127.0.0.1:8787</code></dd>
       </div>
     </dl>
-    <button class="btn ghost" style="width:100%;margin-bottom:24px" data-copy="detected-url" type="button">Копировать адрес сервера</button>
+    <button class="btn ghost" style="width:100%;margin-bottom:24px" data-copy="detected-url" type="button">${escapeHtml(texts.copyUrl)}</button>
 
-    <h2>Источники Webhook</h2>
-    <div class="muted small" style="margin-bottom:10px">Выберите подходящий источник и скопируйте его ID в расширение:</div>
+    <h2>${escapeHtml(texts.webhookSourcesTitle)}</h2>
+    <div class="muted small" style="margin-bottom:10px">${escapeHtml(texts.webhookSourcesDesc)}</div>
     ${sourcesList}
 
-    <div style="margin-top:24px;padding:14px;background:var(--surface);border:1px solid var(--line);border-radius:8px">
-      <div style="font-weight:600;font-size:12px;margin-bottom:4px">Где взять токен источника?</div>
-      <div class="muted small">Токен источника генерируется один раз при создании источника командой CLI:<br>
-      <code>node bin/radar.js source add --kind webhook --title "Browser"</code><br>
-      Если вы забыли токен, создайте новый источник Webhook в панели управления.</div>
+    <div style="border-top:1px solid var(--line);padding-top:14px;margin-top:24px">
+      <div style="font-weight:600;font-size:12px;margin-bottom:4px">${texts.whereTokenTitle}</div>
+      <div class="muted small">${texts.whereTokenDesc}</div>
     </div>
   </aside>
 </div>`;
 
   return layout({
-    title: 'Расширение для браузера',
+    title: texts.title,
     version,
     active: 'extension',
     body,
