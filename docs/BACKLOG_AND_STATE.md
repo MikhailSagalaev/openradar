@@ -95,16 +95,54 @@
 
 ---
 
-## 3. Сводка тестового покрытия
+## 3. Релиз OpenRadar v0.5.0: Защита второго порядка и Ghost Job X-Ray
 
-На момент закрытия всех 6 эпиков мастер-спецификации:
-- Всего тестовых файлов: **24**
-- Всего тестов: **157** (100% pass)
+### EPIC 7: Защита арбитра от ложных срабатываний (SPA / Login-Wall Guard)
+- [x] **Задача 7.1: MinHash Divergence Guard в арбитре** (`src/pipeline/arbiter.ts`)
+  - При HTTP 200 OK арбитр сравнивает текущий MinHash скачанной страницы с исходным `minhash_sketch` лида (или тегом `["mh", "..."]`).
+  - При коэффициенте Жаккара $J < 0.35$ (редирект на главную, заглушка закрытия без явного текста, пустой Next.js/React скелет, логин-волл) выставляется вердикт `inconclusive`, а статус переводится в `under_review`.
+  - **Инвариант слэшинга:** Слэшинг репутации (`trust_score * 0.5`) категорически запрещен при вердикте `inconclusive`. Репортеры не наказываются за закрытые SPA-страницы.
+  - Тесты: 5 тестов в `test/arbiter.test.ts` (100% pass).
+
+### EPIC 8: Устранение дыр в Tit-for-Tat (GitHub 7-Day Trial & Canary Traps)
+- [x] **Задача 8.1: GitHub 7-Day Trial** (`src/core/access-tier.ts`, `migrations/009_v050_features.sql`, `src/store/postgres.ts`, `src/store/memory.ts`)
+  - Добавлено поле `github_verified_at` и `is_banned` в таблицу `mesh_nodes`.
+  - Статус `ActiveContributor` по подтвержденному GitHub действует строго первые 7 дней. По истечении 7 дней узел обязан вносить вклад в сеть ($\ge 3$ лидов в неделю или $\ge 10$ аттестаций в сутки) для сохранения режима без лага.
+  - Тесты: 3 теста в `test/access-tier.test.ts` (100% pass).
+- [x] **Задача 8.2: Канарейки (Canary Traps & Cheater Slashing)** (`src/pipeline/canary.ts`, `src/index/relay-subscriber.ts`)
+  - Генератор и фоновый воркер тестовых лидов-канареек (`canary.openradar.fun`) с заведомо битыми URL.
+  - Автоматическое вычисление слепых ботов-валидаторов: при получении события 30405 со статусом `verified` на канарейку узел мгновенно банится (`trust_score = 0.0`, `is_banned = true`, `false_reports_count += 999`).
+  - Тесты: 3 теста в `test/canary.test.ts` (100% pass).
+
+### EPIC 9: Защита авторов узлов от деанонимизации (Blinded Relaying / HMAC Keys)
+- [x] **Задача 9.1: Генерация производных ключей эпохи** (`src/net/derived-keys.ts`, `src/cli/node.ts`)
+  - Детерминированная деривация: $\text{privkey}_{\text{child}} = \text{HMAC-SHA256}(\text{master\_privkey}, \text{source\_id} \parallel \text{week\_epoch})$ с гарантией четности координаты Y кривой secp256k1 (BIP-340).
+  - Публичные события 30402 подписываются дочерним ключом эпохи.
+  - Устранена возможность деанонимизации авторов сканирования через корреляцию каналов.
+  - Тесты: 5 тестов в `test/derived-keys.test.ts` (100% pass).
+
+### EPIC 10: Вирусное расширение «Ghost Job & Salary X-Ray» (Manifest V3)
+- [x] **Задача 10.1: Сверхбыстрый аналитический эндпоинт `/api/v1/xray`** (`src/pipeline/xray.ts`, `src/server/app.ts`)
+  - Отдает за $< 25\text{ мс}$ медианную зарплату, квартили (p25, p75), количество дубликатов по рынку и оценку надежности источника (0.95 для верифицированных).
+  - Поддержка CORS для запросов со сторонних доменов.
+- [x] **Задача 10.2: Swiss-Style плашка в расширении** (`extension/content.js`, `extension/background.js`)
+  - На сайтах hh.ru, linkedin.com, career.habr.com, kwork.ru, upwork.com внедряет аккуратную тонкую плашку `[ OpenRadar X-Ray ]` прямо над заголовком вакансии.
+  - В фоне парсит `schema.org/JobPosting` и синхронизирует лид с сетью.
+  - Полное соответствие Zero-Emoji Doctrine.
+  - Тесты: 4 теста в `test/xray.test.ts` (100% pass).
+
+---
+
+## 4. Сводка тестового покрытия
+
+На релизе v0.5.0:
+- Всего тестовых файлов: **27** (+3 новых файла)
+- Всего тестов: **170** (+13 новых тестов, 100% pass)
 - Ошибки компилятора TypeScript: **0** (`tsc --noEmit`)
 
 ---
 
-## 4. Памятка для ИИ-агентов (AI Agent Directives)
+## 5. Памятка для ИИ-агентов (AI Agent Directives)
 
 1. **Команды запуска тестов и сборки:**
    - Полный прогон тестов: `node ./node_modules/vitest/vitest.mjs run`

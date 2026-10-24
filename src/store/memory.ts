@@ -555,8 +555,11 @@ export class MemoryStore implements Store {
         ...existing,
         github_username: node.github_username ?? existing.github_username,
         github_gist_url: node.github_gist_url ?? existing.github_gist_url,
+        github_verified_at: node.github_verified_at ?? existing.github_verified_at,
         nip05_domain: node.nip05_domain ?? existing.nip05_domain,
         trust_score: node.trust_score ?? existing.trust_score,
+        is_banned: node.is_banned !== undefined ? node.is_banned : existing.is_banned,
+        false_reports_count: node.false_reports_count ?? existing.false_reports_count,
         last_seen_at: now,
       };
       this.meshNodes.set(node.pubkey, updated);
@@ -567,11 +570,13 @@ export class MemoryStore implements Store {
       npub: node.npub,
       github_username: node.github_username,
       github_gist_url: node.github_gist_url,
+      github_verified_at: node.github_verified_at,
       nip05_domain: node.nip05_domain,
       trust_score: node.trust_score ?? 0.05,
       valid_leads_7d: 0,
       valid_attestations_24h: 0,
-      false_reports_count: 0,
+      false_reports_count: node.false_reports_count ?? 0,
+      is_banned: node.is_banned ?? false,
       created_at: now,
       last_seen_at: now,
     };

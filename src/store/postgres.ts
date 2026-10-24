@@ -917,13 +917,16 @@ export class PostgresStore implements Store {
   async upsertMeshNode(node: MeshNodeInput): Promise<MeshNodeRecord> {
     const res = await this.pool.query(
       `INSERT INTO mesh_nodes (
-        pubkey, npub, github_username, github_gist_url, nip05_domain, trust_score, last_seen_at
-      ) VALUES ($1, $2, $3, $4, $5, COALESCE($6, 0.05), NOW())
+        pubkey, npub, github_username, github_gist_url, github_verified_at, nip05_domain, trust_score, is_banned, false_reports_count, last_seen_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 0.05), COALESCE($8, FALSE), COALESCE($9, 0), NOW())
       ON CONFLICT (pubkey) DO UPDATE SET
         github_username = COALESCE(EXCLUDED.github_username, mesh_nodes.github_username),
         github_gist_url = COALESCE(EXCLUDED.github_gist_url, mesh_nodes.github_gist_url),
+        github_verified_at = COALESCE(EXCLUDED.github_verified_at, mesh_nodes.github_verified_at),
         nip05_domain = COALESCE(EXCLUDED.nip05_domain, mesh_nodes.nip05_domain),
         trust_score = COALESCE(EXCLUDED.trust_score, mesh_nodes.trust_score),
+        is_banned = COALESCE(EXCLUDED.is_banned, mesh_nodes.is_banned),
+        false_reports_count = COALESCE(EXCLUDED.false_reports_count, mesh_nodes.false_reports_count),
         last_seen_at = NOW()
       RETURNING *`,
       [
@@ -931,8 +934,11 @@ export class PostgresStore implements Store {
         node.npub,
         node.github_username ?? null,
         node.github_gist_url ?? null,
+        node.github_verified_at ? new Date(node.github_verified_at) : null,
         node.nip05_domain ?? null,
         node.trust_score ?? null,
+        node.is_banned ?? null,
+        node.false_reports_count ?? null,
       ]
     );
     const r = res.rows[0];
@@ -941,11 +947,13 @@ export class PostgresStore implements Store {
       npub: r.npub,
       github_username: r.github_username || undefined,
       github_gist_url: r.github_gist_url || undefined,
+      github_verified_at: r.github_verified_at ? new Date(r.github_verified_at).toISOString() : undefined,
       nip05_domain: r.nip05_domain || undefined,
       trust_score: Number(r.trust_score),
       valid_leads_7d: Number(r.valid_leads_7d),
       valid_attestations_24h: Number(r.valid_attestations_24h),
       false_reports_count: Number(r.false_reports_count),
+      is_banned: Boolean(r.is_banned),
       created_at: new Date(r.created_at).toISOString(),
       last_seen_at: new Date(r.last_seen_at).toISOString(),
     };
@@ -964,11 +972,13 @@ export class PostgresStore implements Store {
       npub: r.npub,
       github_username: r.github_username || undefined,
       github_gist_url: r.github_gist_url || undefined,
+      github_verified_at: r.github_verified_at ? new Date(r.github_verified_at).toISOString() : undefined,
       nip05_domain: r.nip05_domain || undefined,
       trust_score: Number(r.trust_score),
       valid_leads_7d: Number(r.valid_leads_7d),
       valid_attestations_24h: Number(r.valid_attestations_24h),
       false_reports_count: Number(r.false_reports_count),
+      is_banned: Boolean(r.is_banned),
       created_at: new Date(r.created_at).toISOString(),
       last_seen_at: new Date(r.last_seen_at).toISOString(),
     };

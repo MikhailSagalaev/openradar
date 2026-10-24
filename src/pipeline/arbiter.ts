@@ -8,8 +8,9 @@ import type { Lead, LeadStatus } from '../core/types.ts';
 import type { Store, MeshNodeRecord } from '../core/store.ts';
 import { generateKeyPair, type KeyPair } from '../net/keys.ts';
 import { buildLeadAttestationEvent, RadarEventKinds } from '../net/protocol.ts';
+import { computeMinHashSketch, estimateJaccardFromSketches } from '../core/fingerprint.ts';
 
-export type ArbiterVerdict = 'active' | 'closed' | 'scam';
+export type ArbiterVerdict = 'active' | 'closed' | 'scam' | 'inconclusive';
 
 export interface ArbiterEvaluation {
   verdict: ArbiterVerdict;
@@ -53,10 +54,13 @@ const SCAM_STOP_PATTERNS = [
 
 /**
  * Deterministically checks page content and HTTP status for closure or fraud.
+ * When originalMinHash is supplied and HTTP 200 is returned, checks Jaccard similarity.
+ * If J < 0.35, marks status as inconclusive to protect against SPA redirects and login walls.
  */
 export function evaluateContentDeterministically(
   htmlOrText: string,
   statusCode: number,
+  originalMinHash?: string,
 ): ArbiterEvaluation {
   if (statusCode === 404 || statusCode === 410) {
     return {
@@ -90,6 +94,19 @@ export function evaluateContentDeterministically(
   }
 
   if (statusCode >= 200 && statusCode < 300) {
+    if (originalMinHash) {
+      const pageSketch = computeMinHashSketch(htmlOrText);
+      const similarity = estimateJaccardFromSketches(pageSketch, originalMinHash);
+      if (similarity < 0.35) {
+        return {
+          verdict: 'inconclusive',
+          confidence: 0.50,
+          reason: `MinHash divergence (J=${similarity.toFixed(2)} < 0.35): probable SPA skeleton, redirect or login-wall`,
+          httpCode: statusCode,
+        };
+      }
+    }
+
     return {
       verdict: 'active',
       confidence: 0.90,
@@ -166,6 +183,7 @@ ${text.slice(0, 3000)}`;
 export async function evaluateUrl(
   targetUrl: string,
   ctx: ArbiterContext,
+  originalMinHash?: string,
 ): Promise<ArbiterEvaluation> {
   const fetchImpl = ctx.fetchImpl ?? fetch;
   const timeoutMs = ctx.timeoutMs ?? 5000;
@@ -196,8 +214,11 @@ export async function evaluateUrl(
     const statusCode = res.status;
     const text = await res.text().catch(() => '');
 
-    const deterministic = evaluateContentDeterministically(text, statusCode);
+    const deterministic = evaluateContentDeterministically(text, statusCode, originalMinHash);
     if (deterministic.confidence >= 0.85) {
+      return deterministic;
+    }
+    if (deterministic.verdict === 'inconclusive') {
       return deterministic;
     }
 
@@ -233,9 +254,10 @@ export async function evaluateUrl(
 /**
  * Main Arbiter execution on a lead:
  * 1. Checks canonicalUrl or url safely.
- * 2. Applies verification state (killed_scam | killed_closed | verified_active).
+ * 2. Applies verification state (killed_scam | killed_closed | verified_active | under_review).
  * 3. Signs Kind 30405 attestation.
  * 4. Slashes false scam reporters when lead is confirmed active (Skin-in-the-game).
+ * 5. Prevents slashing when verdict is inconclusive (SPA/Login-Wall Guard).
  */
 export async function arbitrateLead(
   leadId: string,
@@ -252,13 +274,21 @@ export async function arbitrateLead(
   }
 
   const checkUrl = lead.canonicalUrl || lead.url;
+  const originalMinHash = lead.minhash_sketch;
   let evaluation: ArbiterEvaluation;
 
   if (checkUrl) {
-    evaluation = await evaluateUrl(checkUrl, ctx);
+    evaluation = await evaluateUrl(checkUrl, ctx, originalMinHash);
   } else {
     // If no URL exists, evaluate lead text directly
-    evaluation = evaluateContentDeterministically(lead.text, 200);
+    evaluation = evaluateContentDeterministically(lead.text, 200, originalMinHash);
+  }
+
+  if (evaluation.verdict === 'inconclusive') {
+    lead.verification_state = 'under_review';
+    await ctx.store.updateLeadVerification?.(lead.id, 'under_review');
+    // Slashing is strictly forbidden for inconclusive evaluations
+    return evaluation;
   }
 
   const serverKeys = ctx.serverKeys ?? generateKeyPair();

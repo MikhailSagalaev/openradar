@@ -16,6 +16,7 @@ import {
   type NostrEvent,
 } from '../net/protocol.ts';
 import { computeMinHashSketch } from '../core/fingerprint.ts';
+import { deriveChildKeyPair } from '../net/derived-keys.ts';
 import { scrubPII } from '../core/privacy.ts';
 import { assertSafeUrl } from '../core/ssrf.ts';
 import { createRuntime } from '../runtime.ts';
@@ -166,6 +167,10 @@ export async function runMeshNode(options: NodeOptions = {}): Promise<void> {
         // Compute MinHash sketch
         const minHashSketch = computeMinHashSketch(scrub.text);
 
+        // Derive ephemeral child key to prevent channel deanonymization (Blinded Relaying)
+        const sourceId = lead.sourceId || (lead as any).platform || 'generic';
+        const childKeys = deriveChildKeyPair(keys.privKey, sourceId);
+
         const event = buildRadarLeadEvent({
           contentHash: lead.fingerprint,
           canonicalUrl: lead.canonicalUrl || lead.url || '',
@@ -177,14 +182,14 @@ export async function runMeshNode(options: NodeOptions = {}): Promise<void> {
           currency: lead.currency || 'USD',
           stack: lead.skills,
           minHashSketch,
-          pubkey: keys.pubKey,
-          privKey: keys.privKey,
+          pubkey: childKeys.pubKey,
+          privKey: childKeys.privKey,
         });
 
         const pubResult = await relayPool.publish(event);
         if (pubResult.ok) {
           lead.nostr_event_id = event.id;
-          lead.publisher_pubkey = keys.pubKey;
+          lead.publisher_pubkey = childKeys.pubKey;
           lead.minhash_sketch = minHashSketch;
           console.log(`Published lead to mesh: "${lead.title.slice(0, 40)}" (${pubResult.publishedCount} relays)`);
         }

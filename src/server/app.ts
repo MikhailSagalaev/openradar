@@ -1150,6 +1150,19 @@ export function createApp(runtime: Runtime): Hono {
     });
   });
 
+  app.get('/api/v1/xray', async (c) => {
+    const url = c.req.query('url');
+    if (!url) {
+      return c.json({ error: 'url query param required' }, 400);
+    }
+    const { computeXray } = await import('../pipeline/xray.ts');
+    const result = await computeXray(url, runtime.store);
+    c.header('Access-Control-Allow-Origin', '*');
+    c.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    c.header('Cache-Control', 'public, max-age=60');
+    return c.json(result);
+  });
+
   app.delete('/api/leads/:id', async (c) => {
     if (!await isAdmin(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
     const id = c.req.param('id');

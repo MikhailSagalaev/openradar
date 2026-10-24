@@ -56,6 +56,41 @@ describe('Tit-for-Tat access tier & 12h lag (radar/1)', () => {
     });
     expect(contributorByGithubTrust.tier).toBe('active_contributor');
 
+    // Expired GitHub trial (> 7 days ago) with no active contribution must be downgraded to free_rider
+    const eightDaysAgo = new Date(Date.now() - 8 * 86400 * 1000).toISOString();
+    const expiredGithubTrial = determineAccessTier({
+      meshNode: {
+        pubkey: 'node-expired',
+        npub: 'npub-expired',
+        trust_score: 0.40,
+        github_verified_at: eightDaysAgo,
+        created_at: eightDaysAgo,
+        valid_leads_7d: 0,
+        valid_attestations_24h: 0,
+        false_reports_count: 0,
+        last_seen_at: new Date().toISOString(),
+      },
+    });
+    expect(expiredGithubTrial.tier).toBe('free_rider');
+    expect(expiredGithubTrial.isRealtime).toBe(false);
+
+    // Expired GitHub trial but node submitted >= 3 leads: promoted back to active_contributor
+    const expiredTrialWithLeads = determineAccessTier({
+      meshNode: {
+        pubkey: 'node-recovered',
+        npub: 'npub-recovered',
+        trust_score: 0.40,
+        github_verified_at: eightDaysAgo,
+        created_at: eightDaysAgo,
+        valid_leads_7d: 3,
+        valid_attestations_24h: 0,
+        false_reports_count: 0,
+        last_seen_at: new Date().toISOString(),
+      },
+    });
+    expect(expiredTrialWithLeads.tier).toBe('active_contributor');
+    expect(expiredTrialWithLeads.isRealtime).toBe(true);
+
     const guestTier = determineAccessTier({
       meshNode: null,
       user: null,

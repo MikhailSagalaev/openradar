@@ -182,6 +182,129 @@ function extractPageData(doc = typeof document !== 'undefined' ? document : null
   };
 }
 
+const XRAY_DOMAINS = [
+  'hh.ru',
+  'linkedin.com',
+  'career.habr.com',
+  'habr.com',
+  'kwork.ru',
+  'upwork.com',
+];
+
+function isJobDomain(hostname) {
+  if (!hostname) return false;
+  return XRAY_DOMAINS.some((d) => hostname.includes(d));
+}
+
+function findVacancyTitleHeading(doc) {
+  if (!doc) return null;
+  return (
+    doc.querySelector('[data-qa="vacancy-title"]') ||
+    doc.querySelector('.job-details-jobs-unified-top-card__job-title') ||
+    doc.querySelector('.page-title') ||
+    doc.querySelector('h1') ||
+    doc.querySelector('h2')
+  );
+}
+
+function renderXrayBar(data, doc = typeof document !== 'undefined' ? document : null) {
+  if (!doc || doc.getElementById('openradar-xray-bar')) return;
+
+  const targetHeading = findVacancyTitleHeading(doc);
+  if (!targetHeading || !targetHeading.parentNode) return;
+
+  const bar = doc.createElement('div');
+  bar.id = 'openradar-xray-bar';
+  bar.className = 'openradar-xray-bar';
+  bar.setAttribute('style', [
+    'display: flex',
+    'align-items: center',
+    'flex-wrap: wrap',
+    'gap: 8px',
+    'background: #111111',
+    'color: #ffffff',
+    'font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace',
+    'font-size: 12px',
+    'line-height: 1.4',
+    'padding: 6px 12px',
+    'margin: 8px 0',
+    'border: 1px solid #27272a',
+    'border-radius: 2px',
+    'box-sizing: border-box',
+    'width: 100%',
+    'z-index: 9999',
+  ].join('; '));
+
+  const tag = doc.createElement('span');
+  tag.textContent = '[ OpenRadar X-Ray ]';
+  tag.style.fontWeight = '600';
+  tag.style.letterSpacing = '0.5px';
+  tag.style.color = '#38bdf8';
+
+  const metrics = doc.createElement('span');
+  metrics.style.color = '#d4d4d8';
+
+  const market = data.market || {};
+  const median = market.median_salary ? `$${market.median_salary}` : 'нет данных';
+  const range = (market.percentile_25 && market.percentile_75)
+    ? ` ($${market.percentile_25}–$${market.percentile_75})`
+    : '';
+  const dups = typeof market.duplicate_count === 'number' ? market.duplicate_count : 0;
+  const trust = typeof data.source_trust === 'number' ? `${Math.round(data.source_trust * 100)}%` : '80%';
+
+  metrics.textContent = `Вилка по рынку: ${median}${range} · Дубликаты: ${dups} · Надежность источника: ${trust}`;
+
+  bar.appendChild(tag);
+  bar.appendChild(metrics);
+
+  targetHeading.parentNode.insertBefore(bar, targetHeading);
+}
+
+async function runXrayEngine() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  const hostname = window.location.hostname || '';
+  if (!isJobDomain(hostname)) return;
+
+  try {
+    let base = 'https://openradar.fun';
+    if (typeof chrome !== 'undefined' && chrome?.storage?.local) {
+      const stored = await chrome.storage.local.get('radarConfig');
+      if (stored?.radarConfig?.base) {
+        base = stored.radarConfig.base.replace(/\/+$/, '');
+      }
+    }
+
+    const currentUrl = window.location.href;
+    const res = await fetch(`${base}/api/v1/xray?url=${encodeURIComponent(currentUrl)}`);
+    if (!res.ok) return;
+
+    const data = await res.json();
+    renderXrayBar(data, document);
+
+    const posting = extractJobPosting(document);
+    if (posting && typeof chrome !== 'undefined' && chrome?.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({
+        type: 'XRAY_ATTESTATION_CANDIDATE',
+        payload: {
+          url: currentUrl,
+          title: posting.title,
+          posting,
+        },
+      }).catch(() => {});
+    }
+  } catch {
+    // Fail silently in content script
+  }
+}
+
+if (typeof window !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', runXrayEngine);
+  } else {
+    setTimeout(runXrayEngine, 200);
+  }
+}
+
 if (typeof chrome !== 'undefined' && chrome?.runtime?.onMessage) {
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request?.type === 'EXTRACT_PAGE_DATA' || request?.action === 'extract') {
@@ -194,6 +317,7 @@ if (typeof chrome !== 'undefined' && chrome?.runtime?.onMessage) {
 if (typeof window !== 'undefined') {
   window.openRadarExtractJobPosting = extractJobPosting;
   window.openRadarExtractPageData = extractPageData;
+  window.openRadarRenderXrayBar = renderXrayBar;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -203,5 +327,8 @@ if (typeof module !== 'undefined' && module.exports) {
     extractJobPosting,
     extractPageData,
     normalizeJobPosting,
+    isJobDomain,
+    findVacancyTitleHeading,
+    renderXrayBar,
   };
 }

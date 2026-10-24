@@ -14,6 +14,8 @@ import {
   type NostrEvent,
 } from '../net/protocol.ts';
 
+import { handleCanaryAttestation } from '../pipeline/canary.ts';
+
 export interface RelaySubscriberOptions {
   store: Store;
   relayPool: RelayPool;
@@ -250,6 +252,12 @@ export class RelaySubscriber {
   }
 
   private async handleLeadAttestation(event: NostrEvent): Promise<boolean> {
+    // Canary Trap check against blind automated attestations
+    const canaryCheck = await handleCanaryAttestation(event, this.store);
+    if (canaryCheck.caught) {
+      return false;
+    }
+
     let leadEventId = '';
     let status = '';
 
