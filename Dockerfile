@@ -18,6 +18,8 @@ COPY --from=build /app/dist ./dist
 COPY migrations ./migrations
 COPY bin ./bin
 COPY README.md LICENSE ./
+COPY extension.zip* ./
+COPY extension ./extension
 RUN mkdir -p /app/data && chown -R node:node /app
 
 USER node
