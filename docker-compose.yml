@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-radar}
       POSTGRES_USER: ${POSTGRES_USER:-radar}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-radar_mesh_secret_2026}
     volumes:
       - radar_pgdata:/var/lib/postgresql/data
     ports:
@@ -32,11 +32,11 @@ services:
     ports:
       - "127.0.0.1:${RADAR_HOST_PORT:-8787}:8787"
     environment:
-      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL is required}
+      - DATABASE_URL=${DATABASE_URL:-postgres://radar:radar_mesh_secret_2026@postgres:5432/radar}
+      - RADAR_ADMIN_TOKEN=${RADAR_ADMIN_TOKEN:-012345678901234567890123456789012}
+      - RADAR_PUBLIC_READ=true
       - PORT=8787
       - NODE_ENV=production
-    env_file:
-      - .env
     volumes:
       - ./data:/app/data
     logging:
