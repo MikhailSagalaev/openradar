@@ -7,7 +7,7 @@ import path from 'node:path';
 import { escapeHtml } from '../core/text.ts';
 import { renderRssFeed } from './feed.ts';
 import type { UserRecord } from '../core/store.ts';
-import type { LeadStatus, LeadType, RawLead, SourceConfig, SourceKind, SourceRecord, VoteSignal } from '../core/types.ts';
+import type { Lead, LeadStatus, LeadType, RawLead, SourceConfig, SourceKind, SourceRecord, VoteSignal } from '../core/types.ts';
 import { pollAll, pollSource } from '../pipeline/poll.ts';
 import { ingestRawLead, type IngestDeps } from '../pipeline/ingest.ts';
 import { fetchSafeHttp } from '../pipeline/preview.ts';
@@ -1088,6 +1088,65 @@ export function createApp(runtime: Runtime): Hono {
     const sourceId = c.req.query('source') || undefined;
     const query = c.req.query('q')?.trim() || undefined;
     return c.json(await runtime.store.listLeads({ limit, status, sourceId, query, type }));
+  });
+
+  app.post('/mcp', async (c) => {
+    const body = await c.req.json().catch(() => null);
+    if (!body || typeof body !== 'object') {
+      return c.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, 400);
+    }
+    const { handleMcpRequest } = await import('../mcp/server.ts');
+    const resp = await handleMcpRequest(body, runtime.store);
+    return c.json(resp);
+  });
+
+  app.get('/api/v1/firehose', async (c) => {
+    const { authorizeFirehose, parseFirehoseFilter, matchesFirehoseFilter, firehoseEmitter } = await import('./firehose.ts');
+    const isAuthorized = await authorizeFirehose(c, runtime);
+    if (!isAuthorized) {
+      return c.json({ error: 'unauthorized', message: 'Valid B2B API token or Contributor key required' }, 401);
+    }
+
+    const filter = parseFirehoseFilter(c);
+
+    const stream = new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(encoder.encode(`event: connected\ndata: {"status":"streaming"}\n\n`));
+
+        const onLead = (lead: Lead) => {
+          if (matchesFirehoseFilter(lead, filter)) {
+            controller.enqueue(encoder.encode(`event: lead\ndata: ${JSON.stringify(lead)}\n\n`));
+          }
+        };
+
+        firehoseEmitter.on('lead', onLead);
+
+        const heartbeatInterval = setInterval(() => {
+          try {
+            controller.enqueue(encoder.encode(`: heartbeat\n\n`));
+          } catch {
+            clearInterval(heartbeatInterval);
+          }
+        }, 15000);
+
+        c.req.raw.signal.addEventListener('abort', () => {
+          clearInterval(heartbeatInterval);
+          firehoseEmitter.off('lead', onLead);
+          try {
+            controller.close();
+          } catch {}
+        });
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
   });
 
   app.delete('/api/leads/:id', async (c) => {

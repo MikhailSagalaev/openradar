@@ -606,6 +606,16 @@ function buildProgram(): Command {
       });
     });
 
+  program
+    .command('mcp')
+    .description('Run Model Context Protocol (MCP) server over stdio for AI agents')
+    .action(async () => {
+      await withRuntime(async (runtime) => {
+        const { startMcpStdio } = await import('../mcp/server.ts');
+        startMcpStdio(runtime.store);
+      });
+    });
+
   return program;
 }
 
