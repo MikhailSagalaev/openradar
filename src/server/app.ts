@@ -1095,6 +1095,15 @@ export function createApp(runtime: Runtime): Hono {
   });
 
   app.post('/mcp', async (c) => {
+    // MCP is a machine interface: it requires the admin token or a known mesh
+    // node key, otherwise it would bypass the Tit-for-Tat lead locking.
+    const { authorizeFirehose } = await import('./firehose.ts');
+    if (!(await authorizeFirehose(c, runtime))) {
+      return c.json(
+        { jsonrpc: '2.0', id: null, error: { code: -32000, message: 'Unauthorized: admin token or mesh node key required' } },
+        401,
+      );
+    }
     const body = await c.req.json().catch(() => null);
     if (!body || typeof body !== 'object') {
       return c.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, 400);
@@ -1153,7 +1162,7 @@ export function createApp(runtime: Runtime): Hono {
     });
   });
 
-  app.get('/api/v1/xray', async (c) => {
+  app.get('/api/v1/xray', rateLimit({ windowMs: 60_000, max: 30 }), async (c) => {
     const url = c.req.query('url');
     if (!url) {
       return c.json({ error: 'url query param required' }, 400);

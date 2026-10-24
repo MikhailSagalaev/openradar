@@ -560,6 +560,7 @@ export class MemoryStore implements Store {
         trust_score: node.trust_score ?? existing.trust_score,
         is_banned: node.is_banned !== undefined ? node.is_banned : existing.is_banned,
         false_reports_count: node.false_reports_count ?? existing.false_reports_count,
+        valid_leads_7d: node.valid_leads_7d ?? existing.valid_leads_7d,
         last_seen_at: now,
       };
       this.meshNodes.set(node.pubkey, updated);

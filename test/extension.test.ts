@@ -135,21 +135,50 @@ describe('extension content script JobPosting extractor', () => {
     expect(scrubbed.text).not.toContain('alex@work.com');
     expect(scrubbed.text).not.toContain('+7 999 111-22-33');
 
-    const event = await buildAndSignExtensionLead(
-      {
-        title: 'Senior Go Engineer',
-        text: scrubbed.text,
-        url: 'https://habr.com/vacancies/123',
-        type: 'job',
-        company: 'Habr Corp',
-      },
-      keypair,
-    );
+    // Signing requires a NIP-07 signer: without window.nostr the event must
+    // never be emitted with a pseudo-signature.
+    await expect(
+      buildAndSignExtensionLead(
+        {
+          title: 'Senior Go Engineer',
+          text: scrubbed.text,
+          url: 'https://habr.com/vacancies/123',
+          type: 'job',
+          company: 'Habr Corp',
+        },
+        keypair,
+      ),
+    ).rejects.toThrow(/NIP-07/);
 
-    expect(event.kind).toBe(30402);
-    expect(event.pubkey).toBe(keypair.pubKey);
-    expect(event.id).toMatch(/^[0-9a-f]{64}$/);
-    expect(event.sig).toBeDefined();
-    expect(event.tags).toContainEqual(['u', 'https://habr.com/vacancies/123']);
+    (globalThis as any).window = {
+      nostr: {
+        // A real NIP-07 signer computes the event id and the BIP-340 signature
+        signEvent: async (unsigned: { id?: string }) => ({
+          ...unsigned,
+          id: unsigned.id ?? 'e'.repeat(64),
+          sig: 'ab'.repeat(64),
+        }),
+      },
+    };
+    try {
+      const event = await buildAndSignExtensionLead(
+        {
+          title: 'Senior Go Engineer',
+          text: scrubbed.text,
+          url: 'https://habr.com/vacancies/123',
+          type: 'job',
+          company: 'Habr Corp',
+        },
+        keypair,
+      );
+
+      expect(event.kind).toBe(30402);
+      expect(event.pubkey).toBe(keypair.pubKey);
+      expect(event.id).toMatch(/^[0-9a-f]{64}$/);
+      expect(event.sig).toBe('ab'.repeat(64));
+      expect(event.tags).toContainEqual(['u', 'https://habr.com/vacancies/123']);
+    } finally {
+      delete (globalThis as any).window;
+    }
   });
 });

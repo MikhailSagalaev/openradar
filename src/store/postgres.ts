@@ -222,14 +222,18 @@ export class PostgresStore implements Store {
           metadata_json, published_at, fingerprint, title_key, status, score,
           reasons_json, created_at, delivered_at, type,
           votes_up, votes_down, votes_scam, votes_closed, quality_score,
-          raw_salary, payment_period, normalized_usd_min, normalized_usd_max
+          raw_salary, payment_period, normalized_usd_min, normalized_usd_max,
+          publisher_pubkey, nostr_event_id, minhash_sketch, verification_state,
+          attestation_count, is_mesh_exclusive, unlocked_at
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7,
           $8, $9, $10, $11, $12, $13::jsonb, $14,
           $15::jsonb, $16, $17, $18, $19, $20,
           $21::jsonb, $22, $23, $24,
           $25, $26, $27, $28, $29,
-          $30, $31, $32, $33
+          $30, $31, $32, $33,
+          $34, $35, $36, $37,
+          $38, $39, COALESCE($40, NOW())
         ) ON CONFLICT DO NOTHING`,
         [
           lead.id,
@@ -265,6 +269,13 @@ export class PostgresStore implements Store {
           lead.paymentPeriod ?? 'fixed',
           lead.normalizedUsdMin ?? null,
           lead.normalizedUsdMax ?? null,
+          lead.publisher_pubkey ?? null,
+          lead.nostr_event_id ?? null,
+          lead.minhash_sketch ? Buffer.from(lead.minhash_sketch, 'base64url') : null,
+          lead.verification_state ?? 'unverified',
+          lead.attestation_count ?? 0,
+          lead.is_mesh_exclusive ?? false,
+          lead.unlocked_at ? new Date(lead.unlocked_at) : null,
         ]
       );
 
@@ -917,8 +928,8 @@ export class PostgresStore implements Store {
   async upsertMeshNode(node: MeshNodeInput): Promise<MeshNodeRecord> {
     const res = await this.pool.query(
       `INSERT INTO mesh_nodes (
-        pubkey, npub, github_username, github_gist_url, github_verified_at, nip05_domain, trust_score, is_banned, false_reports_count, last_seen_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 0.05), COALESCE($8, FALSE), COALESCE($9, 0), NOW())
+        pubkey, npub, github_username, github_gist_url, github_verified_at, nip05_domain, trust_score, is_banned, false_reports_count, valid_leads_7d, last_seen_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 0.05), COALESCE($8, FALSE), COALESCE($9, 0), COALESCE($10, 0), NOW())
       ON CONFLICT (pubkey) DO UPDATE SET
         github_username = COALESCE(EXCLUDED.github_username, mesh_nodes.github_username),
         github_gist_url = COALESCE(EXCLUDED.github_gist_url, mesh_nodes.github_gist_url),
@@ -927,6 +938,7 @@ export class PostgresStore implements Store {
         trust_score = COALESCE(EXCLUDED.trust_score, mesh_nodes.trust_score),
         is_banned = COALESCE(EXCLUDED.is_banned, mesh_nodes.is_banned),
         false_reports_count = COALESCE(EXCLUDED.false_reports_count, mesh_nodes.false_reports_count),
+        valid_leads_7d = COALESCE(EXCLUDED.valid_leads_7d, mesh_nodes.valid_leads_7d),
         last_seen_at = NOW()
       RETURNING *`,
       [
@@ -939,6 +951,7 @@ export class PostgresStore implements Store {
         node.trust_score ?? null,
         node.is_banned ?? null,
         node.false_reports_count ?? null,
+        node.valid_leads_7d ?? null,
       ]
     );
     const r = res.rows[0];

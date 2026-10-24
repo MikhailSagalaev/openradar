@@ -40,6 +40,19 @@ export function determineAccessTier(params: DetermineAccessTierParams): AccessTi
     };
   }
 
+  // Registered web users (GitHub OAuth) are the community tier: they get
+  // realtime access without needing a mesh node.
+  if (params.user) {
+    return {
+      tier: 'active_contributor',
+      isRealtime: true,
+      reason: 'Registered contributor (GitHub account)',
+      validLeads7d: 0,
+      validAttestations24h: 0,
+      trustScore: 0.40,
+    };
+  }
+
   const node = params.meshNode;
   if (node?.is_banned) {
     return {

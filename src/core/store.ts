@@ -93,6 +93,7 @@ export interface MeshNodeInput {
   trust_score?: number;
   is_banned?: boolean;
   false_reports_count?: number;
+  valid_leads_7d?: number;
 }
 
 export interface LeadAttestationRecord {

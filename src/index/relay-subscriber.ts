@@ -155,11 +155,12 @@ export class RelaySubscriber {
         raw_event: event as any,
       });
 
-      if (this.store.upsertMeshNode && node) {
+      if (this.store.upsertMeshNode) {
         await this.store.upsertMeshNode({
-          pubkey: node.pubkey,
-          npub: node.npub,
-          trust_score: Math.min(1.0, node.trust_score + 0.01),
+          pubkey: node?.pubkey ?? pubkey,
+          npub: node?.npub ?? pubkey,
+          trust_score: Math.min(1.0, (node?.trust_score ?? 0.05) + 0.01),
+          valid_leads_7d: (node?.valid_leads_7d ?? 0) + 1,
         });
       }
       return true;
@@ -211,13 +212,14 @@ export class RelaySubscriber {
 
     await this.store.insertLead(newLead);
 
-    // Reward node with valid_leads_7d increment
+    // Reward node with valid_leads_7d increment (Tit-for-Tat contributor quorum)
     if (this.store.upsertMeshNode) {
       const currentTrust = node?.trust_score ?? 0.05;
       await this.store.upsertMeshNode({
         pubkey,
         npub: node?.npub ?? pubkey,
         trust_score: Math.min(1.0, currentTrust + 0.02),
+        valid_leads_7d: (node?.valid_leads_7d ?? 0) + 1,
       });
     }
 
