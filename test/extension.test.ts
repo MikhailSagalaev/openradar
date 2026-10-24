@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 // @ts-ignore
-import { cleanText, findJobPosting, extractJobPosting } from '../extension/content.js';
+import { cleanText, findJobPosting, extractJobPosting, extractPageData } from '../extension/content.js';
 
 describe('extension content script JobPosting extractor', () => {
   it('cleans HTML text tags cleanly', () => {
@@ -84,5 +84,34 @@ describe('extension content script JobPosting extractor', () => {
     expect(extracted.currency).toBe('RUB');
     expect(extracted.skills).toEqual(['TypeScript', 'React', 'CSS']);
     expect(extracted.description).toContain('Join our team to build OpenRadar.');
+  });
+
+  it('extracts OpenGraph metadata and selection when no JobPosting is present', () => {
+    const mockDoc = {
+      querySelectorAll() {
+        return [];
+      },
+      querySelector(selector: string) {
+        if (selector === 'meta[property="og:title"]') {
+          return { getAttribute: () => 'OG Title: Freelance Project' };
+        }
+        if (selector === 'meta[property="og:description"]') {
+          return { getAttribute: () => 'OG Description: Need a landing page in Next.js' };
+        }
+        return null;
+      },
+      getSelection() {
+        return 'Selected spec fragment';
+      },
+      location: { href: 'https://kwork.ru/projects/456' },
+      title: 'Kwork Default Title',
+    };
+
+    const data = extractPageData(mockDoc);
+    expect(data).toBeTruthy();
+    expect(data.title).toBe('OG Title: Freelance Project');
+    expect(data.description).toBe('OG Description: Need a landing page in Next.js');
+    expect(data.selection).toBe('Selected spec fragment');
+    expect(data.detectedType).toBe('gig');
   });
 });

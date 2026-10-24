@@ -153,7 +153,16 @@ function extractJobPosting(doc = typeof document !== 'undefined' ? document : nu
 function extractPageData(doc = typeof document !== 'undefined' ? document : null) {
   if (!doc) return null;
   const jobPosting = extractJobPosting(doc);
-  const metaDesc = doc.querySelector?.('meta[name="description"]')?.getAttribute('content') ?? '';
+  const metaDesc =
+    doc.querySelector?.('meta[name="description"]')?.getAttribute?.('content') ||
+    doc.querySelector?.('meta[property="og:description"]')?.getAttribute?.('content') ||
+    doc.querySelector?.('meta[name="twitter:description"]')?.getAttribute?.('content') ||
+    '';
+  const metaTitle =
+    jobPosting?.title ||
+    doc.querySelector?.('meta[property="og:title"]')?.getAttribute?.('content') ||
+    doc.title ||
+    '';
   let selection = '';
   try {
     if (typeof doc.getSelection === 'function') {
@@ -164,7 +173,7 @@ function extractPageData(doc = typeof document !== 'undefined' ? document : null
   } catch {}
 
   return {
-    title: jobPosting?.title || doc.title || '',
+    title: metaTitle,
     url: doc.location?.href || '',
     selection,
     description: metaDesc,

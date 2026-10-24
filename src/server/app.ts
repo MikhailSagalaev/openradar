@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { escapeHtml } from '../core/text.ts';
 import { renderRssFeed } from './feed.ts';
 import type { UserRecord } from '../core/store.ts';
@@ -551,6 +553,23 @@ export function createApp(runtime: Runtime): Hono {
     );
   });
 
+  app.get('/extension/download', async (c) => {
+    const zipPath = path.resolve(process.cwd(), 'extension.zip');
+    try {
+      if (fs.existsSync(zipPath)) {
+        const data = await fs.promises.readFile(zipPath);
+        return new Response(data, {
+          headers: {
+            'content-type': 'application/zip',
+            'content-disposition': 'attachment; filename="openradar-extension.zip"',
+            'cache-control': 'public, max-age=300',
+          },
+        });
+      }
+    } catch {}
+    return c.text('Extension archive not found', 404);
+  });
+
   app.get('/submit', async (c) => {
     if (!await canRead(c, runtime)) return c.redirect('/login');
     const lang = resolveLang(c);
@@ -970,6 +989,10 @@ export function createApp(runtime: Runtime): Hono {
     if (!source) return c.html(renderNotFound(VERSION), 404);
     await runtime.store.deleteSource(source.id);
     return c.redirect('/sources');
+  });
+
+  app.get('/api/ping', (c) => {
+    return c.json({ ok: true, version: VERSION, service: 'radar' });
   });
 
   app.get('/api/sources/health', async (c) => {

@@ -1789,6 +1789,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const urlEl = document.getElementById('detected-url');
   if (urlEl) urlEl.textContent = window.location.origin;
 
+  fetch('/api/ping')
+    .then((r) => r.json())
+    .then((d) => {
+      const pingEl = document.getElementById('ping-status');
+      if (pingEl && d.ok) {
+        pingEl.textContent = 'Сервер онлайн (v' + (d.version || '') + ')';
+        pingEl.style.color = '#059669';
+      }
+    })
+    .catch(() => {});
+
   document.querySelectorAll('[data-copy]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const targetId = btn.getAttribute('data-copy');
@@ -1810,74 +1821,104 @@ document.addEventListener('DOMContentLoaded', () => {
           (s) => `
       <div style="background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div>
-          <div style="font-weight:600;font-size:13.5px">${escapeHtml(s.title)}</div>
-          <div class="muted small">ID источника: <code id="src-id-${escapeHtml(s.id)}">${escapeHtml(s.id)}</code></div>
+          <div style="font-weight:600;font-size:13px">${escapeHtml(s.title)}</div>
+          <div class="muted small">ID: <code id="src-id-${escapeHtml(s.id)}">${escapeHtml(s.id)}</code></div>
         </div>
-        <button class="btn ghost" data-copy="src-id-${escapeHtml(s.id)}" type="button">Копировать ID</button>
+        <button class="btn ghost" data-copy="src-id-${escapeHtml(s.id)}" type="button" style="font-size:11px;padding:4px 8px">Копировать ID</button>
       </div>`
         )
         .join('')
-    : `<div class="empty" style="padding:24px 16px">
-        <h2>Нет активного вебхук-источника</h2>
-        <p>Создайте источник типа Webhook, чтобы принимать заказы из браузера.</p>
-        <a class="btn" href="/sources/new">Создать Webhook источник</a>
+    : `<div class="empty" style="padding:20px 14px">
+        <div style="font-weight:600;margin-bottom:4px">Нет активного Webhook-источника</div>
+        <div class="muted small" style="margin-bottom:12px">Создайте источник типа Webhook, чтобы принимать лиды из браузера.</div>
+        <a class="btn" href="/sources/new">Создать источник Webhook</a>
       </div>`;
 
   const body = `
-<div class="page-head">
+<div class="page-head" style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
   <div>
     <h1>Расширение для браузера</h1>
-    <p class="muted small">Отправляйте заказы в Radar в один клик с любых сайтов, бирж и чатов.</p>
+    <p class="muted small">Захват вакансий и заказов в один клик с любых сайтов, бирж и чатов прямо в вашу базу OpenRadar.</p>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <a class="btn primary" href="/extension/download" style="display:inline-flex;align-items:center;gap:7px;font-weight:600;text-decoration:none">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Скачать extension.zip
+    </a>
   </div>
 </div>
 
 <div class="detail-grid">
   <section>
-    <h2>Возможности</h2>
+    <h2>Быстрая установка (Manifest V3)</h2>
     <div style="display:grid;gap:12px;margin-bottom:28px">
       <div style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px">
-        <div style="font-weight:600;margin-bottom:4px">Контекстное меню по правому клику</div>
-        <div class="muted small">Выделите текст любого заказа на странице (Авито, Telegram Web, форум) → правый клик → «Отправить заказ в Radar». Заказ мгновенно сохраняется в общую базу.</div>
+        <div style="font-weight:600;margin-bottom:4px">1. Скачайте и распакуйте архив</div>
+        <div class="muted small">Нажмите кнопку <b>«Скачать extension.zip»</b> выше или возьмите готовую папку <code>extension/</code> из репозитория проекта. Распакуйте её в удобное место на диске.</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px">
-        <div style="font-weight:600;margin-bottom:4px">Быстрая отправка всей страницы (Alt+Shift+R)</div>
-        <div class="muted small">Нажмите горячие клавиши или иконку на панели расширений для автоматического захвата заголовка, URL и описания страницы.</div>
+        <div style="font-weight:600;margin-bottom:4px">2. Откройте управление расширениями в браузере</div>
+        <div class="muted small">В адресной строке Chrome, Edge, Яндекс.Браузера или Brave введите: <code>chrome://extensions/</code> и включите тумблер <b>«Режим разработчика»</b> (в правом верхнем углу).</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px">
-        <div style="font-weight:600;margin-bottom:4px">Авторство контрибьютора комьюнити</div>
-        <div class="muted small">В настройках расширения каждый участник вводит свой никнейм (@telegram), и все найденные им лиды в базе подписываются его именем.</div>
+        <div style="font-weight:600;margin-bottom:4px">3. Загрузите распакованное расширение</div>
+        <div class="muted small">Нажмите <b>«Загрузить распакованное расширение»</b> (Load unpacked) и выберите распакованную папку. На панели появится иконка OpenRadar!</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px">
+        <div style="font-weight:600;margin-bottom:4px">4. Настройте адрес сервера и токен</div>
+        <div class="muted small">Кликните по иконке OpenRadar → раскройте <b>«Настройки подключения»</b>. Скопируйте адрес сервера и ID источника из блока справа, введите секретный токен источника и нажмите <b>«Проверить»</b>.</div>
       </div>
     </div>
 
-    <h2>Установка расширения (3 простых шага)</h2>
+    <h2>Как пользоваться расширением</h2>
     <div style="display:grid;gap:12px;margin-bottom:28px">
       <div style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px">
-        <div style="font-weight:600;margin-bottom:4px">Шаг 1. Получите папку extension/</div>
-        <div class="muted small">Расширение готово и находится прямо в корне проекта в папке <code>extension/</code>. Если раздаёте участникам — заархивируйте эту папку в ZIP.</div>
+        <div style="font-weight:600;margin-bottom:4px">⚡ Отправка всей страницы (горячие клавиши Alt+Shift+R)</div>
+        <div class="muted small">Находясь на любой странице с вакансией или заказом, нажмите <b>Alt+Shift+R</b> или иконку на панели. Расширение автоматически считает заголовок, URL и описание. Если на сайте есть разметка <code>schema.org/JobPosting</code> (HH, SuperJob, LinkedIn), расширение автоматически определит зарплату, компанию, город и стек навыков!</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px">
-        <div style="font-weight:600;margin-bottom:4px">Шаг 2. Откройте chrome://extensions</div>
-        <div class="muted small">В Chrome, Edge или Яндекс.Браузере откройте <code>chrome://extensions/</code> и включите тумблер <b>«Режим разработчика»</b> (в правом верхнем углу).</div>
+        <div style="font-weight:600;margin-bottom:4px">✂️ Отправка фрагмента текста (Контекстное меню)</div>
+        <div class="muted small">Выделите мышью любой текст на бирже (Kwork, FL, Habr Freelance, Telegram Web, Avito, чаты) → Нажмите правую кнопку мыши:
+          <ul style="margin:6px 0 0 16px;padding:0">
+            <li><b>«Отправить заказ в Radar»</b> — сохранит лид с типом «Заказ» (Gig).</li>
+            <li><b>«Отправить вакансию в Radar»</b> — сохранит лид с типом «Вакансия» (Job).</li>
+          </ul>
+        После отправки в браузере появится уведомление, по клику на которое сразу откроется карточка лида!</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px">
-        <div style="font-weight:600;margin-bottom:4px">Шаг 3. Загрузите расширение</div>
-        <div class="muted small">Нажмите кнопку <b>«Загрузить распакованное расширение»</b> и укажите папку <code>extension</code>. Иконка Radar появится в панели браузера!</div>
+        <div style="font-weight:600;margin-bottom:4px">🏷 Подпись и авторство лидов</div>
+        <div class="muted small">В поле «Ваш никнейм (@telegram)» укажите свой ник. Все переданные вами лиды будут сохранены с подписью контрибьютора комьюнити, что позволяет отслеживать активность команды.</div>
       </div>
+    </div>
+
+    <h2>Безопасность и приватность</h2>
+    <div style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px">
+      <div class="muted small">Расширение полностью локальное и Open Source. Токен и настройки хранятся только в защищённом хранилище вашего браузера (<code>chrome.storage.local</code>) и отправляются исключительно на ваш собственный сервер OpenRadar. Расширение не собирает историю посещений и активно только при нажатии горячих клавиш или выборе в меню.</div>
     </div>
   </section>
 
   <aside>
-    <h2>Настройки подключения</h2>
-    <dl class="meta-list" style="margin-bottom:20px">
+    <h2>Параметры для настройки</h2>
+    <div id="ping-status" style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:12px">Проверка доступности сервера...</div>
+
+    <dl class="meta-list" style="margin-bottom:16px">
       <div>
-        <dt>Адрес сервера</dt>
+        <dt>Адрес сервера OpenRadar</dt>
         <dd><code id="detected-url">http://127.0.0.1:8787</code></dd>
       </div>
     </dl>
-    <button class="btn ghost" style="width:100%;margin-bottom:20px" data-copy="detected-url" type="button">Копировать адрес сервера</button>
+    <button class="btn ghost" style="width:100%;margin-bottom:24px" data-copy="detected-url" type="button">Копировать адрес сервера</button>
 
     <h2>Источники Webhook</h2>
+    <div class="muted small" style="margin-bottom:10px">Выберите подходящий источник и скопируйте его ID в расширение:</div>
     ${sourcesList}
+
+    <div style="margin-top:24px;padding:14px;background:var(--surface);border:1px solid var(--line);border-radius:8px">
+      <div style="font-weight:600;font-size:12px;margin-bottom:4px">Где взять токен источника?</div>
+      <div class="muted small">Токен источника генерируется один раз при создании источника командой CLI:<br>
+      <code>node bin/radar.js source add --kind webhook --title "Browser"</code><br>
+      Если вы забыли токен, создайте новый источник Webhook в панели управления.</div>
+    </div>
   </aside>
 </div>`;
 

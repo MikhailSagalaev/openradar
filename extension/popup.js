@@ -12,7 +12,10 @@ const fields = {
   send: document.getElementById('send'),
   pageTitle: document.getElementById('page-title'),
   pageUrl: document.getElementById('page-url'),
+  jobChip: document.getElementById('job-chip'),
+  selectionSnippet: document.getElementById('selection-snippet'),
   details: document.getElementById('settings-details'),
+  testBtn: document.getElementById('test-connection'),
 };
 
 function normalizeBase(value) {
@@ -60,15 +63,38 @@ async function readConfig() {
 }
 
 async function saveConfig(event) {
-  event.preventDefault();
+  event?.preventDefault();
   const config = await readConfig();
   if (!config.base || !config.sourceId || !config.token) {
-    setStatus('Заполните адрес, ID и токен.', 'err');
+    setStatus('Заполните адрес, ID и токен источника.', 'err');
     return;
   }
   await chrome.storage.local.set({ radarConfig: config });
-  setStatus('Настройки сохранены.', 'ok');
+  setStatus('Настройки успешно сохранены.', 'ok');
   fields.details.open = false;
+}
+
+async function testConnection() {
+  const base = normalizeBase(fields.base.value);
+  if (!base) {
+    setStatus('Укажите адрес сервера.', 'err');
+    return;
+  }
+  fields.testBtn.disabled = true;
+  setStatus('Проверка соединения...');
+  try {
+    const res = await fetch(`${base}/api/ping`, { method: 'GET' });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    const data = await res.json().catch(() => null);
+    const ver = data?.version ? ` (v${data.version})` : '';
+    setStatus(`Сервер доступен${ver}`, 'ok');
+  } catch (err) {
+    setStatus(`Ошибка подключения: ${err.message}`, 'err');
+  } finally {
+    fields.testBtn.disabled = false;
+  }
 }
 
 async function readPage() {
@@ -93,7 +119,9 @@ async function readPage() {
     target: { tabId: tab.id },
     func: () => {
       const description =
-        document.querySelector('meta[name="description"]')?.getAttribute('content') ?? '';
+        document.querySelector('meta[name="description"]')?.getAttribute('content') ||
+        document.querySelector('meta[property="og:description"]')?.getAttribute('content') ||
+        '';
       return {
         title: document.title,
         url: location.href,
@@ -116,12 +144,35 @@ async function initPreview() {
     if (page) {
       if (page.jobPosting) {
         setSelectedType('job');
-        const comp = page.jobPosting.company ? ` · ${page.jobPosting.company}` : '';
-        fields.pageTitle.textContent = `${page.jobPosting.title || page.title}${comp}`;
+        const jp = page.jobPosting;
+        fields.pageTitle.textContent = jp.title || page.title;
+
+        const details = [];
+        if (jp.company) details.push(jp.company);
+        if (jp.city) details.push(jp.city);
+        if (jp.isRemote) details.push('Удалённо');
+        if (typeof jp.budget === 'number') {
+          const cur = jp.currency === 'RUB' ? '₽' : jp.currency;
+          details.push(`${jp.budget.toLocaleString('ru-RU')} ${cur}`);
+        }
+
+        if (details.length) {
+          fields.jobChip.textContent = details.join(' · ');
+          fields.jobChip.style.display = 'inline-block';
+        }
       } else {
         fields.pageTitle.textContent = page.title || 'Вкладка без названия';
+        fields.jobChip.style.display = 'none';
       }
+
       fields.pageUrl.textContent = page.url ? new URL(page.url).hostname : '';
+
+      if (page.selection) {
+        fields.selectionSnippet.textContent = `Выделен фрагмент (${page.selection.length} симв.): "${page.selection.slice(0, 160)}${page.selection.length > 160 ? '...' : ''}"`;
+        fields.selectionSnippet.style.display = 'block';
+      } else {
+        fields.selectionSnippet.style.display = 'none';
+      }
     }
   } catch {
     fields.pageTitle.textContent = 'Текущая страница';
@@ -183,13 +234,14 @@ async function sendPage() {
     );
 
     if (!response.ok) {
-      throw new Error((await response.text()).slice(0, 200) || `HTTP ${response.status}`);
+      const errText = await response.text();
+      throw new Error(errText.slice(0, 160) || `HTTP ${response.status}`);
     }
     const data = await response.json().catch(() => null);
     const leadId = data?.outcomes?.[0]?.lead?.id || data?.leadId;
     if (leadId) {
       const leadUrl = `${config.base}/leads/${encodeURIComponent(leadId)}`;
-      fields.status.innerHTML = `Отправлено в Radar. <a href="${leadUrl}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;display:block;margin-top:6px;font-weight:600">Открыть карточку →</a>`;
+      fields.status.innerHTML = `Отправлено в Radar. <a href="${leadUrl}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;display:block;margin-top:6px;font-weight:600">Открыть карточку лида →</a>`;
       fields.status.className = 'status ok';
     } else {
       setStatus('Успешно отправлено в Radar', 'ok');
@@ -203,5 +255,7 @@ async function sendPage() {
 
 document.getElementById('config').addEventListener('submit', saveConfig);
 fields.send.addEventListener('click', sendPage);
+fields.testBtn?.addEventListener('click', testConnection);
+
 loadConfig().catch((error) => setStatus(String(error), 'err'));
 initPreview();

@@ -3,28 +3,33 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Radar</title>
+  <title>OpenRadar</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <header>
-    <strong>OpenRadar</strong>
-    <span>добавление заказов</span>
+    <div class="brand">
+      <img src="icon32.png" width="18" height="18" alt="Radar">
+      <strong>OpenRadar</strong>
+    </div>
+    <span class="sub">захват заказов и вакансий</span>
   </header>
 
   <div id="preview-box" class="preview-box">
-    <div id="page-title" class="page-title">Загрузка...</div>
+    <div id="page-title" class="page-title">Загрузка данных вкладки...</div>
     <div id="page-url" class="page-url"></div>
+    <div id="job-chip" class="job-chip" style="display:none"></div>
+    <div id="selection-snippet" class="selection-snippet" style="display:none"></div>
   </div>
 
   <div class="type-selector">
     <label class="radio-label">
       <input type="radio" name="leadType" value="gig" id="type-gig" checked>
-      <span>Заказ</span>
+      <span>Заказ (Gig)</span>
     </label>
     <label class="radio-label">
       <input type="radio" name="leadType" value="job" id="type-job">
-      <span>Вакансия</span>
+      <span>Вакансия (Job)</span>
     </label>
   </div>
 
@@ -34,21 +39,26 @@
   <p id="status" class="status"></p>
 
   <details id="settings-details">
-    <summary>Настройки сервера</summary>
+    <summary>Настройки подключения</summary>
     <form id="config">
       <label>Ваш никнейм (@telegram)
-        <input id="contributor" type="text" placeholder="@username">
+        <input id="contributor" type="text" placeholder="@username" autocomplete="off">
       </label>
-      <label>Адрес сервера Radar
-        <input id="base" type="url" placeholder="http://127.0.0.1:8787" required>
+      <label>Адрес сервера OpenRadar
+        <div class="input-with-action">
+          <input id="base" type="url" placeholder="http://127.0.0.1:8787" required autocomplete="off">
+          <button id="test-connection" type="button" class="mini-btn">Проверить</button>
+        </div>
       </label>
-      <label>ID источника
-        <input id="sourceId" type="text" placeholder="ID источника" required>
+      <label>ID источника (Webhook)
+        <input id="sourceId" type="text" placeholder="ID источника" required autocomplete="off">
       </label>
-      <label>Токен источника
-        <input id="token" type="password" placeholder="Секретный токен" required>
+      <label>Секретный токен источника
+        <input id="token" type="password" placeholder="Секретный токен источника" required autocomplete="off">
       </label>
-      <button type="submit" class="ghost">Сохранить</button>
+      <div class="settings-actions">
+        <button type="submit" class="ghost">Сохранить</button>
+      </div>
     </form>
   </details>
 

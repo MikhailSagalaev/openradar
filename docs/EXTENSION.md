@@ -1,62 +1,59 @@
-# Browser extension
+# Browser Extension (Manifest V3)
 
-A Manifest V3 extension that sends the current page, its schema.org/JobPosting metadata or selected text to a Radar webhook source — in one click, via a context menu or the `Alt+Shift+R` hotkey.
+A lightweight, zero-dependency Manifest V3 browser extension that captures freelance gigs and job postings into your self-hosted **OpenRadar** instance with one click, via the context menu or the `Alt+Shift+R` hotkey.
 
-No build step, no external dependencies.
+---
 
-## Install (Chrome / Edge / Yandex Browser)
+## 📦 Installation (Chrome / Edge / Yandex Browser / Brave)
 
-1. Create a webhook source:
+### Option A: From Web UI (Recommended)
+1. Open your running OpenRadar dashboard and navigate to **«Расширение»** (`/extension`).
+2. Click **«Скачать extension.zip»** (or download from `/extension/download`) and unpack it to any folder on your computer.
+3. Open `chrome://extensions/` in your browser.
+4. Toggle on **«Developer mode»** (top-right corner).
+5. Click **«Load unpacked»** and select the unpacked extension folder.
 
+### Option B: From Repository
+Select the `extension/` directory directly inside the repository in `chrome://extensions/`.
+
+---
+
+## ⚙️ Configuration
+
+1. **Create a Webhook source** in OpenRadar (if you haven't yet):
    ```bash
-   node bin/radar.js source add --kind webhook --title "Browser"
+   node bin/radar.js source add --kind webhook --title "Browser Extension"
    ```
+   *Note: Save the token printed by the command. You can also view source IDs on the `/extension` page.*
 
-   The command prints a per-source token. It is shown once. The `/extension` page on the server lists the IDs of ready webhook sources for copying.
+2. Click the **OpenRadar icon** in your browser toolbar and expand **«Настройки подключения»**:
+   - **Contributor nickname**: e.g. `@telegram` (optional; signs your submissions in the community).
+   - **Radar server URL**: e.g. `http://127.0.0.1:8787` (click **«Проверить»** to test the connection via `/api/ping`).
+   - **Source ID**: The Webhook source ID from step 1.
+   - **Source Token**: Secret token for the source.
+3. Click **«Сохранить»**.
 
-2. Open `chrome://extensions`, enable **Developer mode**, click **Load unpacked** and choose the `extension/` directory.
+---
 
-3. Click the Radar icon and fill in:
+## 🚀 Features
 
-   - Radar URL, for example `http://127.0.0.1:8787`
-   - source id from step 1
-   - source token from step 1
-   - contributor nickname (`@telegram`) — optional; every lead you submit is signed with it
+- **Full Page Capture (`Alt+Shift+R` or Popup)**:
+  - Automatically parses structured `schema.org/JobPosting` (position, company, salary range, city, remote flag, required skills).
+  - Falls back to OpenGraph (`og:title`, `og:description`), Twitter Card metadata, or page title/description.
+  - Allows switching between **«Заказ (Gig)»** and **«Вакансия (Job)»** before submitting.
+- **Selection Capture (Context Menu)**:
+  - Highlight any text (job requirements, order specs, contact details) on any site (Kwork, Habr Freelance, Telegram Web, Avito, forums).
+  - Right-click → **«Отправить заказ в Radar»** (Gig) or **«Отправить вакансию в Radar»** (Job).
+  - System notification pops up with a direct link to the newly created lead card in OpenRadar.
+- **Visual Snippet & Badge in Popup**:
+  - Live preview of selected text snippet and parsed Job details (`🏢 Acme Corp · 💰 250 000 ₽ · 📍 Москва`).
+- **Dark Mode Support**:
+  - Native dark/light mode following system appearance with crisp Swiss typography.
 
-   Save.
+---
 
-## What it can do
+## 🔒 Security & Privacy
 
-- **Send page** — popup button or `Alt+Shift+R`. The extension parses `schema.org/JobPosting` first (title, company, salary, stack, city) and falls back to the meta description; you can switch the lead type between «Заказ» (gig) and «Вакансия» (job) before sending.
-- **Send selection** — select text on any page, right click → «Отправить заказ в Radar». The selection is submitted with the page title and URL.
-- After a successful send the popup shows a direct link to the lead card on the server.
-
-## What is sent
-
-```json
-{
-  "type": "gig",
-  "title": "page or JobPosting title",
-  "text": "selection, or JobPosting description, or meta description",
-  "url": "https://...",
-  "author": "@nickname (community)",
-  "externalId": "browser:https://..."
-}
-```
-
-The payload goes to `POST /api/ingest/<sourceId>` with `x-radar-token`. Radar then runs the normal pipeline: deduplication, rules, optional classifier, scoring and sinks.
-
-## Permissions
-
-- `activeTab` and `scripting` — read the current tab only after a click or hotkey.
-- `storage` — keep the Radar URL, source id, token and nickname in `chrome.storage.local`.
-- `contextMenus` and `notifications` — the right-click submission and its feedback.
-- Content scripts are declared for all HTTP/HTTPS pages, but they only listen for an extract message from the extension and do nothing on their own.
-
-The token is stored locally and is not synced. Treat it like a password.
-
-## Limitations
-
-- The extension sends the current page, not a whole site.
-- It does not log in anywhere or bypass a paywall.
-- Pages rendered entirely in a cross-origin iframe may return an empty selection.
+- **Local Storage only**: Credentials and tokens are stored solely in `chrome.storage.local`.
+- **Zero Tracking**: No analytics, telemetry, or external third-party servers. All requests go directly to your configured OpenRadar server.
+- **Scoped Permissions**: Uses `activeTab`, `scripting`, and `contextMenus`. Content scripts remain passive until triggered.
