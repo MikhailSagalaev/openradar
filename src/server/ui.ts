@@ -252,25 +252,27 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 12px 5px 6px;
+  padding: 5px 14px 5px 6px;
   background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9999px;
   color: var(--ink);
   cursor: pointer;
   font: inherit;
   font-size: 12.5px;
   font-weight: 500;
-  transition: all 0.15s ease;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease, border-color 0.15s ease, box-shadow 0.18s ease;
 }
 .user-pill:hover, .user-pill[aria-expanded="true"] {
   border-color: var(--ink);
-  background: var(--surface-hover);
+  background: var(--bg);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
 }
 .user-avatar-badge {
   width: 22px;
   height: 22px;
-  border-radius: 4px;
+  border-radius: 50%;
   background: var(--ink);
   color: var(--bg);
   display: inline-flex;
@@ -346,8 +348,8 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 14px;
-  border-radius: 6px;
+  padding: 6px 16px;
+  border-radius: 9999px;
   font-size: 12.5px;
   font-weight: 500;
 }
@@ -645,15 +647,15 @@ dialog::backdrop {
   padding-right: 2px;
 }
 .search-btn-inside {
-  padding: 6px 14px;
+  padding: 6px 16px;
   font-size: 12.5px;
-  border-radius: 6px;
+  border-radius: 9999px;
   white-space: nowrap;
 }
 .search-rss-inside {
-  padding: 6px 12px;
+  padding: 6px 14px;
   font-size: 12px;
-  border-radius: 6px;
+  border-radius: 9999px;
   white-space: nowrap;
 }
 .search-meta-bar {
@@ -676,6 +678,56 @@ dialog::backdrop {
 .search-meta-clear:hover {
   color: var(--ink);
 }
+.search-suggestions {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+  z-index: 90;
+}
+.search-suggestions.active {
+  display: block;
+}
+.suggestions-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 8px;
+  padding: 0 4px;
+}
+.suggestions-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sug-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 9999px;
+  font-size: 12px;
+  color: var(--ink);
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease, border-color 0.15s ease;
+}
+.sug-chip:hover {
+  background: var(--bg);
+  border-color: var(--ink);
+  text-decoration: none;
+  transform: translateY(-2px);
+}
 .funnel-bar {
   display: flex;
   align-items: center;
@@ -690,22 +742,23 @@ dialog::backdrop {
 }
 .funnel-btn {
   background: transparent;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 5px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9999px;
+  padding: 5px 14px;
   font-size: 12px;
   font-weight: 500;
   color: var(--muted);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 .funnel-btn:hover {
   color: var(--ink);
   border-color: var(--ink);
+  transform: translateY(-2px);
 }
 .funnel-btn.active {
-  background: var(--ink);
-  color: var(--bg);
+  background: var(--surface);
+  color: var(--ink);
   border-color: var(--ink);
   font-weight: 600;
 }
@@ -758,9 +811,9 @@ dialog::backdrop {
 }
 .vote-btn {
   background: transparent;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 5px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9999px;
+  padding: 5px 14px;
   font: inherit;
   font-size: 12px;
   font-weight: 500;
@@ -769,12 +822,12 @@ dialog::backdrop {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: all 0.15s ease;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease, border-color 0.15s ease;
 }
 .vote-btn:hover {
-  background: var(--surface-hover);
+  background: var(--bg);
   border-color: var(--ink);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
 }
 .vote-btn:active {
   transform: scale(0.97);
@@ -817,11 +870,11 @@ dialog::backdrop {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--ink);
-  color: var(--bg);
-  border: 1px solid var(--ink);
-  border-radius: 6px;
-  padding: 7px 14px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  border-radius: 9999px;
+  padding: 6px 16px;
   font: inherit;
   font-size: 12.5px;
   font-weight: 500;
@@ -829,17 +882,20 @@ dialog::backdrop {
   cursor: pointer;
   text-decoration: none;
   line-height: 1.4;
-  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: none;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease, border-color 0.15s ease, box-shadow 0.18s ease;
 }
 .btn:hover {
-  opacity: 0.9;
+  background: var(--bg);
+  border-color: var(--ink);
+  color: var(--ink);
   text-decoration: none;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
 }
 .btn:active { transform: scale(0.97); }
 .btn.btn-sm {
-  padding: 4px 10px;
+  padding: 4px 12px;
   font-size: 11.5px;
 }
 .btn.ghost {
@@ -851,12 +907,13 @@ dialog::backdrop {
 .btn.ghost:hover {
   background: var(--surface-hover);
   border-color: var(--ink);
-  opacity: 1;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+  color: var(--ink);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.04);
 }
 .btn.ghost:active { transform: scale(0.97); }
 .btn.danger { border-style: dashed; }
+.btn.danger:hover { border-color: var(--rose); color: var(--rose); }
 .btn:disabled { opacity: 0.4; cursor: default; }
 .empty {
   border: 1px dashed var(--line);
@@ -1592,7 +1649,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
   <form class="search-form" method="get" action="/">
     ${type ? `<input type="hidden" name="type" value="${escapeHtml(type)}">` : ''}
     ${status ? `<input type="hidden" name="status" value="${escapeHtml(status)}">` : ''}
-    <div class="search-bar">
+    <div class="search-bar" id="search-bar-wrap">
       <div class="search-input-wrap">
         <svg class="search-icon-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
         <input name="q" id="search-input" value="${escapeHtml(query)}" placeholder="${escapeHtml(t.searchPlaceholder)}" aria-label="${escapeHtml(t.searchBtn)}" autocomplete="off">
@@ -1601,6 +1658,22 @@ export function renderLeadsPage(data: LeadsPageData): string {
       <div class="search-actions-inside">
         <button class="btn search-btn-inside" type="submit">${escapeHtml(t.searchBtn)}</button>
         <a class="btn ghost search-rss-inside" href="${escapeHtml(rssHref)}" target="_blank" rel="noopener" title="RSS">RSS</a>
+      </div>
+      <div class="search-suggestions" id="search-suggestions">
+        <div class="suggestions-header">Быстрый поиск и подсказки</div>
+        <div class="suggestions-chips">
+          <a class="sug-chip" href="/?q=Python">Python</a>
+          <a class="sug-chip" href="/?q=TypeScript">TypeScript</a>
+          <a class="sug-chip" href="/?q=React">React</a>
+          <a class="sug-chip" href="/?q=Node.js">Node.js</a>
+          <a class="sug-chip" href="/?q=Golang">Golang</a>
+          <a class="sug-chip" href="/?q=Rust">Rust</a>
+          <a class="sug-chip" href="/?q=Удаленно">Удаленно</a>
+          <a class="sug-chip" href="/?q=Парсер">Парсер</a>
+          <a class="sug-chip" href="/?q=Бот">Бот</a>
+          <a class="sug-chip" href="/?q=AI">AI</a>
+          <a class="sug-chip" href="/?q=Дизайн">Дизайн</a>
+        </div>
       </div>
     </div>
     ${query ? `
@@ -1618,16 +1691,35 @@ export function renderLeadsPage(data: LeadsPageData): string {
   const searchHotkeyScript = `
 ${POLL_SCRIPT}
 <script>
-window.addEventListener('keydown', (e) => {
+(function() {
   const input = document.getElementById('search-input');
-  if (e.key === '/' && document.activeElement?.tagName !== 'INPUT') {
-    e.preventDefault();
-    input?.focus();
-    input?.select();
-  } else if (e.key === 'Escape' && document.activeElement === input) {
-    input?.blur();
+  const bar = document.getElementById('search-bar-wrap');
+  const suggestions = document.getElementById('search-suggestions');
+
+  if (input && suggestions && bar) {
+    input.addEventListener('focus', () => {
+      suggestions.classList.add('active');
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!bar.contains(e.target)) {
+        suggestions.classList.remove('active');
+      }
+    });
   }
-});
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === '/' && document.activeElement?.tagName !== 'INPUT') {
+      e.preventDefault();
+      input?.focus();
+      input?.select();
+      suggestions?.classList.add('active');
+    } else if (e.key === 'Escape' && document.activeElement === input) {
+      suggestions?.classList.remove('active');
+      input?.blur();
+    }
+  });
+})();
 </script>`;
 
   const pageTitle = query
