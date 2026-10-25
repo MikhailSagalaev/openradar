@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { firstLine } from '../core/text.ts';
 import type { RawLead, SourceAdapter } from '../core/types.ts';
 import { fetchText } from './http.ts';
+import { fetchTextViaProxy, resolveProxyUrl } from '../net/proxy.ts';
 
 function normalizeChannel(value: string): string {
   return value
@@ -32,7 +33,16 @@ export const telegramSource: SourceAdapter = {
     const channel = normalizeChannel(rawChannel);
     if (!channel) throw new Error('Telegram source requires config.channel');
 
-    const html = await fetchText(ctx, `https://t.me/s/${channel}`);
+    // RADAR_PROXY_URL (or per-source config.proxyUrl) routes the fetch through
+    // a proxy: required on hosts where t.me is network-blocked.
+    const proxyUrl = resolveProxyUrl(source.config);
+    const html = proxyUrl
+      ? await fetchTextViaProxy(`https://t.me/s/${channel}`, {
+          proxyUrl,
+          userAgent: ctx.userAgent,
+          timeoutMs: ctx.timeoutMs,
+        })
+      : await fetchText(ctx, `https://t.me/s/${channel}`);
     const $ = cheerio.load(html);
     const channelTitle = $('.tgme_channel_info_header_title').text().trim() || channel;
     const limit = Math.max(1, Math.min(Number(source.config.limit ?? 30), 100));

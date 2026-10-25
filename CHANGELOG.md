@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1
+
+- `RADAR_PROXY_URL` (or per-source `config.proxyUrl`): outbound HTTP/SOCKS proxy
+  via undici ProxyAgent with manual redirect revalidation — unblocks Telegram
+  t.me preview sources on hosts where Telegram is network-blocked.
+
 ## 0.4.3
 
 - Kwork adapter: closed-API mode. When `RADAR_KWORK_LOGIN` / `RADAR_KWORK_PASSWORD`

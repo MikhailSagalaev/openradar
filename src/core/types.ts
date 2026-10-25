@@ -44,6 +44,7 @@ export interface Env {
   GITHUB_CLIENT_SECRET?: string;
   RADAR_PUBLIC_URL?: string;
   RADAR_MESH_ENABLED?: boolean;
+  RADAR_PROXY_URL?: string;
   RADAR_DIGEST_CHAT_ID?: string;
   RADAR_DIGEST_INTERVAL_HOURS: number;
   RADAR_RETENTION_DAYS: number;
