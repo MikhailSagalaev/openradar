@@ -252,13 +252,10 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 12px 4px 6px;
+  padding: 5px 12px 5px 6px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 9999px;
-  corner-shape: squircle;
-  -webkit-corner-smoothing: 100%;
-  clip-path: url(#squircle-pill);
+  border-radius: 6px;
   color: var(--ink);
   cursor: pointer;
   font: inherit;
@@ -273,7 +270,7 @@ main {
 .user-avatar-badge {
   width: 22px;
   height: 22px;
-  border-radius: 50%;
+  border-radius: 4px;
   background: var(--ink);
   color: var(--bg);
   display: inline-flex;
@@ -349,11 +346,8 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 16px;
-  border-radius: 9999px;
-  corner-shape: squircle;
-  -webkit-corner-smoothing: 100%;
-  clip-path: url(#squircle-pill);
+  padding: 6px 14px;
+  border-radius: 6px;
   font-size: 12.5px;
   font-weight: 500;
 }
@@ -569,10 +563,23 @@ dialog::backdrop {
   flex-direction: column;
   gap: 14px;
 }
+.search-form {
+  width: 100%;
+}
 .search-bar {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  position: relative;
   width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.search-bar:focus-within {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 1px var(--ink), 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 .search-input-wrap {
   position: relative;
@@ -582,19 +589,14 @@ dialog::backdrop {
 }
 .search-input-wrap input {
   width: 100%;
-  padding: 10px 42px 10px 38px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  padding: 8px 36px 8px 38px;
+  border: none;
+  border-radius: 0;
   font: inherit;
   font-size: 13.5px;
-  background: var(--bg);
+  background: transparent;
   color: var(--ink);
-  transition: all 0.15s ease;
-}
-.search-input-wrap input:focus {
-  outline: 0;
-  border-color: var(--ink);
-  box-shadow: 0 0 0 1px var(--ink), 0 2px 4px rgba(0, 0, 0, 0.04);
+  outline: none;
 }
 .search-icon-svg {
   position: absolute;
@@ -604,12 +606,12 @@ dialog::backdrop {
 }
 .search-kbd {
   position: absolute;
-  right: 12px;
+  right: 8px;
   font-family: inherit;
   font-size: 11px;
   font-weight: 500;
   color: var(--muted);
-  background: var(--surface);
+  background: var(--bg);
   border: 1px solid var(--line);
   border-radius: 4px;
   padding: 1px 5px;
@@ -618,16 +620,16 @@ dialog::backdrop {
 }
 .search-clear-btn {
   position: absolute;
-  right: 10px;
+  right: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
   color: var(--muted);
   text-decoration: none;
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -636,12 +638,30 @@ dialog::backdrop {
   background: var(--surface-hover);
   text-decoration: none;
 }
+.search-actions-inside {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 2px;
+}
+.search-btn-inside {
+  padding: 6px 14px;
+  font-size: 12.5px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.search-rss-inside {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
 .search-meta-bar {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 12.5px;
-  padding: 2px 0;
+  padding: 6px 2px 2px;
   color: var(--muted);
 }
 .search-meta-bar strong {
@@ -671,11 +691,8 @@ dialog::backdrop {
 .funnel-btn {
   background: transparent;
   border: 1px solid var(--line);
-  border-radius: 9999px;
-  corner-shape: squircle;
-  -webkit-corner-smoothing: 100%;
-  clip-path: url(#squircle-pill);
-  padding: 5px 14px;
+  border-radius: 6px;
+  padding: 5px 12px;
   font-size: 12px;
   font-weight: 500;
   color: var(--muted);
@@ -742,11 +759,8 @@ dialog::backdrop {
 .vote-btn {
   background: transparent;
   border: 1px solid var(--line);
-  border-radius: 9999px;
-  corner-shape: squircle;
-  -webkit-corner-smoothing: 100%;
-  clip-path: url(#squircle-pill);
-  padding: 5px 14px;
+  border-radius: 6px;
+  padding: 5px 12px;
   font: inherit;
   font-size: 12px;
   font-weight: 500;
@@ -806,11 +820,8 @@ dialog::backdrop {
   background: var(--ink);
   color: var(--bg);
   border: 1px solid var(--ink);
-  border-radius: 9999px;
-  corner-shape: squircle;
-  -webkit-corner-smoothing: 100%;
-  clip-path: url(#squircle-pill);
-  padding: 6px 16px;
+  border-radius: 6px;
+  padding: 7px 14px;
   font: inherit;
   font-size: 12.5px;
   font-weight: 500;
@@ -824,25 +835,25 @@ dialog::backdrop {
   opacity: 0.9;
   text-decoration: none;
   transform: translateY(-1px);
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.08));
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
 }
 .btn:active { transform: scale(0.97); }
 .btn.btn-sm {
-  padding: 4px 12px;
+  padding: 4px 10px;
   font-size: 11.5px;
 }
 .btn.ghost {
   background: transparent;
   color: var(--ink);
   border: 1px solid var(--line-strong);
-  filter: none;
+  box-shadow: none;
 }
 .btn.ghost:hover {
   background: var(--surface-hover);
   border-color: var(--ink);
   opacity: 1;
   transform: translateY(-1px);
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.05));
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
 }
 .btn.ghost:active { transform: scale(0.97); }
 .btn.danger { border-style: dashed; }
@@ -1150,13 +1161,6 @@ ${input.head ?? ''}
 <style>${STYLE}</style>
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute;pointer-events:none;opacity:0" aria-hidden="true">
-  <defs>
-    <clipPath id="squircle-pill" clipPathUnits="objectBoundingBox">
-      <path d="M 1.0000 0.5000 L 0.9989 0.6654 L 0.9954 0.7296 L 0.9896 0.7774 L 0.9815 0.8165 L 0.9710 0.8495 L 0.9579 0.8779 L 0.9423 0.9026 L 0.9239 0.9239 L 0.9026 0.9423 L 0.8779 0.9579 L 0.8495 0.9710 L 0.8165 0.9815 L 0.7774 0.9896 L 0.7296 0.9954 L 0.6654 0.9989 L 0.5000 1.0000 L 0.3346 0.9989 L 0.2704 0.9954 L 0.2226 0.9896 L 0.1835 0.9815 L 0.1505 0.9710 L 0.1221 0.9579 L 0.0974 0.9423 L 0.0761 0.9239 L 0.0577 0.9026 L 0.0421 0.8779 L 0.0290 0.8495 L 0.0185 0.8165 L 0.0104 0.7774 L 0.0046 0.7296 L 0.0011 0.6654 L 0.0000 0.5000 L 0.0011 0.3346 L 0.0046 0.2704 L 0.0104 0.2226 L 0.0185 0.1835 L 0.0290 0.1505 L 0.0421 0.1221 L 0.0577 0.0974 L 0.0761 0.0761 L 0.0974 0.0577 L 0.1221 0.0421 L 0.1505 0.0290 L 0.1835 0.0185 L 0.2226 0.0104 L 0.2704 0.0046 L 0.3346 0.0011 L 0.5000 0.0000 L 0.6654 0.0011 L 0.7296 0.0046 L 0.7774 0.0104 L 0.8165 0.0185 L 0.8495 0.0290 L 0.8779 0.0421 L 0.9026 0.0577 L 0.9239 0.0761 L 0.9423 0.0974 L 0.9579 0.1221 L 0.9710 0.1505 L 0.9815 0.1835 L 0.9896 0.2226 L 0.9954 0.2704 L 0.9989 0.3346 Z"/>
-    </clipPath>
-  </defs>
-</svg>
 <main>
 <header class="top">
   <div class="top-brand-group">
@@ -1594,8 +1598,10 @@ export function renderLeadsPage(data: LeadsPageData): string {
         <input name="q" id="search-input" value="${escapeHtml(query)}" placeholder="${escapeHtml(t.searchPlaceholder)}" aria-label="${escapeHtml(t.searchBtn)}" autocomplete="off">
         ${query ? `<a class="search-clear-btn" href="${escapeHtml(hrefForQuery(''))}" aria-label="Сбросить поиск" title="Сбросить">✕</a>` : `<kbd class="search-kbd">/</kbd>`}
       </div>
-      <button class="btn" type="submit">${escapeHtml(t.searchBtn)}</button>
-      <a class="btn ghost" href="${escapeHtml(rssHref)}" target="_blank" rel="noopener" title="RSS">RSS</a>
+      <div class="search-actions-inside">
+        <button class="btn search-btn-inside" type="submit">${escapeHtml(t.searchBtn)}</button>
+        <a class="btn ghost search-rss-inside" href="${escapeHtml(rssHref)}" target="_blank" rel="noopener" title="RSS">RSS</a>
+      </div>
     </div>
     ${query ? `
     <div class="search-meta-bar">

@@ -106,7 +106,7 @@ function loginPage(error?: string, githubEnabled = false, returnTo?: string): st
 <div class="divider"><span>или</span></div>`
     : '';
   const githubStyle = githubEnabled
-    ? `.github-btn{display:block;width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--line);border-radius:9999px;corner-shape:squircle;-webkit-corner-smoothing:100%;clip-path:url(#squircle-pill);background:var(--surface);color:var(--ink);font:inherit;font-size:13px;font-weight:500;text-align:center;text-decoration:none;transition:border-color .15s ease}
+    ? `.github-btn{display:block;width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font:inherit;font-size:13px;font-weight:500;text-align:center;text-decoration:none;transition:border-color .15s ease}
 .github-btn:hover{border-color:var(--ink);text-decoration:none}
 .divider{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:11px;margin:14px 0}
 .divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--line)}`
@@ -123,19 +123,12 @@ form{background:var(--surface);border:1px solid var(--line);border-radius:12px;p
 h1{font-size:22px;letter-spacing:-0.03em;margin:0 0 6px;font-weight:600}p{color:var(--muted);font-size:13px;margin:0 0 20px}
 input{width:100%;box-sizing:border-box;padding:9px 14px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:13px;background:var(--bg);color:var(--ink);margin-bottom:14px;transition:all .15s ease}
 input:focus{outline:0;border-color:var(--ink);box-shadow:0 0 0 1px var(--ink),0 1px 2px rgba(0,0,0,.04)}
-button{width:100%;padding:10px;border:0;border-radius:9999px;corner-shape:squircle;-webkit-corner-smoothing:100%;clip-path:url(#squircle-pill);background:var(--btn);color:var(--btn-text);font:inherit;font-size:13px;font-weight:500;cursor:pointer;transition:opacity .15s ease,transform .1s ease}
+button{width:100%;padding:10px;border:0;border-radius:6px;background:var(--btn);color:var(--btn-text);font:inherit;font-size:13px;font-weight:500;cursor:pointer;transition:opacity .15s ease,transform .1s ease}
 button:hover{opacity:0.9}button:active{transform:scale(0.98)}
 .error{color:var(--error);font-size:12.5px;font-weight:500;margin-bottom:12px;background:rgba(239,68,68,0.08);padding:6px 10px;border-radius:5px}
 ${githubStyle}
 </style></head>
 <body>
-<svg width="0" height="0" style="position:absolute;pointer-events:none;opacity:0" aria-hidden="true">
-  <defs>
-    <clipPath id="squircle-pill" clipPathUnits="objectBoundingBox">
-      <path d="M 1.0000 0.5000 L 0.9989 0.6654 L 0.9954 0.7296 L 0.9896 0.7774 L 0.9815 0.8165 L 0.9710 0.8495 L 0.9579 0.8779 L 0.9423 0.9026 L 0.9239 0.9239 L 0.9026 0.9423 L 0.8779 0.9579 L 0.8495 0.9710 L 0.8165 0.9815 L 0.7774 0.9896 L 0.7296 0.9954 L 0.6654 0.9989 L 0.5000 1.0000 L 0.3346 0.9989 L 0.2704 0.9954 L 0.2226 0.9896 L 0.1835 0.9815 L 0.1505 0.9710 L 0.1221 0.9579 L 0.0974 0.9423 L 0.0761 0.9239 L 0.0577 0.9026 L 0.0421 0.8779 L 0.0290 0.8495 L 0.0185 0.8165 L 0.0104 0.7774 L 0.0046 0.7296 L 0.0011 0.6654 L 0.0000 0.5000 L 0.0011 0.3346 L 0.0046 0.2704 L 0.0104 0.2226 L 0.0185 0.1835 L 0.0290 0.1505 L 0.0421 0.1221 L 0.0577 0.0974 L 0.0761 0.0761 L 0.0974 0.0577 L 0.1221 0.0421 L 0.1505 0.0290 L 0.1835 0.0185 L 0.2226 0.0104 L 0.2704 0.0046 L 0.3346 0.0011 L 0.5000 0.0000 L 0.6654 0.0011 L 0.7296 0.0046 L 0.7774 0.0104 L 0.8165 0.0185 L 0.8495 0.0290 L 0.8779 0.0421 L 0.9026 0.0577 L 0.9239 0.0761 L 0.9423 0.0974 L 0.9579 0.1221 L 0.9710 0.1505 L 0.9815 0.1835 L 0.9896 0.2226 L 0.9954 0.2704 L 0.9989 0.3346 Z"/>
-    </clipPath>
-  </defs>
-</svg>
 <form method="post" action="/login">
 <div class="login-logo">${renderLogo({ height: 32 })}</div>
 <p>Голосование и добавление заказов — после входа. Токен администратора — для управления источниками.</p>
@@ -170,12 +163,88 @@ function asNumber(value: unknown): number | undefined {
   return undefined;
 }
 
+/**
+ * Config keys that may be shown to non-admin readers of /api/sources.
+ * Everything else (tokens, passwords, proxy credentials, future connector secrets)
+ * is masked: an allowlist stays safe when a connector gains a new sensitive key.
+ */
+const PUBLIC_CONFIG_KEYS = new Set([
+  'url', 'channel', 'chat', 'username', 'board', 'query', 'tag', 'tags',
+  'language', 'lang', 'city', 'category', 'feed', 'topic', 'topics', 'workdir',
+]);
+
 function redactSource<T extends { config: Record<string, unknown> }>(source: T): T {
-  const config = { ...source.config };
-  for (const key of ['token', 'password', 'pass', 'secret']) {
-    if (key in config) config[key] = '***';
+  const config: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(source.config)) {
+    config[key] = PUBLIC_CONFIG_KEYS.has(key) ? value : '***';
   }
   return { ...source, config };
+}
+
+/** Proxy settings must be a credential-less http(s) URL; anything else is rejected. */
+function invalidProxyUrl(config: Record<string, unknown>): string | null {
+  const raw = config.proxyUrl;
+  if (raw === undefined || raw === null || raw === '') return null;
+  if (typeof raw !== 'string') return 'proxyUrl must be a string';
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return 'proxyUrl must be a valid URL';
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return 'proxyUrl must use http or https';
+  }
+  if (parsed.username || parsed.password) {
+    return 'proxyUrl must not embed credentials; use an IP-authenticated proxy';
+  }
+  return null;
+}
+
+/**
+ * Viewer access level for every lead-reading endpoint (API, RSS, catalog, MCP, export).
+ * Admin sees everything; a mesh node key (Bearer pubkey or x-radar-node-pubkey)
+ * gets its earned tier; everyone else is a free-rider (12h lag, no mesh-exclusive).
+ */
+async function viewerFromRequest(c: Context, runtime: Runtime): Promise<import('../core/store.ts').ViewerAccessContext> {
+  const admin = await isAdmin(c, runtime);
+  if (admin) return { isAdmin: true };
+
+  const user = await currentUser(c, runtime);
+  const bearer = (c.req.header('authorization') || '').replace(/^Bearer\s+/i, '').trim();
+  const headerPubkey = (c.req.header('x-radar-node-pubkey') || '').trim();
+  const pubkey = (bearer || headerPubkey).toLowerCase();
+  const node = pubkey && runtime.store.getMeshNode && !user ? await runtime.store.getMeshNode(pubkey) : null;
+  const tier = determineAccessTier({ user, meshNode: node, isAdmin: false });
+  return {
+    pubkey: node?.pubkey,
+    trustScore: node?.trust_score,
+    hasValidAttestations24h: (node?.valid_attestations_24h ?? 0) > 0,
+    isRealtime: tier.isRealtime,
+  };
+}
+
+/**
+ * Lead projection for non-admin API consumers: keeps the public marketplace fields,
+ * drops pipeline internals (fingerprints, dedup keys, external ids, delivery state,
+ * raw metadata) that only operators and the ingest pipeline need.
+ */
+const PUBLIC_LEAD_KEYS = [
+  'id', 'type', 'title', 'text', 'url', 'canonicalUrl', 'author', 'city',
+  'budget', 'currency', 'paymentPeriod', 'rawSalary', 'normalizedUsdMin', 'normalizedUsdMax',
+  'category', 'skills', 'isRemote', 'publishedAt', 'createdAt',
+  'votes_up', 'votes_down', 'votes_scam', 'votes_closed',
+  'verification_state', 'attestation_count', 'publisher_pubkey',
+] as const;
+
+function toPublicLead(lead: Lead): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const record = lead as unknown as Record<string, unknown>;
+  for (const key of PUBLIC_LEAD_KEYS) {
+    const value = record[key];
+    if (value !== undefined) out[key] = value;
+  }
+  return out;
 }
 
 function formString(body: Record<string, unknown>, key: string): string {
@@ -879,7 +948,7 @@ export function createApp(runtime: Runtime): Hono {
       successRate: 0,
     };
     const [leads, runs] = await Promise.all([
-      runtime.store.listLeads({ sourceId: source.id, limit: 20 }),
+      runtime.store.getLeadsForFeed(await viewerFromRequest(c, runtime), { sourceId: source.id, limit: 20 }),
       runtime.store.listRuns(20, source.id),
     ]);
     return c.html(
@@ -1095,6 +1164,8 @@ export function createApp(runtime: Runtime): Hono {
       body.config && typeof body.config === 'object' && !Array.isArray(body.config)
         ? (body.config as Record<string, unknown>)
         : {};
+    const proxyError = invalidProxyUrl(config);
+    if (proxyError) return c.json({ error: 'invalid_config', detail: proxyError }, 400);
     const created = await runtime.store.createSource({
       kind,
       title,
@@ -1108,13 +1179,24 @@ export function createApp(runtime: Runtime): Hono {
     if (!await isAdmin(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
     const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
     if (!body) return c.json({ error: 'invalid_json' }, 400);
-    const updated = await runtime.store.updateSource(c.req.param('id'), {
+    const existing = await runtime.store.getSource(c.req.param('id'));
+    if (!existing) return c.json({ error: 'not_found' }, 404);
+    let config: Record<string, unknown> | undefined;
+    if (body.config && typeof body.config === 'object' && !Array.isArray(body.config)) {
+      config = { ...body.config as Record<string, unknown> };
+      // A masked value round-tripped from the redacted list must never overwrite the real secret.
+      for (const [key, value] of Object.entries(config)) {
+        if (value === '***' && existing.config[key] !== undefined) {
+          config[key] = existing.config[key];
+        }
+      }
+      const proxyError = invalidProxyUrl(config);
+      if (proxyError) return c.json({ error: 'invalid_config', detail: proxyError }, 400);
+    }
+    const updated = await runtime.store.updateSource(existing.id, {
       title: asString(body.title),
       enabled: typeof body.enabled === 'boolean' ? body.enabled : undefined,
-      config:
-        body.config && typeof body.config === 'object' && !Array.isArray(body.config)
-          ? (body.config as Record<string, unknown>)
-          : undefined,
+      config,
     });
     if (!updated) return c.json({ error: 'not_found' }, 404);
     return c.json(redactSource(updated));
@@ -1135,7 +1217,11 @@ export function createApp(runtime: Runtime): Hono {
     const type: LeadType | undefined = rawType === 'job' || rawType === 'gig' ? rawType : undefined;
     const sourceId = c.req.query('source') || undefined;
     const query = c.req.query('q')?.trim() || undefined;
-    return c.json(await runtime.store.listLeads({ limit, status, sourceId, query, type }));
+    // Feed access rules (12h lag / mesh-exclusive) apply to the API just like the UI.
+    const viewer = await viewerFromRequest(c, runtime);
+    const leads = await runtime.store.getLeadsForFeed(viewer, { limit, status, sourceId, query, type });
+    if (viewer.isAdmin) return c.json(leads);
+    return c.json(leads.map(toPublicLead));
   });
 
   app.post('/mcp', async (c) => {
@@ -1153,7 +1239,9 @@ export function createApp(runtime: Runtime): Hono {
       return c.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, 400);
     }
     const { handleMcpRequest } = await import('../mcp/server.ts');
-    const resp = await handleMcpRequest(body, runtime.store);
+    // Access tier of the node key (or admin) is passed through: search results
+    // respect the same 12h lag / mesh-exclusive rules as the HTTP API.
+    const resp = await handleMcpRequest(body, runtime.store, await viewerFromRequest(c, runtime));
     return c.json(resp);
   });
 
@@ -1206,14 +1294,31 @@ export function createApp(runtime: Runtime): Hono {
     });
   });
 
-  app.get('/api/v1/xray', rateLimit({ windowMs: 60_000, max: 30 }), async (c) => {
+  // CORS: only the site itself and the browser extension may call X-Ray cross-origin.
+  // chrome-extension://<id> cannot be pinned to a fixed id before the store build, so any
+  // extension origin is accepted — extension pages are user-installed, not attacker pages.
+  const xrayAllowedOrigins = (runtime.env.RADAR_XRAY_ALLOWED_ORIGINS || 'https://openradar.fun')
+    .split(',').map((o) => o.trim()).filter(Boolean);
+  const xrayOriginAllowed = (origin: string) =>
+    xrayAllowedOrigins.includes(origin) || origin.startsWith('chrome-extension://');
+
+  app.get('/api/v1/xray', rateLimit({
+    windowMs: 60_000,
+    max: 30,
+    // Anonymous XFF is spoofable; a mesh node key, when presented, is the honest bucket.
+    keyFrom: (c) => (c.req.header('authorization') || '').replace(/^Bearer\s+/i, '').trim().toLowerCase() || undefined,
+  }), async (c) => {
     const url = c.req.query('url');
     if (!url) {
       return c.json({ error: 'url query param required' }, 400);
     }
     const { computeXray } = await import('../pipeline/xray.ts');
     const result = await computeXray(url, runtime.store);
-    c.header('Access-Control-Allow-Origin', '*');
+    const origin = c.req.header('origin');
+    if (origin && xrayOriginAllowed(origin)) {
+      c.header('Access-Control-Allow-Origin', origin);
+      c.header('Vary', 'Origin');
+    }
     c.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
     c.header('Cache-Control', 'public, max-age=60');
     return c.json(result);
@@ -1384,7 +1489,7 @@ export function createApp(runtime: Runtime): Hono {
       ? (rawStatus as LeadStatus)
       : undefined;
 
-    const leads = await runtime.store.listLeads({
+    const leads = await runtime.store.getLeadsForFeed(await viewerFromRequest(c, runtime), {
       limit: 50,
       query: q || undefined,
       type,
@@ -1439,7 +1544,7 @@ export function createApp(runtime: Runtime): Hono {
     const entry = findCatalogEntry(c.req.param('slug') as string);
     if (!entry) return c.html(renderNotFound(VERSION), 404);
 
-    const leads = (await runtime.store.listLeads({
+    const leads = (await runtime.store.getLeadsForFeed(await viewerFromRequest(c, runtime), {
       limit: 30,
       query: entry.q,
       type: entry.type,
@@ -1459,7 +1564,7 @@ export function createApp(runtime: Runtime): Hono {
     if (!await canRead(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
     const since = c.req.query('since') || new Date(Date.now() - 24 * 3600 * 1000).toISOString();
     const limit = Math.max(1, Math.min(Number(c.req.query('limit') ?? 200) || 200, 1000));
-    const allLeads = await runtime.store.listLeads({ limit: 500 });
+    const allLeads = await runtime.store.getLeadsForFeed(await viewerFromRequest(c, runtime), { limit: 500 });
     const delta = allLeads
       .filter((lead) => lead.createdAt >= since)
       .slice(0, limit)
