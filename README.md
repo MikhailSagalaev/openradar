@@ -1,10 +1,20 @@
 # OpenRadar: Decentralized Labor Liquidity Network
 
-[![License: AGPL v3](https://img.shields.io/badge/license-AGPLv3-blue.svg)](LICENSE)
-[![Tests: 170 passed](https://img.shields.io/badge/tests-170%20passed-green.svg)]()
-[![TypeScript: Strict](https://img.shields.io/badge/typescript-strict-blue.svg)]()
-[![Production: Online v0.5.0](https://img.shields.io/badge/prod-online%20v0.5.0-success.svg)](https://openradar.fun)
-[![Protocol: radar/1](https://img.shields.io/badge/protocol-radar%2F1%20(Nostr)-purple.svg)]()
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-white.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/logo-black.png">
+    <img alt="OpenRadar Logo" src="assets/logo-black.png" width="360">
+  </picture>
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPLv3-blue.svg" alt="License: AGPL v3"></a>
+  <a href="#"><img src="https://img.shields.io/badge/tests-171%20passed-green.svg" alt="Tests: 171 passed"></a>
+  <a href="#"><img src="https://img.shields.io/badge/typescript-strict-blue.svg" alt="TypeScript: Strict"></a>
+  <a href="https://openradar.fun"><img src="https://img.shields.io/badge/prod-online%20v0.5.0-success.svg" alt="Production: Online v0.5.0"></a>
+  <a href="#"><img src="https://img.shields.io/badge/protocol-radar%2F1%20(Nostr)-purple.svg" alt="Protocol: radar/1 (Nostr)"></a>
+</p>
 
 **OpenRadar** is a decentralized, open-source labor liquidity protocol (`radar/1`) built on top of **Nostr (NIP-01)**. It provides a censorship-resistant, community-curated data mesh for job vacancies (`job`) and freelance contracts (`gig`).
 
