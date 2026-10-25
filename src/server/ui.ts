@@ -198,76 +198,10 @@ main {
 }
 .brand:hover { opacity: 0.8; }
 .brand-logo-svg {
-  height: 22px;
+  height: 42px;
   width: auto;
   display: block;
 }
-.version {
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 500;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 1px 5px;
-}
-.quick-stack-bar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
-  font-size: 12px;
-}
-@media (max-width: 640px) {
-  .quick-stack-bar {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 4px;
-    scrollbar-width: none;
-  }
-  .quick-stack-bar::-webkit-scrollbar {
-    display: none;
-  }
-}
-.quick-stack-label {
-  color: var(--muted);
-  font-weight: 500;
-  margin-right: 2px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.stack-tag {
-  display: inline-flex;
-  align-items: center;
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink);
-  text-decoration: none;
-  transition: all 0.15s ease;
-}
-.stack-tag:hover {
-  border-color: var(--ink);
-  text-decoration: none;
-}
-.stack-tag.active {
-  background: var(--ink);
-  color: var(--bg);
-  border-color: var(--ink);
-  font-weight: 600;
-}
-.stack-tag.clear {
-  color: var(--muted);
-  border-style: dashed;
-}
-.stack-tag.clear:hover {
-  color: #ef4444;
-  border-color: #ef4444;
 }
 .source-error-tooltip {
   display: inline-flex;
@@ -309,6 +243,113 @@ main {
 .nav a.active { color: var(--ink); border-color: var(--ink); }
 .actions { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .auth-handle { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.user-menu-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.user-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+.user-pill:hover, .user-pill[aria-expanded="true"] {
+  border-color: var(--ink);
+  background: var(--surface-hover);
+}
+.user-avatar-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+.user-handle-text {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chevron-svg {
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+.user-pill[aria-expanded="true"] .chevron-svg {
+  transform: rotate(180deg);
+}
+.user-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+}
+.user-menu-info {
+  padding: 8px 10px;
+}
+.user-menu-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink);
+}
+.user-menu-role {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.user-menu-sep {
+  height: 1px;
+  background: var(--line);
+  margin: 4px 0;
+}
+.user-menu-link {
+  display: block;
+  padding: 7px 10px;
+  border-radius: 5px;
+  font-size: 12.5px;
+  color: var(--ink);
+  text-decoration: none;
+  transition: background 0.1s ease;
+}
+.user-menu-link:hover {
+  background: var(--surface-hover);
+  text-decoration: none;
+}
+.user-menu-link.danger {
+  color: #ef4444;
+}
+.user-menu-link.danger:hover {
+  background: rgba(239, 68, 68, 0.08);
+}
+.auth-signin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 500;
+}
 .page-head {
   display: flex;
   align-items: flex-end;
@@ -526,9 +567,15 @@ dialog::backdrop {
   gap: 8px;
   width: 100%;
 }
-.search-bar input {
-  flex: 1;
-  padding: 10px 14px;
+.search-input-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+}
+.search-input-wrap input {
+  width: 100%;
+  padding: 10px 42px 10px 38px;
   border: 1px solid var(--line);
   border-radius: 8px;
   font: inherit;
@@ -537,10 +584,70 @@ dialog::backdrop {
   color: var(--ink);
   transition: all 0.15s ease;
 }
-.search-bar input:focus {
+.search-input-wrap input:focus {
   outline: 0;
   border-color: var(--ink);
   box-shadow: 0 0 0 1px var(--ink), 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+.search-icon-svg {
+  position: absolute;
+  left: 12px;
+  color: var(--muted);
+  pointer-events: none;
+}
+.search-kbd {
+  position: absolute;
+  right: 12px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 5px;
+  pointer-events: none;
+  line-height: 1.4;
+}
+.search-clear-btn {
+  position: absolute;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.search-clear-btn:hover {
+  color: var(--ink);
+  background: var(--surface-hover);
+  text-decoration: none;
+}
+.search-meta-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  padding: 2px 0;
+  color: var(--muted);
+}
+.search-meta-bar strong {
+  color: var(--ink);
+}
+.search-meta-clear {
+  color: var(--muted);
+  font-size: 12px;
+  text-decoration: underline;
+  margin-left: auto;
+}
+.search-meta-clear:hover {
+  color: var(--ink);
 }
 .funnel-bar {
   display: flex;
@@ -981,11 +1088,35 @@ export function layout(input: {
   const nav = (key: 'leads' | 'sources' | 'extension', label: string, href: string): string =>
     `<a href="${href}"${input.active === key ? ' class="active"' : ''}>${label}</a>`;
 
-  const authChip = input.auth
-    ? input.auth.handle
-      ? `<span class="auth-handle">${escapeHtml(input.auth.handle)}</span><a class="chip" href="/logout">${escapeHtml(t.signOut)}</a>`
-      : `<a class="chip" href="/logout">${escapeHtml(t.signOut)}</a>`
-    : `<a class="chip auth-signin-link" href="/login">${escapeHtml(t.signIn)}</a>`;
+  const authWidget = input.auth
+    ? `
+      <div class="user-menu-wrap">
+        <button type="button" class="user-pill" id="user-menu-trigger" aria-haspopup="true" aria-expanded="false" onclick="
+          const m = document.getElementById('user-menu-dropdown');
+          if (m) {
+            const exp = m.style.display !== 'none';
+            m.style.display = exp ? 'none' : 'block';
+            this.setAttribute('aria-expanded', String(!exp));
+          }
+        ">
+          <span class="user-avatar-badge">${escapeHtml((input.auth.handle || 'A').slice(0, 1).toUpperCase())}</span>
+          <span class="user-handle-text">${escapeHtml(input.auth.handle ? '@' + input.auth.handle : 'Admin')}</span>
+          <svg class="chevron-svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="user-menu-dropdown" id="user-menu-dropdown" style="display:none">
+          <div class="user-menu-info">
+            <div class="user-menu-name">${escapeHtml(input.auth.handle ? '@' + input.auth.handle : 'Администратор')}</div>
+            <div class="user-menu-role">${input.auth.handle ? 'GitHub Contributor' : 'Токен администратора'}</div>
+          </div>
+          <div class="user-menu-sep"></div>
+          <a class="user-menu-link" href="/submit">${escapeHtml(lang === 'ru' ? 'Добавить по ссылке' : 'Submit by URL')}</a>
+          <a class="user-menu-link" href="/extension">${escapeHtml(lang === 'ru' ? 'Браузерное расширение' : 'Browser Extension')}</a>
+          <div class="user-menu-sep"></div>
+          <a class="user-menu-link danger" href="/logout">${escapeHtml(t.signOut)}</a>
+        </div>
+      </div>
+    `
+    : `<button type="button" class="btn btn-sm auth-signin-btn" onclick="openLoginModal()">${escapeHtml(t.signIn)}</button>`;
 
   return `<!doctype html>
 <html lang="${lang}">
@@ -1001,14 +1132,13 @@ ${input.head ?? ''}
 <main>
 <header class="top">
   <div class="top-brand-group">
-    <a class="brand" href="/" aria-label="OpenRadar">${renderLogo({ height: 22 })}</a>
-    <span class="version">v${escapeHtml(input.version)}</span>
+    <a class="brand" href="/" aria-label="OpenRadar">${renderLogo({ height: 42 })}</a>
   </div>
   <nav class="nav">
     ${nav('leads', t.navLeads, '/')}
     ${nav('sources', t.navSources, '/sources')}
   </nav>
-  <div class="actions">${input.actions ?? ''}${authChip}</div>
+  <div class="actions">${input.actions ?? ''}${authWidget}</div>
 </header>
 ${input.body}
 <footer>
@@ -1033,21 +1163,30 @@ ${input.body}
   </div>
 </footer>
 </main>
-<dialog id="auth-vote-dialog" style="border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);padding:24px;max-width:440px;width:calc(100vw - 32px);box-shadow:0 16px 40px rgba(0,0,0,0.2)">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-    <h3 style="margin:0;font-size:16px;font-weight:600">${escapeHtml(t.voteAuthTitle)}</h3>
+<dialog id="auth-vote-dialog" style="border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);padding:24px;max-width:400px;width:calc(100vw - 32px);box-shadow:0 16px 40px rgba(0,0,0,0.22)">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    <div style="display:inline-flex;align-items:center">${renderLogo({ height: 28 })}</div>
     <button type="button" onclick="document.getElementById('auth-vote-dialog').close()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:22px;line-height:1;padding:0">&times;</button>
   </div>
-  <p class="muted" style="font-size:13px;line-height:1.6;margin:0 0 20px">
-    ${escapeHtml(t.voteAuthDesc)}
+  <p class="muted" style="font-size:13px;line-height:1.55;margin:0 0 20px">
+    ${escapeHtml(lang === 'ru' ? 'Войдите через GitHub для голосования, оценки качества и участия в сети.' : 'Sign in with GitHub to vote, curate leads and participate in the mesh.')}
   </p>
-  <div style="display:flex;justify-content:flex-end;gap:10px">
-    <button class="btn ghost" type="button" onclick="document.getElementById('auth-vote-dialog').close()">${escapeHtml(t.cancel)}</button>
-    <a class="btn" id="auth-vote-github-btn" href="/auth/github">${escapeHtml(t.signInGithub)}</a>
+  <div style="display:grid;gap:12px">
+    <a class="btn primary" id="auth-vote-github-btn" href="/auth/github" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;font-size:13.5px;font-weight:600;text-decoration:none">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+      <span>${escapeHtml(t.signInGithub)}</span>
+    </a>
   </div>
+  <details style="margin-top:16px">
+    <summary class="muted" style="cursor:pointer;font-size:12px;user-select:none">${escapeHtml(lang === 'ru' ? 'Вход для администратора по токену' : 'Admin token sign-in')}</summary>
+    <form method="post" action="/login" style="margin-top:10px;display:grid;gap:8px">
+      <input type="password" name="token" placeholder="${escapeHtml(lang === 'ru' ? 'Токен администратора' : 'Admin token')}" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit;font-size:13px">
+      <button class="btn" type="submit">${escapeHtml(lang === 'ru' ? 'Войти по токену' : 'Sign in with token')}</button>
+    </form>
+  </details>
 </dialog>
 <script>
-function openAuthVoteModal() {
+function openLoginModal() {
   const dlg = document.getElementById('auth-vote-dialog');
   const btn = document.getElementById('auth-vote-github-btn');
   if (btn) {
@@ -1059,13 +1198,16 @@ function openAuthVoteModal() {
     window.location.href = '/login?returnTo=' + encodeURIComponent(window.location.pathname + window.location.search);
   }
 }
-document.addEventListener('DOMContentLoaded', function() {
-  const links = document.querySelectorAll('.auth-signin-link');
-  links.forEach(function(l) {
-    if (window.location.pathname !== '/login') {
-      l.href = '/login?returnTo=' + encodeURIComponent(window.location.pathname + window.location.search);
-    }
-  });
+function openAuthVoteModal() {
+  openLoginModal();
+}
+document.addEventListener('click', function(e) {
+  const trigger = document.getElementById('user-menu-trigger');
+  const menu = document.getElementById('user-menu-dropdown');
+  if (trigger && menu && !trigger.contains(e.target) && !menu.contains(e.target)) {
+    menu.style.display = 'none';
+    trigger.setAttribute('aria-expanded', 'false');
+  }
 });
 </script>
 <dialog id="add-source-dialog" style="border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);padding:24px;max-width:480px;width:calc(100vw - 32px);box-shadow:0 16px 40px rgba(0,0,0,0.18)">
@@ -1368,15 +1510,6 @@ export function renderLeadsPage(data: LeadsPageData): string {
     return suffix ? `/?${suffix}` : '/';
   };
 
-  const POPULAR_STACKS = ['TypeScript', 'Python', 'Go', 'React', 'Rust', 'Node.js', 'DevOps', 'QA'];
-  const stackTags = POPULAR_STACKS.map((stack) => {
-    const active = query.toLowerCase() === stack.toLowerCase() ? ' active' : '';
-    return `<a class="stack-tag${active}" href="${escapeHtml(hrefForQuery(stack))}">${escapeHtml(stack)}</a>`;
-  }).join('');
-  const clearStack = query
-    ? `<a class="stack-tag clear" href="${escapeHtml(hrefForQuery(''))}" title="Сбросить фильтр стека">✕ Очистить</a>`
-    : '';
-
   const rssParams = new URLSearchParams();
   if (type) rssParams.set('type', type);
   if (status) rssParams.set('status', status);
@@ -1428,15 +1561,20 @@ export function renderLeadsPage(data: LeadsPageData): string {
     ${type ? `<input type="hidden" name="type" value="${escapeHtml(type)}">` : ''}
     ${status ? `<input type="hidden" name="status" value="${escapeHtml(status)}">` : ''}
     <div class="search-bar">
-      <input name="q" id="search-input" value="${escapeHtml(query)}" placeholder="${escapeHtml(t.searchPlaceholder)}" aria-label="${escapeHtml(t.searchBtn)}">
+      <div class="search-input-wrap">
+        <svg class="search-icon-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input name="q" id="search-input" value="${escapeHtml(query)}" placeholder="${escapeHtml(t.searchPlaceholder)}" aria-label="${escapeHtml(t.searchBtn)}" autocomplete="off">
+        ${query ? `<a class="search-clear-btn" href="${escapeHtml(hrefForQuery(''))}" aria-label="Сбросить поиск" title="Сбросить">✕</a>` : `<kbd class="search-kbd">/</kbd>`}
+      </div>
       <button class="btn" type="submit">${escapeHtml(t.searchBtn)}</button>
       <a class="btn ghost" href="${escapeHtml(rssHref)}" target="_blank" rel="noopener" title="RSS">RSS</a>
     </div>
-    <div class="quick-stack-bar">
-      <span class="quick-stack-label">Стек:</span>
-      ${stackTags}
-      ${clearStack}
-    </div>
+    ${query ? `
+    <div class="search-meta-bar">
+      <span>Найдено: <strong>${leads.length}</strong></span>
+      <span>по запросу «<strong>${escapeHtml(query)}</strong>»</span>
+      <a class="search-meta-clear" href="${escapeHtml(hrefForQuery(''))}">✕ Сбросить</a>
+    </div>` : ''}
   </form>
   <div class="chips">${chips}</div>
 </div>
@@ -1447,9 +1585,13 @@ export function renderLeadsPage(data: LeadsPageData): string {
 ${POLL_SCRIPT}
 <script>
 window.addEventListener('keydown', (e) => {
+  const input = document.getElementById('search-input');
   if (e.key === '/' && document.activeElement?.tagName !== 'INPUT') {
     e.preventDefault();
-    document.getElementById('search-input')?.focus();
+    input?.focus();
+    input?.select();
+  } else if (e.key === 'Escape' && document.activeElement === input) {
+    input?.blur();
   }
 });
 </script>`;
