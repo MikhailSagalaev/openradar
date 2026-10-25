@@ -211,9 +211,7 @@ input:focus {
   background: var(--surface-hover);
   color: var(--ink);
   border: 1px solid var(--line);
-  border-radius: 9999px;
-  corner-shape: squircle;
-  -webkit-corner-smoothing: 100%;
+  border-radius: 5px;
   cursor: pointer;
 }
 
@@ -225,9 +223,7 @@ button {
   width: 100%;
   padding: 9px 16px;
   border: 0;
-  border-radius: 9999px;
-  corner-shape: squircle;
-  -webkit-corner-smoothing: 100%;
+  border-radius: 6px;
   background: var(--accent);
   color: var(--accent-ink);
   font: inherit;
