@@ -125,6 +125,8 @@ export interface ViewerAccessContext {
   trustScore?: number;
   hasValidAttestations24h?: boolean;
   isAdmin?: boolean;
+  /** Active-contributor tier (access-tier engine): real-time, no 12h lag. */
+  isRealtime?: boolean;
 }
 
 export interface Store {

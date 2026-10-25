@@ -205,13 +205,15 @@ input:focus {
 
 .mini-btn {
   width: auto;
-  padding: 5px 9px;
+  padding: 5px 12px;
   font-size: 11px;
   white-space: nowrap;
   background: var(--surface-hover);
   color: var(--ink);
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: 9999px;
+  corner-shape: squircle;
+  -webkit-corner-smoothing: 100%;
   cursor: pointer;
 }
 
@@ -221,9 +223,11 @@ input:focus {
 
 button {
   width: 100%;
-  padding: 9px 12px;
+  padding: 9px 16px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 9999px;
+  corner-shape: squircle;
+  -webkit-corner-smoothing: 100%;
   background: var(--accent);
   color: var(--accent-ink);
   font: inherit;
