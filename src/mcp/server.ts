@@ -5,9 +5,10 @@
  */
 
 import { createInterface } from 'node:readline';
-import type { Store } from '../core/store.ts';
+import type { Store, ViewerAccessContext } from '../core/store.ts';
 import type { Lead, LeadType } from '../core/types.ts';
 import { arbitrateLead } from '../pipeline/arbiter.ts';
+import { viewerCanSeeLead } from '../core/access-tier.ts';
 
 export interface McpTool {
   name: string;
@@ -90,8 +91,14 @@ export interface McpResponse {
 
 /**
  * Handles incoming MCP JSON-RPC 2.0 messages.
+ * The viewer's access tier applies everywhere: search, details and analytics
+ * hide mesh-exclusive and still-locked (12h lag) leads from non-privileged keys.
  */
-export async function handleMcpRequest(req: McpRequest, store: Store): Promise<McpResponse> {
+export async function handleMcpRequest(
+  req: McpRequest,
+  store: Store,
+  viewer: ViewerAccessContext = { isAdmin: true },
+): Promise<McpResponse> {
   const id = req.id ?? null;
 
   if (req.method === 'initialize') {
@@ -127,7 +134,7 @@ export async function handleMcpRequest(req: McpRequest, store: Store): Promise<M
 
     try {
       if (toolName === 'search_leads') {
-        const leads = await store.listLeads({
+        const leads = await store.getLeadsForFeed(viewer, {
           query: args.query,
           type: args.type as LeadType,
           limit: Math.min(100, Number(args.limit) || 20),
@@ -178,7 +185,7 @@ export async function handleMcpRequest(req: McpRequest, store: Store): Promise<M
 
       if (toolName === 'get_lead_details') {
         const lead = await store.getLead(args.id);
-        if (!lead) {
+        if (!lead || !viewerCanSeeLead(viewer, lead)) {
           return {
             jsonrpc: '2.0',
             id,
@@ -236,7 +243,7 @@ export async function handleMcpRequest(req: McpRequest, store: Store): Promise<M
       }
 
       if (toolName === 'get_market_analytics') {
-        const leads = await store.listLeads({
+        const leads = await store.getLeadsForFeed(viewer, {
           type: args.type as LeadType,
           limit: 200,
         });
@@ -325,7 +332,8 @@ export function startMcpStdio(store: Store): void {
     if (!line.trim()) return;
     try {
       const parsed = JSON.parse(line) as McpRequest;
-      const resp = await handleMcpRequest(parsed, store);
+      // stdio transport is the local operator's console: full access.
+      const resp = await handleMcpRequest(parsed, store, { isAdmin: true });
       process.stdout.write(JSON.stringify(resp) + '\n');
     } catch {
       process.stdout.write(

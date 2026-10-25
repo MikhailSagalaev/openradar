@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.0
+
+- Real BIP-340 Schnorr via @noble/curves (hand-rolled ECDSA-as-Schnorr removed);
+  radar/1 events are verifiable by standard Nostr relays.
+- Extension signing requires a NIP-07 signer (pseudo-signature fallback removed).
+- `/mcp` authorization (admin token or mesh node key); arbiter never kills leads
+  on network errors; GitHub users map to the realtime tier; mesh metadata is
+  persisted in insertLead; `RADAR_MESH_ENABLED` wires the full mesh runtime.
+
+## 0.5.0
+
+- Mesh layer: radar/1 Nostr protocol events, MinHash sketches, Web-of-Trust with
+  GitHub NIP-39 verification, relay pool and `radar node` CLI, relay subscriber
+  with Tit-for-Tat 12h lag, canary traps, AI arbiter with slashing, HRW
+  sharding, MCP server, B2B firehose (SSE), X-Ray salary analytics, extension
+  crypto module. (Note: the BIP-340 implementation shipped here was ECDSA-based
+  and fixed in 0.6.0.)
+
 ## 0.6.1
 
 - `RADAR_PROXY_URL` (or per-source `config.proxyUrl`): outbound HTTP/SOCKS proxy

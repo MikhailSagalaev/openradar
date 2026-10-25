@@ -628,6 +628,7 @@ export class MemoryStore implements Store {
     const now = new Date().toISOString();
     const isPrivileged =
       viewerContext.isAdmin ||
+      viewerContext.isRealtime ||
       viewerContext.hasValidAttestations24h ||
       (viewerContext.trustScore ?? 0) >= 0.2;
 

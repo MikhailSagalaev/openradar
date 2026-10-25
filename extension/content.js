@@ -297,18 +297,16 @@ async function runXrayEngine() {
   }
 }
 
-if (typeof window !== 'undefined') {
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', runXrayEngine);
-  } else {
-    setTimeout(runXrayEngine, 200);
-  }
-}
-
+// X-Ray is never automatic: the page URL goes to the server only when the user
+// asks for it (popup button / explicit action), see PRIVACY.md.
 if (typeof chrome !== 'undefined' && chrome?.runtime?.onMessage) {
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request?.type === 'EXTRACT_PAGE_DATA' || request?.action === 'extract') {
       sendResponse(extractPageData(document));
+    } else if (request?.type === 'RUN_XRAY') {
+      runXrayEngine()
+        .then(() => sendResponse({ ok: true }))
+        .catch(() => sendResponse({ ok: false }));
     }
     return true;
   });

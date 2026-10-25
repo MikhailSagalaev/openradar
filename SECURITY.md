@@ -19,10 +19,12 @@ In scope:
 - bypass of the GitHub login gate on voting or lead submission (`/submit`, votes);
 - a user session escalating to admin rights;
 - webhook token bypass;
-- SSRF through a source adapter, the webhook endpoint or `/api/preview`;
+- SSRF through a source adapter, the webhook endpoint, `/api/preview`, the arbiter or the outbound proxy (`RADAR_PROXY_URL`);
 - SQL injection or path traversal;
 - secret leakage in logs, errors or exports;
-- stored XSS in the dashboard.
+- stored XSS in the dashboard;
+- bypass of the Tit-for-Tat lead locking (mesh lag) on any public endpoint, including `/mcp`, `/api/v1/firehose` and `/api/v1/xray`;
+- forging or replaying mesh node keys / radar/1 events.
 
 Out of scope:
 
