@@ -261,13 +261,12 @@ main {
   font: inherit;
   font-size: 12.5px;
   font-weight: 500;
-  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease, border-color 0.15s ease, box-shadow 0.18s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .user-pill:hover, .user-pill[aria-expanded="true"] {
   border-color: var(--ink);
   background: var(--bg);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 .user-avatar-badge {
   width: 22px;
@@ -575,8 +574,8 @@ dialog::backdrop {
   width: 100%;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 4px;
+  border-radius: 9999px;
+  padding: 5px 6px 5px 8px;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .search-bar:focus-within {
@@ -591,9 +590,9 @@ dialog::backdrop {
 }
 .search-input-wrap input {
   width: 100%;
-  padding: 8px 36px 8px 38px;
+  padding: 8px 36px 8px 36px;
   border: none;
-  border-radius: 0;
+  border-radius: 9999px;
   font: inherit;
   font-size: 13.5px;
   background: transparent;
@@ -602,7 +601,7 @@ dialog::backdrop {
 }
 .search-icon-svg {
   position: absolute;
-  left: 12px;
+  left: 10px;
   color: var(--muted);
   pointer-events: none;
 }
@@ -615,8 +614,8 @@ dialog::backdrop {
   color: var(--muted);
   background: var(--bg);
   border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 1px 5px;
+  border-radius: 9999px;
+  padding: 1px 7px;
   pointer-events: none;
   line-height: 1.4;
 }
@@ -626,9 +625,9 @@ dialog::backdrop {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
   color: var(--muted);
   text-decoration: none;
   font-size: 12px;
@@ -686,8 +685,8 @@ dialog::backdrop {
   right: 0;
   background: var(--bg);
   border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 10px;
+  border-radius: 16px;
+  padding: 12px 14px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
   z-index: 90;
 }
@@ -720,13 +719,12 @@ dialog::backdrop {
   color: var(--ink);
   text-decoration: none;
   cursor: pointer;
-  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 .sug-chip:hover {
   background: var(--bg);
   border-color: var(--ink);
   text-decoration: none;
-  transform: translateY(-2px);
 }
 .funnel-bar {
   display: flex;
@@ -749,12 +747,11 @@ dialog::backdrop {
   font-weight: 500;
   color: var(--muted);
   cursor: pointer;
-  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 .funnel-btn:hover {
   color: var(--ink);
   border-color: var(--ink);
-  transform: translateY(-2px);
 }
 .funnel-btn.active {
   background: var(--surface);
@@ -822,12 +819,11 @@ dialog::backdrop {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 .vote-btn:hover {
   background: var(--bg);
   border-color: var(--ink);
-  transform: translateY(-2px);
 }
 .vote-btn:active {
   transform: scale(0.97);
@@ -883,15 +879,14 @@ dialog::backdrop {
   text-decoration: none;
   line-height: 1.4;
   box-shadow: none;
-  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease, border-color 0.15s ease, box-shadow 0.18s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .btn:hover {
   background: var(--bg);
   border-color: var(--ink);
   color: var(--ink);
   text-decoration: none;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 .btn:active { transform: scale(0.97); }
 .btn.btn-sm {
@@ -908,8 +903,7 @@ dialog::backdrop {
   background: var(--surface-hover);
   border-color: var(--ink);
   color: var(--ink);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
 }
 .btn.ghost:active { transform: scale(0.97); }
 .btn.danger { border-style: dashed; }
