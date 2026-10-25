@@ -252,10 +252,13 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 10px 4px 6px;
+  padding: 4px 12px 4px 6px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 20px;
+  border-radius: 9999px;
+  corner-shape: squircle;
+  -webkit-corner-smoothing: 100%;
+  clip-path: url(#squircle-pill);
   color: var(--ink);
   cursor: pointer;
   font: inherit;
@@ -346,7 +349,11 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 14px;
+  padding: 6px 16px;
+  border-radius: 9999px;
+  corner-shape: squircle;
+  -webkit-corner-smoothing: 100%;
+  clip-path: url(#squircle-pill);
   font-size: 12.5px;
   font-weight: 500;
 }
@@ -664,8 +671,11 @@ dialog::backdrop {
 .funnel-btn {
   background: transparent;
   border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 5px 10px;
+  border-radius: 9999px;
+  corner-shape: squircle;
+  -webkit-corner-smoothing: 100%;
+  clip-path: url(#squircle-pill);
+  padding: 5px 14px;
   font-size: 12px;
   font-weight: 500;
   color: var(--muted);
@@ -732,8 +742,11 @@ dialog::backdrop {
 .vote-btn {
   background: transparent;
   border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 5px 11px;
+  border-radius: 9999px;
+  corner-shape: squircle;
+  -webkit-corner-smoothing: 100%;
+  clip-path: url(#squircle-pill);
+  padding: 5px 14px;
   font: inherit;
   font-size: 12px;
   font-weight: 500;
@@ -793,8 +806,11 @@ dialog::backdrop {
   background: var(--ink);
   color: var(--bg);
   border: 1px solid var(--ink);
-  border-radius: 4px;
-  padding: 6px 14px;
+  border-radius: 9999px;
+  corner-shape: squircle;
+  -webkit-corner-smoothing: 100%;
+  clip-path: url(#squircle-pill);
+  padding: 6px 16px;
   font: inherit;
   font-size: 12.5px;
   font-weight: 500;
@@ -808,20 +824,25 @@ dialog::backdrop {
   opacity: 0.9;
   text-decoration: none;
   transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.08));
 }
 .btn:active { transform: scale(0.97); }
+.btn.btn-sm {
+  padding: 4px 12px;
+  font-size: 11.5px;
+}
 .btn.ghost {
   background: transparent;
   color: var(--ink);
   border: 1px solid var(--line-strong);
-  box-shadow: none;
+  filter: none;
 }
 .btn.ghost:hover {
   background: var(--surface-hover);
   border-color: var(--ink);
   opacity: 1;
   transform: translateY(-1px);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.05));
 }
 .btn.ghost:active { transform: scale(0.97); }
 .btn.danger { border-style: dashed; }
@@ -1129,6 +1150,13 @@ ${input.head ?? ''}
 <style>${STYLE}</style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute;pointer-events:none;opacity:0" aria-hidden="true">
+  <defs>
+    <clipPath id="squircle-pill" clipPathUnits="objectBoundingBox">
+      <path d="M 1.0000 0.5000 L 0.9989 0.6654 L 0.9954 0.7296 L 0.9896 0.7774 L 0.9815 0.8165 L 0.9710 0.8495 L 0.9579 0.8779 L 0.9423 0.9026 L 0.9239 0.9239 L 0.9026 0.9423 L 0.8779 0.9579 L 0.8495 0.9710 L 0.8165 0.9815 L 0.7774 0.9896 L 0.7296 0.9954 L 0.6654 0.9989 L 0.5000 1.0000 L 0.3346 0.9989 L 0.2704 0.9954 L 0.2226 0.9896 L 0.1835 0.9815 L 0.1505 0.9710 L 0.1221 0.9579 L 0.0974 0.9423 L 0.0761 0.9239 L 0.0577 0.9026 L 0.0421 0.8779 L 0.0290 0.8495 L 0.0185 0.8165 L 0.0104 0.7774 L 0.0046 0.7296 L 0.0011 0.6654 L 0.0000 0.5000 L 0.0011 0.3346 L 0.0046 0.2704 L 0.0104 0.2226 L 0.0185 0.1835 L 0.0290 0.1505 L 0.0421 0.1221 L 0.0577 0.0974 L 0.0761 0.0761 L 0.0974 0.0577 L 0.1221 0.0421 L 0.1505 0.0290 L 0.1835 0.0185 L 0.2226 0.0104 L 0.2704 0.0046 L 0.3346 0.0011 L 0.5000 0.0000 L 0.6654 0.0011 L 0.7296 0.0046 L 0.7774 0.0104 L 0.8165 0.0185 L 0.8495 0.0290 L 0.8779 0.0421 L 0.9026 0.0577 L 0.9239 0.0761 L 0.9423 0.0974 L 0.9579 0.1221 L 0.9710 0.1505 L 0.9815 0.1835 L 0.9896 0.2226 L 0.9954 0.2704 L 0.9989 0.3346 Z"/>
+    </clipPath>
+  </defs>
+</svg>
 <main>
 <header class="top">
   <div class="top-brand-group">

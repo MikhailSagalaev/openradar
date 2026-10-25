@@ -5,7 +5,7 @@
  */
 
 import type { Lead } from './types.ts';
-import type { MeshNodeRecord, UserRecord } from './store.ts';
+import type { MeshNodeRecord, UserRecord, ViewerAccessContext } from './store.ts';
 
 export type UserAccessTier = 'active_contributor' | 'free_rider';
 
@@ -110,6 +110,27 @@ export function determineAccessTier(params: DetermineAccessTierParams): AccessTi
 export interface FilterLeadsResult {
   visibleLeads: Lead[];
   lockedCount: number;
+}
+
+/** The single privileged-viewer rule: mirrors getLeadsForFeed in both stores. */
+export function isPrivilegedViewer(viewer: ViewerAccessContext): boolean {
+  return Boolean(
+    viewer.isAdmin ||
+    viewer.isRealtime ||
+    viewer.hasValidAttestations24h ||
+    (viewer.trustScore ?? 0) >= 0.2,
+  );
+}
+
+/** Visibility check for a single lead (e.g. get_lead_details): killed, mesh-exclusive and still-locked leads are hidden from non-privileged viewers. */
+export function viewerCanSeeLead(viewer: ViewerAccessContext, lead: Lead, now: Date = new Date()): boolean {
+  if (lead.verification_state === 'killed_scam' || lead.verification_state === 'killed_closed') {
+    return false;
+  }
+  if (isPrivilegedViewer(viewer)) return true;
+  if (lead.is_mesh_exclusive) return false;
+  const nowIso = now.toISOString();
+  return !(lead.unlocked_at !== undefined && lead.unlocked_at > nowIso);
 }
 
 /**
