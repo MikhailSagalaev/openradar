@@ -1220,4 +1220,32 @@ describe('http server', () => {
 
     await runtime.store.close();
   });
+
+  it('serves the custom vector logo and renders it in web layouts', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true });
+    const app = createApp(runtime);
+
+    // 1. GET /logo.svg endpoint returns vector asset
+    const logoRes = await app.request('/logo.svg');
+    expect(logoRes.status).toBe(200);
+    expect(logoRes.headers.get('content-type')).toContain('image/svg+xml');
+    const svgText = await logoRes.text();
+    expect(svgText).toContain('viewBox="0 0 670 195"');
+    expect(svgText).toContain('fill-rule="evenodd"');
+
+    // 2. Main layout renders the custom logo SVG in the header and favicon link
+    const indexRes = await app.request('/');
+    expect(indexRes.status).toBe(200);
+    const indexHtml = await indexRes.text();
+    expect(indexHtml).toContain('class="brand-logo-svg"');
+    expect(indexHtml).toContain('rel="icon" href="/logo.svg"');
+
+    // 3. Login page renders the custom logo
+    const loginRes = await app.request('/login');
+    expect(loginRes.status).toBe(200);
+    const loginHtml = await loginRes.text();
+    expect(loginHtml).toContain('class="brand-logo-svg"');
+
+    await runtime.store.close();
+  });
 });

@@ -53,7 +53,12 @@ export async function computeXray(url: string, store: Store): Promise<XrayRespon
   if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
     return cached.result;
   }
-  const allLeads = await store.listLeads({ limit: 300 });
+  const nowIso = new Date().toISOString();
+  const allLeads = (await store.listLeads({ limit: 300 })).filter(
+    // Tit-for-Tat: locked mesh-exclusive leads must not leak through this
+    // public endpoint before their unlock time.
+    (l) => !(l.is_mesh_exclusive && l.unlocked_at && l.unlocked_at > nowIso),
+  );
 
   // 1. Locate matching lead by url or canonicalUrl
   const matchedLead = allLeads.find((l) => {

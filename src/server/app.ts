@@ -32,6 +32,7 @@ import { resolveLang, type SupportedLang } from './i18n.ts';
 import { determineAccessTier, filterLeadsForViewer } from '../core/access-tier.ts';
 import { SEO_CATALOG, findCatalogEntry, renderCatalogPage, renderRobotsTxt, renderSitemapXml } from './seo.ts';
 import { extractPreviewFromHtml, validateSubmissionUrl } from './preview.ts';
+import { renderLogo, LOGO_SVG } from './logo.ts';
 
 function tokenFromRequest(c: Context): string | undefined {
   const authorization = c.req.header('authorization');
@@ -111,12 +112,14 @@ function loginPage(error?: string, githubEnabled = false, returnTo?: string): st
 .divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--line)}`
     : '';
   return `<!doctype html><html lang="ru"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>Radar — вход</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>OpenRadar — вход</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
 <style>
 :root{--bg:#ffffff;--surface:#ffffff;--ink:#09090b;--muted:#71717a;--line:#e4e4e7;--btn:#09090b;--btn-text:#ffffff;--error:#ef4444}
 @media (prefers-color-scheme: dark){:root{--bg:#09090b;--surface:#121215;--ink:#f4f4f5;--muted:#a1a1aa;--line:#27272a;--btn:#f4f4f5;--btn-text:#09090b;--error:#f87171}}
 body{font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;letter-spacing:-0.01em;background:var(--bg);color:var(--ink);display:grid;place-items:center;min-height:100vh;margin:0}
 form{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:28px 24px;width:min(360px,90vw);box-shadow:0 4px 20px rgba(0,0,0,0.04)}
+.login-logo{margin-bottom:14px;color:var(--ink);display:flex;align-items:center}
 h1{font-size:22px;letter-spacing:-0.03em;margin:0 0 6px;font-weight:600}p{color:var(--muted);font-size:13px;margin:0 0 20px}
 input{width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:13px;background:var(--bg);color:var(--ink);margin-bottom:14px;transition:all .15s ease}
 input:focus{outline:0;border-color:var(--ink);box-shadow:0 0 0 1px var(--ink),0 1px 2px rgba(0,0,0,.04)}
@@ -126,7 +129,8 @@ button:hover{opacity:0.9}button:active{transform:scale(0.98)}
 ${githubStyle}
 </style></head>
 <body><form method="post" action="/login">
-<h1>Radar</h1><p>Голосование и добавление заказов — после входа. Токен администратора — для управления источниками.</p>
+<div class="login-logo">${renderLogo({ height: 32 })}</div>
+<p>Голосование и добавление заказов — после входа. Токен администратора — для управления источниками.</p>
 ${error ? `<div class="error">${escapeHtml(error)}</div>` : ''}
 ${githubButton}
 <label style="display:contents"><input name="token" type="password" autofocus autocomplete="current-password" placeholder="Токен администратора"></label>
@@ -441,6 +445,38 @@ export function createApp(runtime: Runtime): Hono {
       uptimeSec: Math.round(process.uptime()),
       sources: stats.sources,
     });
+  });
+
+  app.get('/logo.svg', (c) => {
+    return new Response(LOGO_SVG, {
+      headers: {
+        'content-type': 'image/svg+xml; charset=utf-8',
+        'cache-control': 'public, max-age=86400',
+      },
+    });
+  });
+
+  app.get('/assets/:file', async (c) => {
+    const file = c.req.param('file');
+    if (!/^[a-zA-Z0-9_.-]+$/.test(file)) return c.text('Not found', 404);
+    const filePath = path.resolve(process.cwd(), 'assets', file);
+    try {
+      if (fs.existsSync(filePath)) {
+        const contentType = file.endsWith('.svg')
+          ? 'image/svg+xml'
+          : file.endsWith('.png')
+          ? 'image/png'
+          : 'application/octet-stream';
+        const data = await fs.promises.readFile(filePath);
+        return new Response(data, {
+          headers: {
+            'content-type': contentType,
+            'cache-control': 'public, max-age=86400',
+          },
+        });
+      }
+    } catch {}
+    return c.text('Not found', 404);
   });
 
   app.get('/login', async (c) => {
@@ -1350,7 +1386,10 @@ export function createApp(runtime: Runtime): Hono {
     const host = c.req.header('host') || '127.0.0.1:8787';
     const proto = c.req.header('x-forwarded-proto') || 'http';
     const baseUrl = `${proto}://${host}`;
-    const feedUrl = new URL(c.req.url, baseUrl).toString();
+    // Build the self URL from the proxy-aware baseUrl: c.req.url is the
+    // internal http hop and would advertise http:// in atom:link.
+    const feedPath = new URL(c.req.url).pathname + new URL(c.req.url).search;
+    const feedUrl = `${baseUrl}${feedPath}`;
     const feedTitle = q ? `OpenRadar — Поиск: ${q}` : 'OpenRadar — Свежие заказы и вакансии';
 
     const xml = renderRssFeed({

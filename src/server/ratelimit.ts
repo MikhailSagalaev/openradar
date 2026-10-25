@@ -26,8 +26,10 @@ export function rateLimit(options: RateLimitOptions) {
       }
     }
 
-    const forwarded = c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
-    const client = forwarded || c.req.header('x-real-ip') || 'local';
+    // Our nginx APPENDS the real client IP to X-Forwarded-For, so the LAST
+    // value is the only one the client cannot spoof by sending its own header.
+    const forwardedParts = c.req.header('x-forwarded-for')?.split(',').map((p) => p.trim()).filter(Boolean) ?? [];
+    const client = forwardedParts[forwardedParts.length - 1] || c.req.header('x-real-ip') || 'local';
     const key = client;
     const hits = (buckets.get(key) ?? []).filter((ts) => now - ts < options.windowMs);
     if (hits.length >= options.max) {

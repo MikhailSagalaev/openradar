@@ -1,6 +1,7 @@
 import type { Lead, RunRecord, SourceHealth, SourceRecord, Stats } from '../core/types.ts';
 import { escapeHtml, firstLine } from '../core/text.ts';
 import { type SupportedLang, getTranslations } from './i18n.ts';
+import { renderLogo } from './logo.ts';
 
 export interface AuthDisplay {
   /** GitHub handle when the session belongs to a registered user. */
@@ -101,6 +102,9 @@ const KIND_LABELS: Record<string, string> = {
   kwork: 'Kwork',
   imap: 'IMAP',
   webhook: 'Webhook',
+  trudvsem: 'Работа России',
+  hh: 'HeadHunter',
+  remoteok: 'RemoteOK',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -185,17 +189,19 @@ main {
   gap: 10px;
 }
 .brand {
-  font-weight: 700;
-  letter-spacing: -0.03em;
   text-decoration: none;
   color: var(--ink);
-  font-size: 16px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   transition: opacity 0.15s ease;
 }
 .brand:hover { opacity: 0.8; }
+.brand-logo-svg {
+  height: 22px;
+  width: auto;
+  display: block;
+}
 .version {
   color: var(--muted);
   font-size: 11px;
@@ -987,6 +993,7 @@ export function layout(input: {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(input.title)} · OpenRadar</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
 ${input.head ?? ''}
 <style>${STYLE}</style>
 </head>
@@ -994,7 +1001,7 @@ ${input.head ?? ''}
 <main>
 <header class="top">
   <div class="top-brand-group">
-    <a class="brand" href="/">OpenRadar</a>
+    <a class="brand" href="/" aria-label="OpenRadar">${renderLogo({ height: 22 })}</a>
     <span class="version">v${escapeHtml(input.version)}</span>
   </div>
   <nav class="nav">
@@ -1007,7 +1014,7 @@ ${input.body}
 <footer>
   <div class="footer-wrap">
     <div>
-      <p class="footer-brand"><b>OpenRadar</b> — ${escapeHtml(t.footerDesc)}</p>
+      <p class="footer-brand"><span style="display:inline-block;vertical-align:middle;margin-right:6px">${renderLogo({ height: 16 })}</span> — ${escapeHtml(t.footerDesc)}</p>
       <p class="muted" style="margin:0">${escapeHtml(t.footerLicense)}</p>
     </div>
     <div class="footer-nav">
@@ -1455,6 +1462,7 @@ window.addEventListener('keydown', (e) => {
     ? t.gigs
     : t.navLeads;
 
+  const typeParam = type ? `?type=${encodeURIComponent(type)}` : '';
   return layout({
     title: pageTitle,
     version,
@@ -1464,6 +1472,8 @@ window.addEventListener('keydown', (e) => {
     script: searchHotkeyScript,
     auth: data.auth,
     lang,
+    head: `<link rel="canonical" href="https://openradar.fun/${typeParam}">
+<meta name="description" content="OpenRadar — открытая база заказов и вакансий: свежие проекты с бирж и Telegram-каналов, вилки зарплат, фильтры по стеку и RSS на любой запрос.">`,
   });
 }
 
