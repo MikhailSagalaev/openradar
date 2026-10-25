@@ -47,6 +47,7 @@ const envSchema = z.object({
   RADAR_PUBLIC_URL: optionalString,
   RADAR_MESH_ENABLED: booleanFromEnv(false),
   RADAR_PROXY_URL: optionalString,
+  RADAR_XRAY_ALLOWED_ORIGINS: optionalString,
   RADAR_DIGEST_CHAT_ID: optionalString,
   RADAR_DIGEST_INTERVAL_HOURS: z.coerce.number().int().positive().default(6),
   RADAR_RETENTION_DAYS: z.coerce.number().int().positive().default(180),

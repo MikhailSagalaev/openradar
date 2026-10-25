@@ -5,6 +5,11 @@ interface RateLimitOptions {
   windowMs: number;
   /** Maximum requests per window per client. */
   max: number;
+  /**
+   * Custom bucket key (e.g. a mesh node key instead of the spoofable IP).
+   * Falls back to the proxy-derived client IP.
+   */
+  keyFrom?: (c: Context) => string | undefined;
 }
 
 /**
@@ -29,7 +34,7 @@ export function rateLimit(options: RateLimitOptions) {
     // Our nginx APPENDS the real client IP to X-Forwarded-For, so the LAST
     // value is the only one the client cannot spoof by sending its own header.
     const forwardedParts = c.req.header('x-forwarded-for')?.split(',').map((p) => p.trim()).filter(Boolean) ?? [];
-    const client = forwardedParts[forwardedParts.length - 1] || c.req.header('x-real-ip') || 'local';
+    const client = options.keyFrom?.(c) || forwardedParts[forwardedParts.length - 1] || c.req.header('x-real-ip') || 'local';
     const key = client;
     const hits = (buckets.get(key) ?? []).filter((ts) => now - ts < options.windowMs);
     if (hits.length >= options.max) {
