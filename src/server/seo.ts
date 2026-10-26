@@ -193,23 +193,29 @@ export function renderRobotsTxt(baseUrl: string): string {
 Allow: /
 Disallow: /sources
 Disallow: /api
-Disallow: /leads/
 
 Sitemap: ${baseUrl}/sitemap.xml
 `;
 }
 
-export function renderSitemapXml(baseUrl: string): string {
-  const urls = [
+/** Leads are the public lead pages a guest can open; pass none for a private node. */
+export function renderSitemapXml(baseUrl: string, leads: Array<{ id: string; createdAt: string }> = []): string {
+  const urls: Array<{ loc: string; priority: string; lastmod?: string }> = [
     { loc: `${baseUrl}/`, priority: '1.0' },
     ...SEO_CATALOG.map((entry) => ({
       loc: `${baseUrl}/catalog/${entry.slug}`,
       priority: '0.8',
     })),
+    ...leads.map((lead) => ({
+      loc: `${baseUrl}/leads/${encodeURIComponent(lead.id)}`,
+      priority: '0.5',
+      lastmod: lead.createdAt.slice(0, 10),
+    })),
   ];
   const items = urls
     .map(
-      (item) => `  <url><loc>${escapeHtml(item.loc)}</loc><priority>${item.priority}</priority></url>`,
+      (item) =>
+        `  <url><loc>${escapeHtml(item.loc)}</loc>${item.lastmod ? `<lastmod>${item.lastmod}</lastmod>` : ''}<priority>${item.priority}</priority></url>`,
     )
     .join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>

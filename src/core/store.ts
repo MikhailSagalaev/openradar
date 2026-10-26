@@ -261,7 +261,6 @@ export interface Store extends HubStore {
 
   deleteLead?(id: string): Promise<boolean>;
   cleanupOldLeads?(retentionDays: number): Promise<number>;
-  cleanupOutboxEvents?(retentionDays: number): Promise<number>;
   cleanupRuns?(retentionDays: number): Promise<number>;
 
   close(): Promise<void>;

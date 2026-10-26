@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Hub for guests: no node-internal statuses or rejected leads outside the admin view, a
+  "what is this and how to join" block, score explained, HTML 404, footer cleaned up,
+  public sources page without raw errors and misleading counters.
+- SEO: lead pages are allowed in robots.txt and listed in the sitemap (what a guest may
+  open); www and http redirect to https://openradar.fun (nginx-radar.conf).
+- The stylesheet is served from a content-hashed `/assets/app.<hash>.css` with a one-year
+  cache instead of being inlined in every page.
+- `outbox_events` dropped (migration 014): it was written on every change and never read.
+- Presets: HeadHunter through its RSS (works from data-center IPs, unlike the Open API),
+  Freelancehunt and Jobicy added.
+- `Uptime` workflow checks https://openradar.fun/health every 15 minutes.
 - `radar serve` without `RADAR_ADMIN_TOKEN` prints a one-off admin token instead of
   leaving the dashboard without a way to sign in; `/login` no longer redirects in a loop
   when sign-in is not configured.

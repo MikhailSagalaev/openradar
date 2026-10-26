@@ -54,5 +54,9 @@ describe('SEO catalog pages', () => {
     const sitemap = renderSitemapXml('https://openradar.fun');
     expect(sitemap).toContain('<loc>https://openradar.fun/</loc>');
     expect(sitemap).toContain('<loc>https://openradar.fun/catalog/zakazy-na-razrabotku</loc>');
+    expect(robots).not.toContain('Disallow: /leads/');
+
+    const withLeads = renderSitemapXml('https://openradar.fun', [{ id: 'abc', createdAt: '2026-10-26T06:48:19.000Z' }]);
+    expect(withLeads).toContain('<loc>https://openradar.fun/leads/abc</loc><lastmod>2026-10-26</lastmod>');
   });
 });

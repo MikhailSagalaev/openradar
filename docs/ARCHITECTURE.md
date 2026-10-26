@@ -118,7 +118,6 @@ lead_votes(user_id, lead_id, signal, weight, counted_at, created_at)
 app_users(id, tg_id, github_id, handle, role, reputation, created_at, banned_at)
 deliveries(id, lead_id, sink, status, error, created_at)
 lead_deliveries(lead_id, sink, status, attempts, next_attempt_at, last_error)
-outbox_events(id, event_type, payload, status, created_at, processed_at)
 runs(id, source_id, started_at, finished_at, found, inserted,
      duplicates, rejected, delivered, error)
 sessions(id, user_id, created_at, expires_at)
@@ -297,5 +296,5 @@ Radar — инструмент, а не разрешение. Ответстве
 Radar спроектирован как полностью обособленный сервис:
 - **Изоляция данных:** Radar использует собственную выделенную базу данных PostgreSQL 17 с расширением `vector` (`pgvector`).
 - **Связь с родительскими экосистемами (ProfiPass и др.) только по API:** отправка лидов осуществляется через стандартные Webhook-эндпоинты (`POST /api/ingest/:sourceId`), исключая общие таблицы или прямые SQL-связи.
-- **Transactional Outbox:** каждая фиксация лида атомарно сохраняет событие в таблицу `outbox_events` и таблицу поканальной доставки `lead_deliveries` для надежной доставки без дублей (`FOR UPDATE SKIP LOCKED`).
+- **Transactional Outbox:** каждая фиксация лида атомарно создаёт записи поканальной доставки в `lead_deliveries` для надежной доставки без дублей (`FOR UPDATE SKIP LOCKED`).
 

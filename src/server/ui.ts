@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { Contact, Lead, LeadVoteSignal, RunRecord, SourceHealth, SourceRecord, Stats } from '../core/types.ts';
 import { escapeHtml, firstLine, jsonForScript } from '../core/text.ts';
 import { type SupportedLang, getTranslations } from './i18n.ts';
@@ -22,8 +23,10 @@ export interface LeadsPageData {
   lang?: SupportedLang;
   /** Feed delay for this viewer in minutes (hub mode); 0 = real time. */
   delayMinutes?: number;
-  /** Anonymous viewer: personal CRM funnel tabs and statuses are hidden (UX-03). */
-  isGuest?: boolean;
+  /** Operator view: pipeline statuses and their filters. Everyone else sees the public feed. */
+  isAdmin?: boolean;
+  /** GitHub sign-in is configured: the guest intro links to it. */
+  githubEnabled?: boolean;
 }
 
 export interface SourcesPageData {
@@ -106,6 +109,8 @@ export interface ExtensionPageData {
   lang?: SupportedLang;
   isAuthed?: boolean;
 }
+
+const REPO_URL = 'https://github.com/MikhailSagalaev/radar-oss';
 
 const KIND_LABELS: Record<string, string> = {
   rss: 'RSS / Atom',
@@ -192,7 +197,7 @@ main {
   justify-content: space-between;
   gap: 16px;
   padding: 18px 0;
-  margin-bottom: 32px;
+  margin-bottom: 20px;
 }
 .top-brand-group {
   display: inline-flex;
@@ -796,9 +801,10 @@ dialog::backdrop {
   justify-content: space-between;
   gap: 16px;
   background: var(--bg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
+  border-radius: 8px;
   padding: 10px 16px;
-  margin: 12px 0 16px;
+  margin: 0;
   font-size: 13px;
   color: var(--muted);
 }
@@ -866,6 +872,64 @@ dialog::backdrop {
   color: #fff;
   opacity: 0.85;
 }
+.feed-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  margin: 0;
+}
+.intro {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 16px 18px;
+  margin-bottom: 8px;
+}
+.intro p {
+  margin: 0;
+  padding-right: 56px;
+  max-width: 720px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.intro-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.intro-action {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.intro-action:hover { border-color: var(--line-strong); background: var(--surface-hover); }
+.intro-action span { font-size: 12px; font-weight: 400; color: var(--muted); }
+.intro-action.primary { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.intro-action.primary span { color: inherit; opacity: 0.75; }
+.intro-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.intro-close:hover { color: var(--ink); }
+.score-legend { margin: 0; font-size: 12px; color: var(--muted); }
+.score[title] { cursor: help; }
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1219,6 +1283,7 @@ footer {
   .detail-grid { grid-template-columns: 1fr; gap: 28px; }
   .grid { grid-template-columns: 1fr; }
   .search-hero { margin: 8px 0 20px; gap: 12px; }
+  .intro-action { flex: 1 1 100%; }
   .search-bar { width: 100%; }
   .search-bar input { flex: 1 1 0; min-width: 0; }
   .type-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
@@ -1230,6 +1295,10 @@ footer {
   .community-votes { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; padding-bottom: 4px; }
 }
 `;
+
+/** The stylesheet is served from a content-hashed path so browsers cache it across pages. */
+export const STYLE_PATH = `/assets/app.${createHash('sha256').update(STYLE).digest('hex').slice(0, 10)}.css`;
+export { STYLE };
 
 export function layout(input: {
   title: string;
@@ -1291,7 +1360,7 @@ export function layout(input: {
 <meta name="twitter:card" content="summary">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 ${input.head ?? ''}
-<style>${STYLE}</style>
+<link rel="stylesheet" href="${STYLE_PATH}">
 </head>
 <body>
 <main>
@@ -1309,7 +1378,8 @@ ${input.body}
 <footer>
   <div class="footer-wrap">
     <div class="footer-col footer-col-brand">
-      <p class="footer-brand"><span style="display:inline-block;vertical-align:middle;margin-right:6px">${renderLogo({ height: 16 })}</span> — ${escapeHtml(t.footerDesc)}</p>
+      <p class="footer-brand"><a href="/" aria-label="OpenRadar">${renderLogo({ height: 16 })}</a></p>
+      <p style="margin:6px 0 0">${escapeHtml(t.footerDesc)}</p>
       <p class="muted" style="margin:6px 0 0">${escapeHtml(t.footerLicense)}</p>
     </div>
     <div class="footer-col">
@@ -1322,11 +1392,11 @@ ${input.body}
       <div class="footer-col-title">${escapeHtml(lang === 'ru' ? 'Ресурсы' : 'Resources')}</div>
       <div class="footer-links-grid">
         <a href="/extension">${escapeHtml(t.extensionGuide)}</a>
-        <a href="https://github.com/MikhailSagalaev/radar-oss" target="_blank" rel="noopener noreferrer">GitHub</a>
-        <a href="https://github.com/MikhailSagalaev/radar-oss/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">${escapeHtml(t.licenseLink)}</a>
+        <a href="${REPO_URL}" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="${REPO_URL}/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">${escapeHtml(t.licenseLink)}</a>
         <a href="/feed.rss">${escapeHtml(t.rssFeed)}</a>
-        <a href="/api/delta">${escapeHtml(t.s3Delta)}</a>
-        <a href="/health">${escapeHtml(t.systemStatus)}</a>
+        <a href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md" target="_blank" rel="noopener noreferrer">${escapeHtml(t.guideLink)}</a>
+        <a href="${REPO_URL}/blob/main/docs/PROTOCOL.md" target="_blank" rel="noopener noreferrer">${escapeHtml(t.protocolLink)}</a>
         <span style="display:inline-flex;align-items:center;gap:5px;margin-top:2px">
           <a href="/lang/ru" style="${lang === 'ru' ? 'font-weight:700;color:var(--ink)' : 'color:var(--muted)'}">RU</a>
           <span style="color:var(--line-strong)">/</span>
@@ -1536,6 +1606,22 @@ function healthStatus(health: SourceHealth): { dot: string; label: string } {
   return { dot: '', label: 'нет запусков' };
 }
 
+/**
+ * Source state for readers who are not the operator: no raw errors, and a source that
+ * runs but brings nothing (a blocked API, an empty feed) is not reported as working.
+ */
+function publicHealthStatus(health: SourceHealth): { dot: string; label: string } {
+  if (health.lastRun?.error) return { dot: 'warn', label: 'временно недоступен' };
+  if (health.last24h.runs > 0 && health.last24h.found === 0) return { dot: '', label: 'нет новых данных' };
+  if (health.lastRun) return { dot: 'ok', label: 'работает' };
+  if (health.source.kind === 'webhook') return { dot: '', label: 'принимает данные' };
+  return { dot: '', label: 'ожидает первого опроса' };
+}
+
+function newLeadsLabel(count: number): string {
+  return `${count} ${plural(count, ['новый', 'новых', 'новых'])} за 24 ч`;
+}
+
 function metric(value: string | number, label: string): string {
   return `<div class="metric"><b>${escapeHtml(String(value))}</b><span>${escapeHtml(label)}</span></div>`;
 }
@@ -1548,7 +1634,7 @@ function leadTitle(lead: Lead): string {
   return lead.title.trim() || firstLine(lead.text, 100) || 'Без заголовка';
 }
 
-function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru', guest = false): string {
+function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru', admin = true): string {
   const t = getTranslations(lang);
   const meta = [
     lead.type === 'job' ? t.jobType : t.gigType,
@@ -1594,10 +1680,8 @@ function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru', 
       ${subLine}
     </div>
     <div class="row-side">
-      <span class="score">${lead.score}</span>
-      ${guest
-        ? `<span class="row-status-guest">Проверен</span>`
-        : `<span>${statusDot(lead.status, lang)}</span>`}
+      <span class="score" title="${escapeHtml(t.scoreHint)}">${lead.score}</span>
+      ${admin ? `<span>${statusDot(lead.status, lang)}</span>` : ''}
     </div>
   </a>`;
 }
@@ -1657,7 +1741,7 @@ function runsTable(
 export function renderLeadsPage(data: LeadsPageData): string {
   const { stats, health, leads, query, status, type = '', version, lang = 'ru' } = data;
   const t = getTranslations(lang);
-  const guest = data.isGuest === true;
+  const admin = data.isAdmin === true;
   const sourceById = new Map(health.map((item) => [item.source.id, item.source]));
 
   const typeTabs: Array<{ key: string; label: string }> = [
@@ -1666,13 +1750,9 @@ export function renderLeadsPage(data: LeadsPageData): string {
     { key: 'job', label: t.jobs },
   ];
 
-  // Guests see the public funnel only: personal CRM states are hidden (UX-03).
-  const statusFilters: Array<{ key: string; label: string }> = guest
-    ? [
-        { key: '', label: t.statusAll },
-        { key: 'new', label: t.statusNew },
-        { key: 'interesting', label: t.statusInteresting },
-      ]
+  // Pipeline statuses are the operator's working state: only the admin filters by them.
+  const statusFilters: Array<{ key: string; label: string }> = !admin
+    ? []
     : [
         { key: '', label: t.statusAll },
         { key: 'new', label: t.statusNew },
@@ -1731,7 +1811,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
     )
     .join('');
 
-  const rows = leads.map((lead) => leadRow(lead, sourceById.get(lead.sourceId), lang, guest)).join('');
+  const rows = leads.map((lead) => leadRow(lead, sourceById.get(lead.sourceId), lang, admin)).join('');
 
   const empty =
     stats.sources === 0
@@ -1743,7 +1823,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
       : `<div class="empty">
           <h2>${escapeHtml(t.emptyTitle)}</h2>
           <p>${escapeHtml(t.emptyDesc)}</p>
-          <button class="btn" data-poll="/api/poll">${escapeHtml(t.pollAll)}</button>
+          ${admin ? `<button class="btn" data-poll="/api/poll">${escapeHtml(t.pollAll)}</button>` : ''}
         </div>`;
 
   const delay = data.delayMinutes ?? 0;
@@ -1754,9 +1834,25 @@ export function renderLeadsPage(data: LeadsPageData): string {
       </div>`
     : '';
 
+  // First visit without an account: what this is and how to take part. Hidden once dismissed.
+  const githubHref = data.githubEnabled ? '/auth/github' : undefined;
+  const intro = data.auth || admin
+    ? ''
+    : `<section class="intro" id="feed-intro">
+  <button type="button" class="intro-close" onclick="try{localStorage.setItem('openradar_intro_hidden','1')}catch(e){};this.parentElement.remove()">${escapeHtml(t.heroDismiss)}</button>
+  <p>${escapeHtml(t.heroText)}</p>
+  <div class="intro-actions">
+    ${githubHref ? `<a class="intro-action primary" href="${githubHref}">${escapeHtml(t.heroSignIn)}<span>${escapeHtml(t.heroSignInHint)}</span></a>` : ''}
+    <a class="intro-action" href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md" target="_blank" rel="noopener noreferrer">${escapeHtml(t.heroNode)}<span>${escapeHtml(t.heroNodeHint)}</span></a>
+    <a class="intro-action" href="${REPO_URL}/blob/main/docs/PROTOCOL.md" target="_blank" rel="noopener noreferrer">${escapeHtml(t.heroSend)}<span>${escapeHtml(t.heroSendHint)}</span></a>
+  </div>
+</section>
+<script>try{if(localStorage.getItem('openradar_intro_hidden')==='1'){document.getElementById('feed-intro')?.remove()}}catch(e){}</script>`;
+
   const body = `
-<h1 class="sr-only">${escapeHtml(lang === 'ru' ? 'Свежие заказы, задачи и вакансии со всех площадок' : 'Fresh freelance orders, gigs and jobs from all platforms')}</h1>
+${intro}
 <div class="search-hero">
+  <h1 class="feed-title">${escapeHtml(t.heroTitle)}</h1>
   <div class="type-tabs">${tabs}</div>
   ${lagBanner}
   <form class="search-form" method="get" action="/">
@@ -1796,7 +1892,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
       <a class="search-meta-clear" href="${escapeHtml(hrefForQuery(''))}">✕ Сбросить</a>
     </div>` : ''}
   </form>
-  <div class="chips">${chips}</div>
+  ${chips ? `<div class="chips">${chips}</div>` : `<p class="score-legend">${escapeHtml(t.scoreHint)}</p>`}
 </div>
 
 <div class="list">${rows || empty}</div>`;
@@ -1965,7 +2061,7 @@ document.getElementById('copy-lead')?.addEventListener('click', async (event) =>
 <div class="page-head">
   <div>
     <h1>${escapeHtml(leadTitle(lead))}</h1>
-    <p class="muted small">${statusDot(lead.status, lang)} · ${formatRelative(lead.createdAt, lang)}</p>
+    <p class="muted small">${isAdminSession ? `${statusDot(lead.status, lang)} · ` : ''}${formatRelative(lead.createdAt, lang)}</p>
   </div>
   <div class="actions lead-actions">
     ${cleanUrl ? `<a class="btn" href="${escapeHtml(cleanUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t.openOriginal)}</a>` : ''}
@@ -1992,7 +2088,7 @@ ${cautionBanner}
     ${aiBox}
     <h2>${escapeHtml(t.leadDescription)}</h2>
     <p class="lead-text" id="lead-text">${escapeHtml(lead.text)}</p>
-    ${lead.reasons.length ? `<h2 style="margin-top:26px">${escapeHtml(t.scoreReasons)}</h2><ul class="reasons">${lead.reasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join('')}</ul>` : ''}
+    ${isAdminSession && lead.reasons.length ? `<h2 style="margin-top:26px">${escapeHtml(t.scoreReasons)}</h2><ul class="reasons">${lead.reasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join('')}</ul>` : ''}
   </section>
   <aside>
     <h2>${escapeHtml(t.details)}</h2>
@@ -2004,7 +2100,7 @@ ${cautionBanner}
       <div><dt>${escapeHtml(t.location)}</dt><dd>${escapeHtml(lead.city ?? (lead.isRemote !== false ? t.remote : '—'))}</dd></div>
       <div><dt>${escapeHtml(t.format)}</dt><dd>${lead.isRemote !== false ? escapeHtml(t.remoteFormat) : escapeHtml(t.onsiteFormat)}</dd></div>
       <div><dt>${escapeHtml(t.budget)}</dt><dd>${salaryDisplay}${usdEstimate}</dd></div>
-      <div><dt>${escapeHtml(t.score)}</dt><dd>${lead.score}</dd></div>
+      <div><dt>${escapeHtml(t.score)}</dt><dd><span class="score" title="${escapeHtml(t.scoreHint)}">${lead.score}</span></dd></div>
       <div><dt>${escapeHtml(t.published)}</dt><dd>${formatDate(lead.publishedAt, lang)}</dd></div>
       <div><dt>${escapeHtml(t.added)}</dt><dd>${formatDate(lead.createdAt, lang)}</dd></div>
       ${lead.author ? `<div><dt>${escapeHtml(t.author)}</dt><dd>${escapeHtml(lead.author)}</dd></div>` : ''}
@@ -2015,6 +2111,7 @@ ${cautionBanner}
           ? `<div><dt>${escapeHtml(t.contacts)}</dt><dd>${lead.contacts.map(renderContact).join('<br>')}</dd></div>`
           : ''}
     </dl>
+    <p class="small muted" style="margin:10px 0 0;line-height:1.5">${escapeHtml(t.scoreHint)}</p>
     ${lead.skills?.length ? `
       <h2 style="margin-top:20px">${escapeHtml(t.skills)}</h2>
       <div style="margin-top:8px;line-height:1.6">
@@ -2094,10 +2191,22 @@ function formatSourceError(errStr: string, kind: string): string {
 }
 
 export function renderSourcesPage(data: SourcesPageData): string {
-  const { health, version, lang = 'ru', isAdmin } = data;
+  const { version, lang = 'ru', isAdmin } = data;
   const t = getTranslations(lang);
+  // Readers see the sources that work for the feed; disabled ones are the operator's business.
+  const health = isAdmin ? data.health : data.health.filter((item) => item.source.enabled);
   const rows = health
     .map((item) => {
+      if (!isAdmin) {
+        const status = publicHealthStatus(item);
+        return `<a class="row" href="/sources/${escapeHtml(item.source.id)}">
+        <div>
+          <div class="row-title">${escapeHtml(item.source.title)}</div>
+          <div class="row-meta">${escapeHtml(KIND_LABELS[item.source.kind] ?? item.source.kind)} · <span class="dot ${status.dot}"></span>${status.label}</div>
+        </div>
+        <div class="row-side">${newLeadsLabel(item.last24h.inserted)}</div>
+      </a>`;
+      }
       const status = healthStatus(item);
       const error = item.lastRun?.error;
       return `<a class="row" href="/sources/${escapeHtml(item.source.id)}">
@@ -2110,6 +2219,10 @@ export function renderSourcesPage(data: SourcesPageData): string {
       </a>`;
     })
     .join('');
+  const newTotal = health.reduce((sum, item) => sum + item.last24h.inserted, 0);
+  const subtitle = isAdmin
+    ? `${health.length} ${plural(health.length, ['источник', 'источника', 'источников'])} · ${health.filter((item) => item.source.enabled).length} активных · 24ч: найдено / новых / доставлено`
+    : `${health.length} ${plural(health.length, ['источник', 'источника', 'источников'])} · ${newLeadsLabel(newTotal)}`;
 
   const empty = `<div class="empty">
     <h2>Источников пока нет</h2>
@@ -2127,7 +2240,7 @@ export function renderSourcesPage(data: SourcesPageData): string {
 <div class="page-head">
   <div>
     <h1>${escapeHtml(t.navSources)}</h1>
-    <p class="muted small">${health.length} ${plural(health.length, ['источник', 'источника', 'источников'])} · ${health.filter((item) => item.source.enabled).length} активных · 24ч: найдено / новых / доставлено</p>
+    <p class="muted small">${subtitle}</p>
   </div>
 </div>
 <div class="list">${rows || empty}</div>`;
@@ -2148,6 +2261,26 @@ export function renderSourcesPage(data: SourcesPageData): string {
 export function renderSourcePage(data: SourcePageData): string {
   const { source, health, leads, runs, version, notice, lang = 'ru' } = data;
   const t = getTranslations(lang);
+  if (!data.isAdmin) {
+    const publicStatus = publicHealthStatus(health);
+    const rows = leads.map((lead) => leadRow(lead, source, lang, false)).join('');
+    return layout({
+      title: source.title,
+      version,
+      active: 'sources',
+      body: `
+<a class="back" href="/sources">← ${escapeHtml(t.navSources)}</a>
+<div class="page-head">
+  <div>
+    <h1>${escapeHtml(source.title)}</h1>
+    <p class="muted small">${escapeHtml(KIND_LABELS[source.kind] ?? source.kind)} · <span class="dot ${publicStatus.dot}"></span>${publicStatus.label} · ${newLeadsLabel(health.last24h.inserted)}</p>
+  </div>
+</div>
+<div class="list">${rows || `<div class="empty">${escapeHtml(t.emptyTitle)}</div>`}</div>`,
+      auth: data.auth,
+      lang,
+    });
+  }
   const status = healthStatus(health);
   const config = configEntries(source.config)
     .map(([key, value]) => `<div><dt>${escapeHtml(key)}</dt><dd>${escapeHtml(value)}</dd></div>`)
@@ -2374,9 +2507,9 @@ export function renderSourceCreatedPage(data: CreatedSourcePageData): string {
 export function renderNotFound(version: string, lang: SupportedLang = 'ru'): string {
   const t = getTranslations(lang);
   return layout({
-    title: t.emptyTitle,
+    title: t.notFoundTitle,
     version,
-    body: `<div class="page-head"><div><h1>${escapeHtml(t.emptyTitle)}</h1><p class="muted small">${escapeHtml(t.emptyDesc)}</p></div></div><a class="btn" href="/">${escapeHtml(t.backToLeads)}</a>`,
+    body: `<div class="page-head"><div><h1>${escapeHtml(t.notFoundTitle)}</h1><p class="muted small">${escapeHtml(t.notFoundDesc)}</p></div></div><div><a class="btn" href="/">${escapeHtml(t.backToLeads)}</a></div>`,
     lang,
   });
 }

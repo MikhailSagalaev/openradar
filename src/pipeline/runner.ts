@@ -85,17 +85,15 @@ export class PollRunner {
       const leads = await store.cleanupOldLeads?.(this.deps.env.RADAR_RETENTION_DAYS);
       // Голоса-события и история запусков нужны для health (24ч) и аудита;
       // храним их 30 дней, чтобы таблицы не росли бесконечно.
-      const outbox = await store.cleanupOutboxEvents?.(30);
       const runs = await store.cleanupRuns?.(30);
       const sessions = await store.purgeExpiredSessions?.();
       if (this.deps.env.RADAR_MODE === 'hub') {
         const rating = await recomputeRatings(store, parseModerators(this.deps.env.RADAR_MODERATORS));
         this.logger.info('rating recomputed', { ...rating });
       }
-      if (leads || outbox || runs || sessions) {
+      if (leads || runs || sessions) {
         this.logger.info('maintenance cleanup finished', {
           leads,
-          outboxEvents: outbox,
           runs,
           sessions,
         });

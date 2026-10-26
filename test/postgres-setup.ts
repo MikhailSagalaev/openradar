@@ -17,7 +17,7 @@ beforeEach(async () => {
   await migrated;
   pool ??= new pg.Pool({ connectionString: url });
   await pool.query(
-    `TRUNCATE deliveries, runs, leads, sources, outbox_events, sessions,
+    `TRUNCATE deliveries, runs, leads, sources, sessions,
      lead_deliveries, app_users, lead_votes, participants, events, auth_replay, contact_flags CASCADE`,
   );
 });
