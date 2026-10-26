@@ -988,6 +988,10 @@ export function createApp(runtime: Runtime): Hono {
     const lead = await runtime.store.getLead(c.req.param('id'));
     if (!lead) return c.html(renderNotFound(VERSION, lang), 404);
     const source = await runtime.store.getSource(lead.sourceId);
+    const user = await currentUser(c, runtime);
+    const myVote = (user && runtime.store.getUserVote)
+      ? await runtime.store.getUserVote(lead.id, user.id)
+      : null;
     return c.html(
       renderLeadPage({
         lead,
@@ -995,6 +999,7 @@ export function createApp(runtime: Runtime): Hono {
         version: VERSION,
         auth: await getAuthDisplay(c, runtime),
         lang,
+        myVote: myVote ?? undefined,
       }),
     );
   });

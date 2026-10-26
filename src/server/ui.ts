@@ -1,4 +1,4 @@
-import type { Lead, RunRecord, SourceHealth, SourceRecord, Stats } from '../core/types.ts';
+import type { Lead, LeadVoteSignal, RunRecord, SourceHealth, SourceRecord, Stats } from '../core/types.ts';
 import { escapeHtml, firstLine } from '../core/text.ts';
 import { type SupportedLang, getTranslations } from './i18n.ts';
 import { renderLogo } from './logo.ts';
@@ -7,6 +7,7 @@ import { SEO_CATALOG } from './seo.ts';
 export interface AuthDisplay {
   /** GitHub handle when the session belongs to a registered user. */
   handle?: string;
+  isAdmin?: boolean;
 }
 
 export interface LeadsPageData {
@@ -51,6 +52,7 @@ export interface LeadPageData {
   version: string;
   auth?: AuthDisplay;
   lang?: SupportedLang;
+  myVote?: LeadVoteSignal | null;
 }
 
 export interface SourceFormValues {
@@ -186,7 +188,6 @@ main {
   justify-content: space-between;
   gap: 16px;
   padding: 18px 0;
-  border-bottom: 1px solid var(--line);
   margin-bottom: 32px;
 }
 .top-brand-group {
@@ -235,14 +236,14 @@ main {
   font-size: 9px;
   line-height: 1;
 }
-.nav { display: flex; gap: 20px; margin-left: 12px; }
+.nav { display: flex; gap: 20px; margin-left: 12px; align-items: center; }
 .nav a {
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 500;
   color: var(--muted);
   text-decoration: none;
-  padding: 4px 0;
-  border-bottom: 1.5px solid transparent;
+  padding: 1px 0 2px;
+  border-bottom: 2px solid transparent;
   transition: color 0.15s ease, border-color 0.15s ease;
 }
 .nav a:hover { color: var(--ink); text-decoration: none; }
@@ -843,6 +844,44 @@ dialog::backdrop {
   border-color: var(--rose);
   color: var(--rose);
 }
+.vote-btn.active {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+.vote-btn.active .vote-count {
+  color: var(--bg);
+  opacity: 0.85;
+}
+.vote-btn-danger.active {
+  background: #dc2626;
+  color: #fff;
+  border-color: #dc2626;
+}
+.vote-btn-danger.active .vote-count {
+  color: #fff;
+  opacity: 0.85;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+}
+.icon-btn svg {
+  flex-shrink: 0;
+}
 .text-warn {
   color: var(--rose);
   font-weight: 500;
@@ -1104,29 +1143,57 @@ footer {
   border-top: 1px solid var(--line);
 }
 .footer-wrap {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1.2fr 2fr 1fr;
+  gap: 36px;
   align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 24px;
+}
+@media (max-width: 900px) {
+  .footer-wrap {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+}
+.footer-col-brand {
+  max-width: 320px;
 }
 .footer-brand {
   margin: 0 0 4px;
   color: var(--ink);
   font-size: 13px;
+  line-height: 1.45;
 }
-.footer-nav {
+.footer-col-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 12px;
+}
+.footer-catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 24px;
+}
+@media (max-width: 600px) {
+  .footer-catalog-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.footer-links-grid {
   display: flex;
-  gap: 18px;
-  flex-wrap: wrap;
-  font-size: 12px;
+  flex-direction: column;
+  gap: 8px;
 }
-.footer-nav a {
+.footer-catalog-grid a, .footer-links-grid a {
   color: var(--muted);
   text-decoration: none;
+  font-size: 12.5px;
   transition: color 0.15s ease;
+  line-height: 1.45;
 }
-.footer-nav a:hover {
+.footer-catalog-grid a:hover, .footer-links-grid a:hover {
   color: var(--ink);
   text-decoration: underline;
 }
@@ -1177,6 +1244,7 @@ export function layout(input: {
   const nav = (key: 'leads' | 'sources' | 'extension', label: string, href: string): string =>
     `<a href="${href}"${input.active === key ? ' class="active"' : ''}>${label}</a>`;
 
+  const isMember = Boolean(input.auth?.handle || input.auth?.isAdmin);
   const authWidget = input.auth
     ? `
       <div class="user-menu-wrap">
@@ -1205,7 +1273,7 @@ export function layout(input: {
         </div>
       </div>
     `
-    : `<button type="button" class="btn btn-sm auth-signin-btn" onclick="openLoginModal()">${escapeHtml(t.signIn)}</button>`;
+    : `<button type="button" class="btn auth-signin-btn" onclick="openLoginModal()">${escapeHtml(t.signIn)}</button>`;
 
   return `<!doctype html>
 <html lang="${lang}">
@@ -1236,25 +1304,31 @@ ${input.head ?? ''}
 ${input.body}
 <footer>
   <div class="footer-wrap">
-    <div>
+    <div class="footer-col footer-col-brand">
       <p class="footer-brand"><span style="display:inline-block;vertical-align:middle;margin-right:6px">${renderLogo({ height: 16 })}</span> — ${escapeHtml(t.footerDesc)}</p>
-      <p class="muted" style="margin:0">${escapeHtml(t.footerLicense)}</p>
+      <p class="muted" style="margin:6px 0 0">${escapeHtml(t.footerLicense)}</p>
     </div>
-    <div class="footer-nav">
-      ${SEO_CATALOG.map((entry) => `<a href="/catalog/${escapeHtml(entry.slug)}">${escapeHtml((entry.title.split('—')[0] ?? entry.h1).trim())}</a>`).join('')}
+    <div class="footer-col">
+      <div class="footer-col-title">${escapeHtml(lang === 'ru' ? 'Категории заказов' : 'Categories')}</div>
+      <div class="footer-catalog-grid">
+        ${SEO_CATALOG.map((entry) => `<a href="/catalog/${escapeHtml(entry.slug)}">${escapeHtml((entry.title.split('—')[0] ?? entry.h1).trim())}</a>`).join('')}
+      </div>
     </div>
-    <div class="footer-nav">
-      <a href="/extension">${escapeHtml(t.extensionGuide)}</a>
-      <a href="https://github.com/MikhailSagalaev/radar-oss" target="_blank" rel="noopener noreferrer">GitHub</a>
-      <a href="https://github.com/MikhailSagalaev/radar-oss/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">${escapeHtml(t.licenseLink)}</a>
-      <a href="/feed.rss">${escapeHtml(t.rssFeed)}</a>
-      <a href="/api/delta">${escapeHtml(t.s3Delta)}</a>
-      <a href="/health">${escapeHtml(t.systemStatus)}</a>
-      <span style="display:inline-flex;align-items:center;gap:5px;margin-left:6px">
-        <a href="/lang/ru" style="${lang === 'ru' ? 'font-weight:700;color:var(--ink)' : 'color:var(--muted)'}">RU</a>
-        <span style="color:var(--line-strong)">/</span>
-        <a href="/lang/en" style="${lang === 'en' ? 'font-weight:700;color:var(--ink)' : 'color:var(--muted)'}">EN</a>
-      </span>
+    <div class="footer-col">
+      <div class="footer-col-title">${escapeHtml(lang === 'ru' ? 'Ресурсы' : 'Resources')}</div>
+      <div class="footer-links-grid">
+        <a href="/extension">${escapeHtml(t.extensionGuide)}</a>
+        <a href="https://github.com/MikhailSagalaev/radar-oss" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="https://github.com/MikhailSagalaev/radar-oss/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">${escapeHtml(t.licenseLink)}</a>
+        <a href="/feed.rss">${escapeHtml(t.rssFeed)}</a>
+        <a href="/api/delta">${escapeHtml(t.s3Delta)}</a>
+        <a href="/health">${escapeHtml(t.systemStatus)}</a>
+        <span style="display:inline-flex;align-items:center;gap:5px;margin-top:2px">
+          <a href="/lang/ru" style="${lang === 'ru' ? 'font-weight:700;color:var(--ink)' : 'color:var(--muted)'}">RU</a>
+          <span style="color:var(--line-strong)">/</span>
+          <a href="/lang/en" style="${lang === 'en' ? 'font-weight:700;color:var(--ink)' : 'color:var(--muted)'}">EN</a>
+        </span>
+      </div>
     </div>
   </div>
 </footer>
@@ -1297,6 +1371,22 @@ function openLoginModal() {
 function openAuthVoteModal() {
   openLoginModal();
 }
+function setupBackdropClose(id) {
+  const dlg = document.getElementById(id);
+  if (!dlg) return;
+  dlg.addEventListener('click', function(e) {
+    const rect = dlg.getBoundingClientRect();
+    const inDialog = (
+      rect.top <= e.clientY &&
+      e.clientY <= rect.top + rect.height &&
+      rect.left <= e.clientX &&
+      e.clientX <= rect.left + rect.width
+    );
+    if (!inDialog) dlg.close();
+  });
+}
+setupBackdropClose('auth-vote-dialog');
+setupBackdropClose('add-source-dialog');
 document.addEventListener('click', function(e) {
   const trigger = document.getElementById('user-menu-trigger');
   const menu = document.getElementById('user-menu-dropdown');
@@ -1660,7 +1750,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
     : '';
 
   const body = `
-<h1 class="page-h1">${escapeHtml(lang === 'ru' ? 'Свежие заказы и вакансии для фрилансеров и IT-специалистов' : 'Fresh freelance and IT jobs and gigs')}</h1>
+<h1 class="sr-only">${escapeHtml(lang === 'ru' ? 'Свежие заказы, задачи и вакансии со всех площадок' : 'Fresh freelance orders, gigs and jobs from all platforms')}</h1>
 <div class="search-hero">
   <div class="type-tabs">${tabs}</div>
   ${lagBanner}
@@ -1847,13 +1937,14 @@ document.getElementById('copy-lead')?.addEventListener('click', async (event) =>
   </form>`
     : '';
 
+  const myVote = data.myVote;
   const voteControls = isUser
     ? `<form method="post" action="/leads/${escapeHtml(lead.id)}/vote" class="community-votes">
     <span class="small muted" style="margin-right:4px">${escapeHtml(t.community)}:</span>
-    <button name="signal" value="useful" class="vote-btn" type="submit">${escapeHtml(t.useful)} <span class="vote-count">${lead.votes_up ?? 0}</span></button>
-    <button name="signal" value="junk" class="vote-btn" type="submit">${escapeHtml(t.junk)} <span class="vote-count">${lead.votes_down ?? 0}</span></button>
-    <button name="signal" value="scam" class="vote-btn vote-btn-danger" type="submit">${escapeHtml(t.scam)} <span class="vote-count">${lead.votes_scam ?? 0}</span></button>
-    <button name="signal" value="closed" class="vote-btn" type="submit">${escapeHtml(t.closed)} <span class="vote-count">${lead.votes_closed ?? 0}</span></button>
+    <button name="signal" value="useful" class="vote-btn ${myVote === 'useful' ? 'active' : ''}" type="submit" title="${myVote === 'useful' ? 'Нажмите, чтобы отменить свой голос' : ''}">${escapeHtml(t.useful)} <span class="vote-count">${lead.votes_up ?? 0}</span></button>
+    <button name="signal" value="junk" class="vote-btn ${myVote === 'junk' ? 'active' : ''}" type="submit" title="${myVote === 'junk' ? 'Нажмите, чтобы отменить свой голос' : ''}">${escapeHtml(t.junk)} <span class="vote-count">${lead.votes_down ?? 0}</span></button>
+    <button name="signal" value="scam" class="vote-btn vote-btn-danger ${myVote === 'scam' ? 'active' : ''}" type="submit" title="${myVote === 'scam' ? 'Нажмите, чтобы отменить свой голос' : ''}">${escapeHtml(t.scam)} <span class="vote-count">${lead.votes_scam ?? 0}</span></button>
+    <button name="signal" value="closed" class="vote-btn ${myVote === 'closed' ? 'active' : ''}" type="submit" title="${myVote === 'closed' ? 'Нажмите, чтобы отменить свой голос' : ''}">${escapeHtml(t.closed)} <span class="vote-count">${lead.votes_closed ?? 0}</span></button>
   </form>`
     : `<div class="community-votes">
     <span class="small muted" style="margin-right:4px">${escapeHtml(t.community)}:</span>
@@ -1873,8 +1964,14 @@ document.getElementById('copy-lead')?.addEventListener('click', async (event) =>
   </div>
   <div class="actions lead-actions">
     ${cleanUrl ? `<a class="btn" href="${escapeHtml(cleanUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t.openOriginal)}</a>` : ''}
-    <button class="btn ghost" id="copy-lead" type="button">${escapeHtml(t.copyText)}</button>
-    <button class="btn ghost" id="copy-link" type="button" onclick="navigator.clipboard.writeText(window.location.href);const orig=this.textContent;this.textContent='Ссылка скопирована!';setTimeout(()=>this.textContent=orig,2000)">Скопировать ссылку</button>
+    <button class="btn icon-btn" id="copy-lead" type="button" title="${escapeHtml(t.copyText)}" aria-label="${escapeHtml(t.copyText)}">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+      <span class="icon-btn-label">${escapeHtml(t.copyText)}</span>
+    </button>
+    <button class="btn icon-btn" id="copy-link" type="button" title="${escapeHtml(lang === 'ru' ? 'Поделиться / скопировать ссылку' : 'Share / copy link')}" aria-label="Share" onclick="navigator.clipboard.writeText(window.location.href);const lbl=this.querySelector('.icon-btn-label');if(lbl){const o=lbl.textContent;lbl.textContent='Скопировано!';setTimeout(()=>lbl.textContent=o,2000)}">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+      <span class="icon-btn-label">${escapeHtml(lang === 'ru' ? 'Поделиться' : 'Share')}</span>
+    </button>
   </div>
 </div>
 

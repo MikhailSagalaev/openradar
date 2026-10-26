@@ -65,6 +65,7 @@ export interface UserVoteResult {
   score: number;
   status: LeadStatus;
   alreadyVoted: boolean;
+  myVote?: LeadVoteSignal | null;
 }
 
 export interface MeshNodeRecord {
@@ -175,8 +176,9 @@ export interface Store {
 
   upsertGitHubUser?(input: UpsertGitHubUserInput): Promise<UserRecord>;
   getUserBySession?(sessionId: string): Promise<UserRecord | null>;
-  /** One vote per user per signal; repeated votes of the same signal are ignored. */
+  /** Records or toggles a user vote. Clicking same signal cancels; clicking different switches vote. */
   recordUserVote?(leadId: string, userId: number, signal: LeadVoteSignal): Promise<UserVoteResult>;
+  getUserVote?(leadId: string, userId: number): Promise<LeadVoteSignal | null>;
   purgeExpiredSessions?(): Promise<number>;
 
   // Mesh Network and AI Arbiter methods (radar/1)
