@@ -1,8 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { recalculateVoteScoreAndStatus } from '../core/rules.ts';
 import { normalizeTechTokens } from '../core/text.ts';
-import { contactKey } from '../core/contacts.ts';
+import { contactKey, mergeContacts } from '../core/contacts.ts';
 import type {
+  ObservationRecord,
+  ParticipantRecord,
+  SignalRecord,
+  StoredEvent,
   CreateSourceInput,
   FeedOptions,
   LeadDeliveryRecord,
@@ -119,6 +123,24 @@ export class MemoryStore implements Store {
       votes_scam: cand.votes_scam ?? 0,
       votes_closed: cand.votes_closed ?? 0,
     };
+  }
+
+  async mergeLeadContacts(leadId: string, contacts: Contact[]): Promise<void> {
+    const lead = this.leads.get(leadId);
+    if (lead && contacts.length) lead.contacts = mergeContacts(lead.contacts ?? [], contacts);
+  }
+
+  async findLeadByCanonicalUrl(canonicalUrl: string): Promise<Lead | null> {
+    for (const lead of this.leads.values()) if (lead.canonicalUrl === canonicalUrl) return { ...lead };
+    return null;
+  }
+
+  async listRecentSketches(sinceIso: string, limit: number): Promise<Array<{ id: string; createdAt: string; minhash: string }>> {
+    return [...this.leads.values()]
+      .filter((l) => l.minhash_sketch && l.createdAt >= sinceIso)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .slice(-limit)
+      .map((l) => ({ id: l.id, createdAt: l.createdAt, minhash: l.minhash_sketch! }));
   }
 
   async findRecentByContacts(contacts: Contact[], sinceIso: string, limit = 20): Promise<Lead[]> {
@@ -261,6 +283,10 @@ export class MemoryStore implements Store {
         const cutoff = options.createdBefore;
         result = result.filter((l) => l.createdAt <= cutoff);
       }
+      if (options.after) {
+        const { createdAt, id } = options.after;
+        result = result.filter((l) => l.createdAt > createdAt || (l.createdAt === createdAt && l.id > id));
+      }
     }
     if (options.status) {
       result = result.filter((l) => l.status === options.status);
@@ -281,7 +307,11 @@ export class MemoryStore implements Store {
       });
     }
 
-    result.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const ascending = feedOnly && Boolean(options.after);
+    result.sort((a, b) => {
+      const order = a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
+      return ascending ? order : -order;
+    });
     const limit = Math.max(1, Math.min(options.limit ?? 50, 5000));
     return result.slice(0, limit).map((l) => ({
       ...l,
@@ -585,6 +615,75 @@ export class MemoryStore implements Store {
 
   async getLeadsForFeed(options: FeedOptions = {}): Promise<Lead[]> {
     return this.queryLeads(options, true);
+  }
+
+  // --- radar/2 hub ---
+  private participants = new Map<string, ParticipantRecord>();
+  private events = new Map<string, StoredEvent>();
+  private observations: ObservationRecord[] = [];
+  private signals = new Map<string, SignalRecord>();
+  private authReplay = new Map<string, string>();
+
+  async touchParticipant(pubkey: string): Promise<ParticipantRecord> {
+    const now = new Date().toISOString();
+    const existing = this.participants.get(pubkey);
+    if (existing) {
+      existing.lastSeenAt = now;
+      return { ...existing };
+    }
+    const created: ParticipantRecord = { pubkey, profile: {}, createdAt: now, lastSeenAt: now };
+    this.participants.set(pubkey, created);
+    return { ...created };
+  }
+
+  async getParticipant(pubkey: string): Promise<ParticipantRecord | null> {
+    const p = this.participants.get(pubkey);
+    return p ? { ...p } : null;
+  }
+
+  async setParticipantProfile(pubkey: string, profile: Record<string, unknown>): Promise<void> {
+    await this.touchParticipant(pubkey);
+    this.participants.get(pubkey)!.profile = profile;
+  }
+
+  async insertEvent(event: StoredEvent): Promise<boolean> {
+    if (this.events.has(event.id)) return false;
+    this.events.set(event.id, { ...event });
+    return true;
+  }
+
+  async addObservation(record: ObservationRecord): Promise<void> {
+    if (this.observations.some((o) => o.eventId === record.eventId)) return;
+    this.observations.push({ ...record });
+  }
+
+  async listObservations(leadId: string): Promise<ObservationRecord[]> {
+    return this.observations
+      .filter((o) => o.leadId === leadId && this.leads.has(o.leadId))
+      .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt))
+      .map((o) => ({ ...o }));
+  }
+
+  async findObservationsByPost(platform: string, channel: string, messageId: string): Promise<ObservationRecord[]> {
+    return this.observations
+      .filter((o) => o.platform === platform && o.channel === channel && o.messageId === messageId && this.leads.has(o.leadId))
+      .map((o) => ({ ...o }));
+  }
+
+  async upsertSignal(record: SignalRecord): Promise<void> {
+    this.signals.set(`${record.leadId}\u0000${record.pubkey}`, { ...record });
+  }
+
+  async listSignals(leadId: string): Promise<SignalRecord[]> {
+    return [...this.signals.values()].filter((s) => s.leadId === leadId && this.leads.has(s.leadId)).map((s) => ({ ...s }));
+  }
+
+  async rememberAuth(id: string, expiresAt: string): Promise<boolean> {
+    const now = new Date().toISOString();
+    for (const [key, exp] of this.authReplay) if (exp < now) this.authReplay.delete(key);
+    if (this.authReplay.has(id)) return false;
+    this.authReplay.set(id, expiresAt);
+    return true;
   }
 
   async close(): Promise<void> {

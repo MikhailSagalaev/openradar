@@ -47,6 +47,8 @@ export interface Env {
   RADAR_MODE: 'node' | 'hub';
   /** Tier delays in minutes, e.g. `guest=720,member=180,active=30,core=0`. */
   RADAR_TIER_DELAYS?: string;
+  /** Comma-separated hex pubkeys of hub moderators. */
+  RADAR_MODERATORS?: string;
   RADAR_PROXY_URL?: string;
   RADAR_DIGEST_CHAT_ID?: string;
   RADAR_DIGEST_INTERVAL_HOURS: number;

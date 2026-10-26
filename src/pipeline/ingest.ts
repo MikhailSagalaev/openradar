@@ -4,6 +4,7 @@ import { applyRules } from '../core/rules.ts';
 import { extractTechSkills } from '../core/text.ts';
 import { emitLeadCreated } from '../core/events.ts';
 import { estimateJaccardFromSketches } from '../core/fingerprint.ts';
+import { SIMILAR_MIN_WORDS, type SimilarIndex } from './similar.ts';
 import type {
   Classifier,
   Contact,
@@ -24,6 +25,8 @@ export interface IngestDeps {
   env: Env;
   now?: () => Date;
   fetchImpl?: typeof fetch;
+  /** Recent MinHash sketches for merge rule 4 (similar text, no shared contact). */
+  similar?: SimilarIndex;
 }
 
 export type IngestStatus = 'inserted' | 'duplicate' | 'rejected' | 'delivered' | 'failed';
@@ -41,6 +44,10 @@ function duplicateLead(existing: Lead, fingerprint: string): IngestOutcome {
     lead: existing,
     reasons: [`duplicate:${existing.fingerprint === fingerprint ? 'fingerprint' : 'title'}`],
   };
+}
+
+function wordCount(text: string): number {
+  return text.split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 2).length;
 }
 
 /** Minimum MinHash similarity for two posts sharing a contact to count as one lead. */
@@ -74,6 +81,11 @@ export async function ingestRawLead(
   const byFingerprint = await deps.store.findLeadByFingerprint(prepared.fingerprint);
   if (byFingerprint) return duplicateLead(byFingerprint, prepared.fingerprint);
 
+  if (prepared.canonicalUrl) {
+    const byUrl = await deps.store.findLeadByCanonicalUrl(prepared.canonicalUrl);
+    if (byUrl) return { status: 'duplicate', lead: byUrl, reasons: ['duplicate:url'] };
+  }
+
   const since = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
   const byTitle = await deps.store.findRecentByTitleKey(prepared.titleKey, prepared.city, since);
   if (byTitle) return duplicateLead(byTitle, prepared.fingerprint);
@@ -81,6 +93,12 @@ export async function ingestRawLead(
   // Cross-post by the same author: a shared contact and similar text within 14 days.
   const byContact = await findCrossPost(prepared.contacts, prepared.minhash_sketch, now, deps);
   if (byContact) return { status: 'duplicate', lead: byContact, reasons: ['duplicate:contact'] };
+
+  if (deps.similar && wordCount(prepared.text) >= SIMILAR_MIN_WORDS) {
+    const similarId = await deps.similar.findSimilar(prepared.minhash_sketch, now);
+    const similar = similarId ? await deps.store.getLead(similarId) : null;
+    if (similar) return { status: 'duplicate', lead: similar, reasons: ['duplicate:similar'] };
+  }
 
   const rules = applyRules(prepared, source, now);
   let status: IngestOutcome['status'] = rules.accepted ? 'inserted' : 'rejected';
@@ -178,6 +196,7 @@ export async function ingestRawLead(
     return { status: 'rejected', lead, reasons };
   }
 
+  deps.similar?.add(lead.id, lead.minhash_sketch, lead.createdAt);
   emitLeadCreated(lead);
 
   const registeredSinks = deps.sinks.list().map((s) => s.kind);

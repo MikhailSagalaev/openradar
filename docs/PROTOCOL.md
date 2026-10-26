@@ -96,11 +96,17 @@ R = сумма за 30 дней, не меньше 0; вес сигналов w 
 
 | Метод | Назначение |
 | --- | --- |
-| `POST /v2/events` | до 500 событий, ответ по каждому: `accepted` / `duplicate` / `rejected:<причина>` |
-| `GET /v2/feed` | лента с задержкой уровня, курсор, JSON или NDJSON |
-| `GET /v2/stream` | SSE |
-| `GET /v2/leads/:id` | карточка с наблюдениями |
-| `GET /v2/contacts/:value` | история автора |
-| `GET /v2/me` | рейтинг, уровень, начисления |
+| `POST /v2/events` | до 500 событий (массив, `{"events": [...]}` или одно событие), ответ `results` по каждому: `accepted` / `duplicate` / `rejected:<причина>`, для наблюдений `leadId` и `merged` |
+| `GET /v2/feed` | лента с задержкой уровня: `limit` (до 200), `type`, `q`, `cursor`, `format=ndjson` |
+| `GET /v2/stream` | SSE: события `lead` с `id` = курсор; `cursor` или `Last-Event-ID` продолжают поток |
+| `GET /v2/leads/:id` | карточка, наблюдения (ключ, канал, первый ли, архив) и счётчики сигналов |
+| `GET /v2/contacts/:value` | история автора по контакту (`@handle`, телефон, email, ссылка); гостям недоступно |
+| `GET /v2/me` | ключ, уровень, задержка, профиль (только с подписью Nostr) |
 | `POST /v2/link/github` | привязка ключа к GitHub |
 | `POST /v2/moderation/*` | решения модератора |
+
+Курсор ленты непрозрачный. Первый запрос без курсора возвращает самые новые лиды и курсор на самый новый; следующие запросы с курсором возвращают только более новые, от старых к новым. Курсор приходит в теле (`cursor`) и в заголовке `x-radar-cursor`.
+
+Причины отказа событий: `malformed:<поле>`, `bad_id`, `bad_signature`, `too_large`, `created_at_in_future`, `created_at_too_old`, `unsupported_kind`, `banned`, `content_not_json`, `invalid:<поле>: <ошибка>`, `src_tag_mismatch`, `msg_tag_mismatch`, `not_a_lead`, `bad_signal_tags`, `unknown_lead`, `bad_status_tags`, `profile_not_object`.
+
+Статус `deleted` или `closed` закрывает лид, только если его прислал участник, первым сообщивший о посте. Профиль (kind 30440) — JSON с полями `name`, `about`, `website`, `github`.
