@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { prepareRawLead } from '../core/prepare.ts';
 import { applyRules } from '../core/rules.ts';
+import { extractTechSkills } from '../core/text.ts';
 import type {
   Classifier,
   Env,
@@ -102,6 +103,12 @@ export async function ingestRawLead(
         error: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+
+  // No LLM classification (or it produced nothing): still fill skills from the
+  // lightweight dictionary extractor, so the feed keeps usable tech tags.
+  if (skills.length === 0) {
+    skills = extractTechSkills(`${prepared.title}\n${prepared.text}`);
   }
 
   const lead: Lead = {

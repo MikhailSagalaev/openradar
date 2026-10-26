@@ -77,7 +77,118 @@ export function truncate(input: string, max: number): string {
   if (input.length <= max) return input;
   const sliced = input.slice(0, max - 1);
   const lastSpace = sliced.lastIndexOf(' ');
-  return `${(lastSpace > max * 0.6 ? sliced.slice(0, lastSpace) : sliced).trimEnd()}…`;
+  const base = (lastSpace > max * 0.6 ? sliced.slice(0, lastSpace) : sliced).trimEnd();
+  // A truncation cut mid-parenthesis («Разработка… (Claude») leaves unbalanced
+  // brackets: drop the incomplete trailing group instead.
+  const balanced = base.replace(/\s*\([^()]*$/, '').trimEnd();
+  return `${balanced}…`;
+}
+
+/** FL.ru and friends append « (Бюджет: 30 000 ₽)» to the RSS title; it is stored separately. */
+export function stripBudgetTitleSuffix(input: string): string {
+  return input.replace(/\s*\(\s*(?:Бюджет|Budget)\s*:[^)]*\)\s*$/i, '').trim();
+}
+
+/**
+ * DATA-01: off-topic categories (ремонт, доставка, Repetitor…) ride the budget
+ * ladder otherwise; an IT/digital signal is required before budget counts as
+ * "market fit". Both match lowercase normalized text.
+ */
+const NON_IT_CATEGORY_RE = new RegExp(
+  [
+    'ремонт|сантехник|электрик|плиточник|маляр|штукатур|сварщ|грузчик|курьер|водител',
+    'няня|сиделк|репетитор|уборк|клининг|массаж|маникюр|педикюр|парикмахер|швея|пошив',
+    'повар|официант|озеленен|забор|кровл|фасад|стяжк|гипсокартон|ламинат|обои|потолок',
+    'мебел|шторы|жалюзи|доставк|перевозк|такси|стройк|отделочн|кондиционер|печник',
+    'бухгалт|юрист|юридическ|налоги|кредит|займ|страхован|репетитор|фото на документы',
+  ].join('|'),
+  'i',
+);
+
+const IT_SIGNAL_RE = new RegExp(
+  [
+    'javascript|typescript|python|php|golang|\\bgo\\b|\\bjava\\b|kotlin|swift|react|vue|angular',
+    'nodejs|nextjs|django|laravel|wordpress|woocommerce|bitrix|opencart|tilda|figma|photoshop',
+    'illustrator|autocad|revit|blender|corel|\\bsql\\b|postgres\\w*|mysql|mongo\\w*|docker',
+    'kubernetes|devops|\\bqa\\b|flutter|unity|unreal|\\bapi\\b|\\bai\\b|\\bgpt\\b|chatgpt',
+    'midjourney|\\bcrm\\b|\\berp\\b|no-?code|\\bseo\\b|\\bsmm\\b|\\bux\\b|\\bui\\b',
+    // cyrillic stems (no ASCII \\b around cyrillic — use substring stems without false positives)
+    'разработ|программист|верст|фронтенд|бэкенд|фулстек|лендинг|веб-?сайта?|интернет-магазин',
+    'парсер|парсинг|скрипт|автоматизац|нейросет|приложени|дизайн|видеомонтаж|монтаж.{0,8}видео',
+    'телеграм.{0,3}бот|бота? \\(?telegram|тестирован|интеграц',
+  ].join('|'),
+  'i',
+);
+
+/** True when the text shows an IT/digital work signal (skills, dev vocabulary). */
+export function hasItSkillSignal(normalizedText: string): boolean {
+  return IT_SIGNAL_RE.test(normalizedText);
+}
+
+/** True when the text matches a known non-IT category (household, physical labor, finance). */
+export function hasNonItCategorySignal(normalizedText: string): boolean {
+  return NON_IT_CATEGORY_RE.test(normalizedText);
+}
+
+/** Lightweight tech-tag extractor: canonical skill names found in title+text. */
+const TECH_SKILL_PATTERNS: Array<[RegExp, string]> = [
+  [/(^|[^a-zа-яё0-9])1\s?[сc]([^a-zа-яё0-9]|$)/i, '1С'],
+  [/\bclaude\b/i, 'Claude'],
+  [/\bgpt\b|chatgpt/i, 'GPT'],
+  [/\bmidjourney\b/i, 'Midjourney'],
+  [/\bpython\b/i, 'Python'],
+  [/\bjavascript\b|\bjs\b/i, 'JavaScript'],
+  [/\btypescript\b|\bts\b/i, 'TypeScript'],
+  [/\breact\b|react native/i, 'React'],
+  [/\bvue\b/i, 'Vue'],
+  [/\bnode(?:\.?js)?\b/i, 'Node.js'],
+  [/\bphp\b/i, 'PHP'],
+  [/\bgolang\b|\bgo\b(?![a-z])/i, 'Golang'],
+  [/\bjava\b(?!script)/i, 'Java'],
+  [/\bkotlin\b/i, 'Kotlin'],
+  [/\bswift\b/i, 'Swift'],
+  [/\bc\+\+/i, 'C++'],
+  [/\bc#/i, 'C#'],
+  [/\.net|dotnet/i, '.NET'],
+  [/\bdjango\b/i, 'Django'],
+  [/\blaravel\b/i, 'Laravel'],
+  [/\bwordpress\b/i, 'WordPress'],
+  [/\bwoocommerce\b/i, 'WooCommerce'],
+  [/\bbitrix\b|битрикс/i, 'Битрикс'],
+  [/\bopencart\b/i, 'OpenCart'],
+  [/\btilda\b|тильда/i, 'Tilda'],
+  [/\bfigma\b|фигм/i, 'Figma'],
+  [/\bphotoshop\b|\bps\b(?![a-z])/i, 'Photoshop'],
+  [/\billustrator\b/i, 'Illustrator'],
+  [/after effects/i, 'After Effects'],
+  [/\bautocad\b|автокад/i, 'AutoCAD'],
+  [/\brevit\b/i, 'Revit'],
+  [/\bblender\b/i, 'Blender'],
+  [/\bcorel\s?draw\b/i, 'CorelDRAW'],
+  [/\bsql\b/i, 'SQL'],
+  [/\bpostgres\w*\b|постгрес/i, 'PostgreSQL'],
+  [/\bmysql\b/i, 'MySQL'],
+  [/\bmongo\w*\b/i, 'MongoDB'],
+  [/\bdocker\b/i, 'Docker'],
+  [/\bflutter\b/i, 'Flutter'],
+  [/\bunity\b/i, 'Unity'],
+  [/\bseo\b/i, 'SEO'],
+  [/\bsmm\b/i, 'SMM'],
+  [/\bexcel\b|экзел|эксель/i, 'Excel'],
+  [/телеграм\w*\s*\(?бот|telegram\s*bot/i, 'Telegram Bot'],
+  [/нейросет\w*/i, 'Нейросети'],
+];
+
+export function extractTechSkills(input: string, max = 8): string[] {
+  if (!input) return [];
+  const found: string[] = [];
+  for (const [pattern, name] of TECH_SKILL_PATTERNS) {
+    if (pattern.test(input)) {
+      found.push(name);
+      if (found.length >= max) break;
+    }
+  }
+  return found;
 }
 
 export function escapeHtml(input: string): string {

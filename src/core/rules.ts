@@ -1,4 +1,4 @@
-import { normalizeForMatch } from './text.ts';
+import { hasItSkillSignal, hasNonItCategorySignal, normalizeForMatch } from './text.ts';
 import type { LeadStatus, SourceRecord } from './types.ts';
 import type { PreparedLead } from './prepare.ts';
 
@@ -167,10 +167,22 @@ export function scoreLead(
   score += Math.min(hits * 8, 24);
 
   const budget = lead.budget ?? 0;
-  if (budget >= 25_000) score += 20;
-  else if (budget >= 10_000) score += 15;
-  else if (budget >= 5_000) score += 10;
-  else if (budget >= 1_000) score += 5;
+  // DATA-01: two-stage gate before the budget bonus. Off-topic categories
+  // (ремонт, доставка,…) are penalized; the "market fit" bonus requires an
+  // IT/digital signal — either the source's own include keywords or detected skills.
+  const nonItCategory = hasNonItCategorySignal(textForMatch);
+  const itSignal = hits > 0 || hasItSkillSignal(textForMatch);
+  if (nonItCategory && !itSignal) {
+    score -= 15;
+  } else if (itSignal) {
+    if (budget >= 25_000) score += 20;
+    else if (budget >= 10_000) score += 15;
+    else if (budget >= 5_000) score += 10;
+    else if (budget >= 1_000) score += 5;
+  } else {
+    const bonus = budget >= 25_000 ? 20 : budget >= 10_000 ? 15 : budget >= 5_000 ? 10 : budget >= 1_000 ? 5 : 0;
+    score += Math.round(bonus / 2);
+  }
 
   const ageHours = Math.max(0, (now.getTime() - lead.publishedAtDate.getTime()) / 3_600_000);
   if (ageHours <= 1) score += 15;

@@ -2,6 +2,7 @@ import type { Lead, RunRecord, SourceHealth, SourceRecord, Stats } from '../core
 import { escapeHtml, firstLine } from '../core/text.ts';
 import { type SupportedLang, getTranslations } from './i18n.ts';
 import { renderLogo } from './logo.ts';
+import { SEO_CATALOG } from './seo.ts';
 
 export interface AuthDisplay {
   /** GitHub handle when the session belongs to a registered user. */
@@ -20,6 +21,8 @@ export interface LeadsPageData {
   lang?: SupportedLang;
   lockedCount?: number;
   isRealtime?: boolean;
+  /** Anonymous viewer: personal CRM funnel tabs and statuses are hidden (UX-03). */
+  isGuest?: boolean;
 }
 
 export interface SourcesPageData {
@@ -27,6 +30,7 @@ export interface SourcesPageData {
   version: string;
   auth?: AuthDisplay;
   lang?: SupportedLang;
+  isAdmin?: boolean;
 }
 
 export interface SourcePageData {
@@ -38,6 +42,7 @@ export interface SourcePageData {
   notice?: string;
   auth?: AuthDisplay;
   lang?: SupportedLang;
+  isAdmin?: boolean;
 }
 
 export interface LeadPageData {
@@ -152,9 +157,10 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PT Sans", "Noto Sans", "DejaVu Sans", "Helvetica Neue", Arial, sans-serif;
   letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
 }
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(3px); }
@@ -1207,6 +1213,10 @@ export function layout(input: {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(input.title)} · OpenRadar</title>
+<meta property="og:site_name" content="OpenRadar">
+<meta property="og:title" content="${escapeHtml(input.title)} · OpenRadar">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
 ${input.head ?? ''}
 <style>${STYLE}</style>
@@ -1229,6 +1239,9 @@ ${input.body}
     <div>
       <p class="footer-brand"><span style="display:inline-block;vertical-align:middle;margin-right:6px">${renderLogo({ height: 16 })}</span> — ${escapeHtml(t.footerDesc)}</p>
       <p class="muted" style="margin:0">${escapeHtml(t.footerLicense)}</p>
+    </div>
+    <div class="footer-nav">
+      ${SEO_CATALOG.map((entry) => `<a href="/catalog/${escapeHtml(entry.slug)}">${escapeHtml((entry.title.split('—')[0] ?? entry.h1).trim())}</a>`).join('')}
     </div>
     <div class="footer-nav">
       <a href="/extension">${escapeHtml(t.extensionGuide)}</a>
@@ -1441,7 +1454,7 @@ function leadTitle(lead: Lead): string {
   return lead.title.trim() || firstLine(lead.text, 100) || 'Без заголовка';
 }
 
-function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru'): string {
+function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru', guest = false): string {
   const t = getTranslations(lang);
   const meta = [
     lead.type === 'job' ? t.jobType : t.gigType,
@@ -1488,7 +1501,9 @@ function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru'):
     </div>
     <div class="row-side">
       <span class="score">${lead.score}</span>
-      <span>${statusDot(lead.status, lang)}</span>
+      ${guest
+        ? `<span class="row-status-guest">Проверен</span>`
+        : `<span>${statusDot(lead.status, lang)}</span>`}
     </div>
   </a>`;
 }
@@ -1548,6 +1563,7 @@ function runsTable(
 export function renderLeadsPage(data: LeadsPageData): string {
   const { stats, health, leads, query, status, type = '', version, lang = 'ru' } = data;
   const t = getTranslations(lang);
+  const guest = data.isGuest === true;
   const sourceById = new Map(health.map((item) => [item.source.id, item.source]));
 
   const typeTabs: Array<{ key: string; label: string }> = [
@@ -1556,15 +1572,22 @@ export function renderLeadsPage(data: LeadsPageData): string {
     { key: 'job', label: t.jobs },
   ];
 
-  const statusFilters: Array<{ key: string; label: string }> = [
-    { key: '', label: t.statusAll },
-    { key: 'new', label: t.statusNew },
-    { key: 'interesting', label: t.statusInteresting },
-    { key: 'applied', label: t.statusApplied },
-    { key: 'in_work', label: t.statusInWork },
-    { key: 'delivered', label: t.statusDelivered },
-    { key: 'rejected', label: t.statusRejected },
-  ];
+  // Guests see the public funnel only: personal CRM states are hidden (UX-03).
+  const statusFilters: Array<{ key: string; label: string }> = guest
+    ? [
+        { key: '', label: t.statusAll },
+        { key: 'new', label: t.statusNew },
+        { key: 'interesting', label: t.statusInteresting },
+      ]
+    : [
+        { key: '', label: t.statusAll },
+        { key: 'new', label: t.statusNew },
+        { key: 'interesting', label: t.statusInteresting },
+        { key: 'applied', label: t.statusApplied },
+        { key: 'in_work', label: t.statusInWork },
+        { key: 'delivered', label: t.statusDelivered },
+        { key: 'rejected', label: t.statusRejected },
+      ];
 
   const hrefForType = (nextType: string): string => {
     const params = new URLSearchParams();
@@ -1614,7 +1637,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
     )
     .join('');
 
-  const rows = leads.map((lead) => leadRow(lead, sourceById.get(lead.sourceId), lang)).join('');
+  const rows = leads.map((lead) => leadRow(lead, sourceById.get(lead.sourceId), lang, guest)).join('');
 
   const empty =
     stats.sources === 0
@@ -1637,6 +1660,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
     : '';
 
   const body = `
+<h1 class="page-h1">${escapeHtml(lang === 'ru' ? 'Свежие заказы и вакансии для фрилансеров и IT-специалистов' : 'Fresh freelance and IT jobs and gigs')}</h1>
 <div class="search-hero">
   <div class="type-tabs">${tabs}</div>
   ${lagBanner}
@@ -1891,11 +1915,39 @@ ${cautionBanner}
   </aside>
 </div>`;
 
+  const cleanText = (lead.text || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+  const headExtra = `
+<meta name="description" content="${escapeHtml(cleanText)}">
+<meta property="og:title" content="${escapeHtml(leadTitle(lead))} · OpenRadar">
+<meta property="og:description" content="${escapeHtml(cleanText)}">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://openradar.fun/leads/${escapeHtml(lead.id)}">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="${escapeHtml(leadTitle(lead))}">
+<meta name="twitter:description" content="${escapeHtml(cleanText)}">
+<script type="application/ld+json">
+${JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': lead.type === 'job' ? 'JobPosting' : 'CreativeWork',
+  title: lead.title,
+  description: lead.text,
+  datePosted: lead.publishedAt || lead.createdAt,
+  hiringOrganization: lead.author ? { '@type': 'Organization', name: lead.author } : undefined,
+  jobLocation: lead.city ? { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: lead.city } } : undefined,
+  baseSalary: typeof lead.budget === 'number' ? {
+    '@type': 'MonetaryAmount',
+    currency: lead.currency || 'RUB',
+    value: { '@type': 'QuantitativeValue', value: lead.budget, unitText: 'MONTH' },
+  } : undefined,
+}, null, 2)}
+</script>`;
+
   return layout({
     title: leadTitle(lead),
     version,
     active: 'leads',
     body,
+    head: headExtra,
     script: copyScript,
     auth: data.auth,
     lang,
@@ -1934,7 +1986,7 @@ function formatSourceError(errStr: string, kind: string): string {
 }
 
 export function renderSourcesPage(data: SourcesPageData): string {
-  const { health, version, lang = 'ru' } = data;
+  const { health, version, lang = 'ru', isAdmin } = data;
   const t = getTranslations(lang);
   const rows = health
     .map((item) => {
@@ -1954,12 +2006,13 @@ export function renderSourcesPage(data: SourcesPageData): string {
   const empty = `<div class="empty">
     <h2>Источников пока нет</h2>
     <p>Начните с готового набора популярных бирж (FL.ru, Хабр, Kwork, Telegram) или добавьте свой источник вручную.</p>
+    ${isAdmin ? `
     <div style="display:flex;gap:8px;justify-content:center;margin-top:14px">
       <form method="post" action="/sources/presets">
         <button class="btn" type="submit">Загрузить популярные биржи</button>
       </form>
       <a class="btn ghost" href="/sources/new">Добавить вручную</a>
-    </div>
+    </div>` : ''}
   </div>`;
 
   const body = `
@@ -1976,8 +2029,9 @@ export function renderSourcesPage(data: SourcesPageData): string {
     version,
     active: 'sources',
     body,
-    actions:
-      `<form method="post" action="/sources/presets" style="display:inline"><button class="btn ghost" type="submit">Загрузить биржи</button></form><a class="btn" href="/sources/new">${escapeHtml(t.addSource)}</a>`,
+    actions: isAdmin
+      ? `<form method="post" action="/sources/presets" style="display:inline"><button class="btn ghost" type="submit">Загрузить биржи</button></form><a class="btn" href="/sources/new">${escapeHtml(t.addSource)}</a>`
+      : undefined,
     auth: data.auth,
     lang,
   });
@@ -2030,19 +2084,23 @@ ${metricRow([
   ${runsTable(runs, undefined, false, lang)}
 </section>`;
 
-  return layout({
-    title: source.title,
-    version,
-    active: 'sources',
-    body,
-    actions: `<button class="btn" data-poll="/api/sources/${escapeHtml(source.id)}/poll">Опросить</button>
+  const adminActions = data.isAdmin
+    ? `<button class="btn" data-poll="/api/sources/${escapeHtml(source.id)}/poll">Опросить</button>
       <a class="btn ghost" href="/sources/${escapeHtml(source.id)}/edit">Редактировать</a>
       <form class="inline" method="post" action="/sources/${escapeHtml(source.id)}/toggle">
         <button class="btn ghost" type="submit">${source.enabled ? 'Выключить' : 'Включить'}</button>
       </form>
       <form class="inline" method="post" action="/sources/${escapeHtml(source.id)}/delete" onsubmit="return confirm('Удалить источник?')">
         <button class="btn ghost danger" type="submit">Удалить</button>
-      </form>`,
+      </form>`
+    : undefined;
+
+  return layout({
+    title: source.title,
+    version,
+    active: 'sources',
+    body,
+    actions: adminActions,
     script: POLL_SCRIPT,
     auth: data.auth,
     lang,
@@ -2427,9 +2485,9 @@ document.addEventListener('DOMContentLoaded', () => {
     <div id="ping-status" style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:12px">${escapeHtml(texts.pingChecking)}</div>
 
     <dl class="meta-list" style="margin-bottom:16px">
-      <div>
+      <div style="flex-direction:column;align-items:flex-start;gap:6px">
         <dt>${escapeHtml(texts.serverUrl)}</dt>
-        <dd><code id="detected-url">http://127.0.0.1:8787</code></dd>
+        <dd style="max-width:100%"><code id="detected-url" style="white-space:nowrap;word-break:keep-all;font-size:12px;padding:3px 6px">http://127.0.0.1:8787</code></dd>
       </div>
     </dl>
     <button class="btn ghost" style="width:100%;margin-bottom:24px" data-copy="detected-url" type="button">${escapeHtml(texts.copyUrl)}</button>
