@@ -25,9 +25,8 @@ class ConsoleLogger implements Logger {
   private write(level: LogLevel, message: string, meta?: unknown): void {
     if (LEVEL_WEIGHT[level] < LEVEL_WEIGHT[this.level]) return;
     const line = `${new Date().toISOString()} ${level.toUpperCase().padEnd(5)} [${this.scope}] ${message}${formatMeta(meta)}`;
-    if (level === 'error') console.error(line);
-    else if (level === 'warn') console.warn(line);
-    else console.log(line);
+    // Logs go to stderr: stdout belongs to command output and to the MCP stdio protocol.
+    process.stderr.write(`${line}\n`);
   }
 
   debug(message: string, meta?: unknown): void {
