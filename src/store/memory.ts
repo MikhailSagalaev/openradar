@@ -37,7 +37,7 @@ export class MemoryStore implements Store {
   private users = new Map<number, UserRecord>();
   private usersByGithubId = new Map<number, number>();
   private nextUserId = 1;
-  private userVotes = new Set<string>();
+  private userVotes = new Map<string, LeadVoteSignal>();
   private sessions = new Map<string, { id: string; expiresAt: string; userId?: number }>();
   private meshNodes = new Map<string, MeshNodeRecord>();
   private attestations: LeadAttestationRecord[] = [];
@@ -454,6 +454,10 @@ export class MemoryStore implements Store {
     return this.users.get(session.userId) ?? null;
   }
 
+  async getUserVote(leadId: string, userId: number): Promise<LeadVoteSignal | null> {
+    return this.userVotes.get(`${userId}:${leadId}`) ?? null;
+  }
+
   async recordUserVote(
     leadId: string,
     userId: number,
@@ -464,24 +468,37 @@ export class MemoryStore implements Store {
       throw new Error(`Lead not found: ${leadId}`);
     }
 
-    const voteKey = `${userId}:${leadId}:${signal}`;
-    if (this.userVotes.has(voteKey)) {
-      return {
-        votes_up: lead.votes_up ?? 0,
-        votes_down: lead.votes_down ?? 0,
-        votes_scam: lead.votes_scam ?? 0,
-        votes_closed: lead.votes_closed ?? 0,
-        score: lead.score,
-        status: lead.status,
-        alreadyVoted: true,
-      };
-    }
-    this.userVotes.add(voteKey);
+    const voteKey = `${userId}:${leadId}`;
+    const previousVote = this.userVotes.get(voteKey);
 
-    if (signal === 'useful') lead.votes_up = (lead.votes_up ?? 0) + 1;
-    else if (signal === 'junk') lead.votes_down = (lead.votes_down ?? 0) + 1;
-    else if (signal === 'scam') lead.votes_scam = (lead.votes_scam ?? 0) + 1;
-    else lead.votes_closed = (lead.votes_closed ?? 0) + 1;
+    const decrementSignal = (sig: LeadVoteSignal) => {
+      if (sig === 'useful') lead.votes_up = Math.max(0, (lead.votes_up ?? 0) - 1);
+      else if (sig === 'junk') lead.votes_down = Math.max(0, (lead.votes_down ?? 0) - 1);
+      else if (sig === 'scam') lead.votes_scam = Math.max(0, (lead.votes_scam ?? 0) - 1);
+      else if (sig === 'closed') lead.votes_closed = Math.max(0, (lead.votes_closed ?? 0) - 1);
+    };
+
+    const incrementSignal = (sig: LeadVoteSignal) => {
+      if (sig === 'useful') lead.votes_up = (lead.votes_up ?? 0) + 1;
+      else if (sig === 'junk') lead.votes_down = (lead.votes_down ?? 0) + 1;
+      else if (sig === 'scam') lead.votes_scam = (lead.votes_scam ?? 0) + 1;
+      else if (sig === 'closed') lead.votes_closed = (lead.votes_closed ?? 0) + 1;
+    };
+
+    let activeVote: LeadVoteSignal | null = signal;
+
+    if (previousVote === signal) {
+      // Toggle off / cancel vote
+      decrementSignal(signal);
+      this.userVotes.delete(voteKey);
+      activeVote = null;
+    } else {
+      if (previousVote) {
+        decrementSignal(previousVote);
+      }
+      incrementSignal(signal);
+      this.userVotes.set(voteKey, signal);
+    }
 
     const baseScore = (lead as any).baseScore ?? lead.score;
     const { score: newScore, status: newStatus } = recalculateVoteScoreAndStatus(
@@ -505,6 +522,7 @@ export class MemoryStore implements Store {
       score: newScore,
       status: newStatus,
       alreadyVoted: false,
+      myVote: activeVote,
     };
   }
 

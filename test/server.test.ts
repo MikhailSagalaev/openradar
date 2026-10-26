@@ -648,7 +648,7 @@ describe('http server', () => {
     expect(result.votes_up).toBe(1);
     expect(result.alreadyVoted).toBe(false);
 
-    // 4. Repeating the same signal does not change the counters
+    // 4. Repeating the same signal cancels / toggles the vote
     const repeatVote = await app.request(`/api/leads/${lead.id}/vote`, {
       method: 'POST',
       headers: {
@@ -659,9 +659,9 @@ describe('http server', () => {
       body: JSON.stringify({ signal: 'useful' }),
     });
     expect(repeatVote.status).toBe(200);
-    const repeatResult = (await repeatVote.json()) as { votes_up: number; alreadyVoted: boolean };
-    expect(repeatResult.votes_up).toBe(1);
-    expect(repeatResult.alreadyVoted).toBe(true);
+    const repeatResult = (await repeatVote.json()) as { votes_up: number; myVote: string | null };
+    expect(repeatResult.votes_up).toBe(0);
+    expect(repeatResult.myVote).toBeNull();
 
     await runtime.store.close();
   });
@@ -728,7 +728,7 @@ describe('http server', () => {
     const afterForm = await runtime.store.getLead(lead.id);
     expect(afterForm?.votes_up).toBe(6);
 
-    // 4. Repeating the same vote from the same user changes nothing
+    // 4. Repeating the same vote from the same user toggles/cancels the vote
     await app.request(`/leads/${lead.id}/vote`, {
       method: 'POST',
       headers: {
@@ -738,7 +738,7 @@ describe('http server', () => {
       },
       body: formBody({ signal: 'useful' }),
     });
-    expect((await runtime.store.getLead(lead.id))?.votes_up).toBe(6);
+    expect((await runtime.store.getLead(lead.id))?.votes_up).toBe(5);
 
     await runtime.store.close();
   });

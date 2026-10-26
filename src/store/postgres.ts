@@ -808,6 +808,14 @@ export class PostgresStore implements Store {
     };
   }
 
+  async getUserVote(leadId: string, userId: number): Promise<LeadVoteSignal | null> {
+    const res = await this.pool.query(
+      'SELECT signal FROM lead_votes WHERE user_id = $1 AND lead_id = $2 LIMIT 1',
+      [userId, leadId],
+    );
+    return (res.rows[0]?.signal as LeadVoteSignal) ?? null;
+  }
+
   async recordUserVote(
     leadId: string,
     userId: number,
@@ -823,35 +831,56 @@ export class PostgresStore implements Store {
         throw new Error(`Lead not found: ${leadId}`);
       }
 
-      const current = () => ({
-        votes_up: Number(row.votes_up) || 0,
-        votes_down: Number(row.votes_down) || 0,
-        votes_scam: Number(row.votes_scam) || 0,
-        votes_closed: Number(row.votes_closed) || 0,
-        score: Number(row.score) || 0,
-        status: row.status as LeadStatus,
-      });
-
-      const inserted = await client.query(
-        `INSERT INTO lead_votes (user_id, lead_id, signal, weight, counted_at)
-         VALUES ($1, $2, $3, 1.0, NOW())
-         ON CONFLICT (user_id, lead_id, signal) DO NOTHING`,
-        [userId, leadId, signal]
+      // Check existing vote
+      const existingRes = await client.query(
+        'SELECT signal FROM lead_votes WHERE user_id = $1 AND lead_id = $2 LIMIT 1',
+        [userId, leadId],
       );
-
-      if ((inserted.rowCount ?? 0) === 0) {
-        await client.query('COMMIT');
-        return { ...current(), alreadyVoted: true };
-      }
+      const existingSignal = existingRes.rows[0]?.signal as LeadVoteSignal | undefined;
 
       let votes_up = Number(row.votes_up) || 0;
       let votes_down = Number(row.votes_down) || 0;
       let votes_scam = Number(row.votes_scam) || 0;
       let votes_closed = Number(row.votes_closed) || 0;
-      if (signal === 'useful') votes_up += 1;
-      else if (signal === 'junk') votes_down += 1;
-      else if (signal === 'scam') votes_scam += 1;
-      else votes_closed += 1;
+
+      const decrement = (sig: LeadVoteSignal) => {
+        if (sig === 'useful') votes_up = Math.max(0, votes_up - 1);
+        else if (sig === 'junk') votes_down = Math.max(0, votes_down - 1);
+        else if (sig === 'scam') votes_scam = Math.max(0, votes_scam - 1);
+        else if (sig === 'closed') votes_closed = Math.max(0, votes_closed - 1);
+      };
+      const increment = (sig: LeadVoteSignal) => {
+        if (sig === 'useful') votes_up += 1;
+        else if (sig === 'junk') votes_down += 1;
+        else if (sig === 'scam') votes_scam += 1;
+        else if (sig === 'closed') votes_closed += 1;
+      };
+
+      let activeVote: LeadVoteSignal | null = signal;
+
+      if (existingSignal === signal) {
+        // Cancel / toggle off vote
+        await client.query(
+          'DELETE FROM lead_votes WHERE user_id = $1 AND lead_id = $2',
+          [userId, leadId],
+        );
+        decrement(signal);
+        activeVote = null;
+      } else {
+        if (existingSignal) {
+          await client.query(
+            'DELETE FROM lead_votes WHERE user_id = $1 AND lead_id = $2',
+            [userId, leadId],
+          );
+          decrement(existingSignal);
+        }
+        await client.query(
+          `INSERT INTO lead_votes (user_id, lead_id, signal, weight, counted_at)
+           VALUES ($1, $2, $3, 1.0, NOW())`,
+          [userId, leadId, signal],
+        );
+        increment(signal);
+      }
 
       const baseScore =
         row.quality_score !== null && row.quality_score !== undefined && Number(row.quality_score) > 0
@@ -874,10 +903,20 @@ export class PostgresStore implements Store {
 
       await client.query(
         `INSERT INTO outbox_events (event_type, payload) VALUES ($1, $2::jsonb)`,
-        ['lead.voted', JSON.stringify({ leadId, userId, signal, weight: 1.0, score: newScore, status: newStatus })]
+        ['lead.voted', JSON.stringify({ leadId, userId, signal, weight: 1.0, score: newScore, status: newStatus, myVote: activeVote })]
       );
 
       await client.query('COMMIT');
+      return {
+        votes_up,
+        votes_down,
+        votes_scam,
+        votes_closed,
+        score: newScore,
+        status: newStatus,
+        alreadyVoted: false,
+        myVote: activeVote,
+      };
 
       return {
         votes_up,
