@@ -1,6 +1,23 @@
 # Changelog
 
-## 0.7.0 (unreleased): radar/2, phase 0
+## 0.7.0 (unreleased): radar/2
+
+### Phase 1: observations on a node
+
+- `radar/2.observation` schema (`src/core/observation.ts`): any parser, including one
+  reading private Telegram channels through its own account, sends posts with source
+  (platform, channel, visibility, message id), author contacts, budget and skills.
+- `POST /api/v2/ingest/:sourceId`: up to 500 observations per request as a JSON array,
+  `{observations: [...]}` or NDJSON, with an outcome per item.
+- `radar push --source <id> [--url <node> --token <t>]`: NDJSON from stdin into the
+  local store or a remote node.
+- Lead merging: the same post (platform + channel + message id) is one lead; a cross-post
+  that shares a contact and has MinHash similarity >= 0.6 within 14 days is a duplicate.
+- Migration 011: `leads.contacts_json`, `source_*` columns and the `lead_contacts` index.
+- Lead pages show contacts (as safe links) and the channel; guests on the hub get a
+  sign-in link instead of contacts. Stored text limit raised to 20 000 characters.
+
+### Phase 0: cleanup and hardening
 
 - Removed the commercial layer and the radar/1 mesh: B2B firehose, X-Ray, AI arbiter
   and slashing, canary traps, HRW sharding, per-week child keys, Nostr relay pool and

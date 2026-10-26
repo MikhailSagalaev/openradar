@@ -592,6 +592,32 @@ function buildProgram(): Command {
     });
 
   program
+    .command('push')
+    .description('Read radar/2 observations as NDJSON from stdin and ingest them (docs/PROTOCOL.md)')
+    .requiredOption('--source <id>', 'source id (a webhook source)')
+    .option('--url <url>', 'send to a remote node or hub instead of the local store')
+    .option('--token <token>', 'source token for --url (or RADAR_PUSH_TOKEN)')
+    .action(async (options: { source: string; url?: string; token?: string }) => {
+      const { pushLocal, pushRemote } = await import('./push.ts');
+      let summary;
+      if (options.url) {
+        const token = options.token ?? process.env.RADAR_PUSH_TOKEN;
+        if (!token) fail('--url requires --token or RADAR_PUSH_TOKEN');
+        summary = await pushRemote(process.stdin, { url: options.url, sourceId: options.source, token });
+      } else {
+        summary = await withRuntime(async (runtime) => {
+          const source = await runtime.store.getSource(options.source);
+          if (!source) fail(`source not found: ${options.source}`);
+          return pushLocal(process.stdin, source, pollDeps(runtime));
+        });
+      }
+      console.log(
+        `received ${summary.received}, accepted ${summary.accepted}, duplicate ${summary.duplicate}, rejected ${summary.rejected}`,
+      );
+      for (const error of summary.errors) console.error(error);
+    });
+
+  program
     .command('mcp')
     .description('Run Model Context Protocol (MCP) server over stdio for AI agents')
     .action(async () => {

@@ -34,6 +34,12 @@ radar/2 — протокол, по которому любой парсер от
 
 Обязательны `source.platform`, `source.channel`, `text`. `platform` — `[a-z0-9_.-]{1,32}`. `channel` — стабильный ID, для Telegram числовой `chat_id`. `visibility`: `public` (по умолчанию), `private`, `invite`. Контакты (`telegram`, `phone`, `email`, `whatsapp`, `vk`, `url`, `other`, до 20) нормализуются; если их не передали, они извлекаются из текста. `text` — до 20 000 символов. `raw` в хаб не уходит. Аккаунт, через который читается канал, в схеме не передаётся.
 
+### Приём на узле
+
+`POST /api/v2/ingest/:sourceId` с заголовком `x-radar-token` (токен webhook-источника) или токеном администратора. Тело — JSON-массив, `{"observations": [...]}` или NDJSON, до 500 наблюдений и 10 МБ. Ответ: `received`, `accepted`, `duplicate`, `rejected` и `outcomes` по каждому наблюдению (`leadId`, `reasons`). То же из командной строки: `radar push --source <id>` читает NDJSON из stdin; с `--url` и `--token` отправляет на удалённый узел.
+
+На узле действуют правила склейки 1–3 из раздела ниже.
+
 ## События и подпись
 
 Постоянный ключ участника, события NIP-01: `id` = SHA-256 от `[0, pubkey, created_at, kind, tags, content]`, `sig` = BIP-340.

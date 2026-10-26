@@ -1,4 +1,5 @@
 import type {
+  Contact,
   Lead,
   LeadState,
   LeadStatus,
@@ -86,6 +87,8 @@ export interface Store {
   getLead(id: string): Promise<Lead | null>;
   findRecentByTitleKey(titleKey: string, city: string | undefined, sinceIso: string): Promise<Lead | null>;
   insertLead(lead: Lead): Promise<boolean>;
+  /** Recent leads (created at or after `sinceIso`) sharing at least one normalised contact, newest first. */
+  findRecentByContacts?(contacts: Contact[], sinceIso: string, limit?: number): Promise<Lead[]>;
   updateLeadStatus(id: string, status: LeadStatus, deliveredAt?: string, scoreDelta?: number): Promise<void>;
   updateLeadState?(id: string, state: LeadState): Promise<void>;
   recordVote(

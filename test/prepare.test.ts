@@ -28,13 +28,13 @@ describe('prepareRawLead', () => {
     expect(flProject.type).toBe('gig');
   });
 
-  it('caps stored text at 3000 characters', () => {
+  it('caps stored text at 20 000 characters (radar/2 observation limit)', () => {
     const prepared = prepareRawLead(
-      { sourceId: source.id, title: 'Большой заказ', text: 'Описание '.repeat(2000) },
+      { sourceId: source.id, title: 'Большой заказ', text: 'Описание '.repeat(3000) },
       source,
       TEST_NOW,
     );
-    expect(prepared.text.length).toBeLessThanOrEqual(3000);
+    expect(prepared.text.length).toBeLessThanOrEqual(20_000);
     expect(prepared.text.endsWith('…')).toBe(true);
   });
 

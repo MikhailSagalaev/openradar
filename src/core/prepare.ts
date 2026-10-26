@@ -1,7 +1,10 @@
 import { cleanTitle, extractBudget, extractCity } from './extract.ts';
-import { fingerprintOf, titleKeyOf } from './fingerprint.ts';
+import { computeMinHashSketch, fingerprintOf, sha256, titleKeyOf } from './fingerprint.ts';
+import { extractContacts, mergeContacts, normalizeContact } from './contacts.ts';
+import { postKeyOf } from './observation.ts';
+import type { Contact } from './types.ts';
 import { normalizeSalary } from './salary.ts';
-import { cleanShortField, toPlainText, truncate } from './text.ts';
+import { cleanShortField, normalizeForMatch, toPlainText, truncate } from './text.ts';
 import type { LeadType, RawLead, SourceRecord } from './types.ts';
 import { canonicalizeUrl, isHttpUrl } from './url.ts';
 
@@ -10,10 +13,12 @@ export interface PreparedLead extends RawLead {
   titleKey: string;
   fingerprint: string;
   publishedAtDate: Date;
+  contacts: Contact[];
+  minhash_sketch: string;
 }
 
-/** Hard cap on the stored description: we keep the essence, not a mirror copy. */
-const MAX_TEXT_LENGTH = 3000;
+/** Hard cap on the stored text (same as the radar/2 observation limit). */
+const MAX_TEXT_LENGTH = 20_000;
 
 const JOB_HINT = /ваканс|vacanc|career|hiring|в\s+штат|оклад|трудоустр|соискател/i;
 
@@ -65,7 +70,15 @@ export function prepareRawLead(
 
   const publishedAtDate = parsePublishedAt(raw.publishedAt, now);
   const titleKey = titleKeyOf(title);
-  const fingerprint = fingerprintOf({ canonicalUrl, title, text: normalizedText });
+  // The same post (platform + channel + message id) is one lead whatever source delivered it.
+  const postKey = raw.sourceRef ? postKeyOf(raw.sourceRef) : undefined;
+  const fingerprint = postKey ? sha256(`post:${postKey}`) : fingerprintOf({ canonicalUrl, title, text: normalizedText });
+  // Contacts from the parser (normalised) plus everything written in the text, before any truncation.
+  const given = (raw.contacts ?? [])
+    .map((c) => normalizeContact(c.type, c.value))
+    .filter((c): c is Contact => c !== null);
+  const contacts = mergeContacts(given, extractContacts(`${raw.title ?? ''}\n${text}`));
+  const minhash = computeMinHashSketch(normalizeForMatch(`${title}\n${normalizedText}`));
 
   return {
     ...raw,
@@ -87,6 +100,8 @@ export function prepareRawLead(
     publishedAtDate,
     titleKey,
     fingerprint,
+    contacts,
+    minhash_sketch: minhash,
     externalId:
       raw.externalId?.trim() ||
       canonicalUrl ||
