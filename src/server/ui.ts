@@ -209,7 +209,7 @@ main {
 }
 .brand:hover { opacity: 0.8; }
 .brand-logo-svg {
-  height: 42px;
+  height: 24px;
   width: auto;
   display: block;
 }
@@ -1297,7 +1297,7 @@ ${input.head ?? ''}
 <main>
 <header class="top">
   <div class="top-brand-group">
-    <a class="brand" href="/" aria-label="OpenRadar">${renderLogo({ height: 42 })}</a>
+    <a class="brand" href="/" aria-label="OpenRadar">${renderLogo({ height: 24 })}</a>
   </div>
   <nav class="nav">
     ${nav('leads', t.navLeads, '/')}
