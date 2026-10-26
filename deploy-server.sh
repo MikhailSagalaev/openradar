@@ -7,7 +7,7 @@ set -euo pipefail
 echo "[Radar Deploy] Начинаем развертывание Radar..."
 
 # 1. Проверяем наличие директории
-TARGET_DIR="${RADAR_DIR:-/opt/radar}"
+TARGET_DIR="${RADAR_DIR:-/opt/radar-test}"
 if [ ! -d "$TARGET_DIR" ]; then
   echo "Клонируем репозиторий в $TARGET_DIR..."
   git clone https://github.com/MikhailSagalaev/radar-oss.git "$TARGET_DIR"
@@ -25,7 +25,7 @@ if [ ! -f .env ]; then
   RAND_ADMIN_TOKEN=$(openssl rand -hex 32)
   cat << EOF > .env
 PORT=8787
-RADAR_HOST_PORT=8787
+RADAR_HOST_PORT=8791
 NODE_ENV=production
 RADAR_ADMIN_TOKEN=${RAND_ADMIN_TOKEN}
 
@@ -57,7 +57,7 @@ else
     echo "RADAR_MODE=hub" >> .env
   fi
   if ! grep -q "^RADAR_HOST_PORT=" .env 2>/dev/null; then
-    echo "RADAR_HOST_PORT=8787" >> .env
+    echo "RADAR_HOST_PORT=8791" >> .env
   fi
   if ! grep -q "^RADAR_PUBLIC_URL=" .env 2>/dev/null; then
     echo "RADAR_PUBLIC_URL=https://openradar.fun" >> .env
@@ -75,7 +75,7 @@ fi
 
 # 3. Читаем порт хоста
 RADAR_HOST_PORT=$(grep -E "^RADAR_HOST_PORT=" .env | cut -d '=' -f2- | tr -d ' "' || true)
-RADAR_HOST_PORT=${RADAR_HOST_PORT:-8787}
+RADAR_HOST_PORT=${RADAR_HOST_PORT:-8791}
 
 # 4. Сборка нового образа приложения без остановки текущего
 echo "Сборка обновленного образа Radar..."
