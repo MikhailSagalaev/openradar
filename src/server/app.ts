@@ -695,7 +695,11 @@ export function createApp(runtime: Runtime): Hono {
   });
 
   app.get('/login', async (c) => {
-    if (!runtime.env.RADAR_ADMIN_TOKEN && !githubOAuthConfigured(runtime)) return c.redirect('/');
+    if (!runtime.env.RADAR_ADMIN_TOKEN && !githubOAuthConfigured(runtime)) {
+      // Redirecting to / would loop back here when the feed is not public.
+      if (await canRead(c, runtime)) return c.redirect('/');
+      return c.text('Вход не настроен: задайте RADAR_ADMIN_TOKEN или GitHub OAuth в .env', 503);
+    }
     if (await isAdmin(c, runtime)) return c.redirect('/');
     if (await currentUser(c, runtime)) return c.redirect('/');
     return c.html(loginPage(c.req.query('error'), githubOAuthConfigured(runtime), c.req.query('returnTo')));
@@ -923,6 +927,7 @@ export function createApp(runtime: Runtime): Hono {
     if (!await isAdmin(c, runtime)) return c.redirect('/login');
     if (!sameOrigin(c)) return c.text('Forbidden', 403);
     const existing = await runtime.store.listSources();
+    const created: SourceRecord[] = [];
     for (const preset of SOURCE_PRESETS) {
       const already = existing.some(
         (s) =>
@@ -931,13 +936,24 @@ export function createApp(runtime: Runtime): Hono {
           (preset.config.channel && s.config.channel === preset.config.channel),
       );
       if (already) continue;
-      await runtime.store.createSource({
+      created.push(await runtime.store.createSource({
         kind: preset.kind,
         title: preset.title,
         config: preset.config,
         enabled: true,
-      });
+      }));
     }
+    // Poll the new sources right away instead of waiting for the next scheduler tick,
+    // so a fresh node shows leads within seconds.
+    void (async () => {
+      for (const source of created) {
+        try {
+          await pollSource(source, { ...deps(runtime), sources: runtime.sources });
+        } catch (error) {
+          runtime.logger.warn('first poll of a preset failed', { sourceId: source.id, error: String(error) });
+        }
+      }
+    })();
     return c.redirect('/sources');
   });
 

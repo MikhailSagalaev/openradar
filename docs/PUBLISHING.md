@@ -1,76 +1,53 @@
-# Publishing checklist
+# Publishing and releases
 
-Radar is developed inside the ProfiPass workspace but must be published as a separate repository. Do not publish the monorepo: it contains internal board data, logs and product code that are not part of this project.
+## Launching the public repository
 
-## 1. Move the directory
+The repository is meant to go public as a fresh repository with one initial commit, so the development history (old configs, drafts, earlier passwords) does not come with it.
 
-```bash
-# from C:\projects\ProPass
-move radar-oss C:\projects\radar-oss
-cd C:\projects\radar-oss
-```
+### 1. Before the switch
 
-A sibling directory avoids a nested Git repository inside ProfiPass.
-
-## 2. Scan for secrets and data
-
-```bash
-git init
-git add .
-git status
-```
-
-Before the first commit, check:
-
-- no `.env`, `data/`, `dist/`, `node_modules/` or logs are staged;
-- no real tokens, cookies or email addresses in fixtures;
-- no screenshots with personal data;
-- `git grep -nE "(api[_-]?key|token|password|secret)"` only finds documentation and env names.
-
-The repository `.gitignore` already excludes `.env`, `data/`, `dist/`, logs and coverage.
-
-## 3. Create the repository
-
-```bash
-gh repo create radar-oss --public --source=. --remote=origin --push
-```
-
-Suggested description:
-
-> Self-hosted lead pipeline for public order sources: RSS, IMAP, Telegram, Kwork and webhooks.
-
-Topics: `lead-generation`, `self-hosted`, `rss`, `imap`, `telegram`, `typescript`, `postgresql`, `open-source`.
-
-## 4. Before the announcement
-
-- [ ] CI is green on `main`.
-- [ ] `pnpm typecheck`, `pnpm test`, `pnpm build` pass locally.
-- [ ] Docker image builds and `/health` answers inside the container.
-- [ ] README quick start works from a clean clone.
-- [ ] `LICENSE` is AGPL-3.0 and `package.json` says `AGPL-3.0-only`.
+- [ ] Secrets that ever appeared in history are rotated on every server (database passwords, admin tokens, bot tokens).
+- [ ] `git grep -nE "(api[_-]?key|token|password|secret)"` finds only documentation, env names and test values.
+- [ ] No `.env`, `data/`, `dist/`, `node_modules/`, dumps or logs are tracked.
+- [ ] Screenshots and fixtures contain no real personal contacts.
+- [ ] CI is green on `main`; `pnpm typecheck`, `pnpm test`, `pnpm build` pass locally.
+- [ ] The Docker image builds and `/health` answers inside the container.
+- [ ] The scenarios in [GETTING_STARTED.md](GETTING_STARTED.md) work from a clean clone.
 - [ ] `SECURITY.md` has a working private reporting channel.
 - [ ] The extension loads unpacked and sends a page to a webhook source.
-- [ ] No adapter claims to support a source it cannot actually read.
 
-## 5. Release
+### 2. One-commit repository
 
 ```bash
-git tag v0.3.0
-git push origin v0.3.0
-gh release create v0.3.0 --generate-notes
+git checkout --orphan public main
+git commit -m "OpenRadar 0.7.0"
+gh repo create <owner>/<name> --public --source=. --remote=public --push
 ```
 
-Attach nothing that contains a database or a `.env`.
+Then:
 
-## 6. Naming
+- archive or make private the old repository;
+- set the description, homepage (`https://openradar.fun`) and topics: `lead-generation`, `job-board`, `freelance`, `self-hosted`, `telegram`, `rss`, `postgresql`, `typescript`, `mcp`, `open-source`;
+- move the deploy secrets (`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`) and point the server's `git remote` to the new repository;
+- update repository links in `README.md`, `.env.example`, `src/config.ts` (user agent), `deploy-server.sh` and the extension.
 
-"Radar" is a working title and is heavily used by other projects. Before a public launch, check GitHub, npm and trademarks, and rename if needed. The code does not depend on the name except for the `radar` binary and the dashboard title.
+## Release
 
-## 7. What not to promise
+```bash
+git tag v0.7.0
+git push origin v0.7.0
+```
+
+The `Release` workflow builds the app, the Docker image (`ghcr.io/<owner>/<repo>`) and `radar-extension-<tag>.zip`, and attaches the zip to the release. Attach nothing that contains a database or a `.env`.
+
+## Naming
+
+"Radar" is heavily used by other projects; the public name is OpenRadar. The code depends on the name only through the `radar` binary and the dashboard title.
+
+## What not to promise
 
 - "collects from every marketplace";
-- "free hosted service";
 - "bypasses anti-bot protection";
 - "replaces a CRM".
 
-The README already states the limits. Keep it that way.
+The README states the limits. Keep it that way.
