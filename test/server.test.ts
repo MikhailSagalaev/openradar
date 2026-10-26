@@ -215,6 +215,14 @@ describe('http server', () => {
     expect(css.status).toBe(200);
     expect(css.headers.get('content-type')).toContain('text/css');
     expect(css.headers.get('cache-control')).toContain('immutable');
+
+    // The traced logo is referenced as a cached mask, not inlined three times per page.
+    expect(html).not.toContain('<path d="M23.4 0');
+    const logo = html.match(/url\((\/assets\/logo\.[0-9a-f]{10}\.svg)\)/)?.[1];
+    expect(logo).toBeDefined();
+    const svg = await app.request(logo!);
+    expect(svg.headers.get('content-type')).toContain('image/svg+xml');
+    expect(svg.headers.get('cache-control')).toContain('immutable');
   });
 
   it('does not loop between / and /login when sign-in is not configured', async () => {
