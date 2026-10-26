@@ -1233,15 +1233,22 @@ describe('http server', () => {
     expect(logoRes.status).toBe(200);
     expect(logoRes.headers.get('content-type')).toContain('image/svg+xml');
     const svgText = await logoRes.text();
-    expect(svgText).toContain('viewBox="0 0 670 195"');
+    expect(svgText).toContain('viewBox="0 0 794 140"');
     expect(svgText).toContain('fill-rule="evenodd"');
+
+    // 1b. GET /favicon.svg endpoint returns favicon asset
+    const faviconRes = await app.request('/favicon.svg');
+    expect(faviconRes.status).toBe(200);
+    expect(faviconRes.headers.get('content-type')).toContain('image/svg+xml');
+    const faviconSvg = await faviconRes.text();
+    expect(faviconSvg).toContain('viewBox="0 0 138 140"');
 
     // 2. Main layout renders the custom logo SVG in the header and favicon link
     const indexRes = await app.request('/');
     expect(indexRes.status).toBe(200);
     const indexHtml = await indexRes.text();
     expect(indexHtml).toContain('class="brand-logo-svg"');
-    expect(indexHtml).toContain('rel="icon" href="/logo.svg"');
+    expect(indexHtml).toContain('rel="icon" href="/favicon.svg"');
 
     // 3. Login page renders the custom logo
     const loginRes = await app.request('/login');

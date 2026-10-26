@@ -1289,7 +1289,7 @@ export function layout(input: {
 <meta property="og:title" content="${escapeHtml(input.title)} · OpenRadar">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary">
-<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 ${input.head ?? ''}
 <style>${STYLE}</style>
 </head>
