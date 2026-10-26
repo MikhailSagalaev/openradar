@@ -1,198 +1,111 @@
 import { describe, expect, it } from 'vitest';
-import { MemoryStore } from '../src/store/memory.ts';
-import { handleMcpRequest, MCP_TOOLS } from '../src/mcp/server.ts';
+import { handleMcpRequest, MCP_TOOLS, type McpBackend } from '../src/mcp/server.ts';
 import type { Lead } from '../src/core/types.ts';
 
-function createSampleLeads(): Lead[] {
-  return [
-    {
-      id: 'lead-mcp-1',
-      sourceId: 'mesh',
-      type: 'job',
-      title: 'Senior Golang Engineer',
-      text: 'Microservices with Go, Kafka, PostgreSQL in Highload FinTech',
-      url: 'https://example.com/jobs/go',
-      canonicalUrl: 'https://example.com/jobs/go',
-      fingerprint: 'fp-mcp-1',
-      titleKey: 'senior golang engineer',
-      status: 'new',
-      score: 90,
-      budget: 450000,
-      currency: 'RUB',
-      skills: ['Golang', 'Kafka', 'PostgreSQL'],
-      reasons: [],
-      createdAt: new Date().toISOString(),
-      verification_state: 'verified_active',
-    },
-    {
-      id: 'lead-mcp-2',
-      sourceId: 'kwork',
-      type: 'gig',
-      title: 'Landing Page in Next.js and Tailwind',
-      text: 'Need a fast modern landing page with clean animations',
-      url: 'https://example.com/gigs/landing',
-      canonicalUrl: 'https://example.com/gigs/landing',
-      fingerprint: 'fp-mcp-2',
-      titleKey: 'landing page in nextjs',
-      status: 'new',
-      score: 70,
-      budget: 50000,
-      currency: 'RUB',
-      skills: ['React', 'Next.js', 'Tailwind'],
-      reasons: [],
-      createdAt: new Date().toISOString(),
-      verification_state: 'unverified',
-    },
-  ];
+function lead(overrides: Partial<Lead>): Lead {
+  return {
+    id: 'lead',
+    sourceId: 'src',
+    type: 'job',
+    title: 'Title',
+    text: 'Text',
+    fingerprint: `fp-${overrides.id ?? 'lead'}`,
+    titleKey: 'title',
+    status: 'new',
+    score: 50,
+    reasons: [],
+    createdAt: new Date().toISOString(),
+    ...overrides,
+  };
 }
 
-describe('Model Context Protocol (MCP) Server for AI Agents', () => {
-  it('handles MCP initialize handshake compliant with protocol version', async () => {
-    const store = new MemoryStore();
-    const resp = await handleMcpRequest(
-      {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'initialize',
-        params: {
-          protocolVersion: '2024-11-05',
-          capabilities: {},
-          clientInfo: { name: 'claude-desktop', version: '0.1' },
-        },
-      },
-      store,
-    );
+const LEADS: Lead[] = [
+  lead({
+    id: 'lead-go',
+    type: 'job',
+    title: 'Senior Golang Engineer',
+    text: 'Microservices with Go, Kafka, PostgreSQL',
+    budget: 450000,
+    currency: 'RUB',
+    skills: ['Golang', 'Kafka', 'PostgreSQL'],
+    contacts: [{ type: 'telegram', value: '@hr_go' }],
+  }),
+  lead({
+    id: 'lead-landing',
+    type: 'gig',
+    title: 'Landing Page in Next.js',
+    text: 'Fast landing page with animations',
+    budget: 50000,
+    currency: 'RUB',
+    skills: ['React', 'Next.js'],
+  }),
+];
 
-    expect(resp.jsonrpc).toBe('2.0');
-    expect(resp.id).toBe(1);
-    expect(resp.result?.serverInfo?.name).toBe('openradar-mcp');
-    expect(resp.result?.capabilities?.tools).toBeDefined();
+const backend: McpBackend = {
+  async listLeads(options) {
+    return LEADS.filter((l) => !options.type || l.type === options.type)
+      .filter((l) => !options.query || `${l.title} ${l.text}`.toLowerCase().includes(options.query.toLowerCase()));
+  },
+  async getLead(id) {
+    return LEADS.find((l) => l.id === id) ?? null;
+  },
+};
+
+type Content = { result?: { content?: Array<{ text: string }>; [key: string]: unknown }; error?: { code: number } };
+
+async function call(name: string, args: Record<string, unknown> = {}): Promise<Content> {
+  return (await handleMcpRequest(
+    { jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name, arguments: args } },
+    backend,
+  )) as Content;
+}
+
+function parsed(resp: Content): any {
+  return JSON.parse(resp.result?.content?.[0]?.text ?? 'null');
+}
+
+describe('MCP server', () => {
+  it('answers initialize with a supported protocol version and tools capability', async () => {
+    const resp = (await handleMcpRequest(
+      { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05' } },
+      backend,
+    )) as Content;
+    expect(resp.result?.protocolVersion).toBe('2024-11-05');
+    expect(resp.result?.capabilities).toEqual({ tools: {} });
   });
 
-  it('lists all 4 standardized tools via tools/list', async () => {
-    const store = new MemoryStore();
-    const resp = await handleMcpRequest(
-      {
-        jsonrpc: '2.0',
-        id: 2,
-        method: 'tools/list',
-      },
-      store,
-    );
-
-    expect(resp.result?.tools).toHaveLength(4);
-    const toolNames = resp.result.tools.map((t: any) => t.name);
-    expect(toolNames).toContain('search_leads');
-    expect(toolNames).toContain('get_lead_details');
-    expect(toolNames).toContain('verify_lead_url');
-    expect(toolNames).toContain('get_market_analytics');
+  it('does not answer notifications', async () => {
+    expect(await handleMcpRequest({ jsonrpc: '2.0', method: 'notifications/initialized' }, backend)).toBeNull();
   });
 
-  it('executes search_leads with semantic and parametric filters', async () => {
-    const store = new MemoryStore();
-    const leads = createSampleLeads();
-    for (const l of leads) await store.insertLead(l);
-
-    // Filter by query and min_budget
-    const resp = await handleMcpRequest(
-      {
-        jsonrpc: '2.0',
-        id: 3,
-        method: 'tools/call',
-        params: {
-          name: 'search_leads',
-          arguments: {
-            query: 'Golang',
-            min_budget: 100000,
-            only_verified: true,
-          },
-        },
-      },
-      store,
-    );
-
-    expect(resp.result?.content?.[0]?.type).toBe('text');
-    const parsed = JSON.parse(resp.result.content[0].text);
-    expect(parsed).toHaveLength(1);
-    expect(parsed[0].id).toBe('lead-mcp-1');
-    expect(parsed[0].title).toBe('Senior Golang Engineer');
+  it('lists the three tools', async () => {
+    const resp = (await handleMcpRequest({ jsonrpc: '2.0', id: 2, method: 'tools/list' }, backend)) as Content;
+    expect((resp.result?.tools as unknown[]).length).toBe(MCP_TOOLS.length);
+    expect(MCP_TOOLS.map((t) => t.name)).toEqual(['search_leads', 'get_lead_details', 'get_market_analytics']);
   });
 
-  it('executes get_lead_details returning complete verified metadata', async () => {
-    const store = new MemoryStore();
-    const leads = createSampleLeads();
-    for (const l of leads) await store.insertLead(l);
-
-    const resp = await handleMcpRequest(
-      {
-        jsonrpc: '2.0',
-        id: 4,
-        method: 'tools/call',
-        params: {
-          name: 'get_lead_details',
-          arguments: {
-            id: 'lead-mcp-1',
-          },
-        },
-      },
-      store,
-    );
-
-    expect(resp.result?.content?.[0]?.type).toBe('text');
-    const lead = JSON.parse(resp.result.content[0].text);
-    expect(lead.id).toBe('lead-mcp-1');
-    expect(lead.skills).toContain('Kafka');
-    expect(lead.verification_state).toBe('verified_active');
+  it('searches by query, skills and minimum budget', async () => {
+    expect(parsed(await call('search_leads', { query: 'golang' })).map((l: Lead) => l.id)).toEqual(['lead-go']);
+    expect(parsed(await call('search_leads', { skills: ['react'] })).map((l: Lead) => l.id)).toEqual(['lead-landing']);
+    expect(parsed(await call('search_leads', { min_budget: 100000 })).map((l: Lead) => l.id)).toEqual(['lead-go']);
   });
 
-  it('executes verify_lead_url triggering immediate arbiter inspection', async () => {
-    const store = new MemoryStore();
-    const leads = createSampleLeads();
-    for (const l of leads) await store.insertLead(l);
-
-    const resp = await handleMcpRequest(
-      {
-        jsonrpc: '2.0',
-        id: 5,
-        method: 'tools/call',
-        params: {
-          name: 'verify_lead_url',
-          arguments: {
-            lead_id: 'lead-mcp-2',
-          },
-        },
-      },
-      store,
-    );
-
-    expect(resp.result?.content?.[0]?.type).toBe('text');
-    const verdict = JSON.parse(resp.result.content[0].text);
-    expect(verdict.lead_id).toBe('lead-mcp-2');
-    expect(verdict.verdict).toBeDefined();
+  it('returns details with contacts as the backend provides them, and -32602 for unknown ids', async () => {
+    const details = parsed(await call('get_lead_details', { id: 'lead-go' }));
+    expect(details.contacts).toEqual([{ type: 'telegram', value: '@hr_go' }]);
+    expect((await call('get_lead_details', { id: 'missing' })).error?.code).toBe(-32602);
   });
 
-  it('executes get_market_analytics returning skill counts and median budget', async () => {
-    const store = new MemoryStore();
-    const leads = createSampleLeads();
-    for (const l of leads) await store.insertLead(l);
+  it('computes market analytics', async () => {
+    const stats = parsed(await call('get_market_analytics'));
+    expect(stats.total_analyzed_leads).toBe(2);
+    expect(stats.budget_samples_count).toBe(2);
+    expect(stats.top_skills.length).toBeGreaterThan(0);
+  });
 
-    const resp = await handleMcpRequest(
-      {
-        jsonrpc: '2.0',
-        id: 6,
-        method: 'tools/call',
-        params: {
-          name: 'get_market_analytics',
-          arguments: {},
-        },
-      },
-      store,
-    );
-
-    expect(resp.result?.content?.[0]?.type).toBe('text');
-    const analytics = JSON.parse(resp.result.content[0].text);
-    expect(analytics.total_analyzed_leads).toBe(2);
-    expect(analytics.top_skills.length).toBeGreaterThan(0);
-    expect(analytics.median_budget).toBeGreaterThan(0);
+  it('rejects unknown tools and methods', async () => {
+    expect((await call('verify_lead_url', { lead_id: 'lead-go' })).error?.code).toBe(-32601);
+    const resp = (await handleMcpRequest({ jsonrpc: '2.0', id: 3, method: 'resources/list' }, backend)) as Content;
+    expect(resp.error?.code).toBe(-32601);
   });
 });

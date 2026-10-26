@@ -1,3 +1,4 @@
+import { accessPolicyFromEnv } from '../src/runtime.ts';
 import { createApp } from '../src/server/app.ts';
 import { createRuntime } from '../src/runtime.ts';
 import { MemoryStore } from '../src/store/memory.ts';
@@ -27,6 +28,7 @@ async function runE2ETestSuite() {
     sources,
     sinks,
     fetchImpl: fetch,
+    access: accessPolicyFromEnv(env),
   };
 
   const app = createApp(runtime);

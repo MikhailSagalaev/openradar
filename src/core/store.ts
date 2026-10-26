@@ -1,5 +1,6 @@
 import type {
   Lead,
+  LeadState,
   LeadStatus,
   LeadType,
   LeadVoteSignal,
@@ -68,66 +69,9 @@ export interface UserVoteResult {
   myVote?: LeadVoteSignal | null;
 }
 
-export interface MeshNodeRecord {
-  pubkey: string;
-  npub: string;
-  github_username?: string;
-  github_gist_url?: string;
-  github_verified_at?: string;
-  nip05_domain?: string;
-  trust_score: number;
-  valid_leads_7d: number;
-  valid_attestations_24h: number;
-  false_reports_count: number;
-  is_banned?: boolean;
-  created_at: string;
-  last_seen_at: string;
-}
-
-export interface MeshNodeInput {
-  pubkey: string;
-  npub: string;
-  github_username?: string;
-  github_gist_url?: string;
-  github_verified_at?: string;
-  nip05_domain?: string;
-  trust_score?: number;
-  is_banned?: boolean;
-  false_reports_count?: number;
-  valid_leads_7d?: number;
-}
-
-export interface LeadAttestationRecord {
-  id?: number;
-  nostr_event_id: string;
-  lead_id: string;
-  signer_pubkey: string;
-  kind: 30404 | 30405;
-  signal_or_status: string;
-  recomputed_hash?: string;
-  confidence?: number;
-  raw_event: Record<string, unknown>;
-  created_at?: string;
-}
-
-export interface LeadAttestationInput {
-  nostr_event_id: string;
-  lead_id: string;
-  signer_pubkey: string;
-  kind: 30404 | 30405;
-  signal_or_status: string;
-  recomputed_hash?: string;
-  confidence?: number;
-  raw_event: Record<string, unknown>;
-}
-
-export interface ViewerAccessContext {
-  pubkey?: string;
-  trustScore?: number;
-  hasValidAttestations24h?: boolean;
-  isAdmin?: boolean;
-  /** Active-contributor tier (access-tier engine): real-time, no 12h lag. */
-  isRealtime?: boolean;
+export interface FeedOptions extends ListLeadsOptions {
+  /** Only leads first seen at or before this instant (tier delay). */
+  createdBefore?: string;
 }
 
 export interface Store {
@@ -143,7 +87,7 @@ export interface Store {
   findRecentByTitleKey(titleKey: string, city: string | undefined, sinceIso: string): Promise<Lead | null>;
   insertLead(lead: Lead): Promise<boolean>;
   updateLeadStatus(id: string, status: LeadStatus, deliveredAt?: string, scoreDelta?: number): Promise<void>;
-  updateLeadVerification?(id: string, verificationState: import('./types.ts').VerificationState): Promise<void>;
+  updateLeadState?(id: string, state: LeadState): Promise<void>;
   recordVote(
     leadId: string,
     signal: 'useful' | 'junk' | 'scam' | 'closed',
@@ -181,12 +125,8 @@ export interface Store {
   getUserVote?(leadId: string, userId: number): Promise<LeadVoteSignal | null>;
   purgeExpiredSessions?(): Promise<number>;
 
-  // Mesh Network and AI Arbiter methods (radar/1)
-  upsertMeshNode(node: MeshNodeInput): Promise<MeshNodeRecord>;
-  getMeshNode?(pubkey: string): Promise<MeshNodeRecord | null>;
-  recordAttestation(attestation: LeadAttestationInput): Promise<LeadAttestationRecord>;
-  enqueueArbiterCheck(leadId: string, triggerReason: string): Promise<void>;
-  getLeadsForFeed(viewerContext: ViewerAccessContext, options?: ListLeadsOptions): Promise<Lead[]>;
+  /** Leads visible in the public feed: state `active`, optionally first seen before a cutoff. */
+  getLeadsForFeed(options?: FeedOptions): Promise<Lead[]>;
 
   deleteLead?(id: string): Promise<boolean>;
   cleanupOldLeads?(retentionDays: number): Promise<number>;

@@ -1,5 +1,14 @@
 import dns from 'node:dns/promises';
 
+type Lookup = (hostname: string) => Promise<Array<{ address: string; family: number }>>;
+const systemLookup: Lookup = (hostname) => dns.lookup(hostname, { all: true });
+let lookupImpl: Lookup = systemLookup;
+
+/** Tests only: replaces DNS resolution so unit tests never touch the network. `null` restores it. */
+export function setDnsLookupForTests(fn: Lookup | null): void {
+  lookupImpl = fn ?? systemLookup;
+}
+
 export function isPrivateOrBlockedIp(ip: string): boolean {
   let cleanIp = ip.trim();
   if (cleanIp.startsWith('::ffff:')) {
@@ -68,7 +77,7 @@ export async function assertSafeUrl(urlString: string): Promise<URL> {
 
   // Resolve hostname via DNS
   try {
-    const addresses = await dns.lookup(hostname, { all: true });
+    const addresses = await lookupImpl(hostname);
     for (const addr of addresses) {
       if (isPrivateOrBlockedIp(addr.address)) {
         throw new Error(

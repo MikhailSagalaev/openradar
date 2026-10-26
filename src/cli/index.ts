@@ -507,56 +507,8 @@ function buildProgram(): Command {
         : new PollRunner(pollDeps(runtime), runtime.env.RADAR_POLL_INTERVAL_SEC, runtime.logger);
       runner?.start();
 
-      // Optional mesh runtime: relay subscriber + canary traps + arbiter sweep.
-      const meshStops: Array<() => void> = [];
-      if (runtime.env.RADAR_MESH_ENABLED) {
-        const { startCanaryTrapWorker, isCanaryLead } = await import('../pipeline/canary.ts');
-        const { arbitrateLead, loadOrCreateServerKeys } = await import('../pipeline/arbiter.ts');
-        const { RelayPool } = await import('../net/relay-pool.ts');
-        const { RelaySubscriber } = await import('../index/relay-subscriber.ts');
-
-        meshStops.push(startCanaryTrapWorker(runtime.store, 6 * 3600 * 1000).stop);
-
-        try {
-          const relayPool = new RelayPool();
-          await relayPool.connect();
-          const subscriber = new RelaySubscriber({ store: runtime.store, relayPool });
-          subscriber.start();
-          meshStops.push(() => subscriber.stop());
-          runtime.logger.info('mesh runtime started', {
-            relays: relayPool.getConnectedRelays().length,
-          });
-        } catch (error) {
-          runtime.logger.warn('mesh relay pool failed to start', {
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-
-        // Arbiter sweep: verify a small batch of the oldest unverified leads.
-        const arbiterKeys = loadOrCreateServerKeys(
-          runtime.env.RADAR_ADMIN_TOKEN || 'openradar-dev-passphrase',
-        );
-        const arbiterTimer = setInterval(() => {
-          void (async () => {
-            const candidates = (await runtime.store.listLeads({ limit: 100 }))
-              .filter((l) => !isCanaryLead(l) && !l.verification_state && (l.canonicalUrl || l.url))
-              .slice(0, 5);
-            for (const lead of candidates) {
-              await arbitrateLead(lead.id, {
-                store: runtime.store,
-                serverKeys: arbiterKeys,
-                userAgent: runtime.env.RADAR_USER_AGENT,
-              }).catch(() => undefined);
-            }
-          })();
-        }, 30 * 60 * 1000);
-        meshStops.push(() => clearInterval(arbiterTimer));
-        runtime.logger.info('mesh arbiter sweep scheduled (every 30 min)');
-      }
-
       const shutdown = (): void => {
         runner?.stop();
-        for (const stop of meshStops) stop();
         server.close(async () => {
           try {
             await runtime.store.close();
@@ -586,8 +538,12 @@ function buildProgram(): Command {
           writeFileSync(resolve(out), JSON.stringify(leads, null, 2), 'utf8');
         } else {
           const header = ['id', 'createdAt', 'status', 'score', 'title', 'url', 'city', 'budget', 'sourceId'];
-          const cell = (value: unknown): string =>
-            `"${String(value ?? '').replace(/"/g, '""')}"`;
+          // Leading = + - @ (and tab/CR) would make spreadsheets evaluate the cell as a formula.
+          const cell = (value: unknown): string => {
+            const text = String(value ?? '');
+            const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+            return `"${safe.replace(/"/g, '""')}"`;
+          };
           const lines = [
             header.join(','),
             ...leads.map((lead) =>
@@ -635,33 +591,18 @@ function buildProgram(): Command {
       }
     });
 
-  const nodeCommand = program.command('node').description('OpenRadar Mesh Node operations');
-
-  nodeCommand
-    .command('start')
-    .description('Start the decentralized crawler/validator node')
-    .option('--relays <urls...>', 'Custom Nostr relay URLs')
-    .option('--key <path>', 'Path to custom node_key.json')
-    .option('--interval <sec>', 'Poll interval in seconds', '300')
-    .option('--once', 'Run single pass and exit')
-    .action(async (options: { relays?: string[]; key?: string; interval?: string; once?: boolean }) => {
-      const { runMeshNode } = await import('./node.ts');
-      await runMeshNode({
-        relays: options.relays,
-        keyFile: options.key,
-        pollIntervalSec: options.interval ? Number(options.interval) : 300,
-        once: options.once,
-      });
-    });
-
   program
     .command('mcp')
     .description('Run Model Context Protocol (MCP) server over stdio for AI agents')
     .action(async () => {
-      await withRuntime(async (runtime) => {
-        const { startMcpStdio } = await import('../mcp/server.ts');
-        startMcpStdio(runtime.store);
+      // The stdio loop outlives this action: keep the runtime open until stdin closes.
+      const runtime = await createRuntime();
+      const { startMcpStdio } = await import('../mcp/server.ts');
+      await startMcpStdio({
+        listLeads: (options) => runtime.store.listLeads(options),
+        getLead: (id) => runtime.store.getLead(id),
       });
+      await runtime.store.close();
     });
 
   return program;

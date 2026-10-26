@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { prepareRawLead } from '../core/prepare.ts';
 import { applyRules } from '../core/rules.ts';
 import { extractTechSkills } from '../core/text.ts';
+import { emitLeadCreated } from '../core/events.ts';
 import type {
   Classifier,
   Env,
@@ -148,11 +149,7 @@ export async function ingestRawLead(
     return { status: 'rejected', lead, reasons };
   }
 
-  // Broadcast in real-time to active B2B Firehose subscribers
-  try {
-    const { broadcastToFirehose } = await import('../server/firehose.ts');
-    broadcastToFirehose(lead);
-  } catch {}
+  emitLeadCreated(lead);
 
   const registeredSinks = deps.sinks.list().map((s) => s.kind);
   if (deps.store.initLeadDeliveries && registeredSinks.length > 0) {

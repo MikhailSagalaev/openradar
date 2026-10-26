@@ -26,7 +26,7 @@ describe('CLI new-connector generator', () => {
       const adapterCode = readFileSync(adapterFile, 'utf8');
       expect(adapterCode).toContain("kind: 'sample-api'");
       expect(adapterCode).toContain('export const sampleApiSource: SourceAdapter');
-      expect(adapterCode).toContain('sanitizePrivacy');
+      expect(adapterCode).not.toContain('sanitizePrivacy');
 
       const fixtureContent = JSON.parse(readFileSync(fixtureFile, 'utf8'));
       expect(Array.isArray(fixtureContent.items)).toBe(true);

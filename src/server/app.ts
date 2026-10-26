@@ -7,12 +7,14 @@ import path from 'node:path';
 import { escapeHtml } from '../core/text.ts';
 import { renderRssFeed } from './feed.ts';
 import type { UserRecord } from '../core/store.ts';
-import type { Lead, LeadStatus, LeadType, RawLead, SourceConfig, SourceKind, SourceRecord, VoteSignal } from '../core/types.ts';
+import type { Lead, LeadStatus, LeadType, RawLead, SourceConfig, SourceKind, SourceRecord, Viewer, VoteSignal } from '../core/types.ts';
+import type { ListLeadsOptions } from '../core/store.ts';
 import { pollAll, pollSource } from '../pipeline/poll.ts';
 import { ingestRawLead, type IngestDeps } from '../pipeline/ingest.ts';
 import { fetchSafeHttp } from '../pipeline/preview.ts';
 import type { Runtime } from '../runtime.ts';
 import { SOURCE_PRESETS } from '../sources/presets.ts';
+import { IMAP_PASSWORD_ENV_RE } from '../sources/imap.ts';
 import { VERSION } from '../version.ts';
 import { githubOAuthConfigured, startGitHubOAuth, handleGitHubCallback } from './auth.ts';
 import { rateLimit } from './ratelimit.ts';
@@ -29,7 +31,8 @@ import {
   type SourceFormValues,
 } from './ui.ts';
 import { resolveLang, type SupportedLang } from './i18n.ts';
-import { determineAccessTier, filterLeadsForViewer } from '../core/access-tier.ts';
+import { canSeeContacts, delayMinutes, viewerCanSeeLead, visibleBefore } from '../core/access.ts';
+import { redactLead } from '../core/contacts.ts';
 import { SEO_CATALOG, findCatalogEntry, renderCatalogPage, renderRobotsTxt, renderSitemapXml } from './seo.ts';
 import { extractPreviewFromHtml, validateSubmissionUrl } from './preview.ts';
 import { renderLogo, LOGO_SVG } from './logo.ts';
@@ -202,26 +205,44 @@ function invalidProxyUrl(config: Record<string, unknown>): string | null {
 }
 
 /**
- * Viewer access level for every lead-reading endpoint (API, RSS, catalog, MCP, export).
- * Admin sees everything; a mesh node key (Bearer pubkey or x-radar-node-pubkey)
- * gets its earned tier; everyone else is a free-rider (12h lag, no mesh-exclusive).
+ * Viewer of every lead-reading endpoint (pages, API, RSS, catalog, MCP).
+ * Admin sees everything; a logged-in GitHub user is a member; everyone else
+ * is a guest. In hub mode the tier sets the feed delay; guests never see contacts.
  */
-async function viewerFromRequest(c: Context, runtime: Runtime): Promise<import('../core/store.ts').ViewerAccessContext> {
-  const admin = await isAdmin(c, runtime);
-  if (admin) return { isAdmin: true };
-
+async function viewerFromRequest(c: Context, runtime: Runtime): Promise<Viewer> {
+  if (await isAdmin(c, runtime)) return { tier: 'admin' };
   const user = await currentUser(c, runtime);
-  const bearer = (c.req.header('authorization') || '').replace(/^Bearer\s+/i, '').trim();
-  const headerPubkey = (c.req.header('x-radar-node-pubkey') || '').trim();
-  const pubkey = (bearer || headerPubkey).toLowerCase();
-  const node = pubkey && runtime.store.getMeshNode && !user ? await runtime.store.getMeshNode(pubkey) : null;
-  const tier = determineAccessTier({ user, meshNode: node, isAdmin: false });
-  return {
-    pubkey: node?.pubkey,
-    trustScore: node?.trust_score,
-    hasValidAttestations24h: (node?.valid_attestations_24h ?? 0) > 0,
-    isRealtime: tier.isRealtime,
-  };
+  if (user) return { tier: 'member', userId: user.id };
+  return { tier: 'guest' };
+}
+
+/** Guests never see contacts: they are cut out of every lead they receive. */
+function projectContacts(lead: Lead, viewer: Viewer): Lead {
+  return canSeeContacts(viewer) ? lead : redactLead(lead);
+}
+
+/** The public feed for a viewer (active leads only, after the viewer's delay), contacts projected. */
+async function feedFor(runtime: Runtime, viewer: Viewer, options: ListLeadsOptions): Promise<Lead[]> {
+  const leads = await runtime.store.getLeadsForFeed({ ...options, createdBefore: visibleBefore(viewer, runtime.access) });
+  return leads.map((lead) => projectContacts(lead, viewer));
+}
+
+/**
+ * Absolute base URL for links in feeds, sitemaps and OAuth. RADAR_PUBLIC_URL wins:
+ * the Host header is client-controlled and must not decide where links point.
+ */
+function publicBaseUrl(c: Context, runtime: Runtime): string {
+  const configured = runtime.env.RADAR_PUBLIC_URL?.replace(/\/+$/, '');
+  if (configured) return configured;
+  const host = c.req.header('host') || '127.0.0.1:8787';
+  const proto = c.req.header('x-forwarded-proto') === 'https' ? 'https' : 'http';
+  return `${proto}://${host}`;
+}
+
+/** Leads for a viewer: admins see the whole store, everyone else the active feed after their delay. */
+async function leadsFor(runtime: Runtime, viewer: Viewer, options: ListLeadsOptions): Promise<Lead[]> {
+  if (viewer.tier === 'admin') return runtime.store.listLeads(options);
+  return runtime.store.getLeadsForFeed({ ...options, createdBefore: visibleBefore(viewer, runtime.access) });
 }
 
 /**
@@ -234,7 +255,6 @@ const PUBLIC_LEAD_KEYS = [
   'budget', 'currency', 'paymentPeriod', 'rawSalary', 'normalizedUsdMin', 'normalizedUsdMax',
   'category', 'skills', 'isRemote', 'publishedAt', 'createdAt',
   'votes_up', 'votes_down', 'votes_scam', 'votes_closed',
-  'verification_state', 'attestation_count', 'publisher_pubkey',
 ] as const;
 
 function toPublicLead(lead: Lead): Record<string, unknown> {
@@ -410,6 +430,9 @@ function buildSourceConfig(
         config,
         error: 'Для IMAP нужны хост, пользователь и имя переменной с паролем.',
       };
+    }
+    if (!IMAP_PASSWORD_ENV_RE.test(passwordEnv)) {
+      return { config, error: 'Имя переменной с паролем должно начинаться с RADAR_IMAP_ (например, RADAR_IMAP_PASSWORD).' };
     }
     config.host = host;
     config.user = user;
@@ -631,22 +654,11 @@ export function createApp(runtime: Runtime): Hono {
     const type: LeadType | undefined = rawType === 'job' || rawType === 'gig' ? rawType : undefined;
     const query = (c.req.query('q') ?? '').trim();
 
-    const user = await currentUser(c, runtime);
-    const nodePubkey = c.req.header('x-radar-node-pubkey');
-    const node = (nodePubkey && runtime.store.getMeshNode) ? await runtime.store.getMeshNode(nodePubkey) : null;
-    const admin = await isAdmin(c, runtime);
-    const tier = determineAccessTier({ user, meshNode: node, isAdmin: admin });
-    const viewer = {
-      isAdmin: admin,
-      isRealtime: tier.isRealtime,
-      hasValidAttestations24h: tier.validAttestations24h >= 10,
-      trustScore: tier.trustScore,
-    };
-
+    const viewer = await viewerFromRequest(c, runtime);
     const [stats, health, leads] = await Promise.all([
       runtime.store.getStats(),
       runtime.store.getSourceHealth(),
-      runtime.store.getLeadsForFeed(viewer, {
+      leadsFor(runtime, viewer, {
         limit: 50,
         status: status || undefined,
         query: query || undefined,
@@ -654,21 +666,18 @@ export function createApp(runtime: Runtime): Hono {
       }),
     ]);
 
-    const { visibleLeads, lockedCount } = filterLeadsForViewer(leads, tier);
-
     return c.html(
       renderLeadsPage({
         stats,
         health,
-        leads: visibleLeads,
+        leads: leads.map((lead) => projectContacts(lead, viewer)),
         query,
         status,
         type: type ?? '',
         version: VERSION,
         auth: await getAuthDisplay(c, runtime),
         lang,
-        lockedCount,
-        isRealtime: tier.isRealtime,
+        delayMinutes: delayMinutes(viewer, runtime.access),
       }),
     );
   });
@@ -943,6 +952,7 @@ export function createApp(runtime: Runtime): Hono {
     const lang = resolveLang(c);
     const source = await runtime.store.getSource(c.req.param('id'));
     if (!source) return c.html(renderNotFound(VERSION, lang), 404);
+    const viewer = await viewerFromRequest(c, runtime);
     const allHealth = await runtime.store.getSourceHealth();
     const health = allHealth.find((item) => item.source.id === source.id) ?? {
       source,
@@ -958,7 +968,7 @@ export function createApp(runtime: Runtime): Hono {
       successRate: 0,
     };
     const [leads, runs] = await Promise.all([
-      runtime.store.getLeadsForFeed(await viewerFromRequest(c, runtime), { sourceId: source.id, limit: 20 }),
+      leadsFor(runtime, viewer, { sourceId: source.id, limit: 20 }),
       runtime.store.listRuns(20, source.id),
     ]);
     const admin = await isAdmin(c, runtime);
@@ -966,7 +976,7 @@ export function createApp(runtime: Runtime): Hono {
       renderSourcePage({
         source,
         health,
-        leads,
+        leads: leads.map((lead) => projectContacts(lead, viewer)),
         runs,
         version: VERSION,
         notice:
@@ -985,8 +995,10 @@ export function createApp(runtime: Runtime): Hono {
   app.get('/leads/:id', async (c) => {
     if (!await canRead(c, runtime)) return c.redirect('/login');
     const lang = resolveLang(c);
-    const lead = await runtime.store.getLead(c.req.param('id'));
-    if (!lead) return c.html(renderNotFound(VERSION, lang), 404);
+    const viewer = await viewerFromRequest(c, runtime);
+    const stored = await runtime.store.getLead(c.req.param('id'));
+    if (!stored || !viewerCanSeeLead(viewer, stored, runtime.access)) return c.html(renderNotFound(VERSION, lang), 404);
+    const lead = projectContacts(stored, viewer);
     const source = await runtime.store.getSource(lead.sourceId);
     const user = await currentUser(c, runtime);
     const myVote = (user && runtime.store.getUserVote)
@@ -1234,111 +1246,34 @@ export function createApp(runtime: Runtime): Hono {
     const type: LeadType | undefined = rawType === 'job' || rawType === 'gig' ? rawType : undefined;
     const sourceId = c.req.query('source') || undefined;
     const query = c.req.query('q')?.trim() || undefined;
-    // Feed access rules (12h lag / mesh-exclusive) apply to the API just like the UI.
+    // The viewer's tier (delay, contacts) applies to the API just like the UI.
     const viewer = await viewerFromRequest(c, runtime);
-    const leads = await runtime.store.getLeadsForFeed(viewer, { limit, status, sourceId, query, type });
-    if (viewer.isAdmin) return c.json(leads);
-    return c.json(leads.map(toPublicLead));
+    const leads = await leadsFor(runtime, viewer, { limit, status, sourceId, query, type });
+    if (viewer.tier === 'admin') return c.json(leads);
+    return c.json(leads.map((lead) => toPublicLead(projectContacts(lead, viewer))));
   });
 
-  app.post('/mcp', async (c) => {
-    // MCP is a machine interface: it requires the admin token or a known mesh
-    // node key, otherwise it would bypass the Tit-for-Tat lead locking.
-    const { authorizeFirehose } = await import('./firehose.ts');
-    if (!(await authorizeFirehose(c, runtime))) {
-      return c.json(
-        { jsonrpc: '2.0', id: null, error: { code: -32000, message: 'Unauthorized: admin token or mesh node key required' } },
-        401,
-      );
+  app.post('/mcp', rateLimit({ windowMs: 60_000, max: 60 }), async (c) => {
+    // MCP is a free machine interface over the same feed: same tier, same delay,
+    // same contact rules as the HTTP API.
+    if (!await canRead(c, runtime)) {
+      return c.json({ jsonrpc: '2.0', id: null, error: { code: -32000, message: 'Unauthorized' } }, 401);
     }
     const body = await c.req.json().catch(() => null);
     if (!body || typeof body !== 'object') {
       return c.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, 400);
     }
     const { handleMcpRequest } = await import('../mcp/server.ts');
-    // Access tier of the node key (or admin) is passed through: search results
-    // respect the same 12h lag / mesh-exclusive rules as the HTTP API.
-    const resp = await handleMcpRequest(body, runtime.store, await viewerFromRequest(c, runtime));
+    const viewer = await viewerFromRequest(c, runtime);
+    const resp = await handleMcpRequest(body, {
+      listLeads: async (options) => (await leadsFor(runtime, viewer, options)).map((lead) => projectContacts(lead, viewer)),
+      getLead: async (id) => {
+        const lead = await runtime.store.getLead(id);
+        return lead && viewerCanSeeLead(viewer, lead, runtime.access) ? projectContacts(lead, viewer) : null;
+      },
+    });
+    if (resp === null) return c.body(null, 202);
     return c.json(resp);
-  });
-
-  app.get('/api/v1/firehose', async (c) => {
-    const { authorizeFirehose, parseFirehoseFilter, matchesFirehoseFilter, firehoseEmitter } = await import('./firehose.ts');
-    const isAuthorized = await authorizeFirehose(c, runtime);
-    if (!isAuthorized) {
-      return c.json({ error: 'unauthorized', message: 'Valid B2B API token or Contributor key required' }, 401);
-    }
-
-    const filter = parseFirehoseFilter(c);
-
-    const stream = new ReadableStream({
-      start(controller) {
-        const encoder = new TextEncoder();
-        controller.enqueue(encoder.encode(`event: connected\ndata: {"status":"streaming"}\n\n`));
-
-        const onLead = (lead: Lead) => {
-          if (matchesFirehoseFilter(lead, filter)) {
-            controller.enqueue(encoder.encode(`event: lead\ndata: ${JSON.stringify(lead)}\n\n`));
-          }
-        };
-
-        firehoseEmitter.on('lead', onLead);
-
-        const heartbeatInterval = setInterval(() => {
-          try {
-            controller.enqueue(encoder.encode(`: heartbeat\n\n`));
-          } catch {
-            clearInterval(heartbeatInterval);
-          }
-        }, 15000);
-
-        c.req.raw.signal.addEventListener('abort', () => {
-          clearInterval(heartbeatInterval);
-          firehoseEmitter.off('lead', onLead);
-          try {
-            controller.close();
-          } catch {}
-        });
-      },
-    });
-
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    });
-  });
-
-  // CORS: only the site itself and the browser extension may call X-Ray cross-origin.
-  // chrome-extension://<id> cannot be pinned to a fixed id before the store build, so any
-  // extension origin is accepted — extension pages are user-installed, not attacker pages.
-  const xrayAllowedOrigins = (runtime.env.RADAR_XRAY_ALLOWED_ORIGINS || 'https://openradar.fun')
-    .split(',').map((o) => o.trim()).filter(Boolean);
-  const xrayOriginAllowed = (origin: string) =>
-    xrayAllowedOrigins.includes(origin) || origin.startsWith('chrome-extension://');
-
-  app.get('/api/v1/xray', rateLimit({
-    windowMs: 60_000,
-    max: 30,
-    // Anonymous XFF is spoofable; a mesh node key, when presented, is the honest bucket.
-    keyFrom: (c) => (c.req.header('authorization') || '').replace(/^Bearer\s+/i, '').trim().toLowerCase() || undefined,
-  }), async (c) => {
-    const url = c.req.query('url');
-    if (!url) {
-      return c.json({ error: 'url query param required' }, 400);
-    }
-    const { computeXray } = await import('../pipeline/xray.ts');
-    const result = await computeXray(url, runtime.store);
-    const origin = c.req.header('origin');
-    if (origin && xrayOriginAllowed(origin)) {
-      c.header('Access-Control-Allow-Origin', origin);
-      c.header('Vary', 'Origin');
-    }
-    c.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    c.header('Cache-Control', 'public, max-age=60');
-    return c.json(result);
   });
 
   app.delete('/api/leads/:id', async (c) => {
@@ -1506,16 +1441,14 @@ export function createApp(runtime: Runtime): Hono {
       ? (rawStatus as LeadStatus)
       : undefined;
 
-    const leads = await runtime.store.getLeadsForFeed(await viewerFromRequest(c, runtime), {
+    const leads = await feedFor(runtime, await viewerFromRequest(c, runtime), {
       limit: 50,
       query: q || undefined,
       type,
       status,
     });
 
-    const host = c.req.header('host') || '127.0.0.1:8787';
-    const proto = c.req.header('x-forwarded-proto') || 'http';
-    const baseUrl = `${proto}://${host}`;
+    const baseUrl = publicBaseUrl(c, runtime);
     // Build the self URL from the proxy-aware baseUrl: c.req.url is the
     // internal http hop and would advertise http:// in atom:link.
     const feedPath = new URL(c.req.url).pathname + new URL(c.req.url).search;
@@ -1538,11 +1471,7 @@ export function createApp(runtime: Runtime): Hono {
   app.get('/feed.xml', serveFeed);
   app.get('/api/feed.rss', serveFeed);
 
-  const seoBaseUrl = (c: Context): string => {
-    const host = c.req.header('host') || '127.0.0.1:8787';
-    const proto = c.req.header('x-forwarded-proto') || 'http';
-    return `${proto}://${host}`;
-  };
+  const seoBaseUrl = (c: Context): string => publicBaseUrl(c, runtime);
 
   app.get('/robots.txt', (c) => {
     return c.text(renderRobotsTxt(seoBaseUrl(c)), 200, {
@@ -1561,7 +1490,7 @@ export function createApp(runtime: Runtime): Hono {
     const entry = findCatalogEntry(c.req.param('slug') as string);
     if (!entry) return c.html(renderNotFound(VERSION), 404);
 
-    const leads = (await runtime.store.getLeadsForFeed(await viewerFromRequest(c, runtime), {
+    const leads = (await feedFor(runtime, await viewerFromRequest(c, runtime), {
       limit: 30,
       query: entry.q,
       type: entry.type,
@@ -1581,7 +1510,7 @@ export function createApp(runtime: Runtime): Hono {
     if (!await canRead(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
     const since = c.req.query('since') || new Date(Date.now() - 24 * 3600 * 1000).toISOString();
     const limit = Math.max(1, Math.min(Number(c.req.query('limit') ?? 200) || 200, 1000));
-    const allLeads = await runtime.store.getLeadsForFeed(await viewerFromRequest(c, runtime), { limit: 500 });
+    const allLeads = await feedFor(runtime, await viewerFromRequest(c, runtime), { limit: 500 });
     const delta = allLeads
       .filter((lead) => lead.createdAt >= since)
       .slice(0, limit)

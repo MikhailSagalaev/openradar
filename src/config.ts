@@ -28,7 +28,7 @@ const envSchema = z.object({
   RADAR_HOST_PORT: z.coerce.number().int().positive().optional(),
   RADAR_USER_AGENT: z
     .string()
-    .default('RadarBot/0.6.1 (+https://github.com/MikhailSagalaev/radar-oss)'),
+    .default('RadarBot/0.7.0 (+https://github.com/MikhailSagalaev/radar-oss)'),
   RADAR_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
   RADAR_POLL_INTERVAL_SEC: z.coerce.number().int().positive().default(300),
   RADAR_POLL_CONCURRENCY: z.coerce.number().int().positive().default(4),
@@ -45,9 +45,9 @@ const envSchema = z.object({
   GITHUB_CLIENT_ID: optionalString,
   GITHUB_CLIENT_SECRET: optionalString,
   RADAR_PUBLIC_URL: optionalString,
-  RADAR_MESH_ENABLED: booleanFromEnv(false),
+  RADAR_MODE: z.enum(['node', 'hub']).default('node'),
+  RADAR_TIER_DELAYS: optionalString,
   RADAR_PROXY_URL: optionalString,
-  RADAR_XRAY_ALLOWED_ORIGINS: optionalString,
   RADAR_DIGEST_CHAT_ID: optionalString,
   RADAR_DIGEST_INTERVAL_HOURS: z.coerce.number().int().positive().default(6),
   RADAR_RETENTION_DAYS: z.coerce.number().int().positive().default(180),
@@ -55,15 +55,22 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(8787),
 });
 
+/** Example values that ever shipped in this repository: never accept them as a real secret. */
+const KNOWN_WEAK_TOKENS = new Set([
+  'change-me',
+  '012345678901234567890123456789012',
+  'your_secure_random_admin_token_here_at_least_32_chars',
+]);
+
 export function loadEnv(overrides: Partial<Env> = {}): Env {
   const parsed = envSchema.parse(process.env);
   const env: Env = { ...parsed, ...overrides };
 
   if (env.NODE_ENV === 'production') {
     const token = env.RADAR_ADMIN_TOKEN?.trim();
-    if (!token || token === 'change-me' || token.length < 32) {
+    if (!token || KNOWN_WEAK_TOKENS.has(token) || token.length < 32 || /^(.)\1+$/.test(token)) {
       throw new Error(
-        'FATAL: RADAR_ADMIN_TOKEN is missing, default ("change-me"), or shorter than 32 characters in production mode. ' +
+        'FATAL: RADAR_ADMIN_TOKEN is missing, a published example value, or shorter than 32 characters in production mode. ' +
         'Generate a strong random token, e.g. `openssl rand -hex 32`.'
       );
     }

@@ -211,24 +211,3 @@ chrome.commands.onCommand.addListener(async (command) => {
     }
   }
 });
-
-chrome.runtime.onMessage.addListener((message) => {
-  if (message?.type === 'XRAY_ATTESTATION_CANDIDATE' && message?.payload) {
-    const p = message.payload.posting || {};
-    const payload = {
-      type: 'job',
-      title: message.payload.title || p.title || 'Job Posting',
-      text: p.description || message.payload.title || 'Job Posting',
-      url: message.payload.url,
-      externalId: `xray:${message.payload.url}`,
-    };
-    if (p.city) payload.city = p.city;
-    if (typeof p.budget === 'number') payload.budget = p.budget;
-    if (p.currency) payload.currency = p.currency;
-    if (p.skills?.length) payload.skills = p.skills;
-    if (p.company) payload.metadata = { company: p.company };
-
-    sendToRadar(payload).catch(() => {});
-  }
-  return true;
-});

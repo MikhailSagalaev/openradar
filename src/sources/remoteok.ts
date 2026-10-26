@@ -1,6 +1,5 @@
 import type { RawLead, SourceAdapter, SourceRecord, PollContext } from '../core/types.ts';
 import { fetchText } from './http.ts';
-import { sanitizePrivacy } from '../core/privacy.ts';
 import { stripHtml } from '../core/text.ts';
 
 export interface RemoteOkJobItem {
@@ -112,7 +111,7 @@ export const remoteokSource: SourceAdapter = {
       }
 
       const rawText = sections.length ? `${title}\n\n${sections.join('\n\n')}` : title;
-      const text = sanitizePrivacy(rawText);
+      const text = rawText;
 
       const itemUrl =
         item.url ||

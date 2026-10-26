@@ -43,10 +43,11 @@ export interface Env {
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
   RADAR_PUBLIC_URL?: string;
-  RADAR_MESH_ENABLED?: boolean;
+  /** `node` (self-hosted, no delays) or `hub` (shared network hub with tiered delays). */
+  RADAR_MODE: 'node' | 'hub';
+  /** Tier delays in minutes, e.g. `guest=720,member=180,active=30,core=0`. */
+  RADAR_TIER_DELAYS?: string;
   RADAR_PROXY_URL?: string;
-  /** Extra origins allowed to call /api/v1/xray cross-origin (comma-separated). */
-  RADAR_XRAY_ALLOWED_ORIGINS?: string;
   RADAR_DIGEST_CHAT_ID?: string;
   RADAR_DIGEST_INTERVAL_HOURS: number;
   RADAR_RETENTION_DAYS: number;
@@ -78,6 +79,25 @@ export interface SourceRecord {
   updatedAt: string;
 }
 
+export type ContactType = 'telegram' | 'phone' | 'email' | 'whatsapp' | 'vk' | 'url' | 'other';
+
+export interface Contact {
+  type: ContactType;
+  /** Normalised value: `@handle`, E.164 phone, lower-case email, absolute URL. */
+  value: string;
+}
+
+export type SourceVisibility = 'public' | 'private' | 'invite';
+
+/** Where exactly a post was observed (radar/2 observation `source`). */
+export interface SourceRef {
+  platform: string;
+  channel: string;
+  channelTitle?: string;
+  visibility: SourceVisibility;
+  messageId?: string;
+}
+
 export interface RawLead {
   sourceId: string;
   type?: LeadType;
@@ -99,6 +119,8 @@ export interface RawLead {
   publishedAt?: string;
   metadata?: Record<string, unknown>;
   raw?: Record<string, unknown>;
+  contacts?: Contact[];
+  sourceRef?: SourceRef;
 }
 
 export type VoteSignal = 'useful' | 'junk' | 'scam' | 'closed';
@@ -111,13 +133,22 @@ export interface VoteResult {
   score: number;
 }
 
-export type VerificationState =
-  | 'unverified'
-  | 'attested'
-  | 'under_review'
-  | 'verified_active'
-  | 'killed_scam'
-  | 'killed_closed';
+/**
+ * Visibility state of a lead in the feed (radar/2). Only `active` leads are
+ * shown to non-admin viewers; the other states are reversible decisions.
+ */
+export type LeadState = 'active' | 'suspect' | 'hidden_junk' | 'hidden_scam' | 'closed';
+
+/** Access level of whoever reads the feed. Only the delay and contact visibility differ. */
+export type ViewerTier = 'admin' | 'core' | 'active' | 'member' | 'guest';
+
+export interface Viewer {
+  tier: ViewerTier;
+  /** GitHub user id of a logged-in web user. */
+  userId?: number;
+  /** Participant key (hub mode, NIP-98). */
+  pubkey?: string;
+}
 
 export interface Lead extends RawLead {
   id: string;
@@ -133,13 +164,9 @@ export interface Lead extends RawLead {
   votes_down?: number;
   votes_scam?: number;
   votes_closed?: number;
-  publisher_pubkey?: string;
-  nostr_event_id?: string;
+  /** MinHash sketch of the text (base64url), used for near-duplicate clustering. */
   minhash_sketch?: string;
-  verification_state?: VerificationState;
-  attestation_count?: number;
-  is_mesh_exclusive?: boolean;
-  unlocked_at?: string;
+  state?: LeadState;
 }
 
 export interface PollContext {

@@ -25,7 +25,8 @@ echo "[Radar Backup] Starting backup of database ${POSTGRES_DB}..."
 
 # 2. Dump via pg_dump -Fc
 if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-  docker exec -t "$CONTAINER_NAME" pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB" > "$BACKUP_FILE"
+  # No -t: a TTY rewrites LF to CRLF and corrupts the binary custom-format dump.
+  docker exec "$CONTAINER_NAME" pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB" > "$BACKUP_FILE"
 elif command -v pg_dump >/dev/null 2>&1; then
   pg_dump -Fc "$DATABASE_URL" > "$BACKUP_FILE"
 else
@@ -34,6 +35,14 @@ else
 fi
 
 echo "[Radar Backup] Dump saved: $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
+
+# Verify the archive is readable before trusting it (and before encrypting/uploading it).
+if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+  docker exec -i "$CONTAINER_NAME" pg_restore --list < "$BACKUP_FILE" > /dev/null
+elif command -v pg_restore >/dev/null 2>&1; then
+  pg_restore --list "$BACKUP_FILE" > /dev/null
+fi
+echo "[Radar Backup] Archive verified with pg_restore --list"
 
 # 3. Optional age encryption
 if [ -n "${BACKUP_AGE_RECIPIENT:-}" ] && command -v age >/dev/null 2>&1; then

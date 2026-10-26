@@ -1,3 +1,4 @@
+import { isHttpUrl } from '../core/url.ts';
 import { escapeHtml } from '../core/text.ts';
 import type { Lead, LeadType } from '../core/types.ts';
 import { layout } from './ui.ts';
@@ -126,7 +127,8 @@ export function findCatalogEntry(slug: string): CatalogEntry | undefined {
 }
 
 function leadRow(lead: Lead, baseUrl: string): string {
-  const href = lead.url || `${baseUrl}/leads/${escapeHtml(lead.id)}`;
+  // Only http(s) links leave the site: anything else (javascript:, data:) falls back to the lead page.
+  const href = lead.url && isHttpUrl(lead.url) ? lead.url : `${baseUrl}/leads/${encodeURIComponent(lead.id)}`;
   const meta = [
     lead.city,
     typeof lead.budget === 'number'

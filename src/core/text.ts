@@ -199,6 +199,27 @@ export function escapeHtml(input: string): string {
     .replace(/"/g, '&quot;');
 }
 
+/**
+ * JSON for an inline <script> block (e.g. JSON-LD). JSON.stringify alone does not
+ * escape `</script>`: every `<`, `>`, `&` and line separator becomes a \\u escape,
+ * which is still valid JSON and can never close the script element.
+ */
+export function jsonForScript(value: unknown): string {
+  return JSON.stringify(value, null, 2)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
+/** One-line plain text for short fields (author, city, category): no markup, no control chars. */
+export function cleanShortField(input: string | undefined, max = 200): string | undefined {
+  if (typeof input !== 'string') return undefined;
+  const text = toPlainText(input).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return text ? truncate(text, max) : undefined;
+}
+
 export function firstLine(input: string, max = 120): string {
   const line = input.split('\n').map((part) => part.trim()).find(Boolean) ?? '';
   return truncate(line, max);
@@ -257,5 +278,3 @@ export function normalizeTechTokens(input: string): string {
     .replace(/(^|[^a-zA-Z0-9_])golang(?=[^a-zA-Z0-9_]|$)/gi, '$1golang_tech');
 }
 
-export { sanitizePrivacy, scrubPII, extractSubnet24 } from './privacy.ts';
-export type { SourceMetadata, ScrubResult } from './privacy.ts';

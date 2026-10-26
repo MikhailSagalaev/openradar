@@ -1,7 +1,7 @@
 import { cleanTitle, extractBudget, extractCity } from './extract.ts';
 import { fingerprintOf, titleKeyOf } from './fingerprint.ts';
 import { normalizeSalary } from './salary.ts';
-import { sanitizePrivacy, toPlainText, truncate } from './text.ts';
+import { cleanShortField, toPlainText, truncate } from './text.ts';
 import type { LeadType, RawLead, SourceRecord } from './types.ts';
 import { canonicalizeUrl, isHttpUrl } from './url.ts';
 
@@ -35,8 +35,8 @@ export function prepareRawLead(
   source: SourceRecord,
   now: Date,
 ): PreparedLead {
-  // PII is stripped centrally so every adapter and user submission is covered (152-ФЗ).
-  const text = sanitizePrivacy(toPlainText(raw.text || ''));
+  // Text is kept as written, contacts included (radar/2): guests get a redacted projection at read time.
+  const text = toPlainText(raw.text || '');
   const title = cleanTitle(raw.title, text);
   const normalizedText = truncate(text || title, MAX_TEXT_LENGTH);
   const url = raw.url?.trim();
@@ -49,7 +49,7 @@ export function prepareRawLead(
       : undefined;
   const budget = explicitBudget ?? extractBudget(`${title}\n${normalizedText}`);
 
-  const explicitCity = raw.city?.trim();
+  const explicitCity = cleanShortField(raw.city, 100);
   const extractedCity = extractCity(`${title}\n${normalizedText}`);
   const configuredCity =
     typeof source.config.city === 'string' ? source.config.city.trim() : '';
@@ -59,7 +59,7 @@ export function prepareRawLead(
     text: `${title}\n${normalizedText}`,
     rawSalary: raw.rawSalary,
     budget,
-    currency: raw.currency,
+    currency: cleanShortField(raw.currency, 8),
     type: raw.type,
   });
 
@@ -69,6 +69,8 @@ export function prepareRawLead(
 
   return {
     ...raw,
+    author: cleanShortField(raw.author, 200),
+    category: cleanShortField(raw.category, 100),
     title,
     text: normalizedText,
     type: detectLeadType(raw, title, canonicalUrl ?? safeHttpUrl),

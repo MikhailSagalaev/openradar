@@ -71,7 +71,6 @@ export function generateConnector(
   if (format === 'json') {
     adapterContent = `import type { RawLead, SourceAdapter, SourceRecord, PollContext } from '../core/types.ts';
 import { fetchText } from './http.ts';
-import { sanitizePrivacy } from '../core/privacy.ts';
 
 export const ${camelName}Source: SourceAdapter = {
   kind: '${cleanName}',
@@ -117,7 +116,7 @@ export const ${camelName}Source: SourceAdapter = {
       if (!item.id || !item.title) continue;
       const title = String(item.title).trim();
       const rawText = item.description ? \`\${title}\\n\\n\${item.description}\` : title;
-      const text = sanitizePrivacy(rawText);
+      const text = rawText;
 
       leads.push({
         sourceId: source.id,
@@ -186,7 +185,6 @@ describe('${cleanName} source adapter', () => {
     adapterContent = `import * as cheerio from 'cheerio';
 import type { RawLead, SourceAdapter, SourceRecord, PollContext } from '../core/types.ts';
 import { fetchText } from './http.ts';
-import { sanitizePrivacy } from '../core/privacy.ts';
 
 export const ${camelName}Source: SourceAdapter = {
   kind: '${cleanName}',
@@ -224,7 +222,7 @@ export const ${camelName}Source: SourceAdapter = {
         externalId: \`${cleanName}:\${id}\`,
         url: itemUrl,
         title,
-        text: sanitizePrivacy(rawText),
+        text: rawText,
       });
     });
 

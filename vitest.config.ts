@@ -10,6 +10,6 @@ export default defineConfig({
     // Suites assert on table contents, so against Postgres the files must
     // not run concurrently on one schema, and every test starts clean.
     fileParallelism: !postgresMode,
-    setupFiles: postgresMode ? ['./test/postgres-setup.ts'] : [],
+    setupFiles: postgresMode ? ['./test/setup.ts', './test/postgres-setup.ts'] : ['./test/setup.ts'],
   },
 });

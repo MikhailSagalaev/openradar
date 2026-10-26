@@ -48,7 +48,7 @@ In `src/sources/<source_name>.ts`:
 - Validate all outgoing URLs via `assertSafeUrl(url)` from `src/core/ssrf.ts` to prevent SSRF against private subnets.
 - Extract structured fields: `title`, `text`, `url`, `budget`, `currency`, `skills`, `city`, `isRemote`.
 - Set lead `type`: `'job'` (permanent employment) or `'gig'` (freelance / contract task).
-- Always apply `scrubPII(rawText)` from `src/core/privacy.ts` to sanitize personal contacts before broadcast.
+- Keep the text as published, contacts included: the server extracts contacts into a structured field and hides them from guests at read time.
 
 #### Step 3: Verify and open a Pull Request
 ```bash
@@ -59,7 +59,7 @@ Submit your Pull Request with a clear title and description of the source board.
 
 ### Architectural Invariants
 - **Zero-Emoji Doctrine:** Strictly no emojis in code, logs, comments, UI, or commit messages.
-- **Zero-Regression:** All 170+ existing tests must remain 100% green.
+- **Zero-Regression:** All existing tests must remain 100% green.
 - **Strict TypeScript:** Zero `any` where avoidable, 0 errors on `tsc --noEmit`.
 
 ---
@@ -95,6 +95,6 @@ pnpm new:connector <source_name>
 
 Обязательные требования:
 1. Валидация адресов через `assertSafeUrl` (защита от SSRF).
-2. Очистка персональных данных через `scrubPII`.
+2. Текст передаётся как есть, вместе с контактами: сервер сам выделяет контакты и скрывает их от гостей.
 3. 100% прохождение тестов (`pnpm test`) без внешних сетевых вызовов в тестах.
 4. Полное отсутствие эмодзи в коде и коммитах.
