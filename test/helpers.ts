@@ -7,6 +7,8 @@ import { createSourceRegistry, type SourceRegistry } from '../src/sources/index.
 import { SinkRegistry } from '../src/sinks/index.ts';
 import { MemoryStore } from '../src/store/memory.ts';
 import { PostgresStore } from '../src/store/postgres.ts';
+import { accessPolicyFromEnv } from '../src/runtime.ts';
+import type { AccessPolicy } from '../src/core/access.ts';
 
 export const TEST_NOW = new Date('2026-10-21T12:00:00.000Z');
 
@@ -65,6 +67,8 @@ export interface TestRuntime {
   logger: ReturnType<typeof createLogger>;
   sources: SourceRegistry;
   sinks: SinkRegistry;
+  fetchImpl: typeof fetch;
+  access: AccessPolicy;
 }
 
 export function createTestStore(): Store {
@@ -76,12 +80,15 @@ export function createTestStore(): Store {
 }
 
 export function makeTestRuntime(overrides: Partial<Env> = {}): TestRuntime {
+  const env = testEnv(overrides);
   return {
     store: createTestStore(),
-    env: testEnv(overrides),
+    env,
     logger: createLogger('error'),
     sources: createSourceRegistry(),
     sinks: new SinkRegistry(),
+    fetchImpl: fetch,
+    access: accessPolicyFromEnv(env),
   };
 }
 

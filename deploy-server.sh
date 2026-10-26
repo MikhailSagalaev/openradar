@@ -4,23 +4,23 @@
 # ==============================================================================
 set -euo pipefail
 
-echo "🚀 [Radar Deploy] Начинаем развертывание Radar..."
+echo "[Radar Deploy] Начинаем развертывание Radar..."
 
 # 1. Проверяем наличие директории
 TARGET_DIR="${RADAR_DIR:-/opt/radar}"
 if [ ! -d "$TARGET_DIR" ]; then
-  echo "📦 Клонируем репозиторий в $TARGET_DIR..."
+  echo "Клонируем репозиторий в $TARGET_DIR..."
   git clone https://github.com/MikhailSagalaev/radar-oss.git "$TARGET_DIR"
 fi
 
 cd "$TARGET_DIR"
-echo "🔄 Обновляем репозиторий в $TARGET_DIR..."
+echo "Обновляем репозиторий в $TARGET_DIR..."
 git fetch origin main
 git reset --hard origin/main
 
 # 2. Создаем production .env если его нет или дополняем обязательными секретами
 if [ ! -f .env ]; then
-  echo "⚙️ Создаем .env файл конфигурации со случайными надежными секретами..."
+  echo "Создаем .env файл конфигурации со случайными надежными секретами..."
   RAND_DB_PWD=$(openssl rand -hex 24)
   RAND_ADMIN_TOKEN=$(openssl rand -hex 32)
   cat << EOF > .env
@@ -37,10 +37,12 @@ DATABASE_URL=postgres://radar:${RAND_DB_PWD}@postgres:5432/radar
 
 # General
 RADAR_LOG_LEVEL=info
-RADAR_PUBLIC_READ=false
+RADAR_PUBLIC_READ=true
+RADAR_MODE=hub
+RADAR_PUBLIC_URL=https://openradar.fun
 RADAR_CONSOLE_SINK=true
 EOF
-  echo "✅ .env файл успешно создан."
+  echo ".env файл успешно создан."
 else
   # Дополняем недостающие переменные если файл уже был
   if ! grep -q "^POSTGRES_PASSWORD=" .env 2>/dev/null; then
@@ -50,6 +52,9 @@ else
   if ! grep -q "^RADAR_ADMIN_TOKEN=" .env 2>/dev/null; then
     RAND_ADMIN_TOKEN=$(openssl rand -hex 32)
     echo "RADAR_ADMIN_TOKEN=${RAND_ADMIN_TOKEN}" >> .env
+  fi
+  if ! grep -q "^RADAR_MODE=" .env 2>/dev/null; then
+    echo "RADAR_MODE=hub" >> .env
   fi
   if ! grep -q "^RADAR_HOST_PORT=" .env 2>/dev/null; then
     echo "RADAR_HOST_PORT=8787" >> .env
@@ -61,19 +66,19 @@ RADAR_HOST_PORT=$(grep -E "^RADAR_HOST_PORT=" .env | cut -d '=' -f2- | tr -d ' "
 RADAR_HOST_PORT=${RADAR_HOST_PORT:-8787}
 
 # 4. Сборка нового образа приложения без остановки текущего
-echo "🔨 Сборка обновленного образа Radar..."
+echo "Сборка обновленного образа Radar..."
 docker compose build radar
 
 # 5. Проверка работы базы данных
-echo "🐘 Проверка и запуск PostgreSQL..."
+echo "Проверка и запуск PostgreSQL..."
 docker compose up -d postgres
 
 # 6. Запуск миграций базы данных
-echo "📦 Применение миграций базы данных..."
+echo "Применение миграций базы данных..."
 docker compose run --rm radar migrate
 
 # 7. Бесшовное обновление контейнера приложения
-echo "🔄 Перезапуск контейнера radar_app..."
+echo "Перезапуск контейнера radar_app..."
 docker compose up -d --no-deps radar
 
 # 8. Проверка статуса и healthcheck с ретраями
@@ -89,10 +94,10 @@ for i in {1..12}; do
 done
 
 if [ "$HEALTH_OK" -ne 1 ]; then
-  echo "❌ Healthcheck failed! Radar не ответил 200 OK на http://127.0.0.1:${RADAR_HOST_PORT}/health"
+  echo "Healthcheck failed! Radar не ответил 200 OK на http://127.0.0.1:${RADAR_HOST_PORT}/health"
   echo "Логи сервиса:"
   docker compose logs radar --tail 50
   exit 1
 fi
 
-echo "🎉 Radar успешно запущен и работает на http://127.0.0.1:${RADAR_HOST_PORT}"
+echo "Radar успешно запущен и работает на http://127.0.0.1:${RADAR_HOST_PORT}"

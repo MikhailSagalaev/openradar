@@ -12,9 +12,12 @@ export function githubOAuthConfigured(runtime: Runtime): boolean {
   return Boolean(runtime.env.GITHUB_CLIENT_ID && runtime.env.GITHUB_CLIENT_SECRET);
 }
 
-function baseUrlOf(c: Context): string {
+/** OAuth redirect base: RADAR_PUBLIC_URL when configured, never a client-chosen Host otherwise unchecked. */
+function baseUrlOf(c: Context, runtime: Runtime): string {
+  const configured = runtime.env.RADAR_PUBLIC_URL?.replace(/\/+$/, '');
+  if (configured) return configured;
   const host = c.req.header('host') ?? new URL(c.req.url).host;
-  const proto = c.req.header('x-forwarded-proto') ?? 'http';
+  const proto = c.req.header('x-forwarded-proto') === 'https' ? 'https' : 'http';
   return `${proto}://${host}`;
 }
 
@@ -52,7 +55,7 @@ export function startGitHubOAuth(c: Context, runtime: Runtime): Response {
 
   const authorizeUrl = new URL('https://github.com/login/oauth/authorize');
   authorizeUrl.searchParams.set('client_id', runtime.env.GITHUB_CLIENT_ID!);
-  authorizeUrl.searchParams.set('redirect_uri', `${baseUrlOf(c)}/auth/github/callback`);
+  authorizeUrl.searchParams.set('redirect_uri', `${baseUrlOf(c, runtime)}/auth/github/callback`);
   authorizeUrl.searchParams.set('scope', 'read:user');
   authorizeUrl.searchParams.set('state', state);
   return c.redirect(authorizeUrl.toString());
@@ -84,7 +87,7 @@ export async function handleGitHubCallback(c: Context, runtime: Runtime): Promis
       client_id: runtime.env.GITHUB_CLIENT_ID,
       client_secret: runtime.env.GITHUB_CLIENT_SECRET,
       code,
-      redirect_uri: `${baseUrlOf(c)}/auth/github/callback`,
+      redirect_uri: `${baseUrlOf(c, runtime)}/auth/github/callback`,
     }),
     signal: AbortSignal.timeout(10_000),
   });

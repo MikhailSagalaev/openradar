@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.7.0 (unreleased): radar/2, phase 0
+
+- Removed the commercial layer and the radar/1 mesh: B2B firehose, X-Ray, AI arbiter
+  and slashing, canary traps, HRW sharding, per-week child keys, Nostr relay pool and
+  subscriber, access-tier engine, reputation module, `radar node`, investor documents.
+  Migration 010 drops `mesh_nodes`, `lead_attestations`, `arbiter_queue` and the mesh
+  columns of `leads`; lead visibility is one `state` column.
+- Access model: the viewer tier (admin, member, guest; hub tiers follow) sets the feed
+  delay (`RADAR_MODE=hub`, `RADAR_TIER_DELAYS`); a self-hosted node has no delay.
+  Guests never see contacts (text, author, metadata) on pages, API, RSS, catalog or MCP.
+  `/leads/:id` honours the delay and hidden states.
+- Contacts are kept in the text (no scrubbing) and extracted into structured, normalised
+  values (`src/core/contacts.ts`).
+- Security: JSON-LD on lead pages is escaped (stored XSS); author, city and category are
+  cleaned to plain text; catalog and RSS links are http(s) only; IMAP passwords come only
+  from `RADAR_IMAP_*` variables over TLS; links and OAuth redirects use `RADAR_PUBLIC_URL`
+  instead of the Host header; CSV export neutralises formulas; ILIKE wildcards in search
+  are literal; the published example admin token is refused at startup.
+- docker-compose requires real secrets; `backup.sh` no longer corrupts dumps (`-t`
+  removed) and verifies them with `pg_restore --list`; nginx streams `/v2/stream`.
+- MCP rewritten over the feed (same delay and contact rules), notifications are not
+  answered, `verify_lead_url` removed.
+- Tests are hermetic (DNS stubbed in `test/setup.ts`, local proxy target).
+- Not yet fixed: SSRF filter hardening (audit C1), to be replaced by a maintained library.
+
 ## 0.6.0
 
 - Real BIP-340 Schnorr via @noble/curves (hand-rolled ECDSA-as-Schnorr removed);

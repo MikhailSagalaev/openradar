@@ -2,6 +2,7 @@
  * OpenRadar - Saved Search RSS 2.0 Feed Generator
  */
 
+import { isHttpUrl } from '../core/url.ts';
 import type { Lead } from '../core/types.ts';
 
 export function renderRssFeed(options: {
@@ -25,7 +26,7 @@ export function renderRssFeed(options: {
       const pubDate = lead.publishedAt
         ? new Date(lead.publishedAt).toUTCString()
         : new Date(lead.createdAt).toUTCString();
-      const link = lead.url || `${baseUrl}/leads/${lead.id}`;
+      const link = lead.url && isHttpUrl(lead.url) ? lead.url : `${baseUrl}/leads/${encodeURIComponent(lead.id)}`;
       const leadTitle = escapeXml(lead.title.trim() || lead.text.slice(0, 80));
       // A raw "]]>" inside the text would close the CDATA section early
       const safeText = lead.text.replace(/\]\]>/g, ']]]]><![CDATA[>');

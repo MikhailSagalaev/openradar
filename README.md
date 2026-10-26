@@ -1,4 +1,4 @@
-# OpenRadar: Decentralized Labor Liquidity Network
+# OpenRadar
 
 <p align="center">
   <picture>
@@ -10,144 +10,58 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPLv3-blue.svg" alt="License: AGPL v3"></a>
-  <a href="#"><img src="https://img.shields.io/badge/tests-171%20passed-green.svg" alt="Tests: 171 passed"></a>
-  <a href="#"><img src="https://img.shields.io/badge/typescript-strict-blue.svg" alt="TypeScript: Strict"></a>
-  <a href="https://openradar.fun"><img src="https://img.shields.io/badge/prod-online%20v0.5.0-success.svg" alt="Production: Online v0.5.0"></a>
-  <a href="#"><img src="https://img.shields.io/badge/protocol-radar%2F1%20(Nostr)-purple.svg" alt="Protocol: radar/1 (Nostr)"></a>
+  <a href="docs/PROTOCOL.md"><img src="https://img.shields.io/badge/protocol-radar%2F2-purple.svg" alt="Protocol: radar/2"></a>
 </p>
 
-**OpenRadar** is a decentralized, open-source labor liquidity protocol (`radar/1`) built on top of **Nostr (NIP-01)**. It provides a censorship-resistant, community-curated data mesh for job vacancies (`job`) and freelance contracts (`gig`).
+**OpenRadar** is an open, non-commercial network that collects job vacancies (`job`) and freelance orders (`gig`) from any source into one clean feed: public boards, RSS, Telegram channels (public or private, through your own account), email alerts, or your own scrapers.
 
-No pay-to-apply paywalls. No sponsored zombie postings. No closed data silos.
+No paywalls, no paid responses, no commercial tier. Contacts stay in the post: you write to the client directly.
 
----
+> **Status:** radar/2 is being rolled out (v0.7). The self-hosted node works today; the hub protocol is described in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
-## Manifesto: Why Modern Hiring Is Broken
+## Two ways to use it
 
-The digital recruitment landscape (HeadHunter, Upwork, LinkedIn, Kwork) is structurally flawed at the economic layer:
-1. **The Zombie Vacancy Incentive:** Centralized platforms monetize engagement metrics and applicant desperation. Keeping expired or fake postings active maximizes platform search traffic and resume collection.
-2. **Artificial Scarcity & Application Fees:** Charging candidates and contractors for "connects" or responses creates an artificial barrier to labor liquidity.
-3. **Walled Data Gardens:** Job seekers and automated AI agents are forced to query dozens of closed, fragmented platforms that intentionally degrade public feeds.
+1. **Self-hosted node.** Run `radar` on your machine or server, connect your sources and accounts, and get your own feed and notifications (Telegram, webhook). Nothing leaves your node unless you mark a source as shared.
+2. **Join the hub.** Send observations to the shared hub (openradar.fun) from your node, from the SDK or from any scraper. The hub merges posts seen in different places into one lead, credits whoever saw it first, and gives early access by contribution: active contributors see new leads immediately, everyone else with a delay; guests see the feed without contacts.
 
-**OpenRadar separates the data curation mesh from the commercial layer:**
-- **Zero-Fee Protocol:** Open and verifiable. Anyone can run an indexer, relay, or validator node.
-- **Game-Theoretic Truth:** Hybrid AI Arbitration (Grokipedia Pattern) paired with Skin-in-the-Game slashing enforces truthful status reporting.
-- **Privacy by Design:** Smart PII scrubbing on the user's node strips personal phone numbers and private messenger links before network broadcast.
-- **Swiss Typography (Zero Emoji Doctrine):** Pure monochrome lines, high-density information, and zero visual noise.
-
----
-
-## Protocol Architecture (`radar/1`)
-
-```
-   [ Local Web Scanners / CLI Nodes / Extensions ]
-                         │
-      (Smart PII Scrubbing + MinHash Sketch)
-                         │
-      (BIP-340 Schnorr Sign with HMAC Child Key)
-                         ▼
-        ┌───────────────────────────────────┐
-        │   Nostr Relay Mesh (Kind 30402)   │
-        └─────────────────┬─────────────────┘
-                          │
-         ┌────────────────┴────────────────┐
-         ▼                                 ▼
-┌──────────────────┐             ┌───────────────────┐
-│ Active Node Pool │             │ Passive Readers   │
-│  (0-sec Stream)  │             │   (12-hour Lag)   │
-└────────┬─────────┘             └───────────────────┘
-         │
-         ▼
-┌────────────────────────────────────────────────────┐
-│ Hybrid AI Arbiter (Deterministic Regex + MinHash   │
-│ Jaccard Guard + Grokipedia LLM Slashing Engine)    │
-└────────────────────────────────────────────────────┘
-```
-
-### Core Cryptographic Invariants
-- **BIP-340 Schnorr Signatures:** Even-parity Y-coordinate correction over `secp256k1`.
-- **Blinded Relaying (HMAC Child Keys):** Nodes derive dynamic ephemeral keys per source and per 7-day epoch:
-  $$\text{privkey}_{\text{child}} = \text{HMAC-SHA256}(\text{master\_privkey}, \text{source\_id} \parallel \text{week\_epoch})$$
-  Surveillance observers cannot correlate posts across channels to deanonymize node operators.
-- **MinHash Fingerprinting:** 64 x 16-bit buckets (128 bytes, base64url) in tag `["mh", "..."]` enable $O(1)$ Jaccard similarity estimation without LLM overhead.
-- **Tit-for-Tat Access Engine:** Unlocks real-time streaming exclusively for nodes contributing $\ge 3$ leads/week or $\ge 10$ attestations/day. Passive consumers receive a 12-hour delayed stream.
-- **Canary Traps & Cheater Slashing:** Automated synthetic honey-leads detect blind bots signing fake verifications, permanently zeroing their reputation (`trust_score = 0.0`).
-
----
-
-## One-Command Deployment
-
-Spin up a self-hosted node and database mesh instance:
+## Quick start (node)
 
 ```bash
-# 1. Clone repository
 git clone https://github.com/MikhailSagalaev/radar-oss.git
 cd radar-oss
+pnpm install
+pnpm dev -- init
+pnpm dev -- serve
+```
 
-# 2. Launch full infrastructure
+The dashboard opens on `http://127.0.0.1:8787`. Without `DATABASE_URL` the node uses an in-memory store; for production use PostgreSQL 17:
+
+```bash
+cp .env.example .env    # set RADAR_ADMIN_TOKEN, POSTGRES_PASSWORD, DATABASE_URL
 docker compose up -d
 ```
 
-The node starts immediately on `http://127.0.0.1:8787` with PostgreSQL 17 + `pgvector halfvec(384)`.
+`docker compose` refuses to start without real secrets in `.env`.
 
----
+## Sources
 
-## Autonomous AI Agent Infrastructure (B2D)
+RSS, public Telegram channels (`t.me/s`), Kwork, hh.ru, Работа России, RemoteOK, IMAP job alerts, webhook (`POST /api/ingest/:sourceId`) and the browser extension. Any other source can push JSON to the webhook. See [docs/PLUGINS.md](docs/PLUGINS.md) to write an adapter.
 
-### 1. Model Context Protocol (MCP) Server
-OpenRadar natively implements the Anthropic **Model Context Protocol (MCP)** JSON-RPC 2.0 interface for AI agents (Claude Desktop, Cursor, LangChain, AutoGPT).
+## Interfaces
 
-- **Live Endpoint:** `https://openradar.fun/mcp`
-- **Native Tools:**
-  - `search_leads`: Semantic and parametric filtering by stack, type, budget, and verification state.
-  - `get_lead_details`: Full scrubbed content and verification history.
-  - `verify_lead_url`: Triggers immediate arbiter inspection through SSRF-guarded fetch.
-  - `get_market_analytics`: 7-day rolling skill demand and median salary metrics.
+- Dashboard and lead pages, RSS (`/feed.rss`), search catalog pages.
+- HTTP API (`/api/*`).
+- MCP server for AI agents (`radar mcp` over stdio, `POST /mcp` over HTTP): same feed, same access rules.
+- Browser extension: [docs/EXTENSION.md](docs/EXTENSION.md).
 
-### 2. Realtime B2B Firehose
-Server-Sent Events (SSE) feed for enterprise workflows and recruiter automations:
-```bash
-curl -N -H "Authorization: Bearer <TOKEN>" "https://openradar.fun/api/v1/firehose?types=job&min_budget=3000"
-```
+## Development
 
-### 3. Ghost Job & Salary X-Ray Extension
-Manifest V3 browser extension for HeadHunter, LinkedIn, Habr Career, Kwork, and Upwork.
-- Privacy-first: no automatic requests. The page URL goes to your configured server only
-  when you press "X-Ray страницы" in the popup (see [extension/PRIVACY.md](extension/PRIVACY.md));
-  signing of mesh events is delegated to your NIP-07 signer — the extension stores no keys.
-- Injects a Swiss-style metrics banner directly above vacancy titles:
-  `[ OpenRadar X-Ray ] Market Range: $3500 ($2500–$4500) · Duplicates: 2 · Source Trust: 95%`
-- Pack for Chrome / Firefox:
-  ```bash
-  pnpm pack:extension
-  ```
+- Node.js >= 22.19, pnpm >= 11.
+- `pnpm typecheck && pnpm test` must stay green. Tests never call the network.
+- `RADAR_TEST_STORE=postgres DATABASE_URL=... pnpm test` runs the same suite against PostgreSQL.
 
----
-
-## Contributing
-
-We welcome community adapters, algorithm refinements, and bug fixes.
-Review [CONTRIBUTING.md](CONTRIBUTING.md) for instructions on creating a new source adapter in 15 minutes using:
-```bash
-pnpm new:connector <source_name>
-```
-
-Requirements:
-- Node.js >= 22.19 and pnpm >= 11 (see `engines` in package.json).
-- Strictly 100% test pass rate (`pnpm test` — 170+ tests).
-- Zero TypeScript errors (`pnpm typecheck`).
-- Zero Emoji Doctrine enforced across all code and commit messages.
-
----
-
-## Transparent Infrastructure Funding
-
-OpenRadar is 100% non-commercial open-source software. All contributed funds are used exclusively to finance public Nostr relay bandwidth, NVMe storage, and validator node hosting:
-- **GitHub Sponsors:** [github.com/sponsors/MikhailSagalaev](https://github.com/sponsors/MikhailSagalaev)
-- **Open Collective:** [opencollective.com/openradar](https://opencollective.com/openradar)
-
----
+Contributions: [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md).
 
 ## License
 
-Distributed under the GNU Affero General Public License v3 (AGPL-3.0) to guarantee permanent open-source freedom against proprietary cloud enclosure. See [LICENSE](LICENSE) for details.
+AGPL-3.0. See [LICENSE](LICENSE).

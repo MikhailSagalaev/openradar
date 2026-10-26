@@ -1,59 +1,29 @@
-# Browser Extension (Manifest V3)
+# Browser extension (Manifest V3)
 
-A lightweight, zero-dependency Manifest V3 browser extension that captures freelance gigs and job postings into your self-hosted **OpenRadar** instance with one click, via the context menu or the `Alt+Shift+R` hotkey.
+A dependency-free Manifest V3 extension that sends a vacancy or an order from any site to your OpenRadar node with one click, the context menu or `Alt+Shift+R`.
 
----
+## Installation (Chrome, Edge, Yandex Browser, Brave)
 
-## 📦 Installation (Chrome / Edge / Yandex Browser / Brave)
+1. Open your OpenRadar dashboard, page **Расширение** (`/extension`), and download `extension.zip` (or use the `extension/` folder of the repository).
+2. Unpack it, open `chrome://extensions/`, enable **Developer mode**.
+3. **Load unpacked** and select the unpacked folder.
 
-### Option A: From Web UI (Recommended)
-1. Open your running OpenRadar dashboard and navigate to **«Расширение»** (`/extension`).
-2. Click **«Скачать extension.zip»** (or download from `/extension/download`) and unpack it to any folder on your computer.
-3. Open `chrome://extensions/` in your browser.
-4. Toggle on **«Developer mode»** (top-right corner).
-5. Click **«Load unpacked»** and select the unpacked extension folder.
+## Configuration
 
-### Option B: From Repository
-Select the `extension/` directory directly inside the repository in `chrome://extensions/`.
-
----
-
-## ⚙️ Configuration
-
-1. **Create a Webhook source** in OpenRadar (if you haven't yet):
+1. Create a webhook source on your node:
    ```bash
-   node bin/radar.js source add --kind webhook --title "Browser Extension"
+   node bin/radar.js source add --kind webhook --title "Browser"
    ```
-   *Note: Save the token printed by the command. You can also view source IDs on the `/extension` page.*
+   Keep the token it prints. Source ids are also listed on `/extension`.
+2. In the popup, open **Настройки подключения** and fill in the server URL (e.g. `http://127.0.0.1:8787`, check it with **Проверить**), the source id and the token. Save.
 
-2. Click the **OpenRadar icon** in your browser toolbar and expand **«Настройки подключения»**:
-   - **Contributor nickname**: e.g. `@telegram` (optional; signs your submissions in the community).
-   - **Radar server URL**: e.g. `http://127.0.0.1:8787` (click **«Проверить»** to test the connection via `/api/ping`).
-   - **Source ID**: The Webhook source ID from step 1.
-   - **Source Token**: Secret token for the source.
-3. Click **«Сохранить»**.
+## What it captures
 
----
+- **Whole page** (popup or `Alt+Shift+R`): `schema.org/JobPosting` when present (title, company, salary, city, remote, skills), otherwise OpenGraph / Twitter Card / page title and description. You choose **Заказ** or **Вакансия** before sending.
+- **Selection** (right click): the selected text from any site, including Telegram Web and forums.
 
-## 🚀 Features
+Contacts in the text are sent as they are. The node keeps them in a structured field; in hub mode guests never see them.
 
-- **Full Page Capture (`Alt+Shift+R` or Popup)**:
-  - Automatically parses structured `schema.org/JobPosting` (position, company, salary range, city, remote flag, required skills).
-  - Falls back to OpenGraph (`og:title`, `og:description`), Twitter Card metadata, or page title/description.
-  - Allows switching between **«Заказ (Gig)»** and **«Вакансия (Job)»** before submitting.
-- **Selection Capture (Context Menu)**:
-  - Highlight any text (job requirements, order specs, contact details) on any site (Kwork, Habr Freelance, Telegram Web, Avito, forums).
-  - Right-click → **«Отправить заказ в Radar»** (Gig) or **«Отправить вакансию в Radar»** (Job).
-  - System notification pops up with a direct link to the newly created lead card in OpenRadar.
-- **Visual Snippet & Badge in Popup**:
-  - Live preview of selected text snippet and parsed Job details (`🏢 Acme Corp · 💰 250 000 ₽ · 📍 Москва`).
-- **Dark Mode Support**:
-  - Native dark/light mode following system appearance with crisp Swiss typography.
+## Privacy
 
----
-
-## 🔒 Security & Privacy
-
-- **Local Storage only**: Credentials and tokens are stored solely in `chrome.storage.local`.
-- **Zero Tracking**: No analytics, telemetry, or external third-party servers. All requests go directly to your configured OpenRadar server.
-- **Scoped Permissions**: Uses `activeTab`, `scripting`, and `contextMenus`. Content scripts remain passive until triggered.
+Only on your command, only to your server. See [extension/PRIVACY.md](../extension/PRIVACY.md).

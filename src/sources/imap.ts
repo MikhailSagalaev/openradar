@@ -68,6 +68,9 @@ export function emailToRawLead(input: EmailInput, source: {
   };
 }
 
+/** Only dedicated variables may hold IMAP passwords. */
+export const IMAP_PASSWORD_ENV_RE = /^RADAR_IMAP_[A-Z0-9_]{1,64}$/;
+
 export const imapSource: SourceAdapter = {
   kind: 'imap',
   access: 'user-provided',
@@ -87,6 +90,11 @@ export const imapSource: SourceAdapter = {
     if (!host) throw new Error('IMAP source requires config.host');
     if (!user) throw new Error('IMAP source requires config.user');
     if (!passwordEnv) throw new Error('IMAP source requires config.passwordEnv');
+    // A source config must never be able to read arbitrary server secrets
+    // (DATABASE_URL, GITHUB_CLIENT_SECRET, ...) and send them to a mail host.
+    if (!IMAP_PASSWORD_ENV_RE.test(passwordEnv)) {
+      throw new Error('IMAP config.passwordEnv must name a variable starting with RADAR_IMAP_ (e.g. RADAR_IMAP_PASSWORD)');
+    }
 
     const password = process.env[passwordEnv];
     if (!password) {
@@ -94,7 +102,8 @@ export const imapSource: SourceAdapter = {
     }
 
     const port = Number(config.port ?? 993);
-    const secure = config.secure !== false;
+    // Implicit TLS only: the password never travels in clear text.
+    const secure = true;
     const mailbox = typeof config.mailbox === 'string' && config.mailbox.trim()
       ? config.mailbox.trim()
       : 'INBOX';
@@ -108,7 +117,7 @@ export const imapSource: SourceAdapter = {
       secure,
       auth: { user, pass: password },
       logger: false,
-      tls: { rejectUnauthorized: config.rejectUnauthorized !== false },
+      tls: { rejectUnauthorized: true },
     });
 
     await client.connect();

@@ -1,5 +1,5 @@
 import type { Lead, LeadVoteSignal, RunRecord, SourceHealth, SourceRecord, Stats } from '../core/types.ts';
-import { escapeHtml, firstLine } from '../core/text.ts';
+import { escapeHtml, firstLine, jsonForScript } from '../core/text.ts';
 import { type SupportedLang, getTranslations } from './i18n.ts';
 import { renderLogo } from './logo.ts';
 import { SEO_CATALOG } from './seo.ts';
@@ -20,8 +20,8 @@ export interface LeadsPageData {
   version: string;
   auth?: AuthDisplay;
   lang?: SupportedLang;
-  lockedCount?: number;
-  isRealtime?: boolean;
+  /** Feed delay for this viewer in minutes (hub mode); 0 = real time. */
+  delayMinutes?: number;
   /** Anonymous viewer: personal CRM funnel tabs and statuses are hidden (UX-03). */
   isGuest?: boolean;
 }
@@ -1339,7 +1339,7 @@ ${input.body}
     <button type="button" onclick="document.getElementById('auth-vote-dialog').close()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:22px;line-height:1;padding:0">&times;</button>
   </div>
   <p class="muted" style="font-size:13px;line-height:1.55;margin:0 0 20px">
-    ${escapeHtml(lang === 'ru' ? 'Войдите через GitHub для голосования, оценки качества и участия в сети.' : 'Sign in with GitHub to vote, curate leads and participate in the mesh.')}
+    ${escapeHtml(lang === 'ru' ? 'Войдите через GitHub для голосования, оценки качества и участия в сети.' : 'Sign in with GitHub to vote, curate leads and see contacts.')}
   </p>
   <div style="display:grid;gap:12px">
     <a class="btn primary" id="auth-vote-github-btn" href="/auth/github" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;font-size:13.5px;font-weight:600;text-decoration:none">
@@ -1742,10 +1742,11 @@ export function renderLeadsPage(data: LeadsPageData): string {
           <button class="btn" data-poll="/api/poll">${escapeHtml(t.pollAll)}</button>
         </div>`;
 
-  const lagBanner = (data.lockedCount && data.lockedCount > 0 && !data.isRealtime)
+  const delay = data.delayMinutes ?? 0;
+  const delayLabel = delay >= 60 ? `${Math.round(delay / 60)} ч` : `${delay} мин`;
+  const lagBanner = delay > 0
     ? `<div class="mesh-lag-notice">
-        <span>Вам временно недоступны <strong>${data.lockedCount}</strong> эксклюзивных заказов из Mesh-сети (12-часовой лаг для гостей).</span>
-        <a href="/extension" class="btn btn-sm">Подключить узел</a>
+        <span>Лента показывается с задержкой <strong>${escapeHtml(delayLabel)}</strong>${data.auth ? '' : ', контакты скрыты'}. Без задержки — участникам, которые присылают заказы в сеть.</span>
       </div>`
     : '';
 
@@ -2018,12 +2019,12 @@ ${cautionBanner}
 <meta property="og:title" content="${escapeHtml(leadTitle(lead))} · OpenRadar">
 <meta property="og:description" content="${escapeHtml(cleanText)}">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://openradar.fun/leads/${escapeHtml(lead.id)}">
+<meta property="og:url" content="/leads/${escapeHtml(lead.id)}">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="${escapeHtml(leadTitle(lead))}">
 <meta name="twitter:description" content="${escapeHtml(cleanText)}">
 <script type="application/ld+json">
-${JSON.stringify({
+${jsonForScript({
   '@context': 'https://schema.org',
   '@type': lead.type === 'job' ? 'JobPosting' : 'CreativeWork',
   title: lead.title,
@@ -2036,7 +2037,7 @@ ${JSON.stringify({
     currency: lead.currency || 'RUB',
     value: { '@type': 'QuantitativeValue', value: lead.budget, unitText: 'MONTH' },
   } : undefined,
-}, null, 2)}
+})}
 </script>`;
 
   return layout({

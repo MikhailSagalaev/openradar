@@ -14,6 +14,7 @@ function makeRuntime(overrides: Partial<Env> = {}, fetchImpl: typeof fetch = fet
     sources: base.sources,
     sinks: base.sinks,
     fetchImpl,
+    access: base.access,
   };
 }
 
@@ -35,11 +36,13 @@ describe('http server', () => {
       expect(() => loadEnv({ NODE_ENV: 'production', RADAR_ADMIN_TOKEN: 'too-short' })).toThrow(
         /shorter than 32 characters/,
       );
+      // The example value once shipped in docker-compose.yml is public: refuse it.
       expect(() =>
-        loadEnv({
-          NODE_ENV: 'production',
-          RADAR_ADMIN_TOKEN: '012345678901234567890123456789012',
-        }),
+        loadEnv({ NODE_ENV: 'production', RADAR_ADMIN_TOKEN: '012345678901234567890123456789012' }),
+      ).toThrow(/published example value/);
+      expect(() => loadEnv({ NODE_ENV: 'production', RADAR_ADMIN_TOKEN: 'a'.repeat(40) })).toThrow();
+      expect(() =>
+        loadEnv({ NODE_ENV: 'production', RADAR_ADMIN_TOKEN: '9f2c4e1a7b3d5f6e8a0c2b4d6f8e1a3c5b7d9f0e2a4c6b8d' }),
       ).not.toThrow();
     } finally {
       process.env.NODE_ENV = prevEnv;

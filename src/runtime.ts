@@ -1,4 +1,5 @@
 import { createClassifier } from './classifier/openai.ts';
+import { parseTierDelays, type AccessPolicy } from './core/access.ts';
 import { loadEnv } from './config.ts';
 import { createLogger } from './core/logger.ts';
 import type { Classifier, Env, Logger } from './core/types.ts';
@@ -16,6 +17,7 @@ export interface Runtime {
   sinks: SinkRegistry;
   classifier?: Classifier;
   fetchImpl: typeof fetch;
+  access: AccessPolicy;
 }
 
 export interface RuntimeOverrides {
@@ -55,5 +57,10 @@ export async function createRuntime(env: Env = loadEnv(), overrides: RuntimeOver
     sinks,
     classifier,
     fetchImpl: overrides.fetchImpl ?? fetch,
+    access: accessPolicyFromEnv(env),
   };
+}
+
+export function accessPolicyFromEnv(env: Env): AccessPolicy {
+  return { mode: env.RADAR_MODE ?? 'node', delays: parseTierDelays(env.RADAR_TIER_DELAYS) };
 }

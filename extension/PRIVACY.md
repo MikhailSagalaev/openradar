@@ -1,27 +1,27 @@
-# Privacy Policy for OpenRadar Extension
+# Privacy Policy for the OpenRadar Extension
 
-**Protocol Version:** radar/1  
-**Extension Version:** 0.5.0  
-**Effective Date:** October 25, 2026  
+**Extension version:** 0.7.0
+**Effective date:** October 26, 2026
 
-## 1. Core Manifesto & Zero-Telemetry Guarantee
-The OpenRadar Extension is built on the principle of digital sovereignty and zero user surveillance:
-1. **No Tracking or Telemetry:** The extension contains zero tracking pixels, zero analytics libraries, and zero telemetry SDKs (no Google Analytics, no Sentry, no Mixpanel).
-2. **No Data Reselling:** User data, browsing habits, and identity are never monetized, logged, or transferred to advertisers or data brokers.
-3. **No Private Key Storage:** The extension never generates, stores, or transmits private key material. Signing and identity (radar/1 mesh events) come exclusively from your own NIP-07 signer extension (e.g. Alby) via `window.nostr`; keys stay in the signer, not in this extension.
+## What the extension does
 
-## 2. Information Extracted & Handled
-The extension operates strictly on explicit user action — it never sends anything automatically while you browse:
-1. **Ghost Job & Salary X-Ray (explicit only):** When you press the "X-Ray страницы" button in the popup on a supported job board (HeadHunter, Habr Career, LinkedIn, Kwork, Upwork), the extension queries `GET /api/v1/xray?url=...` on the configured OpenRadar instance to fetch market salary distributions and duplicate counts. The page URL is transmitted only at that moment; there is no automatic background X-Ray on any domain.
-2. **Public Metadata Only:** Extraction reads only publicly rendered HTML elements and standard `schema.org/JobPosting` structured JSON-LD (job title, employer name, salary range, city, skills, and public description), and only when you submit a lead or request an X-Ray.
-3. **Client-Side PII Scrubbing:** All lead submissions are sanitized locally before network transmission. Personal phone numbers, personal emails, and direct messenger links are stripped automatically.
+The extension sends the page you are looking at, or the text you selected, to **your own** OpenRadar server, and only when you ask it to: the popup button, the context menu or the `Alt+Shift+R` shortcut. Nothing is sent while you browse.
 
-## 3. Browser Permissions Declared
-- `activeTab` & `scripting`: Required solely to extract public vacancy metadata from the actively open tab upon user interaction.
-- `storage`: Required to preserve your local server URL, source credentials and access tier state. No cryptographic keys are stored.
-- `contextMenus` & `notifications`: Used solely for optional right-click submissions and notification toasts.
+## What is sent, and where
 
-## 4. Open Source & Auditability
-The entire codebase for the extension and server is 100% open source under the Apache 2.0 / AGPL-3.0 licenses:
-- GitHub Repository: https://github.com/MikhailSagalaev/radar-oss
-- Public Node: https://openradar.fun
+- **Destination:** only the server URL you configured in the extension settings (`/api/ingest/<source id>` with your source token). There is no default server and no third-party endpoint.
+- **Content:** page title, URL, the selected text or the page description, and `schema.org/JobPosting` fields when the page has them (title, company, salary, city, skills, description). Contacts written in the text are sent as they are: your server stores them and hides them from guests.
+
+## What is stored in the browser
+
+`chrome.storage.local` keeps your server URL, the source id and the source token. No keys, no history, no analytics.
+
+## Permissions
+
+- `activeTab`, `scripting`: read the open tab when you press send.
+- `storage`: keep the connection settings above.
+- `contextMenus`, `notifications`: the right-click menu and the "sent" notification.
+
+## No tracking
+
+No analytics, telemetry or third-party scripts. The source code is open: https://github.com/MikhailSagalaev/radar-oss (AGPL-3.0).

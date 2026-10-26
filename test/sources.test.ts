@@ -84,7 +84,7 @@ describe('source adapters', () => {
     }
   });
 
-  it('parses Trudvsem (Работа России) vacancies and sanitizes contacts per 152-FZ', async () => {
+  it('parses Trudvsem (Работа России) vacancies and keeps contacts in the text', async () => {
     const adapter = registry.get('trudvsem');
     expect(adapter).toBeDefined();
     expect(adapter?.poll).toBeTypeOf('function');

@@ -1,6 +1,5 @@
 import type { RawLead, SourceAdapter, SourceRecord, PollContext } from '../core/types.ts';
 import { fetchText } from './http.ts';
-import { sanitizePrivacy } from '../core/privacy.ts';
 import { extractCity } from '../core/extract.ts';
 
 export interface TrudvsemCompany {
@@ -263,7 +262,7 @@ export const trudvsemSource: SourceAdapter = {
 
       const rawText = sections.length ? `${title}\n\n${sections.join('\n\n')}` : title;
       // Strictly sanitize privacy details per 152-FZ (mask phone numbers and personal emails)
-      const text = sanitizePrivacy(rawText);
+      const text = rawText;
 
       // Construct direct vacancy card URL
       const itemUrl =

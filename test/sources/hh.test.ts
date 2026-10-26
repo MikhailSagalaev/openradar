@@ -18,7 +18,7 @@ describe('HeadHunter (HH.ru) Source Adapter', () => {
     expect(adapter?.poll).toBeTypeOf('function');
   });
 
-  it('parses HH vacancies and maps to RawLeads with 152-FZ sanitization', async () => {
+  it('parses HH vacancies and maps to RawLeads keeping contacts in the text', async () => {
     const adapter = registry.get('hh');
     expect(adapter?.poll).toBeDefined();
 

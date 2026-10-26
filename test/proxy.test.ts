@@ -5,11 +5,21 @@ import { fetchTextViaProxy, resolveProxyUrl } from '../src/net/proxy.ts';
 
 let proxyServer: http.Server;
 let proxyPort = 0;
+let targetServer: http.Server;
+let targetPort = 0;
 let connectCount = 0;
 
 beforeAll(async () => {
   // Minimal HTTP CONNECT proxy: tunnels TCP to the target host.
-  proxyServer = http.createServer(() => undefined);
+  // Plain-HTTP targets arrive as absolute-form requests; HTTPS ones as CONNECT.
+  proxyServer = http.createServer((req, res) => {
+    connectCount++;
+    const upstream = http.get(String(req.url), (up) => {
+      res.writeHead(up.statusCode ?? 502, up.headers);
+      up.pipe(res);
+    });
+    upstream.on('error', () => res.destroy());
+  });
   proxyServer.on('connect', (req, clientSocket, head) => {
     const [host, port] = String(req.url).split(':');
     connectCount++;
@@ -28,10 +38,19 @@ beforeAll(async () => {
       resolve();
     });
   });
+  // Local target: the test never leaves the machine.
+  targetServer = http.createServer((_req, res) => res.end('<h1>Example Domain</h1>'));
+  await new Promise<void>((resolve) => {
+    targetServer.listen(0, '127.0.0.1', () => {
+      targetPort = (targetServer.address() as { port: number }).port;
+      resolve();
+    });
+  });
 });
 
 afterAll(() => {
   proxyServer.close();
+  targetServer.close();
 });
 
 describe('outbound proxy support', () => {
@@ -47,7 +66,7 @@ describe('outbound proxy support', () => {
   });
 
   it('fetches text through an HTTP CONNECT proxy', async () => {
-    const text = await fetchTextViaProxy('https://example.com/', {
+    const text = await fetchTextViaProxy(`http://127.0.0.1:${targetPort}/`, {
       proxyUrl: `http://127.0.0.1:${proxyPort}`,
       userAgent: 'radar-proxy-test',
       timeoutMs: 15_000,

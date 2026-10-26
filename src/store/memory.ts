@@ -3,21 +3,18 @@ import { recalculateVoteScoreAndStatus } from '../core/rules.ts';
 import { normalizeTechTokens } from '../core/text.ts';
 import type {
   CreateSourceInput,
-  LeadAttestationInput,
-  LeadAttestationRecord,
+  FeedOptions,
   LeadDeliveryRecord,
   ListLeadsOptions,
-  MeshNodeInput,
-  MeshNodeRecord,
   Store,
   UpdateSourceInput,
   UpsertGitHubUserInput,
   UserRecord,
   UserVoteResult,
-  ViewerAccessContext,
 } from '../core/store.ts';
 import type {
   Lead,
+  LeadState,
   LeadStatus,
   LeadVoteSignal,
   RunRecord,
@@ -39,9 +36,6 @@ export class MemoryStore implements Store {
   private nextUserId = 1;
   private userVotes = new Map<string, LeadVoteSignal>();
   private sessions = new Map<string, { id: string; expiresAt: string; userId?: number }>();
-  private meshNodes = new Map<string, MeshNodeRecord>();
-  private attestations: LeadAttestationRecord[] = [];
-  private arbiterQueue = new Map<string, { triggerReason: string; attempts: number; nextRunAt: string; lastError?: string; createdAt: string }>();
 
   async init(): Promise<void> {}
 
@@ -134,6 +128,7 @@ export class MemoryStore implements Store {
     }
     const storedLead: Lead = {
       ...lead,
+      state: lead.state ?? 'active',
       votes_up: lead.votes_up ?? 0,
       votes_down: lead.votes_down ?? 0,
       votes_scam: lead.votes_scam ?? 0,
@@ -162,10 +157,10 @@ export class MemoryStore implements Store {
     }
   }
 
-  async updateLeadVerification(id: string, verificationState: import('../core/types.ts').VerificationState): Promise<void> {
+  async updateLeadState(id: string, state: LeadState): Promise<void> {
     const lead = this.leads.get(id);
     if (lead) {
-      lead.verification_state = verificationState;
+      lead.state = state;
     }
   }
 
@@ -243,7 +238,18 @@ export class MemoryStore implements Store {
   }
 
   async listLeads(options: ListLeadsOptions = {}): Promise<Lead[]> {
+    return this.queryLeads(options);
+  }
+
+  private queryLeads(options: FeedOptions, feedOnly = false): Lead[] {
     let result = Array.from(this.leads.values());
+    if (feedOnly) {
+      result = result.filter((l) => (l.state ?? 'active') === 'active');
+      if (options.createdBefore) {
+        const cutoff = options.createdBefore;
+        result = result.filter((l) => l.createdAt <= cutoff);
+      }
+    }
     if (options.status) {
       result = result.filter((l) => l.status === options.status);
     }
@@ -565,109 +571,8 @@ export class MemoryStore implements Store {
     return before - this.runs.length;
   }
 
-  async upsertMeshNode(node: MeshNodeInput): Promise<MeshNodeRecord> {
-    const existing = this.meshNodes.get(node.pubkey);
-    const now = new Date().toISOString();
-    if (existing) {
-      const updated: MeshNodeRecord = {
-        ...existing,
-        github_username: node.github_username ?? existing.github_username,
-        github_gist_url: node.github_gist_url ?? existing.github_gist_url,
-        github_verified_at: node.github_verified_at ?? existing.github_verified_at,
-        nip05_domain: node.nip05_domain ?? existing.nip05_domain,
-        trust_score: node.trust_score ?? existing.trust_score,
-        is_banned: node.is_banned !== undefined ? node.is_banned : existing.is_banned,
-        false_reports_count: node.false_reports_count ?? existing.false_reports_count,
-        valid_leads_7d: node.valid_leads_7d ?? existing.valid_leads_7d,
-        last_seen_at: now,
-      };
-      this.meshNodes.set(node.pubkey, updated);
-      return updated;
-    }
-    const created: MeshNodeRecord = {
-      pubkey: node.pubkey,
-      npub: node.npub,
-      github_username: node.github_username,
-      github_gist_url: node.github_gist_url,
-      github_verified_at: node.github_verified_at,
-      nip05_domain: node.nip05_domain,
-      trust_score: node.trust_score ?? 0.05,
-      valid_leads_7d: 0,
-      valid_attestations_24h: 0,
-      false_reports_count: node.false_reports_count ?? 0,
-      is_banned: node.is_banned ?? false,
-      created_at: now,
-      last_seen_at: now,
-    };
-    this.meshNodes.set(node.pubkey, created);
-    return created;
-  }
-
-  async getMeshNode(pubkey: string): Promise<MeshNodeRecord | null> {
-    return this.meshNodes.get(pubkey) ?? null;
-  }
-
-  async recordAttestation(attestation: LeadAttestationInput): Promise<LeadAttestationRecord> {
-    const record: LeadAttestationRecord = {
-      ...attestation,
-      created_at: new Date().toISOString(),
-    };
-    this.attestations.push(record);
-    const lead = this.leads.get(attestation.lead_id);
-    if (lead) {
-      lead.attestation_count = (lead.attestation_count ?? 0) + 1;
-      if (
-        attestation.kind === 30405 &&
-        attestation.signal_or_status === 'verified' &&
-        (!lead.verification_state || lead.verification_state === 'unverified')
-      ) {
-        lead.verification_state = 'attested';
-      }
-    }
-    return record;
-  }
-
-  async enqueueArbiterCheck(leadId: string, triggerReason: string): Promise<void> {
-    const now = new Date().toISOString();
-    this.arbiterQueue.set(leadId, {
-      triggerReason,
-      attempts: 0,
-      nextRunAt: now,
-      createdAt: now,
-    });
-    const lead = this.leads.get(leadId);
-    if (lead && lead.verification_state !== 'killed_scam' && lead.verification_state !== 'killed_closed') {
-      lead.verification_state = 'under_review';
-    }
-  }
-
-  async getLeadsForFeed(viewerContext: ViewerAccessContext, options?: ListLeadsOptions): Promise<Lead[]> {
-    const all = await this.listLeads(options);
-    const now = new Date().toISOString();
-    const isPrivileged =
-      viewerContext.isAdmin ||
-      viewerContext.isRealtime ||
-      viewerContext.hasValidAttestations24h ||
-      (viewerContext.trustScore ?? 0) >= 0.2;
-
-    return all.filter((l) => {
-      // Exclude killed leads from feed
-      if (l.verification_state === 'killed_scam' || l.verification_state === 'killed_closed') {
-        return false;
-      }
-      // Privileged nodes see everything in real time
-      if (isPrivileged) {
-        return true;
-      }
-      // Free-riders / guest viewers: cannot see mesh-exclusive or future-unlocked leads (12h lag)
-      if (l.is_mesh_exclusive) {
-        return false;
-      }
-      if (l.unlocked_at && l.unlocked_at > now) {
-        return false;
-      }
-      return true;
-    });
+  async getLeadsForFeed(options: FeedOptions = {}): Promise<Lead[]> {
+    return this.queryLeads(options, true);
   }
 
   async close(): Promise<void> {

@@ -1,6 +1,5 @@
 import type { RawLead, SourceAdapter, SourceRecord, PollContext } from '../core/types.ts';
 import { fetchText } from './http.ts';
-import { sanitizePrivacy } from '../core/privacy.ts';
 import { stripHtml } from '../core/text.ts';
 
 export interface HhSalary {
@@ -267,7 +266,7 @@ export const hhSource: SourceAdapter = {
 
       const rawText = sections.length ? `${title}\n\n${sections.join('\n\n')}` : title;
       // Compliance with 152-FZ (mask phone numbers and personal emails)
-      const text = sanitizePrivacy(rawText);
+      const text = rawText;
 
       const itemUrl = item.alternate_url || item.url || `https://hh.ru/vacancy/${item.id}`;
 
