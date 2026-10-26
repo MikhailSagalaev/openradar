@@ -169,6 +169,8 @@ export interface Lead extends RawLead {
   /** MinHash sketch of the text (base64url), used for near-duplicate clustering. */
   minhash_sketch?: string;
   state?: LeadState;
+  /** Hub: when the lead was first confirmed (another observer or useful signals); sticky. */
+  confirmedAt?: string;
 }
 
 export interface PollContext {

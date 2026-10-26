@@ -16,6 +16,7 @@ import {
   type SignalType,
 } from '../net/protocol.ts';
 import { ingestRawLead, type IngestDeps } from '../pipeline/ingest.ts';
+import { evaluateLeadState, WeightResolver } from './rating.ts';
 
 /**
  * radar/2 hub: accepts signed events from participants (docs/PROTOCOL.md).
@@ -174,9 +175,20 @@ async function handleObservation(event: NostrEvent, deps: HubDeps, now: Date): P
     archived: now.getTime() - postedAt > ARCHIVE_AFTER_MS,
     receivedAt: now.toISOString(),
   });
+  let contactsChanged = !merged;
   if (merged && raw.contacts?.length) {
     const fresh = mergeContacts(lead.contacts ?? [], raw.contacts);
-    if (fresh.length !== (lead.contacts ?? []).length) await deps.store.mergeLeadContacts(lead.id, raw.contacts);
+    if (fresh.length !== (lead.contacts ?? []).length) {
+      await deps.store.mergeLeadContacts(lead.id, raw.contacts);
+      contactsChanged = true;
+    }
+  }
+  // A contact a moderator flagged as scam hides the lead at once.
+  if (contactsChanged) {
+    const current = await deps.store.getLead(lead.id);
+    if (current?.contacts?.length && (await deps.store.getContactFlags(current.contacts)).length) {
+      await evaluateLeadState(deps.store, current, new WeightResolver(deps.store, deps.moderators, now));
+    }
   }
   return { id: event.id, status: 'accepted', leadId: lead.id, merged };
 }
@@ -197,6 +209,7 @@ async function handleSignal(event: NostrEvent, deps: HubDeps, now: Date): Promis
     eventId: event.id,
     createdAt: now.toISOString(),
   });
+  await evaluateLeadState(deps.store, lead, new WeightResolver(deps.store, deps.moderators, now));
   return { id: event.id, status: 'accepted', leadId };
 }
 
@@ -211,7 +224,12 @@ async function handleStatus(event: NostrEvent, deps: HubDeps): Promise<EventOutc
   const observations = await deps.store.findObservationsByPost(src.platform, src.channel, msg);
   const own = observations.filter((o) => o.pubkey === event.pubkey && o.isFirst);
   if (status !== 'edited') {
-    for (const o of own) await deps.store.updateLeadState?.(o.leadId, 'closed');
+    const weights = new WeightResolver(deps.store, deps.moderators);
+    for (const o of own) {
+      await deps.store.setLeadDecision(o.leadId, { state: 'closed', decidedBy: 'author', pubkey: event.pubkey, reason: status });
+      const lead = await deps.store.getLead(o.leadId);
+      if (lead) await evaluateLeadState(deps.store, lead, weights);
+    }
   }
   return { id: event.id, status: 'accepted', leadId: own[0]?.leadId };
 }

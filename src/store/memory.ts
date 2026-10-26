@@ -3,6 +3,9 @@ import { recalculateVoteScoreAndStatus } from '../core/rules.ts';
 import { normalizeTechTokens } from '../core/text.ts';
 import { contactKey, mergeContacts } from '../core/contacts.ts';
 import type {
+  ContactFlag,
+  LeadDecision,
+  LedgerEntry,
   ObservationRecord,
   ParticipantRecord,
   SignalRecord,
@@ -189,6 +192,11 @@ export class MemoryStore implements Store {
         (lead as any).baseScore = lead.score;
       }
     }
+  }
+
+  async markLeadConfirmed(id: string, at: string): Promise<void> {
+    const lead = this.leads.get(id);
+    if (lead && !lead.confirmedAt) lead.confirmedAt = at;
   }
 
   async updateLeadState(id: string, state: LeadState): Promise<void> {
@@ -479,7 +487,7 @@ export class MemoryStore implements Store {
     const existingId = this.usersByGithubId.get(input.githubId);
     if (existingId !== undefined) {
       const existing = this.users.get(existingId)!;
-      const updated: UserRecord = { ...existing, handle: input.handle };
+      const updated: UserRecord = { ...existing, handle: input.handle, githubCreatedAt: input.githubCreatedAt ?? existing.githubCreatedAt };
       this.users.set(existingId, updated);
       return updated;
     }
@@ -489,6 +497,7 @@ export class MemoryStore implements Store {
       handle: input.handle,
       role: 'participant',
       createdAt: new Date().toISOString(),
+      githubCreatedAt: input.githubCreatedAt,
     };
     this.users.set(user.id, user);
     this.usersByGithubId.set(input.githubId, user.id);
@@ -631,7 +640,7 @@ export class MemoryStore implements Store {
       existing.lastSeenAt = now;
       return { ...existing };
     }
-    const created: ParticipantRecord = { pubkey, profile: {}, createdAt: now, lastSeenAt: now };
+    const created: ParticipantRecord = { pubkey, profile: {}, createdAt: now, lastSeenAt: now, rating: 0 };
     this.participants.set(pubkey, created);
     return { ...created };
   }
@@ -674,6 +683,10 @@ export class MemoryStore implements Store {
     this.signals.set(`${record.leadId}\u0000${record.pubkey}`, { ...record });
   }
 
+  async deleteSignal(leadId: string, pubkey: string): Promise<void> {
+    this.signals.delete(`${leadId}\u0000${pubkey}`);
+  }
+
   async listSignals(leadId: string): Promise<SignalRecord[]> {
     return [...this.signals.values()].filter((s) => s.leadId === leadId && this.leads.has(s.leadId)).map((s) => ({ ...s }));
   }
@@ -684,6 +697,87 @@ export class MemoryStore implements Store {
     if (this.authReplay.has(id)) return false;
     this.authReplay.set(id, expiresAt);
     return true;
+  }
+
+  // --- rating and moderation ---
+  private ledger: LedgerEntry[] = [];
+  private decisions = new Map<string, LeadDecision>();
+  private contactFlags = new Map<string, ContactFlag>();
+
+  async getUserById(id: number): Promise<UserRecord | null> {
+    const user = this.users.get(id);
+    return user ? { ...user } : null;
+  }
+
+  async linkParticipantGithub(pubkey: string, userId: number): Promise<void> {
+    await this.touchParticipant(pubkey);
+    for (const p of this.participants.values()) if (p.githubUserId === userId) p.githubUserId = undefined;
+    this.participants.get(pubkey)!.githubUserId = userId;
+  }
+
+  async getParticipantByGithubUser(userId: number): Promise<ParticipantRecord | null> {
+    for (const p of this.participants.values()) if (p.githubUserId === userId) return { ...p };
+    return null;
+  }
+
+  async banParticipant(pubkey: string, reason: string | null): Promise<void> {
+    await this.touchParticipant(pubkey);
+    const p = this.participants.get(pubkey)!;
+    p.bannedAt = reason === null ? undefined : new Date().toISOString();
+    p.bannedReason = reason ?? undefined;
+  }
+
+  async setParticipantRatings(ratings: Map<string, number>): Promise<void> {
+    for (const p of this.participants.values()) p.rating = ratings.get(p.pubkey) ?? 0;
+  }
+
+  async listObservationsSince(sinceIso: string): Promise<ObservationRecord[]> {
+    return this.observations
+      .filter((o) => o.receivedAt >= sinceIso && this.leads.has(o.leadId))
+      .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt))
+      .map((o) => ({ ...o }));
+  }
+
+  async replaceLedger(leadIds: string[], entries: LedgerEntry[]): Promise<void> {
+    const ids = new Set(leadIds);
+    this.ledger = [...this.ledger.filter((e) => !ids.has(e.leadId)), ...entries.map((e) => ({ ...e }))];
+  }
+
+  async sumLedger(sinceIso: string): Promise<Map<string, number>> {
+    const sums = new Map<string, number>();
+    for (const e of this.ledger) {
+      if (e.createdAt < sinceIso || !this.leads.has(e.leadId)) continue;
+      sums.set(e.pubkey, (sums.get(e.pubkey) ?? 0) + e.points);
+    }
+    return sums;
+  }
+
+  async listLedger(pubkey: string, sinceIso: string, limit: number): Promise<LedgerEntry[]> {
+    return this.ledger
+      .filter((e) => e.pubkey === pubkey && e.createdAt >= sinceIso && this.leads.has(e.leadId))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit)
+      .map((e) => ({ ...e }));
+  }
+
+  async getLeadDecision(leadId: string): Promise<LeadDecision | null> {
+    const d = this.decisions.get(leadId);
+    return d && this.leads.has(leadId) ? { ...d } : null;
+  }
+
+  async setLeadDecision(leadId: string, decision: Omit<LeadDecision, 'leadId' | 'decidedAt'> | null): Promise<void> {
+    if (decision === null) this.decisions.delete(leadId);
+    else this.decisions.set(leadId, { ...decision, leadId, decidedAt: new Date().toISOString() });
+  }
+
+  async setContactFlag(contact: Contact, flag: Omit<ContactFlag, 'type' | 'value' | 'createdAt'> | null): Promise<void> {
+    const key = contactKey(contact);
+    if (flag === null) this.contactFlags.delete(key);
+    else this.contactFlags.set(key, { ...flag, type: contact.type, value: contact.value, createdAt: new Date().toISOString() });
+  }
+
+  async getContactFlags(contacts: Contact[]): Promise<ContactFlag[]> {
+    return contacts.map((c) => this.contactFlags.get(contactKey(c))).filter((f): f is ContactFlag => Boolean(f)).map((f) => ({ ...f }));
   }
 
   async close(): Promise<void> {

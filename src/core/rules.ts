@@ -232,15 +232,8 @@ export function recalculateVoteScoreAndStatus(
   const adjustment = totalVotes >= 1.0 ? Math.round(community * 25) : 0;
   const score = Math.max(0, Math.min(100, Math.round(baseScore + adjustment)));
 
-  let status = currentStatus;
-  // If S >= 3 and S > U, mark lead status as 'rejected' / hidden.
-  if (S >= 3 && S > U) {
-    status = 'rejected';
-  }
-  // If C >= 2 and C > U * 0.5, mark lead status as 'rejected' (closed).
-  if (C >= 2 && C > U * 0.5) {
-    status = 'rejected';
-  }
+  // Hiding is not decided here: weighted signals (src/hub/rating.ts) set the lead state.
+  const status = currentStatus;
 
   return { score, status, community };
 }

@@ -2,6 +2,8 @@ import type { Logger } from '../core/types.ts';
 import { pollAll, type PollDeps } from './poll.ts';
 import { processOutbox } from './outbox.ts';
 import { runDigestIfDue } from './digest.ts';
+import { recomputeRatings } from '../hub/rating.ts';
+import { parseModerators } from '../hub/service.ts';
 
 const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000;
 
@@ -86,6 +88,10 @@ export class PollRunner {
       const outbox = await store.cleanupOutboxEvents?.(30);
       const runs = await store.cleanupRuns?.(30);
       const sessions = await store.purgeExpiredSessions?.();
+      if (this.deps.env.RADAR_MODE === 'hub') {
+        const rating = await recomputeRatings(store, parseModerators(this.deps.env.RADAR_MODERATORS));
+        this.logger.info('rating recomputed', { ...rating });
+      }
       if (leads || outbox || runs || sessions) {
         this.logger.info('maintenance cleanup finished', {
           leads,

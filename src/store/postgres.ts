@@ -18,6 +18,9 @@ import type {
   Stats,
 } from '../core/types.ts';
 import type {
+  ContactFlag,
+  LeadDecision,
+  LedgerEntry,
   ObservationRecord,
   ParticipantRecord,
   SignalRecord,
@@ -700,6 +703,7 @@ export class PostgresStore implements Store {
             : String(r.minhash_sketch))
         : undefined,
       state: (r.state as LeadState) || 'active',
+      confirmedAt: r.confirmed_at ? new Date(r.confirmed_at).toISOString() : undefined,
       contacts: parseJsonArray(r.contacts_json),
       sourceRef: r.source_platform && r.source_channel
         ? {
@@ -880,39 +884,26 @@ export class PostgresStore implements Store {
 
   async upsertGitHubUser(input: UpsertGitHubUserInput): Promise<UserRecord> {
     const res = await this.pool.query(
-      `INSERT INTO app_users (github_id, handle, role)
-       VALUES ($1, $2, 'participant')
-       ON CONFLICT (github_id) DO UPDATE SET handle = EXCLUDED.handle
-       RETURNING id, github_id, handle, role, created_at`,
-      [input.githubId, input.handle]
+      `INSERT INTO app_users (github_id, handle, role, github_created_at)
+       VALUES ($1, $2, 'participant', $3)
+       ON CONFLICT (github_id) DO UPDATE
+         SET handle = EXCLUDED.handle,
+             github_created_at = COALESCE(EXCLUDED.github_created_at, app_users.github_created_at)
+       RETURNING id, github_id, handle, role, created_at, github_created_at`,
+      [input.githubId, input.handle, input.githubCreatedAt ? new Date(input.githubCreatedAt) : null]
     );
-    const r = res.rows[0]!;
-    return {
-      id: Number(r.id),
-      githubId: Number(r.github_id),
-      handle: r.handle,
-      role: r.role,
-      createdAt: new Date(r.created_at).toISOString(),
-    };
+    return rowToUser(res.rows[0]);
   }
 
   async getUserBySession(sessionId: string): Promise<UserRecord | null> {
     const res = await this.pool.query(
-      `SELECT u.id, u.github_id, u.handle, u.role, u.created_at
+      `SELECT u.id, u.github_id, u.handle, u.role, u.created_at, u.github_created_at
        FROM sessions s
        JOIN app_users u ON u.id = s.user_id
        WHERE s.id = $1 AND s.expires_at > NOW()`,
       [sessionId]
     );
-    if (!res.rows[0]) return null;
-    const r = res.rows[0];
-    return {
-      id: Number(r.id),
-      githubId: Number(r.github_id),
-      handle: r.handle,
-      role: r.role,
-      createdAt: new Date(r.created_at).toISOString(),
-    };
+    return res.rows[0] ? rowToUser(res.rows[0]) : null;
   }
 
   async getUserVote(leadId: string, userId: number): Promise<LeadVoteSignal | null> {
@@ -1143,6 +1134,10 @@ export class PostgresStore implements Store {
     );
   }
 
+  async deleteSignal(leadId: string, pubkey: string): Promise<void> {
+    await this.pool.query(`DELETE FROM signals WHERE lead_id = $1 AND pubkey = $2`, [leadId, pubkey]);
+  }
+
   async listSignals(leadId: string): Promise<SignalRecord[]> {
     const res = await this.pool.query(`SELECT * FROM signals WHERE lead_id = $1 ORDER BY created_at ASC`, [leadId]);
     return res.rows.map((r) => ({
@@ -1162,6 +1157,190 @@ export class PostgresStore implements Store {
       [id, new Date(expiresAt)],
     );
     return (res.rowCount ?? 0) > 0;
+  }
+
+  // --- rating and moderation ---
+
+  async getUserById(id: number): Promise<UserRecord | null> {
+    const res = await this.pool.query(
+      `SELECT id, github_id, handle, role, created_at, github_created_at FROM app_users WHERE id = $1`,
+      [id],
+    );
+    return res.rows[0] ? rowToUser(res.rows[0]) : null;
+  }
+
+  async linkParticipantGithub(pubkey: string, userId: number): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`UPDATE participants SET github_user_id = NULL WHERE github_user_id = $1 AND pubkey <> $2`, [userId, pubkey]);
+      await client.query(
+        `INSERT INTO participants (pubkey, github_user_id) VALUES ($1, $2)
+         ON CONFLICT (pubkey) DO UPDATE SET github_user_id = EXCLUDED.github_user_id`,
+        [pubkey, userId],
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getParticipantByGithubUser(userId: number): Promise<ParticipantRecord | null> {
+    const res = await this.pool.query(`SELECT * FROM participants WHERE github_user_id = $1`, [userId]);
+    return res.rows[0] ? rowToParticipant(res.rows[0]) : null;
+  }
+
+  async banParticipant(pubkey: string, reason: string | null): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO participants (pubkey, banned_at, banned_reason) VALUES ($1, $2, $3)
+       ON CONFLICT (pubkey) DO UPDATE SET banned_at = EXCLUDED.banned_at, banned_reason = EXCLUDED.banned_reason`,
+      [pubkey, reason === null ? null : new Date(), reason],
+    );
+  }
+
+  async setParticipantRatings(ratings: Map<string, number>): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`UPDATE participants SET rating = 0, rating_updated_at = NOW() WHERE rating <> 0`);
+      const keys = [...ratings.keys()];
+      if (keys.length) {
+        await client.query(
+          `UPDATE participants p SET rating = r.rating, rating_updated_at = NOW()
+           FROM unnest($1::text[], $2::real[]) AS r(pubkey, rating) WHERE p.pubkey = r.pubkey`,
+          [keys, keys.map((k) => ratings.get(k) ?? 0)],
+        );
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listObservationsSince(sinceIso: string): Promise<ObservationRecord[]> {
+    const res = await this.pool.query(
+      `SELECT * FROM observations WHERE received_at >= $1 ORDER BY received_at ASC`,
+      [new Date(sinceIso)],
+    );
+    return res.rows.map(rowToObservation);
+  }
+
+  async replaceLedger(leadIds: string[], entries: LedgerEntry[]): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      if (leadIds.length) await client.query(`DELETE FROM rating_ledger WHERE lead_id = ANY($1::text[])`, [leadIds]);
+      if (entries.length) {
+        await client.query(
+          `INSERT INTO rating_ledger (pubkey, lead_id, kind, points, created_at)
+           SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::real[], $5::timestamptz[])
+           ON CONFLICT (pubkey, lead_id, kind) DO UPDATE SET points = EXCLUDED.points, created_at = EXCLUDED.created_at`,
+          [
+            entries.map((e) => e.pubkey),
+            entries.map((e) => e.leadId),
+            entries.map((e) => e.kind),
+            entries.map((e) => e.points),
+            entries.map((e) => new Date(e.createdAt)),
+          ],
+        );
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async sumLedger(sinceIso: string): Promise<Map<string, number>> {
+    const res = await this.pool.query(
+      `SELECT pubkey, SUM(points)::float8 AS points FROM rating_ledger WHERE created_at >= $1 GROUP BY pubkey`,
+      [new Date(sinceIso)],
+    );
+    return new Map(res.rows.map((r) => [r.pubkey as string, Number(r.points)]));
+  }
+
+  async listLedger(pubkey: string, sinceIso: string, limit: number): Promise<LedgerEntry[]> {
+    const res = await this.pool.query(
+      `SELECT * FROM rating_ledger WHERE pubkey = $1 AND created_at >= $2 ORDER BY created_at DESC LIMIT $3`,
+      [pubkey, new Date(sinceIso), limit],
+    );
+    return res.rows.map((r) => ({
+      pubkey: r.pubkey,
+      leadId: r.lead_id,
+      kind: r.kind,
+      points: Number(r.points),
+      createdAt: new Date(r.created_at).toISOString(),
+    }));
+  }
+
+  async getLeadDecision(leadId: string): Promise<LeadDecision | null> {
+    const res = await this.pool.query(`SELECT * FROM lead_decisions WHERE lead_id = $1`, [leadId]);
+    const r = res.rows[0];
+    return r
+      ? {
+          leadId: r.lead_id,
+          state: r.state,
+          decidedBy: r.decided_by,
+          pubkey: r.pubkey || undefined,
+          reason: r.reason ?? '',
+          decidedAt: new Date(r.decided_at).toISOString(),
+        }
+      : null;
+  }
+
+  async setLeadDecision(leadId: string, decision: Omit<LeadDecision, 'leadId' | 'decidedAt'> | null): Promise<void> {
+    if (decision === null) {
+      await this.pool.query(`DELETE FROM lead_decisions WHERE lead_id = $1`, [leadId]);
+      return;
+    }
+    await this.pool.query(
+      `INSERT INTO lead_decisions (lead_id, state, decided_by, pubkey, reason, decided_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       ON CONFLICT (lead_id) DO UPDATE SET state = EXCLUDED.state, decided_by = EXCLUDED.decided_by,
+         pubkey = EXCLUDED.pubkey, reason = EXCLUDED.reason, decided_at = NOW()`,
+      [leadId, decision.state, decision.decidedBy, decision.pubkey ?? null, decision.reason],
+    );
+  }
+
+  async setContactFlag(contact: Contact, flag: Omit<ContactFlag, 'type' | 'value' | 'createdAt'> | null): Promise<void> {
+    if (flag === null) {
+      await this.pool.query(`DELETE FROM contact_flags WHERE type = $1 AND value = $2`, [contact.type, contact.value]);
+      return;
+    }
+    await this.pool.query(
+      `INSERT INTO contact_flags (type, value, flag, pubkey, reason) VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (type, value) DO UPDATE SET flag = EXCLUDED.flag, pubkey = EXCLUDED.pubkey, reason = EXCLUDED.reason`,
+      [contact.type, contact.value, flag.flag, flag.pubkey ?? null, flag.reason],
+    );
+  }
+
+  async getContactFlags(contacts: Contact[]): Promise<ContactFlag[]> {
+    if (!contacts.length) return [];
+    const res = await this.pool.query(
+      `SELECT f.* FROM contact_flags f
+       JOIN jsonb_to_recordset($1::jsonb) AS c(type TEXT, value TEXT) ON f.type = c.type AND f.value = c.value`,
+      [JSON.stringify(contacts.map((c) => ({ type: c.type, value: c.value })))],
+    );
+    return res.rows.map((r) => ({
+      type: r.type,
+      value: r.value,
+      flag: r.flag,
+      pubkey: r.pubkey || undefined,
+      reason: r.reason ?? '',
+      createdAt: new Date(r.created_at).toISOString(),
+    }));
+  }
+
+  async markLeadConfirmed(id: string, at: string): Promise<void> {
+    await this.pool.query(`UPDATE leads SET confirmed_at = $1 WHERE id = $2 AND confirmed_at IS NULL`, [new Date(at), id]);
   }
 
   async updateLeadState(id: string, state: LeadState): Promise<void> {
@@ -1192,6 +1371,18 @@ function rowToParticipant(r: any): ParticipantRecord {
     bannedReason: r.banned_reason || undefined,
     createdAt: new Date(r.created_at).toISOString(),
     lastSeenAt: new Date(r.last_seen_at).toISOString(),
+    rating: r.rating !== null && r.rating !== undefined ? Number(r.rating) : 0,
+  };
+}
+
+function rowToUser(r: any): UserRecord {
+  return {
+    id: Number(r.id),
+    githubId: Number(r.github_id),
+    handle: r.handle,
+    role: r.role,
+    createdAt: new Date(r.created_at).toISOString(),
+    githubCreatedAt: r.github_created_at ? new Date(r.github_created_at).toISOString() : undefined,
   };
 }
 
