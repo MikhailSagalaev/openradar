@@ -1,0 +1,61 @@
+name: Deploy hub
+
+# Deploys main to the hub server over SSH after CI passes on main, or by hand.
+# Repository secrets (Settings -> Secrets and variables -> Actions):
+#   DEPLOY_HOST         server address
+#   DEPLOY_USER         SSH user (with docker rights)
+#   DEPLOY_SSH_KEY      private key for that user (a dedicated deploy key)
+#   DEPLOY_PORT         optional, default 22
+#   DEPLOY_KNOWN_HOSTS  optional, output of `ssh-keyscan <host>`; pins the host key
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: deploy-hub
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check secrets
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          if [ -z "$HOST" ] || [ -z "$USER" ] || [ -z "$KEY" ]; then
+            echo "::error::Set DEPLOY_HOST, DEPLOY_USER and DEPLOY_SSH_KEY in the repository secrets"
+            exit 1
+          fi
+      - name: Configure SSH
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          if [ -n "$KNOWN" ]; then printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts; else ssh-keyscan -p "${PORT:-22}" "$HOST" > ~/.ssh/known_hosts; fi
+      - name: Deploy
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          ssh -i ~/.ssh/deploy -p "${PORT:-22}" -o BatchMode=yes "$USER@$HOST" 'bash -s' < deploy-server.sh
+      - name: Public health check
+        run: |
+          for i in $(seq 1 10); do
+            if curl -fsS https://openradar.fun/health; then exit 0; fi
+            sleep 5
+          done
+          echo "::warning::https://openradar.fun/health did not answer; check nginx"

@@ -59,6 +59,18 @@ else
   if ! grep -q "^RADAR_HOST_PORT=" .env 2>/dev/null; then
     echo "RADAR_HOST_PORT=8787" >> .env
   fi
+  if ! grep -q "^RADAR_PUBLIC_URL=" .env 2>/dev/null; then
+    echo "RADAR_PUBLIC_URL=https://openradar.fun" >> .env
+  fi
+  # 0.7 refuses example admin tokens: replace one if an old .env still has it.
+  CURRENT_TOKEN=$(grep -E "^RADAR_ADMIN_TOKEN=" .env | cut -d '=' -f2- | tr -d ' "' || true)
+  case "$CURRENT_TOKEN" in
+    change-me|012345678901234567890123456789012|your_secure_random_admin_token_here_at_least_32_chars|"")
+      NEW_TOKEN=$(openssl rand -hex 32)
+      sed -i "s|^RADAR_ADMIN_TOKEN=.*|RADAR_ADMIN_TOKEN=${NEW_TOKEN}|" .env
+      echo "RADAR_ADMIN_TOKEN был примером из репозитория и заменён; новый токен в $TARGET_DIR/.env"
+      ;;
+  esac
 fi
 
 # 3. Читаем порт хоста
@@ -73,15 +85,33 @@ docker compose build radar
 echo "Проверка и запуск PostgreSQL..."
 docker compose up -d postgres
 
-# 6. Запуск миграций базы данных
+# 6. Резервная копия перед миграциями (0.7 удаляет таблицы mesh radar/1)
+BACKUP_DIR="${RADAR_BACKUP_DIR:-$TARGET_DIR/backups}"
+mkdir -p "$BACKUP_DIR"
+for i in {1..15}; do
+  docker compose exec -T postgres pg_isready -q && break
+  sleep 2
+done
+PG_USER=$(grep -E "^POSTGRES_USER=" .env | cut -d '=' -f2- | tr -d ' "' || true)
+PG_DB=$(grep -E "^POSTGRES_DB=" .env | cut -d '=' -f2- | tr -d ' "' || true)
+BACKUP_FILE="$BACKUP_DIR/pre-deploy-$(date +%Y%m%d-%H%M%S).dump"
+if docker compose exec -T postgres pg_dump -U "${PG_USER:-radar}" -Fc "${PG_DB:-radar}" > "$BACKUP_FILE"; then
+  echo "Резервная копия: $BACKUP_FILE"
+else
+  echo "Не удалось сделать резервную копию, деплой остановлен"
+  rm -f "$BACKUP_FILE"
+  exit 1
+fi
+
+# 7. Запуск миграций базы данных
 echo "Применение миграций базы данных..."
 docker compose run --rm radar migrate
 
-# 7. Бесшовное обновление контейнера приложения
+# 8. Бесшовное обновление контейнера приложения
 echo "Перезапуск контейнера radar_app..."
 docker compose up -d --no-deps radar
 
-# 8. Проверка статуса и healthcheck с ретраями
+# 9. Проверка статуса и healthcheck с ретраями
 echo "⏳ Ожидаем готовность сервиса (порт $RADAR_HOST_PORT)..."
 HEALTH_OK=0
 for i in {1..12}; do
