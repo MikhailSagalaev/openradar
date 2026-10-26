@@ -75,6 +75,8 @@ export interface SourceFormValues {
   mailbox: string;
   sinceDays: string;
   subjectIncludes: string;
+  /** Send leads of this source to the hub. */
+  share?: boolean;
 }
 
 export interface NewSourcePageData {
@@ -2313,6 +2315,10 @@ ${error ? `<div class="error-box" style="margin-bottom:16px">${escapeHtml(error)
     </div>
     ${textField('includeKeywords', 'Обязательные слова', values.includeKeywords, 'сантехник, электрик', 'text', 'Через запятую. Лид без них будет отклонён.')}
     ${textField('excludeKeywords', 'Стоп-слова', values.excludeKeywords, 'бесплатно, вакансия', 'text', 'Через запятую.')}
+    <label class="field" style="display:flex;gap:8px;align-items:center">
+      <input type="checkbox" name="share" value="on"${values.share ? ' checked' : ''} style="accent-color:var(--ink);width:16px;height:16px">
+      <span>Отправлять лиды в хаб (нужны RADAR_HUB_URL и RADAR_NODE_KEY)</span>
+    </label>
   </fieldset>
 
   <div>

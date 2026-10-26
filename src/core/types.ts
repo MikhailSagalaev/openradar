@@ -49,6 +49,10 @@ export interface Env {
   RADAR_TIER_DELAYS?: string;
   /** Comma-separated hex pubkeys of hub moderators. */
   RADAR_MODERATORS?: string;
+  /** Node: hub to send shared sources to, e.g. https://openradar.fun. */
+  RADAR_HUB_URL?: string;
+  /** Node: participant key (hex or nsec) that signs observations sent to the hub. */
+  RADAR_NODE_KEY?: string;
   RADAR_PROXY_URL?: string;
   RADAR_DIGEST_CHAT_ID?: string;
   RADAR_DIGEST_INTERVAL_HOURS: number;
@@ -198,6 +202,8 @@ export interface SinkContext {
 
 export interface SinkAdapter {
   kind: string;
+  /** Optional filter: when it returns false the lead is not queued for this sink. */
+  accepts?(lead: Lead, source: SourceRecord): boolean;
   deliver(lead: Lead, ctx: SinkContext): Promise<void>;
 }
 

@@ -2,6 +2,7 @@ import type { Env, Lead, Logger, SinkAdapter } from '../core/types.ts';
 import { consoleSink } from './console.ts';
 import { telegramSink } from './telegram.ts';
 import { webhookSink } from './webhook.ts';
+import { hubSink } from './hub.ts';
 
 export interface DeliveryResult {
   sink: string;
@@ -44,9 +45,14 @@ export class SinkRegistry {
     }
   }
 
-  async deliver(lead: Lead, ctx: { env: Env; logger: Logger; fetchImpl: typeof fetch }): Promise<DeliveryResult[]> {
+  async deliver(
+    lead: Lead,
+    ctx: { env: Env; logger: Logger; fetchImpl: typeof fetch },
+    kinds?: string[],
+  ): Promise<DeliveryResult[]> {
     const results: DeliveryResult[] = [];
     for (const sink of this.sinks) {
+      if (kinds && !kinds.includes(sink.kind)) continue;
       try {
         await sink.deliver(lead, {
           env: ctx.env,
@@ -69,5 +75,6 @@ export function createSinkRegistry(env: Env): SinkRegistry {
   if (env.RADAR_CONSOLE_SINK) registry.register(consoleSink);
   if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) registry.register(telegramSink);
   if (env.WEBHOOK_URL) registry.register(webhookSink);
+  if (env.RADAR_MODE === 'node' && env.RADAR_HUB_URL && env.RADAR_NODE_KEY) registry.register(hubSink);
   return registry;
 }

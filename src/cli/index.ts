@@ -18,6 +18,7 @@ import { generateConnector } from './generator.ts';
 const SOURCE_KINDS: SourceKind[] = ['rss', 'telegram', 'kwork', 'webhook', 'imap', 'trudvsem'];
 
 interface AddSourceOptions {
+  share?: boolean;
   kind: string;
   title: string;
   url?: string;
@@ -226,6 +227,7 @@ function buildProgram(): Command {
     .option('--trust <0-10>', 'Source trust bonus for scoring')
     .option('--token <token>', 'Per-source token for webhook ingestion')
     .option('--disabled', 'Create the source disabled')
+    .option('--share', 'Send leads of this source to the hub (RADAR_HUB_URL, RADAR_NODE_KEY)')
     .option('--host <host>', 'IMAP host')
     .option('--port <port>', 'IMAP port (993 by default)')
     .option('--user <user>', 'IMAP user')
@@ -260,6 +262,7 @@ function buildProgram(): Command {
       if (trust !== undefined) config.trust = trust;
 
       if (options.token) config.token = options.token;
+      if (options.share) config.share = true;
       if (kind === 'imap') {
         if (options.host) config.host = options.host;
         const port = numberOption(options.port);
@@ -323,6 +326,22 @@ function buildProgram(): Command {
           configSummary(item),
         ]);
         console.log(table(['ID', 'Тип', 'Статус', 'Название', 'Конфигурация'], rows));
+      });
+    });
+
+  source
+    .command('share <id> [state]')
+    .description('Share leads of a source with the hub: on (default) or off')
+    .action(async (id: string, state = 'on') => {
+      if (state !== 'on' && state !== 'off') fail('state must be on or off');
+      await withRuntime(async (runtime) => {
+        const current = await runtime.store.getSource(id);
+        if (!current) fail(`source ${id} not found`);
+        await runtime.store.updateSource(id, { config: { ...current!.config, share: state === 'on' } });
+        console.log(state === 'on' ? `Источник ${id} отправляется в хаб` : `Источник ${id} больше не отправляется в хаб`);
+        if (state === 'on' && (!runtime.env.RADAR_HUB_URL || !runtime.env.RADAR_NODE_KEY)) {
+          console.log('Задайте RADAR_HUB_URL и RADAR_NODE_KEY (radar key), иначе отправки не будет.');
+        }
       });
     });
 
@@ -616,6 +635,21 @@ function buildProgram(): Command {
         `received ${summary.received}, accepted ${summary.accepted}, duplicate ${summary.duplicate}, rejected ${summary.rejected}`,
       );
       for (const error of summary.errors) console.error(error);
+    });
+
+  program
+    .command('key')
+    .description('Generate a participant key for the hub (RADAR_NODE_KEY), or show the public key of one')
+    .option('--show <key>', 'hex or nsec private key to show the public key of')
+    .action(async (options: { show?: string }) => {
+      const { generateKeyPair, importPrivateKey } = await import('../net/keys.ts');
+      const pair = options.show ? importPrivateKey(options.show) : generateKeyPair();
+      console.log(`pubkey  ${pair.pubKey}`);
+      console.log(`npub    ${pair.npub}`);
+      if (!options.show) {
+        console.log(`nsec    ${pair.nsec}`);
+        console.log('Keep the nsec secret: put it in RADAR_NODE_KEY. Your rating is bound to this key.');
+      }
     });
 
   program
