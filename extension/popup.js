@@ -10,6 +10,7 @@ const fields = {
   token: document.getElementById('token'),
   status: document.getElementById('status'),
   send: document.getElementById('send'),
+  xrayBtn: document.getElementById('xray'),
   pageTitle: document.getElementById('page-title'),
   pageUrl: document.getElementById('page-url'),
   jobChip: document.getElementById('job-chip'),
@@ -253,8 +254,40 @@ async function sendPage() {
   }
 }
 
+/**
+ * X-Ray runs ONLY on this explicit click: the page URL is sent to the configured
+ * server, the salary bar is rendered on the page. Nothing is sent automatically.
+ */
+async function runXray() {
+  const config = await readConfig();
+  if (!config.base) {
+    fields.details.open = true;
+    setStatus('Сначала укажите адрес сервера.', 'err');
+    return;
+  }
+  fields.xrayBtn.disabled = true;
+  setStatus('Запускаем X-Ray...');
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) throw new Error('Нет активной вкладки.');
+    // content.js is not auto-injected (manifest has no content_scripts): inject on demand.
+    try {
+      await chrome.tabs.sendMessage(tab.id, { type: 'RUN_XRAY' });
+    } catch {
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
+      await chrome.tabs.sendMessage(tab.id, { type: 'RUN_XRAY' });
+    }
+    setStatus('X-Ray отрисован на странице.', 'ok');
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : String(error), 'err');
+  } finally {
+    fields.xrayBtn.disabled = false;
+  }
+}
+
 document.getElementById('config').addEventListener('submit', saveConfig);
 fields.send.addEventListener('click', sendPage);
+fields.xrayBtn?.addEventListener('click', runXray);
 fields.testBtn?.addEventListener('click', testConnection);
 
 loadConfig().catch((error) => setStatus(String(error), 'err'));

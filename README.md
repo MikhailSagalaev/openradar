@@ -112,6 +112,9 @@ curl -N -H "Authorization: Bearer <TOKEN>" "https://openradar.fun/api/v1/firehos
 
 ### 3. Ghost Job & Salary X-Ray Extension
 Manifest V3 browser extension for HeadHunter, LinkedIn, Habr Career, Kwork, and Upwork.
+- Privacy-first: no automatic requests. The page URL goes to your configured server only
+  when you press "X-Ray страницы" in the popup (see [extension/PRIVACY.md](extension/PRIVACY.md));
+  signing of mesh events is delegated to your NIP-07 signer — the extension stores no keys.
 - Injects a Swiss-style metrics banner directly above vacancy titles:
   `[ OpenRadar X-Ray ] Market Range: $3500 ($2500–$4500) · Duplicates: 2 · Source Trust: 95%`
 - Pack for Chrome / Firefox:
@@ -130,6 +133,7 @@ pnpm new:connector <source_name>
 ```
 
 Requirements:
+- Node.js >= 22.19 and pnpm >= 11 (see `engines` in package.json).
 - Strictly 100% test pass rate (`pnpm test` — 170+ tests).
 - Zero TypeScript errors (`pnpm typecheck`).
 - Zero Emoji Doctrine enforced across all code and commit messages.
