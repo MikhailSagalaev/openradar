@@ -8,6 +8,7 @@ import { createSinkRegistry, type SinkRegistry } from './sinks/index.ts';
 import { createSourceRegistry, type SourceRegistry } from './sources/index.ts';
 import { MemoryStore } from './store/memory.ts';
 import { PostgresStore } from './store/postgres.ts';
+import { SimilarIndex } from './pipeline/similar.ts';
 
 export interface Runtime {
   env: Env;
@@ -18,6 +19,8 @@ export interface Runtime {
   classifier?: Classifier;
   fetchImpl: typeof fetch;
   access: AccessPolicy;
+  /** Recent-sketch index for merge rule 4 (similar text). */
+  similar?: SimilarIndex;
 }
 
 export interface RuntimeOverrides {
@@ -58,6 +61,7 @@ export async function createRuntime(env: Env = loadEnv(), overrides: RuntimeOver
     classifier,
     fetchImpl: overrides.fetchImpl ?? fetch,
     access: accessPolicyFromEnv(env),
+    similar: new SimilarIndex(store),
   };
 }
 

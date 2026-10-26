@@ -8,13 +8,17 @@ import {
   schnorrVerify,
 } from '../src/net/keys.ts';
 import {
-  buildLeadAttestationEvent,
-  buildLeadSignalEvent,
-  buildRadarLeadEvent,
+  buildHttpAuthHeader,
+  buildObservationEvent,
+  buildSignalEvent,
   computeEventId,
-  RadarEventKinds,
-  signAndFinalizeEvent,
-  verifyRadarEvent,
+  eventTimeError,
+  parseSrcTag,
+  RadarKinds,
+  signEvent,
+  tagValue,
+  verifyEvent,
+  verifyHttpAuth,
 } from '../src/net/protocol.ts';
 
 describe('Nostr secp256k1 keys & Schnorr BIP-340', () => {
@@ -67,131 +71,57 @@ describe('Nostr secp256k1 keys & Schnorr BIP-340', () => {
   });
 });
 
-describe('radar/1 protocol events & verification', () => {
-  it('builds, signs, and verifies a valid RadarLead event (Kind 30402)', () => {
-    const keys = generateKeyPair();
-    const now = Math.floor(Date.now() / 1000);
+describe('radar/2 events', () => {
+  const keys = generateKeyPair();
 
-    const event = buildRadarLeadEvent({
-      contentHash: 'a1b2c3d4e5f6',
-      canonicalUrl: 'https://company.com/careers/backend-lead',
-      leadType: 'job',
-      title: 'Senior Go Developer',
-      summary: 'High load systems, microservices, Kafka, ClickHouse',
-      platform: 'tg',
-      channel: 'golang_jobs',
-      extId: '4821',
-      minHashSketch: 'test-sketch-b64',
-      budgetMin: 400000,
-      budgetMax: 500000,
-      currency: 'RUB',
-      stack: ['golang', 'kafka', 'clickhouse'],
-      pubkey: keys.pubKey,
-      privKey: keys.privKey,
-      createdAt: now,
-    });
-
-    expect(event.kind).toBe(RadarEventKinds.RadarLead);
+  it('signs an observation with src/msg/vis tags and drops raw', () => {
+    const event = buildObservationEvent(
+      { source: { platform: 'telegram', channel: '-100,1', visibility: 'private', message_id: 5 }, text: 'hi', raw: { secret: 1 } },
+      keys.privKey,
+    );
+    expect(event.kind).toBe(RadarKinds.Observation);
     expect(event.pubkey).toBe(keys.pubKey);
-    expect(event.tags).toContainEqual(['d', 'a1b2c3d4e5f6']);
-    expect(event.tags).toContainEqual(['t', 'job']);
-    expect(event.tags).toContainEqual(['v', 'radar/1']);
-    expect(event.tags).toContainEqual(['stack', 'golang', 'kafka', 'clickhouse']);
-
-    const result = verifyRadarEvent(event);
-    expect(result.valid).toBe(true);
-    expect(result.error).toBeUndefined();
+    expect(tagValue(event, 'msg')).toBe('5');
+    expect(parseSrcTag(tagValue(event, 'src'))).toEqual({ platform: 'telegram', channel: '-100,1' });
+    expect(JSON.parse(event.content).raw).toBeUndefined();
+    expect(verifyEvent(event).ok).toBe(true);
   });
 
-  it('detects tampering when content or tags are modified', () => {
-    const keys = generateKeyPair();
-    const event = buildRadarLeadEvent({
-      contentHash: 'hash-123',
-      canonicalUrl: 'https://example.com/job/1',
-      leadType: 'gig',
-      title: 'Landing page',
-      summary: 'Clean design',
-      pubkey: keys.pubKey,
-      privKey: keys.privKey,
-    });
-
-    // Valid originally
-    expect(verifyRadarEvent(event).valid).toBe(true);
-
-    // Tampered content (1 byte modified)
-    const tampered = { ...event, content: event.content + ' ' };
-    const res = verifyRadarEvent(tampered);
-    expect(res.valid).toBe(false);
-    expect(res.error).toContain('Event ID mismatch');
+  it('detects tampering with content, tags, id and signature', () => {
+    const event = buildSignalEvent({ leadId: 'lead-1', signal: 'useful' }, keys.privKey);
+    expect(verifyEvent({ ...event, content: 'x' }).error).toBe('bad_id');
+    const retagged = { ...event, tags: [['lead', 'lead-2']] };
+    expect(verifyEvent(retagged).error).toBe('bad_id');
+    const forged = { ...retagged, id: computeEventId(retagged) };
+    expect(verifyEvent(forged).error).toBe('bad_signature');
+    expect(verifyEvent({ ...event, sig: 'zz' }).error).toMatch(/^malformed/);
+    const other = generateKeyPair();
+    const swapped = { ...event, pubkey: other.pubKey };
+    expect(verifyEvent({ ...swapped, id: computeEventId(swapped) }).error).toBe('bad_signature');
   });
 
-  it('detects tampering when signature is altered', () => {
-    const keys = generateKeyPair();
-    const event = buildLeadSignalEvent({
-      leadEventId: '0'.repeat(64),
-      contentHash: 'hash-abc',
-      signal: 'scam',
-      reason: 'Asks for crypto deposit',
-      pubkey: keys.pubKey,
-      privKey: keys.privKey,
-    });
-
-    // Alter last hex char of signature
-    const alteredSig =
-      event.sig.slice(0, 127) + (event.sig.charAt(127) === '0' ? '1' : '0');
-    const tampered = { ...event, sig: alteredSig };
-    const res = verifyRadarEvent(tampered);
-    expect(res.valid).toBe(false);
-    expect(res.error).toContain('Invalid BIP-340 Schnorr signature');
+  it('accepts created_at from 30 days back to 10 minutes ahead', () => {
+    const now = new Date('2026-10-26T12:00:00Z');
+    const sec = Math.floor(now.getTime() / 1000);
+    expect(eventTimeError(sec, now)).toBeUndefined();
+    expect(eventTimeError(sec + 601, now)).toBe('created_at_in_future');
+    expect(eventTimeError(sec - 31 * 24 * 3600, now)).toBe('created_at_too_old');
   });
 
-  it('rejects events with timestamp drift exceeding ±15 minutes', () => {
-    const keys = generateKeyPair();
-    const nowSec = 1700000000;
-    const now = new Date(nowSec * 1000);
-
-    // Event 20 minutes in the past
-    const pastEvent = buildLeadAttestationEvent({
-      leadEventId: '1'.repeat(64),
-      recomputedHash: 'hash-xyz',
-      status: 'verified',
-      confidence: 0.99,
-      pubkey: keys.pubKey,
-      privKey: keys.privKey,
-      createdAt: nowSec - 1200, // -20 min
-    });
-
-    const resPast = verifyRadarEvent(pastEvent, { now });
-    expect(resPast.valid).toBe(false);
-    expect(resPast.error).toContain('Event timestamp drift exceeds');
-
-    // Event 20 minutes in the future
-    const futureEvent = buildLeadAttestationEvent({
-      leadEventId: '1'.repeat(64),
-      recomputedHash: 'hash-xyz',
-      status: 'verified',
-      confidence: 0.99,
-      pubkey: keys.pubKey,
-      privKey: keys.privKey,
-      createdAt: nowSec + 1200, // +20 min
-    });
-
-    const resFuture = verifyRadarEvent(futureEvent, { now });
-    expect(resFuture.valid).toBe(false);
-    expect(resFuture.error).toContain('Event timestamp drift exceeds');
-
-    // Event 5 minutes in the past -> valid
-    const validEvent = buildLeadAttestationEvent({
-      leadEventId: '1'.repeat(64),
-      recomputedHash: 'hash-xyz',
-      status: 'verified',
-      confidence: 0.99,
-      pubkey: keys.pubKey,
-      privKey: keys.privKey,
-      createdAt: nowSec - 300, // -5 min
-    });
-
-    const resValid = verifyRadarEvent(validEvent, { now });
-    expect(resValid.valid).toBe(true);
+  it('builds and verifies HTTP auth bound to URL, method, body and time', () => {
+    const now = new Date();
+    const createdAt = Math.floor(now.getTime() / 1000);
+    const body = '{"a":1}';
+    const header = buildHttpAuthHeader({ url: 'https://hub.example/v2/me?x=1', method: 'post', body, createdAt }, keys.privKey);
+    const ok = verifyHttpAuth(header, { url: 'https://hub.example/v2/me?x=1', method: 'POST', body }, now);
+    expect(ok).toMatchObject({ ok: true, pubkey: keys.pubKey });
+    expect(verifyHttpAuth(header, { url: 'https://hub.example/v2/feed?x=1', method: 'POST', body }, now).error).toBe('url_mismatch');
+    expect(verifyHttpAuth(header, { url: 'https://hub.example/v2/me?x=1', method: 'GET', body }, now).error).toBe('method_mismatch');
+    expect(verifyHttpAuth(header, { url: 'https://hub.example/v2/me?x=1', method: 'POST', body: '{}' }, now).error).toBe('payload_mismatch');
+    expect(verifyHttpAuth(header, { url: 'https://hub.example/v2/me?x=1', method: 'POST', body }, new Date(now.getTime() + 120_000)).error).toBe('expired');
+    const wrongKind = signEvent({ kind: 1, tags: [['u', 'https://hub.example/'], ['method', 'GET']], content: '' }, keys.privKey);
+    const wrongHeader = `Nostr ${Buffer.from(JSON.stringify(wrongKind)).toString('base64')}`;
+    expect(verifyHttpAuth(wrongHeader, { url: 'https://hub.example/', method: 'GET' }).error).toBe('wrong_kind');
+    expect(verifyHttpAuth('Bearer x', { url: 'https://hub.example/', method: 'GET' }).error).toBe('missing');
   });
 });

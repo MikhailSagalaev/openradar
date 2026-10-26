@@ -1,5 +1,6 @@
 import type {
   Contact,
+  SourceVisibility,
   Lead,
   LeadState,
   LeadStatus,
@@ -73,9 +74,73 @@ export interface UserVoteResult {
 export interface FeedOptions extends ListLeadsOptions {
   /** Only leads first seen at or before this instant (tier delay). */
   createdBefore?: string;
+  /** Cursor: only leads after this (created_at, id) pair, oldest first. */
+  after?: { createdAt: string; id: string };
 }
 
-export interface Store {
+export interface ParticipantRecord {
+  pubkey: string;
+  githubUserId?: number;
+  profile: Record<string, unknown>;
+  bannedAt?: string;
+  bannedReason?: string;
+  createdAt: string;
+  lastSeenAt: string;
+}
+
+export interface StoredEvent {
+  id: string;
+  pubkey: string;
+  kind: number;
+  createdAt: number;
+  tags: string[][];
+  content: string;
+  sig: string;
+}
+
+export interface ObservationRecord {
+  eventId: string;
+  leadId: string;
+  pubkey: string;
+  platform: string;
+  channel: string;
+  channelTitle?: string;
+  visibility: SourceVisibility;
+  messageId?: string;
+  isFirst: boolean;
+  archived: boolean;
+  receivedAt: string;
+}
+
+export interface SignalRecord {
+  leadId: string;
+  pubkey: string;
+  signal: 'useful' | 'junk' | 'scam' | 'closed';
+  comment: string;
+  eventId?: string;
+  createdAt: string;
+}
+
+/** radar/2 hub tables (migration 012). */
+export interface HubStore {
+  /** Creates the participant on first sight and bumps last_seen_at. */
+  touchParticipant(pubkey: string): Promise<ParticipantRecord>;
+  getParticipant(pubkey: string): Promise<ParticipantRecord | null>;
+  setParticipantProfile(pubkey: string, profile: Record<string, unknown>): Promise<void>;
+  /** false when the event id is already stored. */
+  insertEvent(event: StoredEvent): Promise<boolean>;
+  addObservation(record: ObservationRecord): Promise<void>;
+  listObservations(leadId: string): Promise<ObservationRecord[]>;
+  /** Observations of one post (platform + channel + message id). */
+  findObservationsByPost(platform: string, channel: string, messageId: string): Promise<ObservationRecord[]>;
+  /** One signal per participant and lead; a new one replaces the old. */
+  upsertSignal(record: SignalRecord): Promise<void>;
+  listSignals(leadId: string): Promise<SignalRecord[]>;
+  /** Replay cache for HTTP auth: false when `id` was already used and has not expired. */
+  rememberAuth(id: string, expiresAt: string): Promise<boolean>;
+}
+
+export interface Store extends HubStore {
   init?(): Promise<void>;
   listSources(): Promise<SourceRecord[]>;
   getSource(id: string): Promise<SourceRecord | null>;
@@ -89,6 +154,12 @@ export interface Store {
   insertLead(lead: Lead): Promise<boolean>;
   /** Recent leads (created at or after `sinceIso`) sharing at least one normalised contact, newest first. */
   findRecentByContacts?(contacts: Contact[], sinceIso: string, limit?: number): Promise<Lead[]>;
+  /** Adds contacts seen in a later observation of the same lead (at most 20 in total). */
+  mergeLeadContacts(leadId: string, contacts: Contact[]): Promise<void>;
+  /** Lead with this canonical URL (rule 2 of the merge rules). */
+  findLeadByCanonicalUrl(canonicalUrl: string): Promise<Lead | null>;
+  /** Id, creation time and MinHash sketch of leads created since `sinceIso`, oldest first. */
+  listRecentSketches(sinceIso: string, limit: number): Promise<Array<{ id: string; createdAt: string; minhash: string }>>;
   updateLeadStatus(id: string, status: LeadStatus, deliveredAt?: string, scoreDelta?: number): Promise<void>;
   updateLeadState?(id: string, state: LeadState): Promise<void>;
   recordVote(

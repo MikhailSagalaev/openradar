@@ -2,6 +2,7 @@ import pg from 'pg';
 import { randomUUID } from 'node:crypto';
 import { recalculateVoteScoreAndStatus } from '../core/rules.ts';
 import { normalizeTechTokens } from '../core/text.ts';
+import { mergeContacts } from '../core/contacts.ts';
 import type {
   Contact,
   Lead,
@@ -17,6 +18,10 @@ import type {
   Stats,
 } from '../core/types.ts';
 import type {
+  ObservationRecord,
+  ParticipantRecord,
+  SignalRecord,
+  StoredEvent,
   CreateSourceInput,
   FeedOptions,
   LeadDeliveryRecord,
@@ -462,6 +467,11 @@ export class PostgresStore implements Store {
         conditions.push(`created_at <= $${idx++}::timestamptz`);
         params.push(options.createdBefore);
       }
+      if (options.after) {
+        conditions.push(`(created_at, id) > ($${idx}::timestamptz, $${idx + 1})`);
+        params.push(options.after.createdAt, options.after.id);
+        idx += 2;
+      }
     }
     if (options.status) {
       conditions.push(`status = $${idx++}`);
@@ -509,7 +519,8 @@ export class PostgresStore implements Store {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     params.push(limit);
-    const query = `SELECT * FROM leads ${whereClause} ORDER BY created_at DESC LIMIT $${idx}`;
+    const order = feedOnly && options.after ? 'created_at ASC, id ASC' : 'created_at DESC, id DESC';
+    const query = `SELECT * FROM leads ${whereClause} ORDER BY ${order} LIMIT $${idx}`;
 
     const res = await this.pool.query(query, params);
     return res.rows.map((r) => this.rowToLead(r));
@@ -700,6 +711,57 @@ export class PostgresStore implements Store {
           }
         : undefined,
     };
+  }
+
+  async mergeLeadContacts(leadId: string, contacts: Contact[]): Promise<void> {
+    if (!contacts.length) return;
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const res = await client.query(`SELECT contacts_json FROM leads WHERE id = $1 FOR UPDATE`, [leadId]);
+      if (!res.rows[0]) {
+        await client.query('ROLLBACK');
+        return;
+      }
+      const merged = mergeContacts(parseJsonArray(res.rows[0].contacts_json), contacts);
+      await client.query(`UPDATE leads SET contacts_json = $2::jsonb WHERE id = $1`, [leadId, JSON.stringify(merged)]);
+      await client.query(
+        `INSERT INTO lead_contacts (lead_id, type, value)
+         SELECT $1, c->>'type', c->>'value' FROM jsonb_array_elements($2::jsonb) AS c
+         ON CONFLICT DO NOTHING`,
+        [leadId, JSON.stringify(merged)],
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async findLeadByCanonicalUrl(canonicalUrl: string): Promise<Lead | null> {
+    const res = await this.pool.query(
+      `SELECT * FROM leads WHERE canonical_url = $1 ORDER BY created_at ASC LIMIT 1`,
+      [canonicalUrl],
+    );
+    return res.rows[0] ? this.rowToLead(res.rows[0]) : null;
+  }
+
+  async listRecentSketches(sinceIso: string, limit: number): Promise<Array<{ id: string; createdAt: string; minhash: string }>> {
+    const res = await this.pool.query(
+      `SELECT id, created_at, minhash_sketch FROM (
+         SELECT id, created_at, minhash_sketch FROM leads
+         WHERE created_at >= $1 AND minhash_sketch IS NOT NULL
+         ORDER BY created_at DESC LIMIT $2
+       ) recent ORDER BY created_at ASC`,
+      [new Date(sinceIso), limit],
+    );
+    return res.rows.map((r) => ({
+      id: r.id,
+      createdAt: new Date(r.created_at).toISOString(),
+      minhash: Buffer.isBuffer(r.minhash_sketch) ? r.minhash_sketch.toString('base64url') : String(r.minhash_sketch),
+    }));
   }
 
   async findRecentByContacts(contacts: Contact[], sinceIso: string, limit = 20): Promise<Lead[]> {
@@ -1009,6 +1071,99 @@ export class PostgresStore implements Store {
     return res.rowCount ?? 0;
   }
 
+  // --- radar/2 hub ---
+
+  async touchParticipant(pubkey: string): Promise<ParticipantRecord> {
+    const res = await this.pool.query(
+      `INSERT INTO participants (pubkey) VALUES ($1)
+       ON CONFLICT (pubkey) DO UPDATE SET last_seen_at = NOW()
+       RETURNING *`,
+      [pubkey],
+    );
+    return rowToParticipant(res.rows[0]);
+  }
+
+  async getParticipant(pubkey: string): Promise<ParticipantRecord | null> {
+    const res = await this.pool.query(`SELECT * FROM participants WHERE pubkey = $1`, [pubkey]);
+    return res.rows[0] ? rowToParticipant(res.rows[0]) : null;
+  }
+
+  async setParticipantProfile(pubkey: string, profile: Record<string, unknown>): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO participants (pubkey, profile_json) VALUES ($1, $2::jsonb)
+       ON CONFLICT (pubkey) DO UPDATE SET profile_json = EXCLUDED.profile_json, last_seen_at = NOW()`,
+      [pubkey, JSON.stringify(profile)],
+    );
+  }
+
+  async insertEvent(event: StoredEvent): Promise<boolean> {
+    const res = await this.pool.query(
+      `INSERT INTO events (id, pubkey, kind, created_at, tags_json, content, sig)
+       VALUES ($1, $2, $3, to_timestamp($4), $5::jsonb, $6, $7)
+       ON CONFLICT (id) DO NOTHING`,
+      [event.id, event.pubkey, event.kind, event.createdAt, JSON.stringify(event.tags), event.content, event.sig],
+    );
+    return (res.rowCount ?? 0) > 0;
+  }
+
+  async addObservation(r: ObservationRecord): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO observations
+         (event_id, lead_id, pubkey, platform, channel, channel_title, visibility, message_id, is_first, archived, received_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       ON CONFLICT (event_id) DO NOTHING`,
+      [r.eventId, r.leadId, r.pubkey, r.platform, r.channel, r.channelTitle ?? null, r.visibility, r.messageId ?? null,
+        r.isFirst, r.archived, new Date(r.receivedAt)],
+    );
+  }
+
+  async listObservations(leadId: string): Promise<ObservationRecord[]> {
+    const res = await this.pool.query(
+      `SELECT * FROM observations WHERE lead_id = $1 ORDER BY received_at ASC`,
+      [leadId],
+    );
+    return res.rows.map(rowToObservation);
+  }
+
+  async findObservationsByPost(platform: string, channel: string, messageId: string): Promise<ObservationRecord[]> {
+    const res = await this.pool.query(
+      `SELECT * FROM observations WHERE platform = $1 AND channel = $2 AND message_id = $3 ORDER BY received_at ASC`,
+      [platform, channel, messageId],
+    );
+    return res.rows.map(rowToObservation);
+  }
+
+  async upsertSignal(r: SignalRecord): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO signals (lead_id, pubkey, signal, comment, event_id, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (lead_id, pubkey) DO UPDATE
+         SET signal = EXCLUDED.signal, comment = EXCLUDED.comment, event_id = EXCLUDED.event_id, created_at = EXCLUDED.created_at`,
+      [r.leadId, r.pubkey, r.signal, r.comment, r.eventId ?? null, new Date(r.createdAt)],
+    );
+  }
+
+  async listSignals(leadId: string): Promise<SignalRecord[]> {
+    const res = await this.pool.query(`SELECT * FROM signals WHERE lead_id = $1 ORDER BY created_at ASC`, [leadId]);
+    return res.rows.map((r) => ({
+      leadId: r.lead_id,
+      pubkey: r.pubkey,
+      signal: r.signal,
+      comment: r.comment ?? '',
+      eventId: r.event_id || undefined,
+      createdAt: new Date(r.created_at).toISOString(),
+    }));
+  }
+
+  async rememberAuth(id: string, expiresAt: string): Promise<boolean> {
+    await this.pool.query(`DELETE FROM auth_replay WHERE expires_at < NOW()`);
+    const res = await this.pool.query(
+      `INSERT INTO auth_replay (id, expires_at) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING`,
+      [id, new Date(expiresAt)],
+    );
+    return (res.rowCount ?? 0) > 0;
+  }
+
   async updateLeadState(id: string, state: LeadState): Promise<void> {
     await this.pool.query(`UPDATE leads SET state = $1 WHERE id = $2`, [state, id]);
   }
@@ -1026,4 +1181,32 @@ function parseJsonArray(value: unknown): any[] {
     }
   }
   return [];
+}
+
+function rowToParticipant(r: any): ParticipantRecord {
+  return {
+    pubkey: r.pubkey,
+    githubUserId: r.github_user_id !== null && r.github_user_id !== undefined ? Number(r.github_user_id) : undefined,
+    profile: r.profile_json && typeof r.profile_json === 'object' ? r.profile_json : {},
+    bannedAt: r.banned_at ? new Date(r.banned_at).toISOString() : undefined,
+    bannedReason: r.banned_reason || undefined,
+    createdAt: new Date(r.created_at).toISOString(),
+    lastSeenAt: new Date(r.last_seen_at).toISOString(),
+  };
+}
+
+function rowToObservation(r: any): ObservationRecord {
+  return {
+    eventId: r.event_id,
+    leadId: r.lead_id,
+    pubkey: r.pubkey,
+    platform: r.platform,
+    channel: r.channel,
+    channelTitle: r.channel_title || undefined,
+    visibility: r.visibility,
+    messageId: r.message_id || undefined,
+    isFirst: Boolean(r.is_first),
+    archived: Boolean(r.archived),
+    receivedAt: new Date(r.received_at).toISOString(),
+  };
 }

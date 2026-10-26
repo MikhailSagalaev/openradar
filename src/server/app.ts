@@ -34,6 +34,9 @@ import { resolveLang, type SupportedLang } from './i18n.ts';
 import { canSeeContacts, delayMinutes, viewerCanSeeLead, visibleBefore } from '../core/access.ts';
 import { redactLead } from '../core/contacts.ts';
 import { observationToRawLead, parseObservation } from '../core/observation.ts';
+import { isNostrAuthHeader, verifyHttpAuth } from '../net/protocol.ts';
+import { parseModerators } from '../hub/service.ts';
+import { registerV2Routes } from './v2.ts';
 import { SEO_CATALOG, findCatalogEntry, renderCatalogPage, renderRobotsTxt, renderSitemapXml } from './seo.ts';
 import { extractPreviewFromHtml, validateSubmissionUrl } from './preview.ts';
 import { renderLogo, LOGO_SVG } from './logo.ts';
@@ -151,6 +154,7 @@ function deps(runtime: Runtime): IngestDeps {
     logger: runtime.logger,
     env: runtime.env,
     fetchImpl: runtime.fetchImpl,
+    similar: runtime.similar,
   };
 }
 
@@ -212,9 +216,58 @@ function invalidProxyUrl(config: Record<string, unknown>): string | null {
  */
 async function viewerFromRequest(c: Context, runtime: Runtime): Promise<Viewer> {
   if (await isAdmin(c, runtime)) return { tier: 'admin' };
+  const nostr = await nostrAuthOf(c, runtime);
+  if (nostr.pubkey) {
+    const moderator = parseModerators(runtime.env.RADAR_MODERATORS).has(nostr.pubkey);
+    return { tier: moderator ? 'core' : 'member', pubkey: nostr.pubkey };
+  }
   const user = await currentUser(c, runtime);
   if (user) return { tier: 'member', userId: user.id };
   return { tier: 'guest' };
+}
+
+interface NostrAuthState {
+  pubkey?: string;
+  error?: string;
+}
+
+const nostrAuthPending = new WeakMap<Request, Promise<NostrAuthState>>();
+const nostrAuthDone = new WeakMap<Request, NostrAuthState>();
+
+/** URL the client must have signed: RADAR_PUBLIC_URL (behind a proxy) or the request URL. */
+function signedRequestUrl(c: Context, runtime: Runtime): string {
+  const base = runtime.env.RADAR_PUBLIC_URL?.replace(/\/+$/, '');
+  if (!base) return c.req.url;
+  const url = new URL(c.req.url);
+  return `${base}${url.pathname}${url.search}`;
+}
+
+/**
+ * Participant key from `Authorization: Nostr <event>` (hub mode only). Verified once per
+ * request: the auth event id is single-use, so a second check would look like a replay.
+ */
+function nostrAuthOf(c: Context, runtime: Runtime): Promise<NostrAuthState> {
+  const header = c.req.header('authorization');
+  if (runtime.access.mode !== 'hub' || !isNostrAuthHeader(header)) return Promise.resolve({});
+  let pending = nostrAuthPending.get(c.req.raw);
+  if (!pending) {
+    pending = (async (): Promise<NostrAuthState> => {
+      const method = c.req.method.toUpperCase();
+      const body = method === 'GET' || method === 'HEAD' ? undefined : await c.req.text();
+      const result = verifyHttpAuth(header, { url: signedRequestUrl(c, runtime), method, body });
+      if (!result.ok || !result.pubkey || !result.eventId || !result.expiresAt) return { error: result.error ?? 'invalid' };
+      const fresh = await runtime.store.rememberAuth(result.eventId, new Date(result.expiresAt * 1000).toISOString());
+      if (!fresh) return { error: 'replay' };
+      const participant = await runtime.store.touchParticipant(result.pubkey);
+      if (participant.bannedAt) return { error: 'banned' };
+      return { pubkey: result.pubkey };
+    })().then((state) => {
+      nostrAuthDone.set(c.req.raw, state);
+      return state;
+    });
+    nostrAuthPending.set(c.req.raw, pending);
+  }
+  return pending;
 }
 
 /** Guests never see contacts: they are cut out of every lead they receive. */
@@ -255,7 +308,7 @@ const PUBLIC_LEAD_KEYS = [
   'id', 'type', 'title', 'text', 'url', 'canonicalUrl', 'author', 'city',
   'budget', 'currency', 'paymentPeriod', 'rawSalary', 'normalizedUsdMin', 'normalizedUsdMax',
   'category', 'skills', 'isRemote', 'publishedAt', 'createdAt',
-  'votes_up', 'votes_down', 'votes_scam', 'votes_closed',
+  'votes_up', 'votes_down', 'votes_scam', 'votes_closed', 'contacts', 'sourceRef',
 ] as const;
 
 function toPublicLead(lead: Lead): Record<string, unknown> {
@@ -517,6 +570,8 @@ export function createApp(runtime: Runtime): Hono {
     if (['POST', 'PATCH', 'DELETE'].includes(method)) {
       const isIngest =
         c.req.path.startsWith('/api/ingest') ||
+        c.req.path.startsWith('/api/v2/ingest') ||
+        c.req.path === '/v2/events' ||
         c.req.path === '/api/preview' ||
         c.req.path === '/api/submit' ||
         c.req.path === '/mcp';
@@ -537,6 +592,13 @@ export function createApp(runtime: Runtime): Hono {
       path: c.req.path,
     });
     return c.json({ error: 'internal_error' }, 500);
+  });
+
+  registerV2Routes(app, runtime, {
+    viewerFromRequest: (c) => viewerFromRequest(c, runtime),
+    authError: (c) => nostrAuthDone.get(c.req.raw)?.error,
+    projectLead: (lead, viewer) => toPublicLead(projectContacts(lead, viewer)),
+    ingestDeps: () => deps(runtime),
   });
 
   app.get('/health', async (c) => {

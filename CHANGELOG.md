@@ -2,6 +2,21 @@
 
 ## 0.7.0 (unreleased): radar/2
 
+### Phase 2: the hub
+
+- `RADAR_MODE=hub`: signed radar/2 events (`src/net/protocol.ts`, kinds 4040 observation,
+  4041 signal, 4042 post status, 30440 profile) at `POST /v2/events`, up to 500 per request.
+  Observations go through the normal ingest under the built-in `radar2-hub` source; every
+  observation is kept with its participant key, channel and first/archived flags.
+- Merge rules 1-4 of the protocol: post key, canonical URL, shared contact + J >= 0.6 over
+  14 days, J >= 0.85 over 7 days (in-process sketch index). Contacts of later
+  observations are merged into the lead.
+- HTTP auth after NIP-98 (`Authorization: Nostr <event>`): bound to URL, method and body
+  hash, +-60 s, single use. Participants are members; `RADAR_MODERATORS` are core.
+- Reading: `/v2/feed` (cursor, JSON or NDJSON), `/v2/stream` (SSE), `/v2/leads/:id`
+  with observations and signal counts, `/v2/contacts/:value` (author history), `/v2/me`.
+- Migration 012: `participants`, `events`, `observations`, `signals`, `auth_replay`.
+
 ### Phase 1: observations on a node
 
 - `radar/2.observation` schema (`src/core/observation.ts`): any parser, including one

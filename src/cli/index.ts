@@ -90,6 +90,7 @@ function pollDeps(runtime: Runtime): PollDeps {
     logger: runtime.logger,
     env: runtime.env,
     fetchImpl: runtime.fetchImpl,
+    similar: runtime.similar,
     sources: runtime.sources,
   };
 }
