@@ -64,6 +64,7 @@ export function startGitHubOAuth(c: Context, runtime: Runtime): Response {
 interface GitHubProfile {
   id?: number;
   login?: string;
+  created_at?: string;
 }
 
 export async function handleGitHubCallback(c: Context, runtime: Runtime): Promise<Response> {
@@ -110,6 +111,9 @@ export async function handleGitHubCallback(c: Context, runtime: Runtime): Promis
   const user = await runtime.store.upsertGitHubUser({
     githubId: profile.id,
     handle: profile.login,
+    githubCreatedAt: profile.created_at && !Number.isNaN(Date.parse(profile.created_at))
+      ? new Date(profile.created_at).toISOString()
+      : undefined,
   });
 
   const sessionId = randomBytes(32).toString('hex');

@@ -127,7 +127,8 @@ describe('radar/2 hub: HTTP auth and reading', () => {
     const headers = auth('/v2/me', alice.privKey);
     const me = await app.request('/v2/me', { headers });
     expect(me.status).toBe(200);
-    expect(await me.json()).toMatchObject({ pubkey: alice.pubKey, tier: 'member', profile: { name: 'Alice' } });
+    // A bare key with no rating and no linked GitHub account is a guest.
+    expect(await me.json()).toMatchObject({ pubkey: alice.pubKey, tier: 'guest', rating: 0, profile: { name: 'Alice' } });
 
     const replay = await app.request('/v2/me', { headers });
     expect(replay.status).toBe(401);
@@ -139,9 +140,10 @@ describe('radar/2 hub: HTTP auth and reading', () => {
   });
 
   it('applies tier delays and contact rules to the feed, with a cursor and NDJSON', async () => {
-    const { app } = hub({ RADAR_TIER_DELAYS: 'guest=720,member=0' });
+    const { runtime, app } = hub({ RADAR_TIER_DELAYS: 'guest=720,member=0' });
     const alice = generateKeyPair();
     await send(app, [buildObservationEvent(observation(), alice.privKey)]);
+    await runtime.store.setParticipantRatings(new Map([[alice.pubKey, 1]]));
 
     const guest = (await (await app.request('/v2/feed')).json()) as { tier: string; delayMinutes: number; leads: unknown[] };
     expect(guest).toMatchObject({ tier: 'guest', delayMinutes: 720 });

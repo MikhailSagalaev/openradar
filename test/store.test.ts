@@ -273,48 +273,21 @@ describe('store', () => {
     await store.close();
   });
 
-  it('marks lead as rejected when scam threshold is reached (TASK-D3: S >= 3 && S > U)', async () => {
+  it('counts raw votes and adjusts the score but never hides a lead by itself (radar/2: weighted signals decide)', async () => {
     const store = new MemoryStore();
     const source = await store.createSource({ kind: 'rss', title: 'Feed' });
     const lead = makeLead({ sourceId: source.id, id: 'lead-scam', status: 'new', score: 60 });
     await store.insertLead(lead);
 
-    // 1 useful vote: U=1
     await store.recordVote(lead.id, 'useful', 1);
-    expect((await store.getLead(lead.id))?.status).toBe('new');
-
-    // 2 scam votes: S=2 (S < 3 -> not rejected yet)
-    await store.recordVote(lead.id, 'scam', 2);
-    expect((await store.getLead(lead.id))?.status).toBe('new');
-
-    // 1 more scam vote: S=3, U=1 (S >= 3 && S > U -> rejected!)
-    const res = await store.recordVote(lead.id, 'scam', 1);
+    await store.recordVote(lead.id, 'scam', 3);
+    const res = await store.recordVote(lead.id, 'closed', 2);
     expect(res.votes_scam).toBe(3);
-    const finalLead = await store.getLead(lead.id);
-    expect(finalLead?.status).toBe('rejected');
-
-    await store.close();
-  });
-
-  it('marks lead as rejected when closed threshold is reached (C >= 2 && C > U * 0.5)', async () => {
-    const store = new MemoryStore();
-    const source = await store.createSource({ kind: 'rss', title: 'Feed' });
-    const lead = makeLead({ sourceId: source.id, id: 'lead-closed', status: 'new', score: 70 });
-    await store.insertLead(lead);
-
-    // 2 useful votes: U=2
-    await store.recordVote(lead.id, 'useful', 2);
-    expect((await store.getLead(lead.id))?.status).toBe('new');
-
-    // 1 closed vote: C=1 (C < 2 -> not rejected yet)
-    await store.recordVote(lead.id, 'closed', 1);
-    expect((await store.getLead(lead.id))?.status).toBe('new');
-
-    // 1 more closed vote: C=2, U=2. C >= 2 and C > 2 * 0.5 (2 > 1) -> rejected!
-    const res = await store.recordVote(lead.id, 'closed', 1);
     expect(res.votes_closed).toBe(2);
     const finalLead = await store.getLead(lead.id);
-    expect(finalLead?.status).toBe('rejected');
+    expect(finalLead?.status).toBe('new');
+    expect(finalLead?.state).toBe('active');
+    expect(finalLead!.score).toBeLessThan(60);
 
     await store.close();
   });

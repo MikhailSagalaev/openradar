@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { escapeHtml } from '../core/text.ts';
 import { renderRssFeed } from './feed.ts';
-import type { UserRecord } from '../core/store.ts';
+import type { ParticipantRecord, UserRecord } from '../core/store.ts';
 import type { Lead, LeadStatus, LeadType, RawLead, SourceConfig, SourceKind, SourceRecord, Viewer, VoteSignal } from '../core/types.ts';
 import type { ListLeadsOptions } from '../core/store.ts';
 import { pollAll, pollSource } from '../pipeline/poll.ts';
@@ -36,6 +36,7 @@ import { redactLead } from '../core/contacts.ts';
 import { observationToRawLead, parseObservation } from '../core/observation.ts';
 import { isNostrAuthHeader, verifyHttpAuth } from '../net/protocol.ts';
 import { parseModerators } from '../hub/service.ts';
+import { evaluateLeadState, tierFor, WeightResolver, WEB_SIGNAL_PREFIX } from '../hub/rating.ts';
 import { registerV2Routes } from './v2.ts';
 import { SEO_CATALOG, findCatalogEntry, renderCatalogPage, renderRobotsTxt, renderSitemapXml } from './seo.ts';
 import { extractPreviewFromHtml, validateSubmissionUrl } from './preview.ts';
@@ -216,18 +217,32 @@ function invalidProxyUrl(config: Record<string, unknown>): string | null {
  */
 async function viewerFromRequest(c: Context, runtime: Runtime): Promise<Viewer> {
   if (await isAdmin(c, runtime)) return { tier: 'admin' };
+  const moderators = parseModerators(runtime.env.RADAR_MODERATORS);
   const nostr = await nostrAuthOf(c, runtime);
-  if (nostr.pubkey) {
-    const moderator = parseModerators(runtime.env.RADAR_MODERATORS).has(nostr.pubkey);
-    return { tier: moderator ? 'core' : 'member', pubkey: nostr.pubkey };
+  if (nostr.pubkey && nostr.participant) {
+    const tier = tierFor({
+      rating: nostr.participant.rating,
+      moderator: moderators.has(nostr.pubkey),
+      githubLinked: Boolean(nostr.participant.githubUserId),
+    });
+    return { tier, pubkey: nostr.pubkey };
   }
   const user = await currentUser(c, runtime);
-  if (user) return { tier: 'member', userId: user.id };
+  if (user) {
+    // A web user linked to a participant key gets that key's tier (never below member).
+    const linked = runtime.access.mode === 'hub' ? await runtime.store.getParticipantByGithubUser(user.id) : null;
+    if (linked && !linked.bannedAt) {
+      const tier = tierFor({ rating: linked.rating, moderator: moderators.has(linked.pubkey), githubLinked: true });
+      return { tier, userId: user.id, pubkey: linked.pubkey };
+    }
+    return { tier: 'member', userId: user.id };
+  }
   return { tier: 'guest' };
 }
 
 interface NostrAuthState {
   pubkey?: string;
+  participant?: ParticipantRecord;
   error?: string;
 }
 
@@ -260,7 +275,7 @@ function nostrAuthOf(c: Context, runtime: Runtime): Promise<NostrAuthState> {
       if (!fresh) return { error: 'replay' };
       const participant = await runtime.store.touchParticipant(result.pubkey);
       if (participant.bannedAt) return { error: 'banned' };
-      return { pubkey: result.pubkey };
+      return { pubkey: result.pubkey, participant };
     })().then((state) => {
       nostrAuthDone.set(c.req.raw, state);
       return state;
@@ -268,6 +283,20 @@ function nostrAuthOf(c: Context, runtime: Runtime): Promise<NostrAuthState> {
     nostrAuthPending.set(c.req.raw, pending);
   }
   return pending;
+}
+
+/** Mirrors a web vote into the weighted signals that decide whether a lead is hidden. */
+async function recordWebSignal(runtime: Runtime, leadId: string, userId: number, vote: VoteSignal | null): Promise<void> {
+  const signer = `${WEB_SIGNAL_PREFIX}${userId}`;
+  if (vote) {
+    await runtime.store.upsertSignal({ leadId, pubkey: signer, signal: vote, comment: '', createdAt: new Date().toISOString() });
+  } else {
+    await runtime.store.deleteSignal(leadId, signer);
+  }
+  const lead = await runtime.store.getLead(leadId);
+  if (lead) {
+    await evaluateLeadState(runtime.store, lead, new WeightResolver(runtime.store, parseModerators(runtime.env.RADAR_MODERATORS)));
+  }
 }
 
 /** Guests never see contacts: they are cut out of every lead they receive. */
@@ -599,6 +628,7 @@ export function createApp(runtime: Runtime): Hono {
     authError: (c) => nostrAuthDone.get(c.req.raw)?.error,
     projectLead: (lead, viewer) => toPublicLead(projectContacts(lead, viewer)),
     ingestDeps: () => deps(runtime),
+    currentUserId: async (c) => (await currentUser(c, runtime))?.id,
   });
 
   app.get('/health', async (c) => {
@@ -1137,6 +1167,7 @@ export function createApp(runtime: Runtime): Hono {
 
     try {
       const result = await runtime.store.recordUserVote?.(id, user.id, signal as VoteSignal);
+      if (result) await recordWebSignal(runtime, id, user.id, result.myVote ?? null);
       if (!result) {
         return c.json({ error: 'votes_not_supported' }, 500);
       }
@@ -1184,6 +1215,7 @@ export function createApp(runtime: Runtime): Hono {
 
     try {
       const result = await runtime.store.recordUserVote?.(id, user.id, signal as VoteSignal);
+      if (result) await recordWebSignal(runtime, id, user.id, result.myVote ?? null);
       if (!result) {
         return c.json({ error: 'votes_not_supported' }, 500);
       }

@@ -5,6 +5,7 @@ import { normalizeContact } from '../core/contacts.ts';
 import { leadEvents } from '../core/events.ts';
 import type { FeedOptions } from '../core/store.ts';
 import type { Contact, Lead, LeadType, Viewer } from '../core/types.ts';
+import { evaluateLeadState, recomputeRatings, RATING_WINDOW_MS, WeightResolver } from '../hub/rating.ts';
 import { MAX_EVENTS_PER_REQUEST, parseModerators, processEvent, type HubDeps } from '../hub/service.ts';
 import type { IngestDeps } from '../pipeline/ingest.ts';
 import type { Runtime } from '../runtime.ts';
@@ -17,6 +18,8 @@ export interface V2Helpers {
   authError(c: Context): string | undefined;
   projectLead(lead: Lead, viewer: Viewer): Record<string, unknown>;
   ingestDeps(): IngestDeps;
+  /** GitHub user id of the web session, if any. */
+  currentUserId(c: Context): Promise<number | undefined>;
 }
 
 const MAX_EVENTS_BODY_BYTES = 10 * 1024 * 1024;
@@ -215,13 +218,111 @@ export function registerV2Routes(app: Hono, runtime: Runtime, h: V2Helpers): voi
     if (viewer instanceof Response) return viewer;
     if (!viewer.pubkey) return c.json({ error: 'nostr_auth_required' }, 401);
     const participant = await runtime.store.getParticipant(viewer.pubkey);
+    const since = new Date(Date.now() - RATING_WINDOW_MS).toISOString();
+    const ledger = await runtime.store.listLedger(viewer.pubkey, since, 100);
     return c.json({
       pubkey: viewer.pubkey,
       tier: viewer.tier,
       delayMinutes: delayMinutes(viewer, runtime.access),
+      rating: participant?.rating ?? 0,
+      ratingWindowDays: RATING_WINDOW_MS / 86_400_000,
       profile: participant?.profile ?? {},
       githubLinked: Boolean(participant?.githubUserId),
       since: participant?.createdAt,
+      ledger: ledger.map((e) => ({ leadId: e.leadId, kind: e.kind, points: e.points, createdAt: e.createdAt })),
     });
+  });
+
+  /** Links the signing key to the GitHub account of the current web session (both are required). */
+  app.post('/v2/link/github', rateLimit({ windowMs: 60_000, max: 10 }), async (c) => {
+    if (runtime.access.mode !== 'hub') return c.json({ error: 'not_a_hub' }, 404);
+    const viewer = await viewerOr401(c);
+    if (viewer instanceof Response) return viewer;
+    if (!viewer.pubkey) return c.json({ error: 'nostr_auth_required' }, 401);
+    const userId = await h.currentUserId(c);
+    if (!userId) return c.json({ error: 'github_session_required' }, 401);
+    const taken = await runtime.store.getParticipantByGithubUser(userId);
+    if (taken && taken.pubkey !== viewer.pubkey) return c.json({ error: 'github_already_linked' }, 409);
+    await runtime.store.linkParticipantGithub(viewer.pubkey, userId);
+    return c.json({ ok: true, pubkey: viewer.pubkey, githubUserId: userId });
+  });
+
+  // --- moderation: a key from RADAR_MODERATORS (Nostr auth) or the admin token ---
+  const moderatorOr403 = async (c: Context): Promise<string | Response> => {
+    const viewer = await viewerOr401(c);
+    if (viewer instanceof Response) return viewer;
+    if (viewer.tier === 'admin') return 'admin';
+    if (viewer.pubkey && parseModerators(runtime.env.RADAR_MODERATORS).has(viewer.pubkey)) return viewer.pubkey;
+    return c.json({ error: 'forbidden' }, 403);
+  };
+  const bodyOf = async (c: Context): Promise<Record<string, unknown>> => {
+    const body = await c.req.json().catch(() => null);
+    return body && typeof body === 'object' && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
+  };
+  const reasonOf = (body: Record<string, unknown>) => (typeof body.reason === 'string' ? body.reason.slice(0, 500) : '');
+  const reevaluate = async (leadId: string) => {
+    const lead = await runtime.store.getLead(leadId);
+    if (!lead) return undefined;
+    return evaluateLeadState(runtime.store, lead, new WeightResolver(runtime.store, parseModerators(runtime.env.RADAR_MODERATORS)));
+  };
+
+  /** Final decision on a lead: state active|hidden_junk|hidden_scam|closed, or null to return it to signals. */
+  app.post('/v2/moderation/lead/:id', async (c) => {
+    const moderator = await moderatorOr403(c);
+    if (moderator instanceof Response) return moderator;
+    const id = c.req.param('id') ?? '';
+    if (!(await runtime.store.getLead(id))) return c.json({ error: 'not_found' }, 404);
+    const body = await bodyOf(c);
+    const states = ['active', 'hidden_junk', 'hidden_scam', 'closed'] as const;
+    const state = body.state === null ? null : states.find((v) => v === body.state);
+    if (state === undefined) return c.json({ error: 'bad_state', allowed: [...states, null] }, 400);
+    await runtime.store.setLeadDecision(
+      id,
+      state ? { state, decidedBy: 'moderator', pubkey: moderator === 'admin' ? undefined : moderator, reason: reasonOf(body) } : null,
+    );
+    return c.json({ ok: true, leadId: id, state: await reevaluate(id) });
+  });
+
+  /** Marks a contact as scam (hides every lead with it) or clears the flag with `flag: null`. */
+  app.post('/v2/moderation/contact', async (c) => {
+    const moderator = await moderatorOr403(c);
+    if (moderator instanceof Response) return moderator;
+    const body = await bodyOf(c);
+    const contact = typeof body.type === 'string' && typeof body.value === 'string'
+      ? normalizeContact(body.type, body.value)
+      : typeof body.value === 'string'
+        ? contactFromValue(body.value)
+        : null;
+    if (!contact) return c.json({ error: 'bad_contact' }, 400);
+    const clear = body.flag === null;
+    if (!clear && body.flag !== undefined && body.flag !== 'scam') return c.json({ error: 'bad_flag', allowed: ['scam', null] }, 400);
+    await runtime.store.setContactFlag(
+      contact,
+      clear ? null : { flag: 'scam', pubkey: moderator === 'admin' ? undefined : moderator, reason: reasonOf(body) },
+    );
+    const leads = (await runtime.store.findRecentByContacts?.([contact], new Date(0).toISOString(), 500)) ?? [];
+    for (const lead of leads) await reevaluate(lead.id);
+    return c.json({ ok: true, contact, flag: clear ? null : 'scam', leads: leads.length });
+  });
+
+  /** Bans a key (`ban: true`, default) or lifts the ban (`ban: false`). Banned keys get no access and no weight. */
+  app.post('/v2/moderation/ban/:pubkey', async (c) => {
+    const moderator = await moderatorOr403(c);
+    if (moderator instanceof Response) return moderator;
+    const pubkey = (c.req.param('pubkey') ?? '').toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(pubkey)) return c.json({ error: 'bad_pubkey' }, 400);
+    if (parseModerators(runtime.env.RADAR_MODERATORS).has(pubkey)) return c.json({ error: 'cannot_ban_moderator' }, 400);
+    const body = await bodyOf(c);
+    const ban = body.ban !== false;
+    await runtime.store.touchParticipant(pubkey);
+    await runtime.store.banParticipant(pubkey, ban ? reasonOf(body) || 'banned' : null);
+    return c.json({ ok: true, pubkey, banned: ban });
+  });
+
+  /** Runs the rating job now (it also runs hourly with the maintenance loop). */
+  app.post('/v2/moderation/recompute', async (c) => {
+    const moderator = await moderatorOr403(c);
+    if (moderator instanceof Response) return moderator;
+    return c.json({ ok: true, ...(await recomputeRatings(runtime.store, parseModerators(runtime.env.RADAR_MODERATORS))) });
   });
 }

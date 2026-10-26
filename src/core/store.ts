@@ -50,6 +50,8 @@ export interface LeadDeliveryRecord {
 export interface UpsertGitHubUserInput {
   githubId: number;
   handle: string;
+  /** GitHub account creation time (from the GitHub API); sets the base signal weight. */
+  githubCreatedAt?: string;
 }
 
 export interface UserRecord {
@@ -58,6 +60,7 @@ export interface UserRecord {
   handle: string;
   role: string;
   createdAt: string;
+  githubCreatedAt?: string;
 }
 
 export interface UserVoteResult {
@@ -86,6 +89,35 @@ export interface ParticipantRecord {
   bannedReason?: string;
   createdAt: string;
   lastSeenAt: string;
+  /** Cached 30-day rating R, refreshed by the rating job. */
+  rating: number;
+}
+
+export interface LedgerEntry {
+  pubkey: string;
+  leadId: string;
+  kind: 'first' | 'confirm' | 'signal_match' | 'hidden_first' | 'hidden_confirm';
+  points: number;
+  /** Lead creation time: the entry counts for 30 days from it. */
+  createdAt: string;
+}
+
+export interface LeadDecision {
+  leadId: string;
+  state: 'active' | 'hidden_junk' | 'hidden_scam' | 'closed';
+  decidedBy: 'moderator' | 'author';
+  pubkey?: string;
+  reason: string;
+  decidedAt: string;
+}
+
+export interface ContactFlag {
+  type: string;
+  value: string;
+  flag: 'scam';
+  pubkey?: string;
+  reason: string;
+  createdAt: string;
 }
 
 export interface StoredEvent {
@@ -136,8 +168,31 @@ export interface HubStore {
   /** One signal per participant and lead; a new one replaces the old. */
   upsertSignal(record: SignalRecord): Promise<void>;
   listSignals(leadId: string): Promise<SignalRecord[]>;
+  deleteSignal(leadId: string, pubkey: string): Promise<void>;
   /** Replay cache for HTTP auth: false when `id` was already used and has not expired. */
   rememberAuth(id: string, expiresAt: string): Promise<boolean>;
+
+  // --- rating and moderation (migration 013) ---
+  getUserById(id: number): Promise<UserRecord | null>;
+  linkParticipantGithub(pubkey: string, userId: number): Promise<void>;
+  getParticipantByGithubUser(userId: number): Promise<ParticipantRecord | null>;
+  /** `reason` null lifts the ban. */
+  banParticipant(pubkey: string, reason: string | null): Promise<void>;
+  /** Sets the cached rating of the listed participants and 0 for everyone else. */
+  setParticipantRatings(ratings: Map<string, number>): Promise<void>;
+  /** Hub observations received since `sinceIso`, oldest first. */
+  listObservationsSince(sinceIso: string): Promise<ObservationRecord[]>;
+  /** Replaces all ledger entries of these leads. */
+  replaceLedger(leadIds: string[], entries: LedgerEntry[]): Promise<void>;
+  /** Sum of points per participant for entries created since `sinceIso`. */
+  sumLedger(sinceIso: string): Promise<Map<string, number>>;
+  listLedger(pubkey: string, sinceIso: string, limit: number): Promise<LedgerEntry[]>;
+  getLeadDecision(leadId: string): Promise<LeadDecision | null>;
+  /** null removes the decision. */
+  setLeadDecision(leadId: string, decision: Omit<LeadDecision, 'leadId' | 'decidedAt'> | null): Promise<void>;
+  setContactFlag(contact: Contact, flag: Omit<ContactFlag, 'type' | 'value' | 'createdAt'> | null): Promise<void>;
+  /** Flags of the given contacts that exist. */
+  getContactFlags(contacts: Contact[]): Promise<ContactFlag[]>;
 }
 
 export interface Store extends HubStore {
@@ -162,6 +217,8 @@ export interface Store extends HubStore {
   listRecentSketches(sinceIso: string, limit: number): Promise<Array<{ id: string; createdAt: string; minhash: string }>>;
   updateLeadStatus(id: string, status: LeadStatus, deliveredAt?: string, scoreDelta?: number): Promise<void>;
   updateLeadState?(id: string, state: LeadState): Promise<void>;
+  /** Hub: marks a lead confirmed once; later calls keep the first time. */
+  markLeadConfirmed?(id: string, at: string): Promise<void>;
   recordVote(
     leadId: string,
     signal: 'useful' | 'junk' | 'scam' | 'closed',
