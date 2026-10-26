@@ -154,7 +154,7 @@ export function evaluateContentDeterministically(
 }
 
 /**
- * Optional LLM verifier fallback via OpenAI/Ollama compatible endpoint.
+ * Optional LLM verifier fallback via standard HTTP completions endpoint.
  */
 export async function evaluateWithLLM(
   text: string,

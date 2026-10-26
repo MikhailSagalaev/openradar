@@ -78,7 +78,7 @@ export function truncate(input: string, max: number): string {
   const sliced = input.slice(0, max - 1);
   const lastSpace = sliced.lastIndexOf(' ');
   const base = (lastSpace > max * 0.6 ? sliced.slice(0, lastSpace) : sliced).trimEnd();
-  // A truncation cut mid-parenthesis («Разработка… (Claude») leaves unbalanced
+  // A truncation cut mid-parenthesis («Разработка… (Draft») leaves unbalanced
   // brackets: drop the incomplete trailing group instead.
   const balanced = base.replace(/\s*\([^()]*$/, '').trimEnd();
   return `${balanced}…`;

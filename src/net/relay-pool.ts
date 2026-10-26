@@ -42,9 +42,9 @@ export interface RelayPoolOptions {
 }
 
 export const DEFAULT_RELAYS = [
-  'wss://relay.openradar.fun',
   'wss://relay.damus.io',
   'wss://nos.lol',
+  'wss://relay.openradar.fun',
 ];
 
 export class RelayPool {

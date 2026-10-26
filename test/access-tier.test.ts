@@ -205,4 +205,30 @@ describe('Tit-for-Tat access tier & 12h lag (radar/1)', () => {
     const updatedLead = await store.getLead(ingested.id);
     expect(updatedLead?.attestation_count).toBeGreaterThanOrEqual(1);
   });
+
+  it('does not inflate trust score based purely on event volume (Sybil resistance)', async () => {
+    const store = new MemoryStore();
+    const relayPool = new RelayPool({ relays: [] });
+    const subscriber = new RelaySubscriber({ store, relayPool, lagHours: 12 });
+
+    const spammerKeys = generateKeyPair();
+
+    for (let i = 0; i < 20; i++) {
+      const event = buildRadarLeadEvent({
+        contentHash: `spam-lead-${i}`,
+        canonicalUrl: `https://example.com/job/spam-${i}`,
+        leadType: 'job',
+        title: `Spam Job ${i}`,
+        summary: `Job description ${i}`,
+        pubkey: spammerKeys.pubKey,
+        privKey: spammerKeys.privKey,
+      });
+      await subscriber.handleEvent(event, 'wss://relay.mock');
+    }
+
+    const node = await store.getMeshNode(spammerKeys.pubKey);
+    expect(node).toBeDefined();
+    expect(node!.trust_score).toBeLessThan(0.20);
+    expect(node!.trust_score).toBe(0.05);
+  });
 });

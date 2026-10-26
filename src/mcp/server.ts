@@ -1,6 +1,6 @@
 /**
  * OpenRadar Model Context Protocol (MCP) Server.
- * Exposes standardized AI Agent tools for Claude Desktop, Cursor, and automated SDR agents.
+ * Exposes standardized AI Agent tools for desktop agents, IDE assistants, and automated SDRs.
  * Compliant with MCP JSON-RPC 2.0 specification.
  */
 

@@ -631,10 +631,22 @@ export function createApp(runtime: Runtime): Hono {
     const type: LeadType | undefined = rawType === 'job' || rawType === 'gig' ? rawType : undefined;
     const query = (c.req.query('q') ?? '').trim();
 
+    const user = await currentUser(c, runtime);
+    const nodePubkey = c.req.header('x-radar-node-pubkey');
+    const node = (nodePubkey && runtime.store.getMeshNode) ? await runtime.store.getMeshNode(nodePubkey) : null;
+    const admin = await isAdmin(c, runtime);
+    const tier = determineAccessTier({ user, meshNode: node, isAdmin: admin });
+    const viewer = {
+      isAdmin: admin,
+      isRealtime: tier.isRealtime,
+      hasValidAttestations24h: tier.validAttestations24h >= 10,
+      trustScore: tier.trustScore,
+    };
+
     const [stats, health, leads] = await Promise.all([
       runtime.store.getStats(),
       runtime.store.getSourceHealth(),
-      runtime.store.listLeads({
+      runtime.store.getLeadsForFeed(viewer, {
         limit: 50,
         status: status || undefined,
         query: query || undefined,
@@ -642,11 +654,6 @@ export function createApp(runtime: Runtime): Hono {
       }),
     ]);
 
-    const user = await currentUser(c, runtime);
-    const nodePubkey = c.req.header('x-radar-node-pubkey');
-    const node = (nodePubkey && runtime.store.getMeshNode) ? await runtime.store.getMeshNode(nodePubkey) : null;
-    const admin = await isAdmin(c, runtime);
-    const tier = determineAccessTier({ user, meshNode: node, isAdmin: admin });
     const { visibleLeads, lockedCount } = filterLeadsForViewer(leads, tier);
 
     return c.html(
