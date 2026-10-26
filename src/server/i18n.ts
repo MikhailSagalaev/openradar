@@ -62,6 +62,10 @@ export interface Translations {
   published: string;
   added: string;
   author: string;
+  contacts: string;
+  contactsHidden: string;
+  channel: string;
+  privateChannel: string;
   skills: string;
   aiAnalysis: string;
   aiMatch: string;
@@ -182,6 +186,10 @@ export const RU: Translations = {
   published: 'Опубликован',
   added: 'Добавлен',
   author: 'Автор',
+  contacts: 'Контакты',
+  contactsHidden: 'Контакты видны после входа',
+  channel: 'Канал',
+  privateChannel: 'закрытый',
   skills: 'Навыки и стек',
   aiAnalysis: 'AI Анализ заказа',
   aiMatch: 'совпадение',
@@ -296,6 +304,10 @@ export const EN: Translations = {
   published: 'Published',
   added: 'Added',
   author: 'Author',
+  contacts: 'Contacts',
+  contactsHidden: 'Sign in to see contacts',
+  channel: 'Channel',
+  privateChannel: 'private',
   skills: 'Skills & stack',
   aiAnalysis: 'AI Analysis',
   aiMatch: 'match',

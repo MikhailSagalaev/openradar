@@ -1,4 +1,4 @@
-import type { Lead, LeadVoteSignal, RunRecord, SourceHealth, SourceRecord, Stats } from '../core/types.ts';
+import type { Contact, Lead, LeadVoteSignal, RunRecord, SourceHealth, SourceRecord, Stats } from '../core/types.ts';
 import { escapeHtml, firstLine, jsonForScript } from '../core/text.ts';
 import { type SupportedLang, getTranslations } from './i18n.ts';
 import { renderLogo } from './logo.ts';
@@ -53,6 +53,8 @@ export interface LeadPageData {
   auth?: AuthDisplay;
   lang?: SupportedLang;
   myVote?: LeadVoteSignal | null;
+  /** The viewer is a guest: contacts were removed from the lead. */
+  contactsHidden?: boolean;
 }
 
 export interface SourceFormValues {
@@ -2004,6 +2006,12 @@ ${cautionBanner}
       <div><dt>${escapeHtml(t.published)}</dt><dd>${formatDate(lead.publishedAt, lang)}</dd></div>
       <div><dt>${escapeHtml(t.added)}</dt><dd>${formatDate(lead.createdAt, lang)}</dd></div>
       ${lead.author ? `<div><dt>${escapeHtml(t.author)}</dt><dd>${escapeHtml(lead.author)}</dd></div>` : ''}
+      ${lead.sourceRef ? `<div><dt>${escapeHtml(t.channel)}</dt><dd>${escapeHtml(lead.sourceRef.channelTitle || lead.sourceRef.channel)}${lead.sourceRef.visibility !== 'public' ? ` (${escapeHtml(t.privateChannel)})` : ''}</dd></div>` : ''}
+      ${data.contactsHidden
+        ? `<div><dt>${escapeHtml(t.contacts)}</dt><dd><a href="/login">${escapeHtml(t.contactsHidden)}</a></dd></div>`
+        : lead.contacts?.length
+          ? `<div><dt>${escapeHtml(t.contacts)}</dt><dd>${lead.contacts.map(renderContact).join('<br>')}</dd></div>`
+          : ''}
     </dl>
     ${lead.skills?.length ? `
       <h2 style="margin-top:20px">${escapeHtml(t.skills)}</h2>
@@ -2931,3 +2939,23 @@ export function renderSubmitPage(data: SubmitPageData): string {
   });
 }
 
+/** One contact as a link where the scheme is safe, otherwise as text. */
+function renderContact(contact: Contact): string {
+  const value = escapeHtml(contact.value);
+  switch (contact.type) {
+    case 'telegram':
+      return /^@[a-z0-9_]{3,64}$/.test(contact.value)
+        ? `<a href="https://t.me/${escapeHtml(contact.value.slice(1))}" rel="nofollow noopener" target="_blank">${value}</a>`
+        : value;
+    case 'email':
+      return `<a href="mailto:${encodeURIComponent(contact.value).replace(/%40/g, '@')}">${value}</a>`;
+    case 'phone':
+      return /^\+\d{7,15}$/.test(contact.value) ? `<a href="tel:${escapeHtml(contact.value)}">${value}</a>` : value;
+    case 'url':
+      return /^https?:\/\//i.test(contact.value)
+        ? `<a href="${value}" rel="nofollow noopener ugc" target="_blank">${value}</a>`
+        : value;
+    default:
+      return `${escapeHtml(contact.type)}: ${value}`;
+  }
+}

@@ -33,6 +33,7 @@ import {
 import { resolveLang, type SupportedLang } from './i18n.ts';
 import { canSeeContacts, delayMinutes, viewerCanSeeLead, visibleBefore } from '../core/access.ts';
 import { redactLead } from '../core/contacts.ts';
+import { observationToRawLead, parseObservation } from '../core/observation.ts';
 import { SEO_CATALOG, findCatalogEntry, renderCatalogPage, renderRobotsTxt, renderSitemapXml } from './seo.ts';
 import { extractPreviewFromHtml, validateSubmissionUrl } from './preview.ts';
 import { renderLogo, LOGO_SVG } from './logo.ts';
@@ -1012,6 +1013,7 @@ export function createApp(runtime: Runtime): Hono {
         auth: await getAuthDisplay(c, runtime),
         lang,
         myVote: myVote ?? undefined,
+        contactsHidden: !canSeeContacts(viewer),
       }),
     );
   });
@@ -1347,6 +1349,48 @@ export function createApp(runtime: Runtime): Hono {
     return c.json({ sourceId: source.id, accepted: outcomes.length, outcomes });
   });
 
+  // radar/2 observations (docs/PROTOCOL.md): JSON array, {"observations": [...]} or NDJSON.
+  app.post('/api/v2/ingest/:sourceId', rateLimit({ windowMs: 60_000, max: 120 }), async (c) => {
+    const source = await runtime.store.getSource(c.req.param('sourceId') as string);
+    if (!source) return c.json({ error: 'not_found' }, 404);
+    const sourceToken = typeof source.config.token === 'string' ? source.config.token : undefined;
+    const provided = c.req.header('x-radar-token');
+    const allowed = (await isAdmin(c, runtime)) || Boolean(sourceToken && safeEqual(provided, sourceToken));
+    if (!allowed) return c.json({ error: 'unauthorized' }, 401);
+
+    const length = Number(c.req.header('content-length') ?? 0);
+    if (length > MAX_V2_INGEST_BYTES) return c.json({ error: 'payload_too_large' }, 413);
+    const bodyText = await c.req.text();
+    if (bodyText.length > MAX_V2_INGEST_BYTES) return c.json({ error: 'payload_too_large' }, 413);
+
+    const items = parseObservationBody(bodyText, c.req.header('content-type'));
+    if (!items) return c.json({ error: 'invalid_json' }, 400);
+    if (items.length === 0) return c.json({ error: 'no_items' }, 400);
+    if (items.length > MAX_V2_INGEST_ITEMS) return c.json({ error: 'too_many_items', max: MAX_V2_INGEST_ITEMS }, 400);
+
+    const outcomes: Array<{ status: string; leadId?: string; reasons: string[] }> = [];
+    for (const item of items) {
+      const parsed = parseObservation(item);
+      if (!parsed.ok || !parsed.observation) {
+        outcomes.push({ status: 'rejected', reasons: [`invalid:${parsed.error}`] });
+        continue;
+      }
+      const result = await ingestRawLead(observationToRawLead(parsed.observation, source.id), source, deps(runtime));
+      outcomes.push({ status: result.status, leadId: result.lead?.id, reasons: result.reasons ?? [] });
+    }
+    const count = (status: string) => outcomes.filter((o) => o.status === status).length;
+    const duplicate = count('duplicate');
+    const rejected = count('rejected');
+    return c.json({
+      sourceId: source.id,
+      received: items.length,
+      accepted: outcomes.length - duplicate - rejected,
+      duplicate,
+      rejected,
+      outcomes,
+    });
+  });
+
   app.post('/api/preview', rateLimit({ windowMs: 10 * 60_000, max: 30 }), async (c) => {
     if (!await canRead(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
     const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
@@ -1552,4 +1596,37 @@ export function createApp(runtime: Runtime): Hono {
   });
 
   return app;
+}
+
+const MAX_V2_INGEST_ITEMS = 500;
+const MAX_V2_INGEST_BYTES = 10 * 1024 * 1024;
+
+/** Observations from a JSON array, `{observations: [...]}`, a single object, or NDJSON. */
+export function parseObservationBody(body: string, contentType?: string): unknown[] | null {
+  const trimmed = body.trim();
+  if (!trimmed) return [];
+  const ndjson = (contentType ?? '').includes('ndjson');
+  if (!ndjson) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed && typeof parsed === 'object') {
+        const list = (parsed as Record<string, unknown>).observations;
+        return Array.isArray(list) ? list : [parsed];
+      }
+      return null;
+    } catch {
+      // fall through: a body of several JSON lines is NDJSON even without the header
+    }
+  }
+  const out: unknown[] = [];
+  for (const line of trimmed.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      out.push(JSON.parse(line));
+    } catch {
+      return null;
+    }
+  }
+  return out;
 }

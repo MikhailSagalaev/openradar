@@ -3,8 +3,10 @@ import { prepareRawLead } from '../core/prepare.ts';
 import { applyRules } from '../core/rules.ts';
 import { extractTechSkills } from '../core/text.ts';
 import { emitLeadCreated } from '../core/events.ts';
+import { estimateJaccardFromSketches } from '../core/fingerprint.ts';
 import type {
   Classifier,
+  Contact,
   Env,
   Lead,
   Logger,
@@ -41,6 +43,26 @@ function duplicateLead(existing: Lead, fingerprint: string): IngestOutcome {
   };
 }
 
+/** Minimum MinHash similarity for two posts sharing a contact to count as one lead. */
+export const CONTACT_MATCH_JACCARD = 0.6;
+
+async function findCrossPost(
+  contacts: Contact[],
+  minhash: string,
+  now: Date,
+  deps: IngestDeps,
+): Promise<Lead | null> {
+  if (!contacts.length || !deps.store.findRecentByContacts) return null;
+  const since = new Date(now.getTime() - 14 * 24 * 3600 * 1000).toISOString();
+  const candidates = await deps.store.findRecentByContacts(contacts, since, 20);
+  for (const candidate of candidates) {
+    if (candidate.minhash_sketch && estimateJaccardFromSketches(minhash, candidate.minhash_sketch) >= CONTACT_MATCH_JACCARD) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 export async function ingestRawLead(
   raw: RawLead,
   source: SourceRecord,
@@ -55,6 +77,10 @@ export async function ingestRawLead(
   const since = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
   const byTitle = await deps.store.findRecentByTitleKey(prepared.titleKey, prepared.city, since);
   if (byTitle) return duplicateLead(byTitle, prepared.fingerprint);
+
+  // Cross-post by the same author: a shared contact and similar text within 14 days.
+  const byContact = await findCrossPost(prepared.contacts, prepared.minhash_sketch, now, deps);
+  if (byContact) return { status: 'duplicate', lead: byContact, reasons: ['duplicate:contact'] };
 
   const rules = applyRules(prepared, source, now);
   let status: IngestOutcome['status'] = rules.accepted ? 'inserted' : 'rejected';
@@ -130,6 +156,9 @@ export async function ingestRawLead(
     isRemote: prepared.isRemote !== false,
     metadata,
     publishedAt: prepared.publishedAt,
+    contacts: prepared.contacts,
+    sourceRef: prepared.sourceRef,
+    minhash_sketch: prepared.minhash_sketch,
     fingerprint: prepared.fingerprint,
     titleKey: prepared.titleKey,
     status: status === 'rejected' ? 'rejected' : 'new',

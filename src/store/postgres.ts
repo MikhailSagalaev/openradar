@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { recalculateVoteScoreAndStatus } from '../core/rules.ts';
 import { normalizeTechTokens } from '../core/text.ts';
 import type {
+  Contact,
   Lead,
   LeadState,
   LeadStatus,
@@ -12,6 +13,7 @@ import type {
   SourceHealth,
   SourceKind,
   SourceRecord,
+  SourceVisibility,
   Stats,
 } from '../core/types.ts';
 import type {
@@ -220,7 +222,8 @@ export class PostgresStore implements Store {
           reasons_json, created_at, delivered_at, type,
           votes_up, votes_down, votes_scam, votes_closed, quality_score,
           raw_salary, payment_period, normalized_usd_min, normalized_usd_max,
-          minhash_sketch, state
+          minhash_sketch, state, contacts_json,
+          source_platform, source_channel, source_channel_title, source_visibility, source_message_id
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7,
           $8, $9, $10, $11, $12, $13::jsonb, $14,
@@ -228,7 +231,8 @@ export class PostgresStore implements Store {
           $21::jsonb, $22, $23, $24,
           $25, $26, $27, $28, $29,
           $30, $31, $32, $33,
-          $34, $35
+          $34, $35, $36::jsonb,
+          $37, $38, $39, $40, $41
         ) ON CONFLICT DO NOTHING`,
         [
           lead.id,
@@ -266,10 +270,25 @@ export class PostgresStore implements Store {
           lead.normalizedUsdMax ?? null,
           lead.minhash_sketch ? Buffer.from(lead.minhash_sketch, 'base64url') : null,
           lead.state ?? 'active',
+          JSON.stringify(lead.contacts ?? []),
+          lead.sourceRef?.platform ?? null,
+          lead.sourceRef?.channel ?? null,
+          lead.sourceRef?.channelTitle ?? null,
+          lead.sourceRef?.visibility ?? null,
+          lead.sourceRef?.messageId ?? null,
         ]
       );
 
       const inserted = (res.rowCount ?? 0) > 0;
+
+      if (inserted && lead.contacts?.length) {
+        await client.query(
+          `INSERT INTO lead_contacts (lead_id, type, value)
+           SELECT $1, c->>'type', c->>'value' FROM jsonb_array_elements($2::jsonb) AS c
+           ON CONFLICT DO NOTHING`,
+          [lead.id, JSON.stringify(lead.contacts)]
+        );
+      }
 
       // Transactional Outbox: публикуем событие о новом лиде
       if (inserted) {
@@ -670,7 +689,32 @@ export class PostgresStore implements Store {
             : String(r.minhash_sketch))
         : undefined,
       state: (r.state as LeadState) || 'active',
+      contacts: parseJsonArray(r.contacts_json),
+      sourceRef: r.source_platform && r.source_channel
+        ? {
+            platform: r.source_platform,
+            channel: r.source_channel,
+            channelTitle: r.source_channel_title || undefined,
+            visibility: (r.source_visibility as SourceVisibility) || 'public',
+            messageId: r.source_message_id || undefined,
+          }
+        : undefined,
     };
+  }
+
+  async findRecentByContacts(contacts: Contact[], sinceIso: string, limit = 20): Promise<Lead[]> {
+    if (!contacts.length) return [];
+    const res = await this.pool.query(
+      `SELECT l.* FROM leads l
+       WHERE l.created_at >= $2 AND EXISTS (
+         SELECT 1 FROM lead_contacts lc
+         JOIN jsonb_to_recordset($1::jsonb) AS c(type TEXT, value TEXT) ON lc.type = c.type AND lc.value = c.value
+         WHERE lc.lead_id = l.id
+       )
+       ORDER BY l.created_at DESC LIMIT $3`,
+      [JSON.stringify(contacts.map((c) => ({ type: c.type, value: c.value }))), new Date(sinceIso), limit]
+    );
+    return res.rows.map((r) => this.rowToLead(r));
   }
 
   async initLeadDeliveries(leadId: string, sinks: string[]): Promise<void> {
@@ -969,4 +1013,17 @@ export class PostgresStore implements Store {
     await this.pool.query(`UPDATE leads SET state = $1 WHERE id = $2`, [state, id]);
   }
 
+}
+
+function parseJsonArray(value: unknown): any[] {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string' && value) {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
 }

@@ -45,7 +45,15 @@ docker compose up -d
 
 ## Sources
 
-RSS, public Telegram channels (`t.me/s`), Kwork, hh.ru, Работа России, RemoteOK, IMAP job alerts, webhook (`POST /api/ingest/:sourceId`) and the browser extension. Any other source can push JSON to the webhook. See [docs/PLUGINS.md](docs/PLUGINS.md) to write an adapter.
+RSS, public Telegram channels (`t.me/s`), Kwork, hh.ru, Работа России, RemoteOK, IMAP job alerts, webhook and the browser extension. See [docs/PLUGINS.md](docs/PLUGINS.md) to write an adapter.
+
+Any other parser (a Telethon script reading private channels, a Playwright scraper) sends radar/2 observations ([docs/PROTOCOL.md](docs/PROTOCOL.md)) to a webhook source:
+
+```bash
+node bin/radar.js source add --kind webhook --title "My parser"   # prints the source id and token
+python my_parser.py | node bin/radar.js push --source <id>            # NDJSON, one observation per line
+# or over HTTP: POST /api/v2/ingest/<id> with header x-radar-token
+```
 
 ## Interfaces
 

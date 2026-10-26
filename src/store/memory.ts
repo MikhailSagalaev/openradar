@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { recalculateVoteScoreAndStatus } from '../core/rules.ts';
 import { normalizeTechTokens } from '../core/text.ts';
+import { contactKey } from '../core/contacts.ts';
 import type {
   CreateSourceInput,
   FeedOptions,
@@ -13,6 +14,7 @@ import type {
   UserVoteResult,
 } from '../core/store.ts';
 import type {
+  Contact,
   Lead,
   LeadState,
   LeadStatus,
@@ -117,6 +119,16 @@ export class MemoryStore implements Store {
       votes_scam: cand.votes_scam ?? 0,
       votes_closed: cand.votes_closed ?? 0,
     };
+  }
+
+  async findRecentByContacts(contacts: Contact[], sinceIso: string, limit = 20): Promise<Lead[]> {
+    if (!contacts.length) return [];
+    const wanted = new Set(contacts.map(contactKey));
+    const since = Date.parse(sinceIso);
+    return [...this.leads.values()]
+      .filter((l) => Date.parse(l.createdAt) >= since && (l.contacts ?? []).some((c) => wanted.has(contactKey(c))))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
   }
 
   async insertLead(lead: Lead): Promise<boolean> {
