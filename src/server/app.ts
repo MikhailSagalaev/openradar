@@ -408,6 +408,7 @@ function formValues(body: Record<string, unknown>): SourceFormValues {
     mailbox: formString(body, 'mailbox'),
     sinceDays: formString(body, 'sinceDays'),
     subjectIncludes: formString(body, 'subjectIncludes'),
+    share: formString(body, 'share') === 'on',
   };
 }
 
@@ -437,6 +438,7 @@ function formValuesFromSource(source: SourceRecord): SourceFormValues {
     mailbox: text(config.mailbox),
     sinceDays: text(config.sinceDays),
     subjectIncludes: text(config.subjectIncludes),
+    share: config.share === true,
   };
 }
 
@@ -446,6 +448,7 @@ function buildSourceConfig(
   existing?: SourceRecord,
 ): { config: SourceConfig; error?: string } {
   const config: SourceConfig = {};
+  if (formString(body, 'share') === 'on') config.share = true;
   const city = formString(body, 'city');
   if (city) config.city = city;
 

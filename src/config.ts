@@ -48,6 +48,8 @@ const envSchema = z.object({
   RADAR_MODE: z.enum(['node', 'hub']).default('node'),
   RADAR_TIER_DELAYS: optionalString,
   RADAR_MODERATORS: optionalString,
+  RADAR_HUB_URL: z.string().url().optional().or(z.literal('').transform(() => undefined)),
+  RADAR_NODE_KEY: optionalString,
   RADAR_PROXY_URL: optionalString,
   RADAR_DIGEST_CHAT_ID: optionalString,
   RADAR_DIGEST_INTERVAL_HOURS: z.coerce.number().int().positive().default(6),

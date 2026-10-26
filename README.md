@@ -17,12 +17,21 @@
 
 No paywalls, no paid responses, no commercial tier. Contacts stay in the post: you write to the client directly.
 
-> **Status:** radar/2 is being rolled out (v0.7). The self-hosted node works today; the hub protocol is described in [docs/PROTOCOL.md](docs/PROTOCOL.md).
+> **Status:** v0.7, protocol radar/2. Node, hub, rating and SDKs are in place; see [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
 ## Two ways to use it
 
 1. **Self-hosted node.** Run `radar` on your machine or server, connect your sources and accounts, and get your own feed and notifications (Telegram, webhook). Nothing leaves your node unless you mark a source as shared.
 2. **Join the hub.** Send observations to the shared hub (openradar.fun) from your node, from the SDK or from any scraper. The hub merges posts seen in different places into one lead, credits whoever saw it first, and gives early access by contribution: active contributors see new leads immediately, everyone else with a delay; guests see the feed without contacts.
+
+| Tier | How | Delay | Contacts |
+| --- | --- | --- | --- |
+| Guest | not signed in | 12 h | no |
+| Member | GitHub sign-in, or rating >= 1 | 3 h | yes |
+| Active | rating >= 10 over 30 days | 30 min | yes |
+| Core | rating >= 50, or moderator | none | yes |
+
+Rating comes from confirmed leads you saw first (x1.5 for private channels and for a 6-hour exclusive), confirmations, and signals that matched the outcome; leads hidden as junk or scam cost points.
 
 ## Quick start (node)
 
@@ -55,10 +64,21 @@ python my_parser.py | node bin/radar.js push --source <id>            # NDJSON, 
 # or over HTTP: POST /api/v2/ingest/<id> with header x-radar-token
 ```
 
+Straight to the hub with the Python SDK ([sdk/python](sdk/python/README.md), Telethon / Pyrogram helpers included):
+
+```python
+from openradar import HubClient, Key
+hub = HubClient("https://openradar.fun", Key.from_string(os.environ["RADAR_KEY"]))
+hub.observe([{"source": {"platform": "telegram", "channel": "-1001234567890", "visibility": "private", "message_id": "48213"},
+              "text": "Ищем React-разработчика..."}])
+```
+
+The TypeScript package exports the same `HubClient` and `NodeClient`. To share a node source with the hub, set `RADAR_HUB_URL` and `RADAR_NODE_KEY` (`radar key`), then `radar source share <id>`.
+
 ## Interfaces
 
 - Dashboard and lead pages, RSS (`/feed.rss`), search catalog pages.
-- HTTP API (`/api/*`).
+- HTTP API (`/api/*`) and the hub API (`/v2/*`: feed, SSE stream, lead cards, author history, rating, moderation).
 - MCP server for AI agents (`radar mcp` over stdio, `POST /mcp` over HTTP): same feed, same access rules.
 - Browser extension: [docs/EXTENSION.md](docs/EXTENSION.md).
 

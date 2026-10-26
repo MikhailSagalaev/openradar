@@ -1,6 +1,27 @@
 # Changelog
 
-## 0.7.0 (unreleased): radar/2
+## 0.7.0: radar/2
+
+### Phase 3: rating, moderation, sharing and SDKs
+
+- Rating ledger (`rating_ledger`, migration 013): points per lead for the first observer
+  (x1.5 private channel, x1.5 for a 6-hour exclusive, half when confirmed by age only),
+  confirmers (+0.2, up to three), matching signals (+0.1) and penalties for hidden leads.
+  Recomputed hourly in hub mode and on demand; idempotent, confirmation is sticky.
+- Tiers from rating: a bare key is a guest; GitHub link or R >= 1 is member; R >= 10
+  active; R >= 50 or moderator core.
+- Signals weighted by w = min(1, w0 + R/30), w0 = 0.2 for GitHub accounts older than
+  90 days. Web votes are mirrored into signals as `web:<user id>`; raw votes no longer
+  hide leads. Order of decisions: moderator, scam contact flag, author status, signals.
+- Moderation API: lead decisions, scam contact flags (hide current and future leads),
+  key bans, manual recompute. `/v2/me` shows rating and ledger; `/v2/link/github`.
+- Node -> hub: `hub` sink for sources with `share` (`radar source share <id>`, source
+  form), signed with `RADAR_NODE_KEY` (`radar key`) and sent to `RADAR_HUB_URL`, retried
+  by the outbox. Sinks can filter leads with `accepts(lead, source)`.
+- SDKs: Python (`sdk/python`, standard library only, BIP-340 checked against the BIP
+  vectors, Telethon / Pyrogram helpers) and TypeScript (`HubClient`, `NodeClient`,
+  protocol builders exported from the package). CI runs the Python tests.
+- Versions: package 0.7.0, extension 0.7.0 (`extension.zip` rebuilt without X-Ray).
 
 ### Phase 2: the hub
 

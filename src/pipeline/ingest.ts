@@ -199,7 +199,7 @@ export async function ingestRawLead(
   deps.similar?.add(lead.id, lead.minhash_sketch, lead.createdAt);
   emitLeadCreated(lead);
 
-  const registeredSinks = deps.sinks.list().map((s) => s.kind);
+  const registeredSinks = deps.sinks.list().filter((s) => !s.accepts || s.accepts(lead, source)).map((s) => s.kind);
   if (deps.store.initLeadDeliveries && registeredSinks.length > 0) {
     await deps.store.initLeadDeliveries(lead.id, registeredSinks);
   }
@@ -208,7 +208,7 @@ export async function ingestRawLead(
     env: deps.env,
     logger: deps.logger,
     fetchImpl: deps.fetchImpl ?? fetch,
-  });
+  }, registeredSinks);
 
   for (const delivery of deliveries) {
     await deps.store.recordDelivery(
