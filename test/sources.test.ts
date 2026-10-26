@@ -48,22 +48,15 @@ describe('source adapters', () => {
     expect(leads[0]?.externalId).toBe('kwork:123');
   });
 
-  it('uses the Kwork closed API when RADAR_KWORK_* credentials are set', async () => {
+  it('ignores any login credentials and strictly uses the public page parser without signIn', async () => {
     const adapter = registry.get('kwork');
-    const fixtureApi = fixture('kwork-api.json');
     const calls: string[] = [];
     const ctx: PollContext = {
       ...pollContext(''),
-      fetchImpl: (async (input: RequestInfo | URL, init?: RequestInit) => {
+      fetchImpl: (async (input: RequestInfo | URL) => {
         const url = String(input);
         calls.push(url);
-        if (url.endsWith('/signIn')) {
-          return new Response(JSON.stringify({ success: true, response: { token: 'tok-123' } }), {
-            status: 200,
-            headers: { 'content-type': 'application/json' },
-          });
-        }
-        return new Response(fixtureApi, { status: 200, headers: { 'content-type': 'application/json' } });
+        return new Response(fixture('kwork.html'), { status: 200, headers: { 'content-type': 'text/html' } });
       }) as typeof fetch,
     };
 
@@ -71,13 +64,10 @@ describe('source adapters', () => {
     process.env.RADAR_KWORK_PASSWORD = 'kwork-pass';
     try {
       const leads = await adapter!.poll!(makeSource({ kind: 'kwork', config: { categoryId: '11' } }), ctx);
-      expect(calls.some((url) => url.endsWith('/signIn'))).toBe(true);
-      expect(calls.some((url) => url.endsWith('/projects'))).toBe(true);
-      expect(leads).toHaveLength(2);
-      expect(leads[0]?.externalId).toBe('kwork:301');
-      expect(leads[0]?.budget).toBe(12000);
-      expect(leads[0]?.author).toBe('shop_owner');
-      expect(leads[1]?.budget).toBe(25000);
+      expect(calls.some((url) => url.includes('api.kwork.ru') || url.endsWith('/signIn'))).toBe(false);
+      expect(calls.some((url) => url.includes('kwork.ru/projects'))).toBe(true);
+      expect(leads).toHaveLength(1);
+      expect(leads[0]?.externalId).toBe('kwork:123');
     } finally {
       delete process.env.RADAR_KWORK_LOGIN;
       delete process.env.RADAR_KWORK_PASSWORD;

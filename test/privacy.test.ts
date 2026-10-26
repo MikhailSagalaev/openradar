@@ -136,6 +136,24 @@ describe('Smart PII Scrubbing (radar/1 specification)', () => {
     expect(result.hasHiddenContacts).toBe(false);
   });
 
+  it('case 13: masks wa.me direct links with phone numbers', () => {
+    const raw = 'Срочный заказ на верстку. WhatsApp: https://wa.me/79991234567';
+    const result = scrubPII(raw);
+
+    expect(result.text).not.toContain('https://wa.me/79991234567');
+    expect(result.text).toContain('[contact hidden]');
+    expect(result.hasHiddenContacts).toBe(true);
+  });
+
+  it('case 14: masks t.me direct contact link preceded by contact trigger', () => {
+    const raw = 'Ищем Go разработчика. Писать: https://t.me/hr_recruiter_m';
+    const result = scrubPII(raw, { channel: 'golang_channel' });
+
+    expect(result.text).not.toContain('https://t.me/hr_recruiter_m');
+    expect(result.text).toContain('[contact hidden]');
+    expect(result.hasHiddenContacts).toBe(true);
+  });
+
   it('helpers: extractPublicChannelHandle and isPrivateInternalUrl work correctly', () => {
     expect(extractPublicChannelHandle('https://t.me/s/my_channel/123')).toBe('@my_channel');
     expect(extractPublicChannelHandle('https://t.me/my_channel')).toBe('@my_channel');

@@ -28,6 +28,7 @@ import { assertSafeUrl } from '../core/ssrf.ts';
 import { createRuntime } from '../runtime.ts';
 import { pollAll } from '../pipeline/poll.ts';
 import { loadEnv } from '../config.ts';
+import { isAllowedAttestationDomain, AttestationRateLimiter } from '../net/attestation-guard.ts';
 
 export interface NodeOptions {
   relays?: string[];
@@ -116,6 +117,8 @@ export async function runMeshNode(options: NodeOptions = {}): Promise<void> {
     limit: 20,
   };
 
+  const attestationLimiter = new AttestationRateLimiter();
+
   const unsubscribe = relayPool.subscribe('radar-node-sub', subFilter, async (event, fromRelay) => {
     // Skip our own events
     if (event.pubkey === keys.pubKey) return;
@@ -134,6 +137,12 @@ export async function runMeshNode(options: NodeOptions = {}): Promise<void> {
     const declaredHash = dTag?.[1];
 
     if (!targetUrl || !declaredHash) return;
+
+    // Strict domain whitelist check (SSRF / DDoS amplification protection)
+    if (!isAllowedAttestationDomain(targetUrl)) return;
+
+    // Rate limiter: max 10/hr per domain, max 30/hr per pubkey
+    if (!attestationLimiter.canAttest(targetUrl, event.pubkey)) return;
 
     try {
       await assertSafeUrl(targetUrl);

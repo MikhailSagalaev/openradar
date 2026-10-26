@@ -1091,6 +1091,7 @@ export class PostgresStore implements Store {
 
     const isPrivileged =
       viewerContext.isAdmin ||
+      viewerContext.isRealtime ||
       viewerContext.hasValidAttestations24h ||
       (viewerContext.trustScore ?? 0) >= 0.2;
 
@@ -1110,6 +1111,36 @@ export class PostgresStore implements Store {
     if (options.type) {
       conditions.push(`type = $${idx++}`);
       params.push(options.type);
+    }
+    if (options.query && options.query.trim().length > 0) {
+      const trimmed = options.query.trim();
+      const normQuery = normalizeTechTokens(trimmed);
+      if (trimmed.length >= 2) {
+        conditions.push(`(
+          (to_tsvector('russian', title || ' ' || text) || to_tsvector('english', title || ' ' || text))
+          @@ (websearch_to_tsquery('russian', $${idx}) || websearch_to_tsquery('english', $${idx}))
+          OR title ILIKE $${idx + 1}
+          OR text ILIKE $${idx + 1}
+          OR city ILIKE $${idx + 1}
+          OR category ILIKE $${idx + 1}
+          OR skills_json::text ILIKE $${idx + 1}
+        )`);
+        params.push(normQuery);
+        params.push(`%${trimmed}%`);
+        idx += 2;
+      } else {
+        const q = `%${trimmed}%`;
+        conditions.push(`(
+          title ILIKE $${idx} OR
+          text ILIKE $${idx} OR
+          city ILIKE $${idx} OR
+          category ILIKE $${idx} OR
+          title_key ILIKE $${idx} OR
+          skills_json::text ILIKE $${idx}
+        )`);
+        params.push(q);
+        idx += 1;
+      }
     }
 
     const whereClause = `WHERE ${conditions.join(' AND ')}`;

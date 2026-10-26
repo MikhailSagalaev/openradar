@@ -239,7 +239,7 @@ CREATE TABLE IF NOT EXISTS arbiter_queue (
   2. Создать модуль `src/pipeline/arbiter.ts`:
      * Безопасная загрузка страницы `u` через существующий `SSRF DNS Resolver Guard` с таймаутом $5000\text{ мс}$.
      * **Детерминированный анализатор:** проверка кодов $404 / 410$, проверка текста на стоп-маркеры закрытия («вакансия в архиве», «заказ закрыт», «неактуально», `validThrough` истек) и маркеры скама (запрос seed-фразы, предоплата за верификацию/тестовое).
-     * **Опциональный LLM-верификатор** (через совместимый OpenAI/xAI/локальный Ollama endpoint из `process.env.ARBITER_LLM_URL`): передается очищенный текст страницы и возвращается строгий JSON `{ verdict: "active" | "closed" | "scam", confidence: number, reason: string }`.
+     * **Опциональный LLM-верификатор** (через совместимый локальный или сетевой endpoint из `process.env.ARBITER_LLM_URL`): передается очищенный текст страницы и возвращается строгий JSON `{ verdict: "active" | "closed" | "scam", confidence: number, reason: string }`.
   3. Если вердикт `scam` или `closed` с $\text{confidence} \ge 0.85$ — обновить статус лида на `killed_scam` / `killed_closed` и выпустить подписанное сервером событие аттестации `kind: 30405`.
   4. **Slashing (Skin-in-the-Game):** Если вердикт арбитра `active` ($\text{confidence} \ge 0.85$), для всех ключей, отправивших `scam` по этому лиду, уменьшить `trust_score = trust_score * 0.5` и увеличить `false_reports_count + 1`.
 * **Acceptance Criteria (DoD):**
@@ -305,7 +305,7 @@ CREATE TABLE IF NOT EXISTS arbiter_queue (
 ### EPIC 5: Коммерческий слой B2D / B2B (MCP-сервер для ИИ-агентов, Firehose API и Lakehouse Analytics)
 
 #### Задача 5.1: MCP-сервер для ИИ-агентов (`src/mcp/server.ts`)
-* **Цель:** Дать внешним ИИ-агентам (Claude Desktop, Cursor, кастомным AI SDR для агентств) прямой протокольный доступ к поиску заказов и аналитике рынка.
+* **Цель:** Дать внешним ИИ-агентам прямой протокольный доступ к поиску заказов и аналитике рынка.
 * **Что сделать:**
   1. Реализовать стандартный **Model Context Protocol (MCP)** сервер (транспорт `stdio` для локального CLI `radar mcp` и `SSE / Streamable HTTP` на эндпоинте `/mcp` в Hono).
   2. Описать 3 MCP-инструмента (`tools`):

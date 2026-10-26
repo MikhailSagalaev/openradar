@@ -118,6 +118,20 @@ describe('feed access hardening', () => {
     expect(html).not.toContain('>locked-lead<');
   });
 
+  it('hides locked and mesh-exclusive leads from the anonymous main page /', async () => {
+    const runtime = makeRuntime();
+    await seedLeads(runtime);
+    const app = createApp(runtime);
+
+    const res = await app.request('/');
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('href="/leads/public-lead"');
+    expect(html).toContain('href="/leads/unlocked-lead"');
+    expect(html).not.toContain('href="/leads/mesh-lead"');
+    expect(html).not.toContain('href="/leads/locked-lead"');
+  });
+
   it('MCP search and details respect the viewer tier', async () => {
     const store = new MemoryStore();
     for (const lead of [

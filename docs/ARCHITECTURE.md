@@ -59,7 +59,7 @@ Radar — самостоятельный сервис, который превр
 | `src/pipeline/` | ingest, poll, планировщик, outbox воркер |
 | `src/server/` | Hono API и server-rendered dashboard |
 | `src/cli/` | команды `radar` |
-| `src/classifier/` | опциональный OpenAI-совместимый классификатор |
+| `src/classifier/` | опциональный LLM-совместимый классификатор |
 
 ## 4. Поток данных
 
@@ -159,8 +159,8 @@ sessions(id, user_id, created_at, expires_at)
 
 ## 9. LLM
 
-- Включается только `RADAR_LLM_ENABLED=true` и наличием `OPENAI_API_KEY`.
-- Любой OpenAI-совместимый endpoint: OpenAI, совместимый шлюз, локальный Ollama с OpenAI-фасадом.
+- Включается только `RADAR_LLM_ENABLED=true` и наличием API-ключа.
+- Любой стандартный endpoint: внешний шлюз или локальный сервис с HTTP API.
 - Ответ — строгий JSON; текст лида передаётся как данные, не как инструкции.
 - Ошибка/таймаут → `null`, пайплайн продолжает по правилам.
 - Модель не влияет на дедуп и не может «оживить» отклонённый спам.

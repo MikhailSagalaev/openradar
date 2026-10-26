@@ -156,11 +156,13 @@ export class RelaySubscriber {
       });
 
       if (this.store.upsertMeshNode) {
+        const isIndependentPeer = existingLead.publisher_pubkey && existingLead.publisher_pubkey !== pubkey;
+        const trustBonus = isIndependentPeer ? 0.01 : 0;
         await this.store.upsertMeshNode({
           pubkey: node?.pubkey ?? pubkey,
           npub: node?.npub ?? pubkey,
-          trust_score: Math.min(1.0, (node?.trust_score ?? 0.05) + 0.01),
-          valid_leads_7d: (node?.valid_leads_7d ?? 0) + 1,
+          trust_score: Math.min(1.0, (node?.trust_score ?? 0.05) + trustBonus),
+          valid_leads_7d: (node?.valid_leads_7d ?? 0) + (isIndependentPeer ? 1 : 0),
         });
       }
       return true;
@@ -212,13 +214,13 @@ export class RelaySubscriber {
 
     await this.store.insertLead(newLead);
 
-    // Reward node with valid_leads_7d increment (Tit-for-Tat contributor quorum)
+    // Ingest lead, but do not artificially inflate trust score solely based on event volume.
+    // Trust score must remain Sybil-resistant (< 0.20) unless cross-verified by peers or GitHub.
     if (this.store.upsertMeshNode) {
-      const currentTrust = node?.trust_score ?? 0.05;
       await this.store.upsertMeshNode({
         pubkey,
         npub: node?.npub ?? pubkey,
-        trust_score: Math.min(1.0, currentTrust + 0.02),
+        trust_score: node?.trust_score ?? 0.05,
         valid_leads_7d: (node?.valid_leads_7d ?? 0) + 1,
       });
     }

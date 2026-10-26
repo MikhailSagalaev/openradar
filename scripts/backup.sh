@@ -21,44 +21,44 @@ POSTGRES_USER="${POSTGRES_USER:-radar}"
 POSTGRES_DB="${POSTGRES_DB:-radar}"
 CONTAINER_NAME="${PG_CONTAINER:-radar_postgres}"
 
-echo "📦 [Radar Backup] Создание резервной копии базы данных ${POSTGRES_DB}..."
+echo "[Radar Backup] Starting backup of database ${POSTGRES_DB}..."
 
-# 2. Выгрузка pg_dump -Fc
+# 2. Dump via pg_dump -Fc
 if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
   docker exec -t "$CONTAINER_NAME" pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB" > "$BACKUP_FILE"
 elif command -v pg_dump >/dev/null 2>&1; then
   pg_dump -Fc "$DATABASE_URL" > "$BACKUP_FILE"
 else
-  echo "❌ Ошибка: Не найден запущенный контейнер ${CONTAINER_NAME} или утилита pg_dump"
+  echo "[Radar Backup] Error: Neither container ${CONTAINER_NAME} nor pg_dump found"
   exit 1
 fi
 
-echo "✅ Дамп сохранен: $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
+echo "[Radar Backup] Dump saved: $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
 
-# 3. Опциональное шифрование через age
+# 3. Optional age encryption
 if [ -n "${BACKUP_AGE_RECIPIENT:-}" ] && command -v age >/dev/null 2>&1; then
-  echo "🔒 Шифрование бэкапа с помощью age..."
+  echo "[Radar Backup] Encrypting with age..."
   age -r "$BACKUP_AGE_RECIPIENT" -o "$ENCRYPTED_FILE" "$BACKUP_FILE"
   rm -f "$BACKUP_FILE"
   UPLOAD_TARGET="$ENCRYPTED_FILE"
-  echo "✅ Зашифровано: $ENCRYPTED_FILE"
+  echo "[Radar Backup] Encrypted: $ENCRYPTED_FILE"
 else
   UPLOAD_TARGET="$BACKUP_FILE"
 fi
 
-# 4. Опциональная загрузка в S3 / MinIO / Timeweb S3
+# 4. Optional upload to S3
 if [ -n "${S3_BUCKET:-}" ] && command -v aws >/dev/null 2>&1; then
-  echo "☁️ Отправка в S3-хранилище (${S3_BUCKET})..."
+  echo "[Radar Backup] Uploading to S3 (${S3_BUCKET})..."
   ENDPOINT_FLAG=""
   if [ -n "${S3_ENDPOINT:-}" ]; then
     ENDPOINT_FLAG="--endpoint-url ${S3_ENDPOINT}"
   fi
   aws s3 cp "$UPLOAD_TARGET" "s3://${S3_BUCKET}/radar/$(basename "$UPLOAD_TARGET")" ${ENDPOINT_FLAG}
-  echo "✅ Бэкап выгружен в облачное хранилище."
+  echo "[Radar Backup] Uploaded to S3"
 fi
 
-# 5. Ротация: удаление локальных бэкапов старше 14 дней
-echo "🧹 Удаление локальных копий старше 14 дней..."
+# 5. Rotation: keep 14 days
+echo "[Radar Backup] Cleaning backups older than 14 days..."
 find "$BACKUP_DIR" -type f \( -name "radar_*.dump" -o -name "radar_*.dump.age" \) -mtime +14 -delete
 
-echo "🎉 Резервное копирование успешно завершено!"
+echo "[Radar Backup] Backup completed successfully"

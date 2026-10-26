@@ -168,6 +168,25 @@ export function scrubPII(rawText: string, sourceMeta?: SourceMetadata): ScrubRes
     return match.replace(phoneGroup.trim(), CONTACT_HIDDEN);
   });
 
+  // 4b. Mask direct messenger links (wa.me, t.me personal outreach)
+  const waUrlRegex = /https?:\/\/(?:wa\.me\/|api\.whatsapp\.com\/send\?phone=)\d+/gi;
+  if (waUrlRegex.test(text)) {
+    hasHiddenContacts = true;
+    text = text.replace(waUrlRegex, CONTACT_HIDDEN);
+  }
+
+  const triggerThenTgUrlRegex = new RegExp(
+    `(${TRIGGER_PATTERN.source})(https?:\\/\\/t(?:elegram)?\\.me\\/(?:s\\/)?([a-zA-Z0-9_]{4,32}))`,
+    'gi',
+  );
+  text = text.replace(triggerThenTgUrlRegex, (match, prefix, fullUrl, handle) => {
+    if (sourceChannelHandle && `@${handle.toLowerCase()}` === sourceChannelHandle.toLowerCase()) {
+      return match;
+    }
+    hasHiddenContacts = true;
+    return `${prefix}${CONTACT_HIDDEN}`;
+  });
+
   // 5. Mask personal handles with contact triggers
   // Pattern A: Trigger followed by @handle (e.g. "писать в лс @alex", "tg: @hr_lead")
   const triggerThenHandleRegex = new RegExp(
