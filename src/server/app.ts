@@ -28,6 +28,8 @@ import {
   renderSourcePage,
   renderSourcesPage,
   renderSubmitPage,
+  STYLE,
+  STYLE_PATH,
   type SourceFormValues,
 } from './ui.ts';
 import { resolveLang, type SupportedLang } from './i18n.ts';
@@ -618,6 +620,13 @@ export function createApp(runtime: Runtime): Hono {
     await next();
   });
 
+  app.notFound((c) => {
+    const p = c.req.path;
+    const wantsJson = p.startsWith('/api') || p.startsWith('/v2') || p === '/mcp' || !c.req.header('accept')?.includes('text/html');
+    if (wantsJson) return c.json({ error: 'not_found' }, 404);
+    return c.html(renderNotFound(VERSION, resolveLang(c)), 404);
+  });
+
   app.onError((error, c) => {
     runtime.logger.error('http handler failed', {
       error: error instanceof Error ? error.message : String(error),
@@ -649,6 +658,15 @@ export function createApp(runtime: Runtime): Hono {
       headers: {
         'content-type': 'image/svg+xml; charset=utf-8',
         'cache-control': 'public, max-age=86400',
+      },
+    });
+  });
+
+  app.get(STYLE_PATH, () => {
+    return new Response(STYLE, {
+      headers: {
+        'content-type': 'text/css; charset=utf-8',
+        'cache-control': 'public, max-age=31536000, immutable',
       },
     });
   });
@@ -796,6 +814,8 @@ export function createApp(runtime: Runtime): Hono {
         auth: await getAuthDisplay(c, runtime),
         lang,
         delayMinutes: delayMinutes(viewer, runtime.access),
+        isAdmin: viewer.tier === 'admin',
+        githubEnabled: githubOAuthConfigured(runtime),
       }),
     );
   });
@@ -1654,8 +1674,10 @@ export function createApp(runtime: Runtime): Hono {
     });
   });
 
-  app.get('/sitemap.xml', (c) => {
-    return c.text(renderSitemapXml(seoBaseUrl(c)), 200, {
+  app.get('/sitemap.xml', async (c) => {
+    // Only what a guest may open: delayed, active, not rejected.
+    const leads = runtime.env.RADAR_PUBLIC_READ ? await feedFor(runtime, { tier: 'guest' }, { limit: 1000 }) : [];
+    return c.text(renderSitemapXml(seoBaseUrl(c), leads), 200, {
       'content-type': 'application/xml; charset=utf-8',
     });
   });

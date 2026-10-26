@@ -53,7 +53,7 @@ export function canSeeContacts(viewer: Viewer): boolean {
 /** Single-lead check for detail pages and APIs: hidden or not-yet-visible leads are 404 for non-admins. */
 export function viewerCanSeeLead(viewer: Viewer, lead: Lead, policy: AccessPolicy, now: Date = new Date()): boolean {
   if (viewer.tier === 'admin') return true;
-  if ((lead.state ?? 'active') !== 'active') return false;
+  if ((lead.state ?? 'active') !== 'active' || lead.status === 'rejected') return false;
   const cutoff = visibleBefore(viewer, policy, now);
   return cutoff === undefined || lead.createdAt <= cutoff;
 }

@@ -202,6 +202,21 @@ describe('http server', () => {
     expect(requested.length).toBeGreaterThan(0);
   });
 
+  it('serves the stylesheet from a cacheable hashed path instead of inlining it', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true });
+    const app = createApp(runtime);
+
+    const html = await (await app.request('/')).text();
+    const href = html.match(/<link rel="stylesheet" href="(\/assets\/app\.[0-9a-f]{10}\.css)">/)?.[1];
+    expect(href).toBeDefined();
+    expect(html).not.toContain('<style>:root');
+
+    const css = await app.request(href!);
+    expect(css.status).toBe(200);
+    expect(css.headers.get('content-type')).toContain('text/css');
+    expect(css.headers.get('cache-control')).toContain('immutable');
+  });
+
   it('does not loop between / and /login when sign-in is not configured', async () => {
     const runtime = makeRuntime({ RADAR_ADMIN_TOKEN: undefined, RADAR_PUBLIC_READ: false });
     const app = createApp(runtime);
@@ -895,6 +910,83 @@ describe('http server', () => {
     expect(storedLead?.type).toBe('job');
 
     await runtime.store.close();
+  });
+
+  describe('public view for readers who are not the operator', () => {
+    async function seed(runtime: Runtime) {
+      const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed' });
+      const base = { sourceId: source.id, reasons: [], score: 70, createdAt: '2026-10-23T14:00:00Z' };
+      await runtime.store.insertLead({
+        ...base, id: 'lead-ok', title: 'Python bot', text: 'Telegram bot in Python', fingerprint: 'fp-ok', titleKey: 'python-bot', status: 'delivered',
+      });
+      await runtime.store.insertLead({
+        ...base, id: 'lead-rejected', title: 'Write a review', text: 'Leave a five star review', fingerprint: 'fp-rej', titleKey: 'write-review', status: 'rejected',
+      });
+      return source;
+    }
+
+    it('hides pipeline statuses and rejected leads from guests, keeps them for the admin', async () => {
+      const runtime = makeRuntime({ RADAR_PUBLIC_READ: true });
+      await seed(runtime);
+      const app = createApp(runtime);
+
+      const guest = await (await app.request('/')).text();
+      expect(guest).toContain('Python bot');
+      expect(guest).not.toContain('Write a review');
+      expect(guest).not.toContain('status=delivered');
+      expect(guest).not.toContain('доставлен');
+      expect(guest).toContain('id="feed-intro"');
+      expect(guest).toContain('Скор от 0 до 100');
+
+      for (const path of ['/api/leads', '/v2/feed', '/feed.rss', '/api/delta?since=2000-01-01T00:00:00Z']) {
+        const body = await (await app.request(path)).text();
+        expect(body, path).toContain('Python bot');
+        expect(body, path).not.toContain('Write a review');
+      }
+      expect((await app.request('/leads/lead-rejected')).status).toBe(404);
+
+      const sessionId = await makeAdminSession(runtime);
+      const admin = await (await app.request('/', { headers: { cookie: `radar_session=${sessionId}` } })).text();
+      expect(admin).toContain('Write a review');
+      expect(admin).toContain('status=rejected');
+      expect(admin).not.toContain('id="feed-intro"');
+      expect((await app.request('/leads/lead-rejected', { headers: { cookie: `radar_session=${sessionId}` } })).status).toBe(200);
+
+      await runtime.store.close();
+    });
+
+    it('shows readers source states without raw errors or disabled sources', async () => {
+      const runtime = makeRuntime({ RADAR_PUBLIC_READ: true });
+      const source = await seed(runtime);
+      await runtime.store.createSource({ kind: 'rss', title: 'Old feed', enabled: false });
+      await runtime.store.recordRun({
+        id: 'run-1', sourceId: source.id, startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(),
+        found: 0, inserted: 0, duplicates: 0, rejected: 0, delivered: 0, error: 'fetch failed',
+      });
+      const app = createApp(runtime);
+
+      const page = await (await app.request('/sources')).text();
+      expect(page).toContain('временно недоступен');
+      expect(page).not.toContain('fetch failed');
+      expect(page).not.toContain('Сбой сети');
+      expect(page).not.toContain('Old feed');
+      expect(page).not.toContain('найдено / новых / доставлено');
+
+      await runtime.store.close();
+    });
+  });
+
+  it('answers unknown pages with an HTML 404 and unknown API paths with JSON', async () => {
+    const app = createApp(makeRuntime({ RADAR_PUBLIC_READ: true }));
+
+    const page = await app.request('/no-such-page', { headers: { accept: 'text/html' } });
+    expect(page.status).toBe(404);
+    expect(page.headers.get('content-type')).toContain('text/html');
+    expect(await page.text()).toContain('Страница не найдена');
+
+    const api = await app.request('/api/no-such-endpoint', { headers: { accept: 'text/html' } });
+    expect(api.status).toBe(404);
+    expect(await api.json()).toEqual({ error: 'not_found' });
   });
 
   it('serves search RSS feed with matching items', async () => {

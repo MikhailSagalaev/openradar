@@ -93,8 +93,21 @@ export interface Translations {
   footerLicense: string;
   licenseLink: string;
   rssFeed: string;
-  s3Delta: string;
-  systemStatus: string;
+  guideLink: string;
+  protocolLink: string;
+  // Feed intro for guests
+  heroTitle: string;
+  heroText: string;
+  heroSignIn: string;
+  heroSignInHint: string;
+  heroNode: string;
+  heroNodeHint: string;
+  heroSend: string;
+  heroSendHint: string;
+  heroDismiss: string;
+  scoreHint: string;
+  notFoundTitle: string;
+  notFoundDesc: string;
   extensionGuide: string;
   // Submit page
   submitTitle: string;
@@ -197,8 +210,8 @@ export const RU: Translations = {
   stack: 'Стек',
   scoreReasons: 'Почему так',
   cautionFlag: 'Внимание: участники сообщества отметили этот заказ как подозрительный. Тщательно проверяйте заказчика перед началом работы.',
-  signalHighScore: 'высокий рейтинг',
-  signalMarketBudget: 'вилка в рынке',
+  signalHighScore: 'сильный заказ',
+  signalMarketBudget: 'указан бюджет',
   signalDirectEmployer: 'прямой заказчик',
   signalPossibleScam: 'возможен скам',
   useful: 'Полезно',
@@ -210,12 +223,24 @@ export const RU: Translations = {
   voteAuthDesc: 'Чтобы исключить накрутку и спам, оценивать заказы и помечать скам могут только авторизованные через GitHub участники.',
   signInGithub: 'Войти через GitHub',
   cancel: 'Отмена',
-  footerDesc: 'OpenRadar — открытый децентрализованный мониторинг любых заказов, задач и вакансий.',
+  footerDesc: 'Открытая некоммерческая сеть заказов, задач и вакансий.',
   footerLicense: 'Свободное программное обеспечение. Лицензия AGPL-3.0.',
   licenseLink: 'Лицензия AGPL-3.0',
   rssFeed: 'RSS фид',
-  s3Delta: 'S3 Delta Stream',
-  systemStatus: 'Статус системы',
+  guideLink: 'Как пользоваться',
+  protocolLink: 'API и протокол',
+  heroTitle: 'Свежие заказы и вакансии со всех площадок',
+  heroText: 'OpenRadar собирает заказы и вакансии с бирж, RSS и Telegram-каналов в одну ленту. Без платных откликов: контакты в посте, вы пишете заказчику напрямую. Код открыт, ленту пополняют сами участники.',
+  heroSignIn: 'Войти через GitHub',
+  heroSignInHint: 'меньше задержка, видны контакты',
+  heroNode: 'Запустить свой узел',
+  heroNodeHint: 'своя лента и фильтры без задержки',
+  heroSend: 'Присылать заказы',
+  heroSendHint: 'кто делится, видит ленту первым',
+  heroDismiss: 'Скрыть',
+  notFoundTitle: 'Страница не найдена',
+  notFoundDesc: 'Такой страницы нет: ссылка устарела, или заказ уже скрыт.',
+  scoreHint: 'Скор от 0 до 100 — насколько заказ стоит внимания. Учитываются бюджет, свежесть, IT-навыки в тексте и голоса участников. От 80 — сильный заказ.',
   extensionGuide: 'Расширение для браузера',
   submitTitle: 'Добавить по ссылке',
   submitSubtitle: 'Автоматический сбор описания вакансии или заказа через разметку страницы',
@@ -315,8 +340,8 @@ export const EN: Translations = {
   stack: 'Stack',
   scoreReasons: 'Score breakdown',
   cautionFlag: 'Caution: community members flagged this lead as suspicious. Verify the client carefully before proceeding.',
-  signalHighScore: 'high score',
-  signalMarketBudget: 'market budget',
+  signalHighScore: 'strong lead',
+  signalMarketBudget: 'budget stated',
   signalDirectEmployer: 'direct employer',
   signalPossibleScam: 'possible scam',
   useful: 'Useful',
@@ -328,12 +353,24 @@ export const EN: Translations = {
   voteAuthDesc: 'To prevent manipulation and spam, voting and scam reporting requires signing in with GitHub.',
   signInGithub: 'Sign in with GitHub',
   cancel: 'Cancel',
-  footerDesc: 'OpenRadar — open-source decentralized monitor for all jobs, gigs and freelance orders.',
+  footerDesc: 'Open, non-commercial network of gigs, tasks and jobs.',
   footerLicense: 'Free and open-source software. AGPL-3.0 License.',
   licenseLink: 'AGPL-3.0 License',
   rssFeed: 'RSS feed',
-  s3Delta: 'S3 Delta Stream',
-  systemStatus: 'System status',
+  guideLink: 'Getting started',
+  protocolLink: 'API and protocol',
+  heroTitle: 'Fresh gigs and jobs from every board',
+  heroText: 'OpenRadar collects freelance orders and jobs from boards, RSS and Telegram channels into one feed. No paid responses: contacts stay in the post and you write to the client directly. The code is open and the feed is filled by its participants.',
+  heroSignIn: 'Sign in with GitHub',
+  heroSignInHint: 'shorter delay, contacts visible',
+  heroNode: 'Run your own node',
+  heroNodeHint: 'your own feed and filters, no delay',
+  heroSend: 'Send leads',
+  heroSendHint: 'those who share see the feed first',
+  heroDismiss: 'Hide',
+  notFoundTitle: 'Page not found',
+  notFoundDesc: 'There is no such page: the link is outdated, or the lead has been hidden.',
+  scoreHint: 'Score from 0 to 100: how much a lead is worth your attention. It counts the budget, freshness, IT skills in the text and participant votes. 80 and above is a strong lead.',
   extensionGuide: 'Browser Extension',
   submitTitle: 'Submit by URL',
   submitSubtitle: 'Automated extraction of job or gig details using page schema',

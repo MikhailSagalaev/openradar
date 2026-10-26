@@ -66,13 +66,29 @@ export const SOURCE_PRESETS: SourcePreset[] = [
   },
   {
     id: 'hh-it',
-    kind: 'hh',
+    kind: 'rss',
     title: 'HeadHunter — IT-вакансии',
-    description: 'Официальный Open API HeadHunter (hh.ru) — вакансии в сфере IT и разработки',
+    description: 'RSS поиска hh.ru по IT-вакансиям. В отличие от Open API, работает и с IP дата-центров',
     config: {
-      url: 'https://api.hh.ru/vacancies',
-      text: 'разработчик',
-      limit: 20,
+      url: 'https://hh.ru/search/vacancy/rss?text=%D1%80%D0%B0%D0%B7%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D1%87%D0%B8%D0%BA&professional_role=96&order_by=publication_time',
+    },
+  },
+  {
+    id: 'freelancehunt',
+    kind: 'rss',
+    title: 'Freelancehunt — Все проекты',
+    description: 'Официальный RSS-фид открытых проектов биржи Freelancehunt',
+    config: {
+      url: 'https://freelancehunt.com/projects.rss',
+    },
+  },
+  {
+    id: 'jobicy-dev',
+    kind: 'rss',
+    title: 'Jobicy — Remote Dev Jobs',
+    description: 'RSS-фид удалённых вакансий в разработке с Jobicy',
+    config: {
+      url: 'https://jobicy.com/feed/job_feed?job_categories=dev',
     },
   },
   {

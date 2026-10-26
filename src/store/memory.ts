@@ -286,7 +286,8 @@ export class MemoryStore implements Store {
   private queryLeads(options: FeedOptions, feedOnly = false): Lead[] {
     let result = Array.from(this.leads.values());
     if (feedOnly) {
-      result = result.filter((l) => (l.state ?? 'active') === 'active');
+      // Leads rejected by the pipeline rules stay with the operator, not in the public feed.
+      result = result.filter((l) => (l.state ?? 'active') === 'active' && l.status !== 'rejected');
       if (options.createdBefore) {
         const cutoff = options.createdBefore;
         result = result.filter((l) => l.createdAt <= cutoff);
@@ -608,11 +609,6 @@ export class MemoryStore implements Store {
       }
     }
     return removed;
-  }
-
-  async cleanupOutboxEvents(_retentionDays: number): Promise<number> {
-    // The memory store keeps no outbox_events copy; delivery state lives in leadDeliveries.
-    return 0;
   }
 
   async cleanupRuns(retentionDays: number): Promise<number> {

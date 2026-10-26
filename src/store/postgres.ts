@@ -298,14 +298,6 @@ export class PostgresStore implements Store {
         );
       }
 
-      // Transactional Outbox: публикуем событие о новом лиде
-      if (inserted) {
-        await client.query(
-          `INSERT INTO outbox_events (event_type, payload) VALUES ($1, $2::jsonb)`,
-          ['lead.created', JSON.stringify({ leadId: lead.id, status: lead.status, score: lead.score })]
-        );
-      }
-
       await client.query('COMMIT');
       return inserted;
     } catch (err) {
@@ -331,10 +323,6 @@ export class PostgresStore implements Store {
           [status, deliveredAt ? new Date(deliveredAt) : null, id]
         );
       }
-      await client.query(
-        `INSERT INTO outbox_events (event_type, payload) VALUES ($1, $2::jsonb)`,
-        ['lead.status_updated', JSON.stringify({ leadId: id, status, deliveredAt, scoreDelta })]
-      );
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK');
@@ -428,11 +416,6 @@ export class PostgresStore implements Store {
         [votes_up, votes_down, votes_scam, votes_closed, newScore, newStatus, baseScore, JSON.stringify(meta), leadId],
       );
 
-      await client.query(
-        `INSERT INTO outbox_events (event_type, payload) VALUES ($1, $2::jsonb)`,
-        ['lead.voted', JSON.stringify({ leadId, signal, weight: w, score: newScore, status: newStatus })],
-      );
-
       await client.query('COMMIT');
 
       return {
@@ -465,7 +448,8 @@ export class PostgresStore implements Store {
     let idx = 1;
 
     if (feedOnly) {
-      conditions.push(`state = 'active'`);
+      // Leads rejected by the pipeline rules stay with the operator, not in the public feed.
+      conditions.push(`state = 'active'`, `status <> 'rejected'`);
       if (options.createdBefore) {
         conditions.push(`created_at <= $${idx++}::timestamptz`);
         params.push(options.createdBefore);
@@ -999,11 +983,6 @@ export class PostgresStore implements Store {
         [votes_up, votes_down, votes_scam, votes_closed, newScore, newStatus, baseScore, leadId]
       );
 
-      await client.query(
-        `INSERT INTO outbox_events (event_type, payload) VALUES ($1, $2::jsonb)`,
-        ['lead.voted', JSON.stringify({ leadId, userId, signal, weight: 1.0, score: newScore, status: newStatus, myVote: activeVote })]
-      );
-
       await client.query('COMMIT');
       return {
         votes_up,
@@ -1041,14 +1020,6 @@ export class PostgresStore implements Store {
   async cleanupOldLeads(retentionDays: number): Promise<number> {
     const res = await this.pool.query(
       `DELETE FROM leads WHERE created_at < NOW() - ($1 || ' days')::interval`,
-      [retentionDays]
-    );
-    return res.rowCount ?? 0;
-  }
-
-  async cleanupOutboxEvents(retentionDays: number): Promise<number> {
-    const res = await this.pool.query(
-      `DELETE FROM outbox_events WHERE created_at < NOW() - ($1 || ' days')::interval`,
       [retentionDays]
     );
     return res.rowCount ?? 0;
