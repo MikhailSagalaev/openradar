@@ -42,7 +42,7 @@ import { evaluateLeadState, tierFor, WeightResolver, WEB_SIGNAL_PREFIX } from '.
 import { registerV2Routes } from './v2.ts';
 import { SEO_CATALOG, findCatalogEntry, renderCatalogPage, renderRobotsTxt, renderSitemapXml } from './seo.ts';
 import { extractPreviewFromHtml, validateSubmissionUrl } from './preview.ts';
-import { renderLogo, LOGO_SVG, FAVICON_SVG } from './logo.ts';
+import { renderLogo, LOGO_SVG, LOGO_ASSET_PATH, FAVICON_SVG } from './logo.ts';
 
 function tokenFromRequest(c: Context): string | undefined {
   const authorization = c.req.header('authorization');
@@ -658,6 +658,15 @@ export function createApp(runtime: Runtime): Hono {
       headers: {
         'content-type': 'image/svg+xml; charset=utf-8',
         'cache-control': 'public, max-age=86400',
+      },
+    });
+  });
+
+  app.get(LOGO_ASSET_PATH, () => {
+    return new Response(LOGO_SVG, {
+      headers: {
+        'content-type': 'image/svg+xml; charset=utf-8',
+        'cache-control': 'public, max-age=31536000, immutable',
       },
     });
   });
