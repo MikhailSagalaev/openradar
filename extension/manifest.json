@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "OpenRadar — захват вакансий и заказов",
-  "version": "0.5.0",
-  "description": "Отправляет вакансии и заказы в OpenRadar в один клик или через контекстное меню.",
+  "version": "0.5.1",
+  "description": "Отправляет вакансии и заказы в OpenRadar в один клик или через контекстное меню. Никаких автоматических запросов: каждое действие — только по вашей команде.",
   "icons": {
     "16": "icon16.png",
     "32": "icon32.png",
@@ -33,18 +33,6 @@
       "128": "icon128.png"
     }
   },
-  "content_scripts": [
-    {
-      "matches": [
-        "http://*/*",
-        "https://*/*"
-      ],
-      "js": [
-        "content.js"
-      ],
-      "run_at": "document_idle"
-    }
-  ],
   "commands": {
     "send-page": {
       "suggested_key": {
