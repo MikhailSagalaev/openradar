@@ -519,9 +519,17 @@ function buildProgram(): Command {
     .option('--no-scheduler', 'Do not poll sources in the background')
     .action(async (options: ServeOptions) => {
       const runtime = await createRuntime();
+      if (!runtime.env.RADAR_ADMIN_TOKEN) {
+        // Without a token nobody can sign in to manage sources: issue one for this run.
+        runtime.env.RADAR_ADMIN_TOKEN = randomBytes(24).toString('hex');
+        console.error(
+          `RADAR_ADMIN_TOKEN не задан, токен администратора на этот запуск: ${runtime.env.RADAR_ADMIN_TOKEN}\n` +
+            'Задайте RADAR_ADMIN_TOKEN в .env, чтобы он не менялся между запусками.',
+        );
+      }
       const app = createApp(runtime);
       const port = numberOption(options.port) ?? runtime.env.PORT;
-      const server = startServer(app, port);
+      const server = startServer(app, port, runtime.env.RADAR_BIND);
       const runner = options.noScheduler
         ? undefined
         : new PollRunner(pollDeps(runtime), runtime.env.RADAR_POLL_INTERVAL_SEC, runtime.logger);

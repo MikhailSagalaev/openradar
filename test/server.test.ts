@@ -180,6 +180,37 @@ describe('http server', () => {
     return sessionId;
   }
 
+  it('polls preset sources right after loading them', async () => {
+    const requested: string[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      requested.push(String(input));
+      return new Response('', { status: 503 });
+    }) as typeof fetch;
+    const runtime = makeRuntime({}, fetchImpl);
+    const sessionId = await makeAdminSession(runtime);
+    const app = createApp(runtime);
+
+    const response = await app.request('/sources/presets', {
+      method: 'POST',
+      headers: { cookie: `radar_session=${sessionId}`, origin: 'http://localhost' },
+    });
+    expect(response.status).toBe(302);
+    const sources = await runtime.store.listSources();
+    expect(sources.length).toBeGreaterThan(0);
+
+    await expect.poll(async () => (await runtime.store.listRuns(50)).length).toBe(sources.length);
+    expect(requested.length).toBeGreaterThan(0);
+  });
+
+  it('does not loop between / and /login when sign-in is not configured', async () => {
+    const runtime = makeRuntime({ RADAR_ADMIN_TOKEN: undefined, RADAR_PUBLIC_READ: false });
+    const app = createApp(runtime);
+
+    expect((await app.request('/')).headers.get('location')).toBe('/login');
+    const login = await app.request('/login');
+    expect(login.status).toBe(503);
+  });
+
   it('creates a source from the dashboard form', async () => {
     const runtime = makeRuntime();
     const sessionId = await makeAdminSession(runtime);

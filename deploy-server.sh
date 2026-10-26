@@ -3,6 +3,8 @@
 # Radar Auto-Deploy Script for Server
 # ==============================================================================
 set -euo pipefail
+# Runs as `ssh host 'bash -s' < deploy-server.sh`: commands that read stdin get
+# </dev/null so they do not swallow the rest of this script.
 
 echo "[Radar Deploy] Начинаем развертывание Radar..."
 
@@ -89,13 +91,13 @@ docker compose up -d postgres
 BACKUP_DIR="${RADAR_BACKUP_DIR:-$TARGET_DIR/backups}"
 mkdir -p "$BACKUP_DIR"
 for i in {1..15}; do
-  docker compose exec -T postgres pg_isready -q && break
+  docker compose exec -T postgres pg_isready -q </dev/null && break
   sleep 2
 done
 PG_USER=$(grep -E "^POSTGRES_USER=" .env | cut -d '=' -f2- | tr -d ' "' || true)
 PG_DB=$(grep -E "^POSTGRES_DB=" .env | cut -d '=' -f2- | tr -d ' "' || true)
 BACKUP_FILE="$BACKUP_DIR/pre-deploy-$(date +%Y%m%d-%H%M%S).dump"
-if docker compose exec -T postgres pg_dump -U "${PG_USER:-radar}" -Fc "${PG_DB:-radar}" > "$BACKUP_FILE"; then
+if docker compose exec -T postgres pg_dump -U "${PG_USER:-radar}" -Fc "${PG_DB:-radar}" </dev/null > "$BACKUP_FILE"; then
   echo "Резервная копия: $BACKUP_FILE"
 else
   echo "Не удалось сделать резервную копию, деплой остановлен"
@@ -105,7 +107,7 @@ fi
 
 # 7. Запуск миграций базы данных
 echo "Применение миграций базы данных..."
-docker compose run --rm radar migrate
+docker compose run --rm -T radar migrate </dev/null
 
 # 8. Бесшовное обновление контейнера приложения
 echo "Перезапуск контейнера radar_app..."

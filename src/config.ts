@@ -56,6 +56,8 @@ const envSchema = z.object({
   RADAR_RETENTION_DAYS: z.coerce.number().int().positive().default(180),
   RADAR_LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   PORT: z.coerce.number().int().positive().default(8787),
+  /** Interface to listen on; the Docker image sets 0.0.0.0. */
+  RADAR_BIND: z.string().min(1).default('127.0.0.1'),
 });
 
 /** Example values that ever shipped in this repository: never accept them as a real secret. */

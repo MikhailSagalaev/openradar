@@ -59,6 +59,7 @@ export interface Env {
   RADAR_RETENTION_DAYS: number;
   RADAR_LOG_LEVEL: LogLevel;
   PORT: number;
+  RADAR_BIND: string;
 }
 
 export interface SourceConfig {

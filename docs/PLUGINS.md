@@ -1,12 +1,12 @@
 # Plugins and adapters
 
-Radar ships with eight sources (rss, telegram, kwork, webhook, imap, trudvsem, hh, remoteok) and three sinks. Everything else is meant to be added as an adapter, not by patching the pipeline.
+Radar ships with eight sources (rss, telegram, kwork, webhook, imap, trudvsem, hh, remoteok) and four sinks (console, telegram, webhook, hub). Everything else is meant to be added as an adapter, not by patching the pipeline.
 
 ## Two levels of extension
 
-### 1. Compile-time adapter (v0.2, recommended)
+### 1. Compile-time adapter (recommended)
 
-A normal TypeScript module, reviewed and shipped with the project:
+A normal TypeScript module, reviewed and shipped with the project. `pnpm new:connector <name>` generates the module, a fixture and a test:
 
 ```ts
 import { defineSource } from '../sdk.ts';
@@ -30,7 +30,7 @@ export const exampleSource = defineSource({
 
 Register it in `src/sources/index.ts`, add a fixture and a test.
 
-### 2. Runtime plugins (v0.3, not shipped)
+### 2. Runtime plugins (not shipped)
 
 Runtime loading of untrusted JavaScript is deliberately absent. A self-hosted tool that imports arbitrary plugins from a directory is a remote-code-execution surface, and it makes the adapter contract impossible to keep stable. The plan is a signed/allowlisted plugin directory with a manifest, not `import()` of anything a user drops into a folder.
 
@@ -54,7 +54,6 @@ Runtime loading of untrusted JavaScript is deliberately absent. A self-hosted to
 ## Testing
 
 ```bash
-pnpm add -D vitest
 pnpm test
 ```
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- `radar serve` without `RADAR_ADMIN_TOKEN` prints a one-off admin token instead of
+  leaving the dashboard without a way to sign in; `/login` no longer redirects in a loop
+  when sign-in is not configured.
+- The server listens on `127.0.0.1` by default (`RADAR_BIND`); the Docker image sets
+  `0.0.0.0`. Before, it listened on all interfaces while printing 127.0.0.1.
+- Loading the preset sources polls them right away, so a fresh node shows leads in
+  seconds instead of after the first scheduler tick.
+- `deploy-server.sh` defaults to `/opt/radar-test` and port 8791, and no longer lets
+  `docker compose exec` swallow the rest of the script when piped over SSH.
+- Docs: `docs/GETTING_STARTED.md` with user scenarios, README quick start fixed, stale
+  screenshots, contributors and publishing notes replaced.
+
 ## 0.7.0: radar/2
 
 ### Phase 3: rating, moderation, sharing and SDKs
