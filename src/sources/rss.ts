@@ -1,5 +1,5 @@
 import Parser from 'rss-parser';
-import { firstLine, toPlainText } from '../core/text.ts';
+import { firstLine, stripBudgetTitleSuffix, toPlainText } from '../core/text.ts';
 import type { RawLead, SourceAdapter } from '../core/types.ts';
 import { fetchText } from './http.ts';
 
@@ -22,7 +22,7 @@ export const rssSource: SourceAdapter = {
       const text = toPlainText(
         item.contentSnippet || item.content || item.summary || item.title || '',
       );
-      const title = firstLine(item.title || text, 140);
+      const title = firstLine(stripBudgetTitleSuffix(item.title || text), 140);
       return {
         sourceId: source.id,
         externalId: item.guid || item.id || item.link || undefined,

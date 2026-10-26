@@ -82,7 +82,8 @@ export function detectCurrency(text: string): string {
   if (lower.includes('тенге') || lower.includes('kzt') || lower.includes('₸')) {
     return 'KZT';
   }
-  if (lower.includes('бел') || lower.includes('byn')) {
+  // «белый», «Белгород» и пр. не валюты: только явные «бел. руб» / «белорусск» / BYN.
+  if (/(?:бел\.?\s*руб|белорусск)/i.test(lower) || /\bbyn\b/i.test(lower)) {
     return 'BYN';
   }
   if (lower.includes('грн') || lower.includes('uah') || lower.includes('₴')) {

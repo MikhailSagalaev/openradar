@@ -482,6 +482,7 @@ export function createApp(runtime: Runtime): Hono {
     c.header('X-Frame-Options', 'DENY');
     c.header('X-Content-Type-Options', 'nosniff');
     c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+    c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     // The dashboard uses inline scripts and styles, hence 'unsafe-inline'.
     c.header(
       'Content-Security-Policy',
@@ -776,12 +777,14 @@ export function createApp(runtime: Runtime): Hono {
   app.get('/sources', async (c) => {
     if (!await canRead(c, runtime)) return c.redirect('/login');
     const lang = resolveLang(c);
+    const admin = await isAdmin(c, runtime);
     return c.html(
       renderSourcesPage({
         health: await runtime.store.getSourceHealth(),
         version: VERSION,
         auth: await getAuthDisplay(c, runtime),
         lang,
+        isAdmin: admin,
       }),
     );
   });
@@ -951,6 +954,7 @@ export function createApp(runtime: Runtime): Hono {
       runtime.store.getLeadsForFeed(await viewerFromRequest(c, runtime), { sourceId: source.id, limit: 20 }),
       runtime.store.listRuns(20, source.id),
     ]);
+    const admin = await isAdmin(c, runtime);
     return c.html(
       renderSourcePage({
         source,
@@ -966,6 +970,7 @@ export function createApp(runtime: Runtime): Hono {
               : undefined,
         auth: await getAuthDisplay(c, runtime),
         lang,
+        isAdmin: admin,
       }),
     );
   });
