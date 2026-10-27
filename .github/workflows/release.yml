@@ -50,7 +50,7 @@ jobs:
           cd extension && zip -r ../radar-extension-${{ steps.version.outputs.tag }}.zip ./* && cd ..
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Release notes from CHANGELOG.md
         run: |
