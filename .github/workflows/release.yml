@@ -52,15 +52,36 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker Image
+      - name: Release notes from CHANGELOG.md
         run: |
-          docker build -t ghcr.io/${{ github.repository }}:${{ steps.version.outputs.tag }} -t ghcr.io/${{ github.repository }}:latest .
+          # The section of this version, up to the next "## " heading.
+          awk -v v="${{ steps.version.outputs.version }}" '
+            $0 == "## " v { on = 1; next }
+            on && /^## / { exit }
+            on { print }
+          ' CHANGELOG.md > release-notes.md
+          [ -s release-notes.md ] || echo "See CHANGELOG.md." > release-notes.md
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push the Docker image
+        run: |
+          # Image names must be lowercase; the owner is not.
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
+          docker build -t "$IMAGE:${{ steps.version.outputs.tag }}" -t "$IMAGE:latest" .
+          docker push "$IMAGE:${{ steps.version.outputs.tag }}"
+          docker push "$IMAGE:latest"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: Radar ${{ steps.version.outputs.tag }}
+          name: OpenRadar ${{ steps.version.outputs.tag }}
+          body_path: release-notes.md
           files: |
             radar-extension-${{ steps.version.outputs.tag }}.zip
-          generate_release_notes: true
