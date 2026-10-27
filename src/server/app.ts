@@ -18,6 +18,7 @@ import { IMAP_PASSWORD_ENV_RE } from '../sources/imap.ts';
 import { VERSION } from '../version.ts';
 import { githubOAuthConfigured, startGitHubOAuth, handleGitHubCallback } from './auth.ts';
 import { filterOptions, parseFeedFilters } from './filters.ts';
+import { estimateMarket } from '../core/market.ts';
 import { rateLimit } from './ratelimit.ts';
 import {
   renderExtensionPage,
@@ -46,6 +47,9 @@ import { registerV2Routes } from './v2.ts';
 import { SEO_CATALOG, findCatalogEntry, renderCatalogPage, renderRobotsTxt, renderSitemapXml } from './seo.ts';
 import { extractPreviewFromHtml, validateSubmissionUrl } from './preview.ts';
 import { renderLogo, LOGO_SVG, LOGO_ASSET_PATH, FAVICON_SVG } from './logo.ts';
+
+/** The market estimate looks at the last 90 days of priced leads. */
+const MARKET_WINDOW_MS = 90 * 24 * 3600 * 1000;
 
 function tokenFromRequest(c: Context): string | undefined {
   const authorization = c.req.header('authorization');
@@ -1452,6 +1456,27 @@ export function createApp(runtime: Runtime): Hono {
     return (await runtime.store.deleteSource(c.req.param('id')))
       ? c.json({ ok: true })
       : c.json({ error: 'not_found' }, 404);
+  });
+
+  // Market estimate for the browser extension: aggregates only, over leads a guest may
+  // already see, so it reveals nothing the public feed does not.
+  app.get('/api/market', rateLimit({ windowMs: 60_000, max: 60 }), async (c) => {
+    c.header('Access-Control-Allow-Origin', '*');
+    if (!await canRead(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
+    const title = (c.req.query('title') ?? '').trim().slice(0, 300);
+    if (title.length < 3) return c.json({ error: 'title_required' }, 400);
+    const type: LeadType = c.req.query('type') === 'job' ? 'job' : 'gig';
+    const skills = (c.req.query('skills') ?? '').split(',').map((s) => s.trim().slice(0, 40)).filter(Boolean).slice(0, 12);
+    const now = new Date();
+    const leads = await runtime.store.getLeadsForFeed({
+      type,
+      minBudgetUsd: 1,
+      limit: 3000,
+      createdAfter: new Date(now.getTime() - MARKET_WINDOW_MS).toISOString(),
+      createdBefore: visibleBefore({ tier: 'guest' }, runtime.access, now),
+    });
+    c.header('Cache-Control', 'public, max-age=600');
+    return c.json(estimateMarket({ title, type, skills }, leads));
   });
 
   app.get('/api/leads', async (c) => {

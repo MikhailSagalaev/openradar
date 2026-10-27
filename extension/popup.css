@@ -277,3 +277,49 @@ button.ghost:hover {
   color: #dc2626;
   font-weight: 600;
 }
+
+.market {
+  margin: 10px 0 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.market button {
+  width: 100%;
+}
+
+.market-result {
+  margin-top: 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.market-median {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.market-range,
+.market-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.market-compare {
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.market-examples {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  font-size: 12px;
+}
+
+.market-examples a {
+  color: var(--ink);
+}
