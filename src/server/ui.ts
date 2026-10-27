@@ -2703,6 +2703,8 @@ export function renderExtensionPage(data: ExtensionPageData): string {
         selectionItem1: '<b>"Send gig to Radar"</b> — saves the lead with type "Gig".',
         selectionItem2: '<b>"Send job to Radar"</b> — saves the lead with type "Job".',
         selectionAfter: 'A desktop notification will confirm the submission; clicking it opens the lead card directly.',
+        marketTitle: 'Market pay estimate',
+        marketDesc: 'On a vacancy or an order, press <b>«Оценить оплату на рынке»</b> in the popup: the median and the middle half of pay for similar leads over 90 days, and whether the pay on this page is below, within or above the market. Only the title, the type and the skills are sent, to the hub (openradar.fun by default, changeable in the settings) and only on your click.',
         attributionTitle: 'Contributor attribution',
         attributionDesc: 'In the extension settings, specify your username. Captured leads will display your attribution handle.',
         privacyTitle: 'Security and Privacy',
@@ -2745,6 +2747,8 @@ export function renderExtensionPage(data: ExtensionPageData): string {
         selectionItem1: '<b>«Отправить заказ в Radar»</b> — сохранит лид с типом «Заказ» (Gig).',
         selectionItem2: '<b>«Отправить вакансию в Radar»</b> — сохранит лид с типом «Вакансия» (Job).',
         selectionAfter: 'После отправки в браузере появится уведомление, по клику на которое сразу откроется карточка лида.',
+        marketTitle: 'Оценка оплаты на рынке',
+        marketDesc: 'На странице вакансии или заказа нажмите в попапе <b>«Оценить оплату на рынке»</b>: медиана и середина разброса оплаты по похожим заказам за 90 дней и сравнение с оплатой на этой странице — ниже, в рынке или выше. На хаб (по умолчанию openradar.fun, меняется в настройках) уходят только заголовок, тип и навыки, и только по вашему клику.',
         attributionTitle: 'Подпись и авторство лидов',
         attributionDesc: 'В поле «Ваш никнейм (@telegram)» укажите свой ник. Все переданные вами лиды будут сохранены с подписью контрибьютора комьюнити, что позволяет отслеживать активность команды.',
         privacyTitle: 'Безопасность и приватность',
@@ -2875,6 +2879,10 @@ document.addEventListener('DOMContentLoaded', () => {
           </ul>
           <div style="margin-top:6px">${texts.selectionAfter}</div>
         </div>
+      </div>
+      <div style="border-top:1px solid var(--line);padding-top:12px">
+        <div style="font-weight:600;margin-bottom:4px">${texts.marketTitle}</div>
+        <div class="muted small">${texts.marketDesc}</div>
       </div>
       <div style="border-top:1px solid var(--line);padding-top:12px">
         <div style="font-weight:600;margin-bottom:4px">${texts.attributionTitle}</div>

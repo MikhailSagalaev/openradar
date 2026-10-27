@@ -24,6 +24,17 @@ A dependency-free Manifest V3 extension that sends a vacancy or an order from an
 
 Contacts in the text are sent as they are. The node keeps them in a structured field; in hub mode guests never see them.
 
+## Market pay estimate
+
+On a vacancy or an order, press **Оценить оплату на рынке** in the popup. The extension asks the market server (`https://openradar.fun` by default, **Сервер рыночной оценки** in the settings) for `/api/market` and shows:
+
+- the median pay for similar leads over the last 90 days (monthly for vacancies, per project for orders);
+- the middle half of offers, from the 25th to the 75th percentile;
+- whether the pay on this page is below, within or above that range, when the page states it;
+- up to three similar leads.
+
+Only the title, the chosen type and the skills from the page markup are sent, and only on the click. The estimate uses leads a guest can already see, so it never reflects posts still under the feed delay.
+
 ## Privacy
 
 Only on your command, only to your server. See [extension/PRIVACY.md](../extension/PRIVACY.md).

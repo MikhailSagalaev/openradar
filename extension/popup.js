@@ -16,7 +16,13 @@ const fields = {
   selectionSnippet: document.getElementById('selection-snippet'),
   details: document.getElementById('settings-details'),
   testBtn: document.getElementById('test-connection'),
+  marketBase: document.getElementById('marketBase'),
+  estimate: document.getElementById('estimate'),
+  marketResult: document.getElementById('market-result'),
 };
+
+/** The hub answers market estimates; any OpenRadar server with priced leads can. */
+const DEFAULT_MARKET_BASE = 'https://openradar.fun';
 
 function normalizeBase(value) {
   return value.trim().replace(/\/+$/, '');
@@ -46,6 +52,9 @@ async function loadConfig() {
   fields.base.value = config.base ?? 'http://127.0.0.1:8787';
   fields.sourceId.value = config.sourceId ?? '';
   fields.token.value = config.token ?? '';
+
+  const market = await chrome.storage.local.get('radarMarketBase');
+  fields.marketBase.value = market.radarMarketBase ?? DEFAULT_MARKET_BASE;
 
   if (!config.sourceId || !config.token) {
     fields.details.open = true;
@@ -253,9 +262,101 @@ async function sendPage() {
   }
 }
 
+function formatMoney(value, currency) {
+  const sign = { RUB: '₽', USD: '$', EUR: '€' }[currency] ?? currency;
+  return `${Math.round(value).toLocaleString('ru-RU')} ${sign}`;
+}
+
+function marketLine(className, text) {
+  const el = document.createElement('div');
+  el.className = className;
+  el.textContent = text;
+  return el;
+}
+
+/** Pay on this page against the market range, in the same currency when we can tell it. */
+function compareWithPage(estimate, page) {
+  const budget = page?.jobPosting?.budget;
+  if (typeof budget !== 'number' || !estimate.rub || !estimate.usd) return null;
+  const currency = page.jobPosting.currency || 'RUB';
+  const range = currency === 'USD' ? estimate.usd : currency === 'RUB' ? estimate.rub : null;
+  if (!range) return null;
+  const verdict = budget < range.p25 ? 'ниже рынка' : budget > range.p75 ? 'выше рынка' : 'в рынке';
+  return `На этой странице: ${formatMoney(budget, currency)} — ${verdict}`;
+}
+
+/** Sends only the title, type and skills: no URL, no page text. On the user's click only. */
+async function estimateMarket() {
+  const page = cachedPage || (await readPage().catch(() => null));
+  const title = (page?.jobPosting?.title || page?.title || '').trim();
+  if (title.length < 3) {
+    setStatus('На странице нет заголовка для оценки.', 'err');
+    return;
+  }
+  const base = normalizeBase(fields.marketBase.value) || DEFAULT_MARKET_BASE;
+  const type = getSelectedType();
+  const params = new URLSearchParams({ title: title.slice(0, 300), type });
+  if (page?.jobPosting?.skills?.length) params.set('skills', page.jobPosting.skills.slice(0, 12).join(','));
+
+  fields.estimate.disabled = true;
+  fields.marketResult.hidden = false;
+  fields.marketResult.replaceChildren(marketLine('market-note', 'Считаем по похожим заказам...'));
+  try {
+    const res = await fetch(`${base}/api/market?${params}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const e = await res.json();
+    const nodes = [];
+    if (!e.rub || e.basis === 'none') {
+      nodes.push(marketLine('market-note', 'Пока мало заказов с бюджетом, чтобы оценить.'));
+    } else {
+      const per = e.period === 'month' ? ' в месяц' : ' за проект';
+      nodes.push(marketLine('market-median', `≈ ${formatMoney(e.rub.median, 'RUB')}${per}`));
+      nodes.push(marketLine('market-range', `Половина предложений — от ${formatMoney(e.rub.p25, 'RUB')} до ${formatMoney(e.rub.p75, 'RUB')}`));
+      const what = e.type === 'job' ? 'вакансиям' : 'заказам';
+      const basis = e.basis === 'type'
+        ? `Похожих мало: по всем ${what} за 90 дней (${e.count})`
+        : `По ${e.count} похожим ${what} за 90 дней`;
+      nodes.push(marketLine('market-note', `${basis} · ${new URL(base).hostname}`));
+      const compare = compareWithPage(e, page);
+      if (compare) nodes.push(marketLine('market-compare', compare));
+      if (e.basis !== 'type' && e.examples?.length) {
+        const list = document.createElement('ul');
+        list.className = 'market-examples';
+        for (const example of e.examples) {
+          const item = document.createElement('li');
+          const link = document.createElement('a');
+          link.href = `${base}/leads/${encodeURIComponent(example.id)}`;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.textContent = example.title;
+          item.append(link);
+          list.append(item);
+        }
+        nodes.push(list);
+      }
+    }
+    fields.marketResult.replaceChildren(...nodes);
+  } catch (error) {
+    fields.marketResult.replaceChildren(
+      marketLine('market-note', `Не удалось получить оценку: ${error instanceof Error ? error.message : String(error)}`),
+    );
+  } finally {
+    fields.estimate.disabled = false;
+  }
+}
+
 document.getElementById('config').addEventListener('submit', saveConfig);
 fields.send.addEventListener('click', sendPage);
 fields.testBtn?.addEventListener('click', testConnection);
+fields.estimate.addEventListener('click', estimateMarket);
+fields.marketBase.addEventListener('change', () => {
+  chrome.storage.local.set({ radarMarketBase: normalizeBase(fields.marketBase.value) || DEFAULT_MARKET_BASE });
+});
+document.querySelectorAll('input[name="leadType"]').forEach((radio) => {
+  radio.addEventListener('change', () => {
+    fields.marketResult.hidden = true;
+  });
+});
 
 loadConfig().catch((error) => setStatus(String(error), 'err'));
 initPreview();

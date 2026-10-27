@@ -38,6 +38,11 @@
   </div>
   <p id="status" class="status"></p>
 
+  <section class="market">
+    <button id="estimate" type="button" class="ghost">Оценить оплату на рынке</button>
+    <div id="market-result" class="market-result" hidden></div>
+  </section>
+
   <details id="settings-details">
     <summary>Настройки подключения</summary>
     <form id="config">
@@ -55,6 +60,9 @@
       </label>
       <label>Секретный токен источника
         <input id="token" type="password" placeholder="Секретный токен источника" required autocomplete="off">
+      </label>
+      <label>Сервер рыночной оценки
+        <input id="marketBase" type="url" placeholder="https://openradar.fun" autocomplete="off">
       </label>
       <div class="settings-actions">
         <button type="submit" class="ghost">Сохранить</button>

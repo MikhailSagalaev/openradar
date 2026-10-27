@@ -562,6 +562,33 @@ describe('http server', () => {
     expect(me).toContain('Администратор');
   });
 
+  it('serves a market estimate over leads a guest may already see', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true, RADAR_MODE: 'hub' });
+    const app = createApp(runtime);
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed' });
+    const old = Date.now() - 24 * 3600_000;
+    for (const [i, usd] of [30, 40, 50, 60, 70].entries()) {
+      await runtime.store.insertLead({
+        id: `m${i}`, sourceId: source.id, externalId: `m${i}`, titleKey: `m${i}`, fingerprint: `fpm${i}`,
+        title: `Дизайн логотипа ${i}`, text: 'Логотип', status: 'new', score: 60, reasons: [],
+        normalizedUsdMin: usd, normalizedUsdMax: usd, createdAt: new Date(old + i * 1000).toISOString(),
+      });
+    }
+    // A fresh, very expensive lead is still under the guest delay and must not move the estimate.
+    await runtime.store.insertLead({
+      id: 'fresh', sourceId: source.id, externalId: 'fresh', titleKey: 'fresh', fingerprint: 'fp-fresh',
+      title: 'Дизайн логотипа срочно', text: 'Логотип', status: 'new', score: 60, reasons: [],
+      normalizedUsdMin: 9000, normalizedUsdMax: 9000, createdAt: new Date().toISOString(),
+    });
+
+    const res = await app.request('/api/market?title=' + encodeURIComponent('Логотип для бренда') + '&type=gig');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    const body = (await res.json()) as { basis: string; count: number; usd: { median: number } };
+    expect(body).toMatchObject({ basis: 'similar', count: 5, usd: { median: 50 } });
+    expect((await app.request('/api/market?title=a')).status).toBe(400);
+  });
+
   it('supports GDPR erasure with DELETE /api/leads/:id', async () => {
     const runtime = makeRuntime();
     const app = createApp(runtime);

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Market pay estimate: `GET /api/market` returns the median and the 25th-75th
+  percentile of pay for similar priced leads over 90 days (title stems and skills,
+  wider basis when there are too few), over leads a guest may already see. The browser
+  extension (0.7.1) shows it on «Оценить оплату на рынке», compares it with the pay on
+  the page and sends only the title, type and skills, on the click.
 - Feed: «Показать ещё» paging, a language filter (Russian / English titles), one quiet
   line with today's count and the viewer's delay instead of a banner, the score
   explained on demand, an honest title for delayed viewers; compact intro, one-row
