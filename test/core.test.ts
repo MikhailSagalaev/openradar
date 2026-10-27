@@ -101,6 +101,21 @@ describe('rules', () => {
     );
   });
 
+  it('rejects job seekers but keeps vacancies and orders that mention a CV', () => {
+    const reasons = (title: string, text: string): string[] =>
+      applyRules(prepareRawLead({ sourceId: source.id, title, text }, makeSource(), TEST_NOW), makeSource(), TEST_NOW)
+        .reasons;
+
+    expect(reasons('Ищу работу', 'Ищу работу frontend-разработчиком, моё резюме по ссылке')).toContain('spam:JOB_SEEKER');
+    for (const [title, text] of [
+      ['Junior Java Developer', 'Вакансия в продуктовой команде. Присылайте резюме на почту.'],
+      ['Сделать сайт визитку/резюме', 'Нужен адаптивный сайт-резюме на Tilda'],
+      ['Собрать данные', 'Нужно собрать данные по вакансиям в сфере айти: ссылка на вакансию, название'],
+    ]) {
+      expect(reasons(title!, text!)).not.toContain('spam:JOB_SEEKER');
+    }
+  });
+
   it('rejects a lead without a required keyword', () => {
     const lead = prepareRawLead(
       {

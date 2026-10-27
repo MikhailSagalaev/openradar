@@ -17,7 +17,10 @@ const EMAIL_RE = /(?<![\w.%+-])[a-z0-9][a-z0-9._%+-]*@[a-z0-9-]+(?:\.[a-z0-9-]+)
 const RU_PHONE_RE = /(?<![\d+])(?:\+7|8)[\s\-(]*\d{3}[\s\-)]*\d{3}[\s-]*\d{2}[\s-]*\d{2}(?!\d)/g;
 const INTL_PHONE_RE = /(?<![\d+])\+(?!7)\d{1,3}(?:[\s-]?\d){7,13}(?!\d)/g;
 const TG_LINK_RE = /(?:https?:\/\/)?(?:www\.)?(?:t|telegram)\.me\/(?:s\/)?([a-z][a-z0-9_]{3,31})(?:\/\d+)?\b/gi;
-const TG_HANDLE_RE = /(?<![\w@./])@([a-z][a-z0-9_]{3,31})\b/gi;
+// Telegram usernames are 5-32 characters. A hyphen right after the name means code, not a
+// handle: «@font-face», «@media-query»; well-known at-rules and decorators are skipped too.
+const TG_HANDLE_RE =
+  /(?<![\w@./])@(?!(?:media|import|keyframes|supports|charset|namespace|container|tailwind|apply|override|autowired|component|injectable|deprecated|property|dataclass|staticmethod|classmethod)\b)([a-z][a-z0-9_]{4,31})(?![\w-])/gi;
 const WA_RE = /(?:https?:\/\/)?(?:wa\.me\/|api\.whatsapp\.com\/send\/?\?phone=)\+?(\d{7,15})/gi;
 const VK_RE = /(?:https?:\/\/)?(?:www\.|m\.)?vk\.(?:com|ru)\/([a-z0-9_.]{2,64})\b/gi;
 

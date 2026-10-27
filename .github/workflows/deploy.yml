@@ -7,6 +7,8 @@ name: Deploy hub
 #   DEPLOY_SSH_KEY      private key for that user (a dedicated deploy key)
 #   DEPLOY_PORT         optional, default 22
 #   DEPLOY_KNOWN_HOSTS  optional, output of `ssh-keyscan <host>`; pins the host key
+# Repository variable (Settings -> Secrets and variables -> Actions -> Variables):
+#   DEPLOY_DIR          optional, checkout directory on the server, default /opt/radar
 
 on:
   workflow_dispatch:
@@ -50,8 +52,9 @@ jobs:
           HOST: ${{ secrets.DEPLOY_HOST }}
           USER: ${{ secrets.DEPLOY_USER }}
           PORT: ${{ secrets.DEPLOY_PORT }}
+          DIR: ${{ vars.DEPLOY_DIR }}
         run: |
-          ssh -i ~/.ssh/deploy -p "${PORT:-22}" -o BatchMode=yes "$USER@$HOST" 'bash -s' < deploy-server.sh
+          ssh -i ~/.ssh/deploy -p "${PORT:-22}" -o BatchMode=yes "$USER@$HOST" "RADAR_DIR=${DIR:-/opt/radar} bash -s" < deploy-server.sh
       - name: Public health check
         run: |
           for i in $(seq 1 10); do
