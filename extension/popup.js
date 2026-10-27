@@ -283,12 +283,16 @@ function renderAccount(account) {
   }
 }
 
-/** GitHub sign-in on the hub through chrome.identity; the hub returns a token for this extension only. */
+/**
+ * GitHub sign-in on the hub. Through the chrome.identity window where the browser has it;
+ * otherwise in a tab that the hub sends back to the extension's connected.html.
+ */
 async function signIn() {
   const base = normalizeBase(fields.marketBase.value) || DEFAULT_MARKET_BASE;
   const button = document.getElementById('sign-in');
   button.disabled = true;
   try {
+    if (!chrome.identity?.launchWebAuthFlow) throw new Error('identity API is not available');
     const redirect = chrome.identity.getRedirectURL();
     const result = await chrome.identity.launchWebAuthFlow({
       url: `${base}/extension/connect?redirect_uri=${encodeURIComponent(redirect)}`,
@@ -302,7 +306,14 @@ async function signIn() {
     renderAccount(account);
     setStatus('Готово: заказы будут добавляться от вашего имени.', 'ok');
   } catch (error) {
-    setStatus(`Вход не удался: ${error instanceof Error ? error.message : String(error)}`, 'err');
+    const message = error instanceof Error ? error.message : String(error);
+    if (/did not approve|user closed|canceled|cancelled/i.test(message)) {
+      setStatus('Вход отменён.', '');
+      return;
+    }
+    // No chrome.identity window in this browser: sign in in a tab instead.
+    const back = chrome.runtime.getURL('connected.html');
+    await chrome.tabs.create({ url: `${base}/extension/connect?redirect_uri=${encodeURIComponent(back)}` });
   } finally {
     button.disabled = false;
   }

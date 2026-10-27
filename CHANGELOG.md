@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.1
+
+- Extension 0.8.1: GitHub sign-in falls back to a regular tab where the browser has no
+  `chrome.identity` window; the hub then returns to the extension's own `connected.html`.
+- `/extension` shows the current extension version and how to update an unpacked
+  install; the docs explain installing, signing in and updating.
+- Dependencies: dotenv 18.0.9, imapflow 2.9.1, mailparser 3.12.4; CI and release actions
+  on their current major versions.
+
 ## 0.8.0
 
 - Releases go to production by pull: `scripts/autodeploy.sh` from cron deploys the newest

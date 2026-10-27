@@ -951,6 +951,15 @@ export function createApp(runtime: Runtime): Hono {
     );
   });
 
+  // The version of the extension this server hands out, shown on /extension.
+  const extensionVersion = (() => {
+    try {
+      return String(JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'extension/manifest.json'), 'utf8')).version ?? '');
+    } catch {
+      return '';
+    }
+  })();
+
   app.get('/extension', async (c) => {
     const lang = resolveLang(c);
     const isAuthed = await canRead(c, runtime);
@@ -962,6 +971,7 @@ export function createApp(runtime: Runtime): Hono {
     return c.html(
       renderExtensionPage({
         version: VERSION,
+        extensionVersion: extensionVersion || undefined,
         webhookSources,
         auth: await getAuthDisplay(c, runtime),
         lang,
@@ -1800,7 +1810,9 @@ export function createApp(runtime: Runtime): Hono {
 
   // Browser extension sign-in. The extension opens /extension/connect with chrome.identity;
   // after GitHub sign-in and consent the token goes back to its chromiumapp.org redirect.
-  const EXTENSION_REDIRECT_RE = /^https:\/\/[a-p]{32}\.chromiumapp\.org\/[\w./-]*$/;
+  // Either the chrome.identity window (chromiumapp.org) or, where that API is missing, the
+  // extension's own connected.html opened in a tab. Both reach only the extension itself.
+  const EXTENSION_REDIRECT_RE = /^(?:https:\/\/[a-p]{32}\.chromiumapp\.org\/[\w./-]*|chrome-extension:\/\/[a-p]{32}\/connected\.html)$/;
   const extensionUser = async (c: Context): Promise<{ user: UserRecord; hash: string } | null> => {
     const header = c.req.header('authorization') ?? '';
     const token = header.toLowerCase().startsWith('bearer ') ? header.slice(7).trim() : '';

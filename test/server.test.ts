@@ -690,6 +690,9 @@ describe('http server', () => {
     const connect = `/extension/connect?redirect_uri=${encodeURIComponent(redirect)}`;
 
     expect((await app.request('/extension/connect?redirect_uri=https://evil.example/')).status).toBe(400);
+    expect((await app.request('/extension/connect?redirect_uri=chrome-extension://abcdefghijklmnopabcdefghijklmnop/popup.html')).status).toBe(400);
+    const tabFlow = `/extension/connect?redirect_uri=${encodeURIComponent('chrome-extension://abcdefghijklmnopabcdefghijklmnop/connected.html')}`;
+    expect((await app.request(tabFlow)).status).toBe(302);
     const anonymous = await app.request(connect);
     expect(anonymous.headers.get('location')).toBe(`/auth/github?returnTo=${encodeURIComponent(connect)}`);
 
@@ -733,6 +736,9 @@ describe('http server', () => {
     const result = (await submitted.json()) as { ok: boolean; leadId: string };
     expect(result.ok).toBe(true);
     expect((await runtime.store.getLead(result.leadId))?.author).toBe('octocat');
+
+    const extensionPage = await (await app.request('/extension')).text();
+    expect(extensionPage).toMatch(/Актуальная версия: <strong>\d+\.\d+\.\d+<\/strong>/);
 
     await app.request('/api/ext/token', { method: 'DELETE', headers: bearer });
     expect((await app.request('/api/ext/me', { headers: bearer })).status).toBe(401);
