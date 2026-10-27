@@ -117,6 +117,8 @@ export interface CreatedSourcePageData {
 
 export interface ExtensionPageData {
   version: string;
+  /** Version of the extension this server hands out (extension/manifest.json). */
+  extensionVersion?: string;
   webhookSources: SourceRecord[];
   auth?: AuthDisplay;
   lang?: SupportedLang;
@@ -2938,7 +2940,7 @@ export function renderExtensionPage(data: ExtensionPageData): string {
         step2Title: '2. Open Extension Management in browser',
         step2Desc: 'In Chrome, Edge, Yandex Browser, or Brave, navigate to <code>chrome://extensions/</code> and enable the <b>Developer mode</b> toggle in the top-right corner.',
         step3Title: '3. Load unpacked extension',
-        step3Desc: 'Click <b>Load unpacked</b> and select the extracted folder. The OpenRadar icon will appear in your browser toolbar.',
+        step3Desc: 'Click <b>Load unpacked</b> and select the extracted folder. The OpenRadar icon will appear in your browser toolbar. <b>Updating:</b> unpack the new archive over the old folder and press the reload arrow on the extension card, or remove the old extension and load the new folder.',
         step4Title: '4. Sign in with GitHub',
         step4Desc: 'Click the OpenRadar icon and press <b>Войти через GitHub</b>, then allow the extension on the hub. Nothing to type: leads go to the shared base under your GitHub name. For your own server, use <b>Свой узел</b> in the popup with the address and webhook source below.',
         usageTitle: 'How to Use',
@@ -2982,7 +2984,7 @@ export function renderExtensionPage(data: ExtensionPageData): string {
         step2Title: '2. Откройте управление расширениями в браузере',
         step2Desc: 'В адресной строке Chrome, Edge, Яндекс.Браузера или Brave введите: <code>chrome://extensions/</code> и включите тумблер <b>«Режим разработчика»</b> (в правом верхнем углу).',
         step3Title: '3. Загрузите распакованное расширение',
-        step3Desc: 'Нажмите <b>«Загрузить распакованное расширение»</b> (Load unpacked) и выберите распакованную папку. На панели появится иконка OpenRadar.',
+        step3Desc: 'Нажмите <b>«Загрузить распакованное расширение»</b> (Load unpacked) и выберите распакованную папку. На панели появится иконка OpenRadar. <b>Обновление:</b> распакуйте новый архив поверх старой папки и нажмите стрелку «Обновить» на карточке расширения — или удалите старое расширение и загрузите новую папку.',
         step4Title: '4. Войдите через GitHub',
         step4Desc: 'Кликните по иконке OpenRadar и нажмите <b>«Войти через GitHub»</b>, затем разрешите расширение на сайте. Ничего вводить не нужно: заказы добавляются в общую базу от вашего имени. Для своего сервера — раздел <b>«Свой узел»</b> в попапе с адресом и webhook-источником ниже.',
         usageTitle: 'Как пользоваться расширением',
@@ -3078,6 +3080,9 @@ document.addEventListener('DOMContentLoaded', () => {
   <div>
     <h1>${escapeHtml(texts.title)}</h1>
     <p class="muted small">${escapeHtml(texts.subtitle)}</p>
+    ${data.extensionVersion ? `<p class="small" style="margin:6px 0 0">${lang === 'ru' ? 'Актуальная версия' : 'Current version'}: <strong>${escapeHtml(data.extensionVersion)}</strong>. ${lang === 'ru'
+      ? 'Распакованное расширение не обновляется само: сверьте версию на странице расширений браузера и, если она старше, переустановите (шаги ниже).'
+      : 'An unpacked extension does not update itself: compare the version on the browser extensions page and reinstall if it is older (steps below).'}</p>` : ''}
   </div>
   <div style="display:flex;gap:10px;align-items:center">
     <a class="btn primary" href="/extension/download" style="display:inline-flex;align-items:center;gap:7px;font-weight:600;text-decoration:none">

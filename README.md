@@ -28,7 +28,7 @@ Job seekers should not have to pay for subscriptions to parsers or for respondin
 
 - **One feed of every trade.** FL.ru, Kwork, Freelancehunt, Habr Career, hh.ru, Работа России, We Work Remotely, Jobicy, RemoteOK and public Telegram channels: development, design, video, writing, ads, sales and more. A post seen on two boards is one lead.
 - **Search, filters and a score.** Budget from, skill, remote only, language; newest, best or highest budget first. Each lead gets a 0-100 score from its pay, skills, detail and a direct contact.
-- **Market pay estimate.** The browser extension shows what similar work usually pays and whether the pay on the page you are reading is below, within or above it.
+- **Browser extension.** Sign in with GitHub once, then add a vacancy or an order from any site in one click; it also shows what similar work usually pays and whether the pay on the page is below, within or above it.
 - **Votes and submissions.** Signed-in users mark leads as useful, junk, scam or closed, and add posts by link.
 - **RSS for any query**, an HTTP API and an MCP server over the same feed.
 - **Your own node.** Run it at home or on a server, connect your sources, filters and notifications (Telegram, webhook). Nothing leaves the node unless you share a source.
