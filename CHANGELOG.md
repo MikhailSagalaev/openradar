@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0
+
+- The extension popup offers a newer version when the hub has one (`GET /api/ext/version`):
+  a store install updates in place, an unpacked one gets a link to the download page.
+- The `Release` workflow publishes the extension to the Chrome Web Store where the store
+  secrets are set. The manifest description fits the store's 132-character limit.
+
 ## 0.8.1
 
 - Extension 0.8.1: GitHub sign-in falls back to a regular tab where the browser has no

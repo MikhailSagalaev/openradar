@@ -1,6 +1,6 @@
 # Privacy Policy for the OpenRadar Extension
 
-**Extension version:** 0.8.1
+**Extension version:** 0.9.0
 **Effective date:** October 27, 2026
 
 ## What the extension does

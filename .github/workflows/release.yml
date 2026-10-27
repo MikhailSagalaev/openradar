@@ -83,6 +83,19 @@ jobs:
             radar-extension-${{ steps.version.outputs.tag }}.zip
           overwrite_files: true
 
+      # Runs only where the Chrome Web Store secrets are set; forks skip it.
+      # Installed copies update themselves once the store approves the version.
+      - name: Publish the extension to the Chrome Web Store
+        env:
+          EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+          PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+        run: |
+          if [ -z "$EXTENSION_ID" ]; then echo "Chrome Web Store secrets are not set; skipping."; exit 0; fi
+          npx --yes chrome-webstore-upload-cli@4.0.2 upload publish --source "radar-extension-${{ steps.version.outputs.tag }}.zip"
+
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:

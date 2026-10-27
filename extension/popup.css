@@ -328,6 +328,23 @@ button.ghost:hover {
   margin-bottom: 12px;
 }
 
+.update {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  font-size: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+}
+
+.update[hidden] {
+  display: none;
+}
+
 .account button#sign-in {
   width: 100%;
 }

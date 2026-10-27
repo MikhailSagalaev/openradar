@@ -1856,6 +1856,13 @@ export function createApp(runtime: Runtime): Hono {
     return c.body(null, 204);
   });
 
+  // The extension compares this with its own version and offers the update.
+  app.get('/api/ext/version', (c) => {
+    extensionCors(c);
+    c.header('cache-control', 'public, max-age=3600');
+    return c.json({ version: extensionVersion || null, url: `${publicBaseUrl(c, runtime)}/extension` });
+  });
+
   app.get('/api/ext/me', async (c) => {
     extensionCors(c);
     const auth = await extensionUser(c);
