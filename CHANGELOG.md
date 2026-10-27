@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Lead page: copy and share are icon buttons (share uses the system share sheet where
+  available), votes without the «Сообщество» label, text formatted into paragraphs,
+  lists and links, skill hashtags shown as tags.
+- Search: shorter placeholder, popular skills of the week and recent searches in the
+  suggestions, «Удалённо» switches the remote filter, partial matches when the whole
+  phrase finds nothing.
+- «Показать ещё» appends the next page in place.
+- Footer: no top rule, «Проект» and «Участвовать» columns, a bottom line with the
+  licence and the language switch.
+- Public sources page «Откуда заказы»: cards with the board, the part of it that is read,
+  today's count and a link to the board; suggest a source or connect a node.
 - Market pay estimate: `GET /api/market` returns the median and the 25th-75th
   percentile of pay for similar priced leads over 90 days (title stems and skills,
   wider basis when there are too few), over leads a guest may already see. The browser
