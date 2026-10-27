@@ -1,4 +1,5 @@
-import { hasItSkillSignal, hasNonItCategorySignal, normalizeForMatch } from './text.ts';
+import { budgetUsd } from './salary.ts';
+import { extractTechSkills, hasItSkillSignal, hasNonItCategorySignal, normalizeForMatch } from './text.ts';
 import type { LeadStatus, SourceRecord } from './types.ts';
 import type { PreparedLead } from './prepare.ts';
 
@@ -153,13 +154,22 @@ export function applyRules(
   };
 }
 
+/**
+ * Static worth of a lead, 0-100, computed once at ingest. Freshness is not part of it:
+ * at ingest every lead is fresh, and the feed already orders by time. What counts:
+ * money (USD-normalised, separate ladders for gigs and monthly salaries), IT skills,
+ * how detailed the post is, a direct contact, the operator's keywords, city and trust.
+ * Calibrated on the hub's leads: median ~58, a one-line post without budget ~45-50,
+ * 80+ (about one lead in twenty) for a detailed, well-paid one with clear IT skills.
+ */
 export function scoreLead(
   lead: PreparedLead,
   source: SourceRecord,
   now: Date,
 ): number {
-  let score = 50;
-  const textForMatch = normalizeForMatch(`${lead.title}\n${lead.text}`);
+  let score = 55;
+  const textForMatch = normalizeForMatch(`${lead.title}
+${lead.text}`);
 
   const include = source.config.includeKeywords ?? [];
   let hits = 0;
@@ -168,31 +178,30 @@ export function scoreLead(
   }
   score += Math.min(hits * 8, 24);
 
-  const budget = lead.budget ?? 0;
-  // DATA-01: two-stage gate before the budget bonus. Off-topic categories
-  // (ремонт, доставка,…) are penalized; the "market fit" bonus requires an
-  // IT/digital signal — either the source's own include keywords or detected skills.
+  const skills = lead.skills?.length ? lead.skills : extractTechSkills(`${lead.title}
+${lead.text}`);
+  const itSignal = hits > 0 || skills.length > 0 || hasItSkillSignal(textForMatch);
   const nonItCategory = hasNonItCategorySignal(textForMatch);
-  const itSignal = hits > 0 || hasItSkillSignal(textForMatch);
-  if (nonItCategory && !itSignal) {
-    score -= 15;
-  } else if (itSignal) {
-    if (budget >= 25_000) score += 20;
-    else if (budget >= 10_000) score += 15;
-    else if (budget >= 5_000) score += 10;
-    else if (budget >= 1_000) score += 5;
-  } else {
-    const bonus = budget >= 25_000 ? 20 : budget >= 10_000 ? 15 : budget >= 5_000 ? 10 : budget >= 1_000 ? 5 : 0;
-    score += Math.round(bonus / 2);
-  }
+  if (nonItCategory && !itSignal) score -= 15;
+  score += skills.length >= 3 ? 12 : skills.length === 2 ? 9 : skills.length === 1 ? 6 : itSignal ? 3 : 0;
 
+  // DATA-01: off-topic posts get half the money bonus; an IT signal earns all of it.
+  const money = moneyPoints(lead);
+  score += money > 0 && !itSignal ? Math.round(money / 2) : money;
+
+  const length = lead.text.trim().length;
+  if (length < 60) score -= 10;
+  else if (length < 150) score -= 4;
+  else if (length > 1500) score += 6;
+  else if (length > 600) score += 4;
+
+  if (lead.contacts.length > 0) score += 3;
+
+  // Posts that were already stale when they reached us (boards keep orders open for days).
   const ageHours = Math.max(0, (now.getTime() - lead.publishedAtDate.getTime()) / 3_600_000);
-  if (ageHours <= 1) score += 15;
-  else if (ageHours <= 6) score += 10;
-  else if (ageHours <= 24) score += 5;
-  else if (ageHours > 72) score -= 10;
+  if (ageHours > 168) score -= 10;
 
-  if (lead.city === 'Онлайн') score += 3;
+  if (lead.city === 'Онлайн') score += 2;
   if (
     lead.city &&
     typeof source.config.city === 'string' &&
@@ -205,6 +214,27 @@ export function scoreLead(
   if (Number.isFinite(trust)) score += Math.max(0, Math.min(10, trust));
 
   return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+/** Budget points: gigs by total budget, jobs and hourly rates by monthly pay (USD). */
+function moneyPoints(lead: PreparedLead): number {
+  const usd = budgetUsd(lead);
+  if (usd === undefined) return 0;
+  const monthly =
+    lead.paymentPeriod === 'hourly' ? usd * 160 : lead.type === 'job' || lead.paymentPeriod === 'monthly' ? usd : undefined;
+  if (monthly !== undefined) {
+    if (monthly >= 3300) return 20;
+    if (monthly >= 2200) return 16;
+    if (monthly >= 1300) return 10;
+    if (monthly >= 700) return 4;
+    return -5;
+  }
+  if (usd >= 1500) return 22;
+  if (usd >= 500) return 18;
+  if (usd >= 150) return 12;
+  if (usd >= 50) return 6;
+  if (usd >= 15) return 0;
+  return -8;
 }
 
 export interface VoteSums {

@@ -9,6 +9,7 @@ import { evaluateLeadState, recomputeRatings, RATING_WINDOW_MS, WeightResolver }
 import { MAX_EVENTS_PER_REQUEST, parseModerators, processEvent, type HubDeps } from '../hub/service.ts';
 import type { IngestDeps } from '../pipeline/ingest.ts';
 import type { Runtime } from '../runtime.ts';
+import { filterOptions, parseFeedFilters } from './filters.ts';
 import { rateLimit } from './ratelimit.ts';
 
 /** What the v2 routes need from app.ts (passed in to avoid an import cycle). */
@@ -104,17 +105,21 @@ export function registerV2Routes(app: Hono, runtime: Runtime, h: V2Helpers): voi
     if (after === null) return c.json({ error: 'bad_cursor' }, 400);
     const limit = Math.max(1, Math.min(Number(c.req.query('limit') ?? 50) || 50, 200));
     const type = c.req.query('type');
+    const filters = parseFeedFilters(c);
+    // The cursor walks forward in time, so it only combines with the default order.
+    if (after && filters.sort !== 'new') return c.json({ error: 'cursor_needs_sort_new' }, 400);
     const options: FeedOptions = {
       limit,
       query: c.req.query('q') || undefined,
       type: type === 'job' || type === 'gig' ? (type as LeadType) : undefined,
+      ...filterOptions(filters),
       createdBefore: visibleBefore(viewer, runtime.access),
       after,
     };
     const leads = await runtime.store.getLeadsForFeed(options);
     // Without a cursor the newest leads come first; the cursor then points at the newest one.
-    const newest = after ? leads[leads.length - 1] : leads[0];
-    const cursor = newest ? encodeCursor(newest) : c.req.query('cursor') ?? null;
+    const newest = filters.sort !== 'new' ? undefined : after ? leads[leads.length - 1] : leads[0];
+    const cursor = newest ? encodeCursor(newest) : filters.sort !== 'new' ? null : c.req.query('cursor') ?? null;
     const items = leads.map((lead) => h.projectLead(lead, viewer));
     c.header('x-radar-delay-minutes', String(delayMinutes(viewer, runtime.access)));
     if (cursor) c.header('x-radar-cursor', cursor);

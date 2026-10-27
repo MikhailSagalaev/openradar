@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { recalculateVoteScoreAndStatus } from '../core/rules.ts';
-import { normalizeTechTokens } from '../core/text.ts';
+import { isRemoteLead, normalizeTechTokens } from '../core/text.ts';
 import { contactKey, mergeContacts } from '../core/contacts.ts';
 import type {
   ContactFlag,
@@ -180,6 +180,20 @@ export class MemoryStore implements Store {
     return true;
   }
 
+  async updateLeadScore(id: string, baseScore: number): Promise<number | undefined> {
+    const lead = this.leads.get(id);
+    if (!lead) return undefined;
+    const { score } = recalculateVoteScoreAndStatus(lead.status, baseScore, {
+      useful: lead.votes_up ?? 0,
+      junk: lead.votes_down ?? 0,
+      scam: lead.votes_scam ?? 0,
+      closed: lead.votes_closed ?? 0,
+    });
+    (lead as any).baseScore = baseScore;
+    lead.score = score;
+    return score;
+  }
+
   async updateLeadStatus(id: string, status: LeadStatus, deliveredAt?: string, scoreDelta?: number): Promise<void> {
     const lead = this.leads.get(id);
     if (lead) {
@@ -306,6 +320,21 @@ export class MemoryStore implements Store {
     if (options.type) {
       result = result.filter((l) => (l.type ?? 'gig') === options.type);
     }
+    if (typeof options.minBudgetUsd === 'number' && options.minBudgetUsd > 0) {
+      const min = options.minBudgetUsd;
+      result = result.filter((l) => (l.normalizedUsdMax ?? l.normalizedUsdMin ?? 0) >= min);
+    }
+    if (options.remote) {
+      result = result.filter((l) => isRemoteLead(l));
+    }
+    if (options.skill?.trim()) {
+      const skill = options.skill.trim().toLowerCase();
+      result = result.filter((l) => (l.skills ?? []).some((s) => s.toLowerCase() === skill));
+    }
+    if (options.createdAfter) {
+      const since = options.createdAfter;
+      result = result.filter((l) => l.createdAt >= since);
+    }
     if (options.query?.trim()) {
       const q = options.query.trim().toLowerCase();
       const normQ = normalizeTechTokens(q).toLowerCase();
@@ -317,9 +346,13 @@ export class MemoryStore implements Store {
     }
 
     const ascending = feedOnly && Boolean(options.after);
+    const usd = (l: Lead): number => l.normalizedUsdMax ?? l.normalizedUsdMin ?? -1;
     result.sort((a, b) => {
       const order = a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
-      return ascending ? order : -order;
+      if (ascending) return order;
+      if (options.sort === 'score' && a.score !== b.score) return b.score - a.score;
+      if (options.sort === 'budget' && usd(a) !== usd(b)) return usd(b) - usd(a);
+      return -order;
     });
     const limit = Math.max(1, Math.min(options.limit ?? 50, 5000));
     return result.slice(0, limit).map((l) => ({

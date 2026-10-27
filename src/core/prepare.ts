@@ -60,12 +60,13 @@ export function prepareRawLead(
     typeof source.config.city === 'string' ? source.config.city.trim() : '';
   const city = explicitCity || extractedCity || configuredCity || undefined;
 
+  const type = detectLeadType(raw, title, canonicalUrl ?? safeHttpUrl);
   const salaryInfo = normalizeSalary({
     text: `${title}\n${normalizedText}`,
     rawSalary: raw.rawSalary,
     budget,
     currency: cleanShortField(raw.currency, 8),
-    type: raw.type,
+    type,
   });
 
   const publishedAtDate = parsePublishedAt(raw.publishedAt, now);
@@ -86,7 +87,7 @@ export function prepareRawLead(
     category: cleanShortField(raw.category, 100),
     title,
     text: normalizedText,
-    type: detectLeadType(raw, title, canonicalUrl ?? safeHttpUrl),
+    type,
     url: canonicalUrl ?? safeHttpUrl,
     canonicalUrl,
     budget,

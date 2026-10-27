@@ -17,6 +17,7 @@ import { SOURCE_PRESETS } from '../sources/presets.ts';
 import { IMAP_PASSWORD_ENV_RE } from '../sources/imap.ts';
 import { VERSION } from '../version.ts';
 import { githubOAuthConfigured, startGitHubOAuth, handleGitHubCallback } from './auth.ts';
+import { filterOptions, parseFeedFilters } from './filters.ts';
 import { rateLimit } from './ratelimit.ts';
 import {
   renderExtensionPage,
@@ -798,6 +799,7 @@ export function createApp(runtime: Runtime): Hono {
     const rawType = (c.req.query('type') ?? '').trim();
     const type: LeadType | undefined = rawType === 'job' || rawType === 'gig' ? rawType : undefined;
     const query = (c.req.query('q') ?? '').trim();
+    const filters = parseFeedFilters(c);
 
     const viewer = await viewerFromRequest(c, runtime);
     const [stats, health, leads] = await Promise.all([
@@ -808,6 +810,7 @@ export function createApp(runtime: Runtime): Hono {
         status: status || undefined,
         query: query || undefined,
         type,
+        ...filterOptions(filters),
       }),
     ]);
 
@@ -819,6 +822,7 @@ export function createApp(runtime: Runtime): Hono {
         query,
         status,
         type: type ?? '',
+        filters,
         version: VERSION,
         auth: await getAuthDisplay(c, runtime),
         lang,
@@ -1410,7 +1414,7 @@ export function createApp(runtime: Runtime): Hono {
     const query = c.req.query('q')?.trim() || undefined;
     // The viewer's tier (delay, contacts) applies to the API just like the UI.
     const viewer = await viewerFromRequest(c, runtime);
-    const leads = await leadsFor(runtime, viewer, { limit, status, sourceId, query, type });
+    const leads = await leadsFor(runtime, viewer, { limit, status, sourceId, query, type, ...filterOptions(parseFeedFilters(c)) });
     if (viewer.tier === 'admin') return c.json(leads);
     return c.json(leads.map((lead) => toPublicLead(projectContacts(lead, viewer))));
   });
@@ -1650,6 +1654,7 @@ export function createApp(runtime: Runtime): Hono {
       query: q || undefined,
       type,
       status,
+      ...filterOptions(parseFeedFilters(c)),
     });
 
     const baseUrl = publicBaseUrl(c, runtime);

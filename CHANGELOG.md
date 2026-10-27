@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Score recalibrated: freshness is no longer part of the stored score (every lead was
+  fresh at ingest, so two thirds of the feed scored 65). It now counts USD-normalised
+  money on separate ladders for orders and salaries, IT skills, how detailed the post is
+  and a direct contact. Median ~58, 80+ for about one lead in twenty. `radar rescore`
+  recomputes stored leads and keeps votes.
+- Feed filters and sorting: newest, best or highest budget first (the last 7 days),
+  budget from, skill, remote only. Same parameters on `/api/leads`, `/feed.rss` and
+  `/v2/feed`.
+- Ingest kept the budget but dropped the USD-normalised range and payment period;
+  they are stored now, and migration 015 fills them for existing leads.
 - The `JOB_SEEKER` spam rule rejected any vacancy or order mentioning «вакансия» or
   «резюме» (all hh.ru vacancies, «сайт-резюме» orders); it now matches only phrases of
   people looking for work.

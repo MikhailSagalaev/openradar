@@ -308,6 +308,23 @@ export class PostgresStore implements Store {
     }
   }
 
+  async updateLeadScore(id: string, baseScore: number): Promise<number | undefined> {
+    const res = await this.pool.query(
+      `SELECT status, votes_up, votes_down, votes_scam, votes_closed FROM leads WHERE id = $1`,
+      [id],
+    );
+    const row = res.rows[0];
+    if (!row) return undefined;
+    const { score } = recalculateVoteScoreAndStatus(row.status as LeadStatus, baseScore, {
+      useful: Number(row.votes_up) || 0,
+      junk: Number(row.votes_down) || 0,
+      scam: Number(row.votes_scam) || 0,
+      closed: Number(row.votes_closed) || 0,
+    });
+    await this.pool.query(`UPDATE leads SET score = $1, quality_score = $2 WHERE id = $3`, [score, baseScore, id]);
+    return score;
+  }
+
   async updateLeadStatus(id: string, status: LeadStatus, deliveredAt?: string, scoreDelta?: number): Promise<void> {
     const client = await this.pool.connect();
     try {
@@ -472,6 +489,26 @@ export class PostgresStore implements Store {
       conditions.push(`type = $${idx++}`);
       params.push(options.type);
     }
+    if (typeof options.minBudgetUsd === 'number' && options.minBudgetUsd > 0) {
+      conditions.push(`COALESCE(normalized_usd_max, normalized_usd_min) >= $${idx++}`);
+      params.push(options.minBudgetUsd);
+    }
+    if (options.remote) {
+      // Same rule as isRemoteLead() in src/core/text.ts.
+      conditions.push(
+        `(city IS NULL OR city ~* '^(онлайн|удал)' OR (title || ' ' || text) ~* 'удал[её]нн|удал[её]нк|можно\\s+удал|remote')`,
+      );
+    }
+    if (options.skill && options.skill.trim()) {
+      conditions.push(
+        `EXISTS (SELECT 1 FROM jsonb_array_elements_text(skills_json) AS s(skill) WHERE lower(s.skill) = lower($${idx++}))`,
+      );
+      params.push(options.skill.trim());
+    }
+    if (options.createdAfter) {
+      conditions.push(`created_at >= $${idx++}::timestamptz`);
+      params.push(options.createdAfter);
+    }
     if (options.query && options.query.trim().length > 0) {
       const trimmed = options.query.trim();
       const normQuery = normalizeTechTokens(trimmed);
@@ -506,7 +543,14 @@ export class PostgresStore implements Store {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     params.push(limit);
-    const order = feedOnly && options.after ? 'created_at ASC, id ASC' : 'created_at DESC, id DESC';
+    const order =
+      feedOnly && options.after
+        ? 'created_at ASC, id ASC'
+        : options.sort === 'score'
+          ? 'score DESC, created_at DESC, id DESC'
+          : options.sort === 'budget'
+            ? 'COALESCE(normalized_usd_max, normalized_usd_min) DESC NULLS LAST, created_at DESC, id DESC'
+            : 'created_at DESC, id DESC';
     const query = `SELECT * FROM leads ${whereClause} ORDER BY ${order} LIMIT $${idx}`;
 
     const res = await this.pool.query(query, params);

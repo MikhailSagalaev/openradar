@@ -233,3 +233,22 @@ export function normalizeSalary(input: {
     currency,
   };
 }
+
+/** USD value of a lead's budget: the normalised range when known, else budget × rate. */
+export function budgetUsd(lead: {
+  budget?: number;
+  currency?: string;
+  normalizedUsdMin?: number;
+  normalizedUsdMax?: number;
+}): number | undefined {
+  const normalized = lead.normalizedUsdMax ?? lead.normalizedUsdMin;
+  if (typeof normalized === 'number' && normalized > 0) return normalized;
+  if (typeof lead.budget !== 'number' || !(lead.budget > 0)) return undefined;
+  const rate = FX_TO_USD[(lead.currency ?? 'RUB').toUpperCase()] ?? FX_TO_USD.RUB!;
+  return Math.round(lead.budget * rate);
+}
+
+/** Roubles to USD at the reference rate, for filters expressed in roubles. */
+export function rubToUsd(rub: number): number {
+  return Math.round(rub * FX_TO_USD.RUB!);
+}

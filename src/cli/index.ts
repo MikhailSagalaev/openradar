@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Lead, LeadStatus, SourceConfig, SourceKind, SourceRecord } from '../core/types.ts';
 import { pollAll, pollSource, type PollDeps, type PollSummary } from '../pipeline/poll.ts';
+import { rescoreLeads } from '../pipeline/rescore.ts';
 import { PollRunner } from '../pipeline/runner.ts';
 import { createRuntime, type Runtime } from '../runtime.ts';
 import { createApp } from '../server/app.ts';
@@ -459,6 +460,17 @@ function buildProgram(): Command {
     .action(async () => {
       await withRuntime(async (runtime) => {
         console.log(JSON.stringify(await runtime.store.getStats(), null, 2));
+      });
+    });
+
+  program
+    .command('rescore')
+    .description('Recompute lead scores with the current formula (votes are kept)')
+    .option('--limit <n>', 'Newest leads to rescore', '5000')
+    .action(async (options: { limit: string }) => {
+      await withRuntime(async (runtime) => {
+        const summary = await rescoreLeads(runtime.store, { limit: Number(options.limit) || 5000 });
+        console.log(`Пересчитано: ${summary.checked}, изменилось: ${summary.changed}`);
       });
     });
 

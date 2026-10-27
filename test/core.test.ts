@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cleanTitle, extractBudget, extractCity } from '../src/core/extract.ts';
 import { prepareRawLead } from '../src/core/prepare.ts';
-import { applyRules } from '../src/core/rules.ts';
+import { applyRules, scoreLead } from '../src/core/rules.ts';
 import { normalizeTechTokens } from '../src/core/text.ts';
 import { canonicalizeUrl } from '../src/core/url.ts';
 import { makeSource, TEST_NOW } from './helpers.ts';
@@ -154,5 +154,37 @@ describe('tech token normalization', () => {
     expect(normalizeTechTokens('Backend: Node.js, Next.js, Golang и F#')).toBe(
       'Backend: nodejs_tech, nextjs_tech, golang_tech и fsharp_tech',
     );
+  });
+});
+
+describe('score', () => {
+  const source = makeSource();
+  const score = (raw: { title: string; text: string; type?: 'job' | 'gig'; publishedAt?: string }, now = TEST_NOW): number =>
+    scoreLead(prepareRawLead({ sourceId: source.id, ...raw }, source, now), source, now);
+  const detailedSpec =
+    'Нужен интернет-магазин на Next.js и TypeScript с бэкендом на Node.js и PostgreSQL. ' +
+    'Каталог на 5 000 товаров, фильтры, корзина, оплата через ЮKassa, личный кабинет, ' +
+    'интеграция с 1С по CommerceML, админка для контент-менеджера. Дизайн в Figma готов. ' +
+    'Срок 6 недель, оплата поэтапно. Бюджет 150 000 ₽. Пишите @shop_owner_dev';
+
+  it('ranks a detailed, well-paid IT order high and a one-line post low', () => {
+    expect(score({ title: 'Интернет-магазин на Next.js', text: detailedSpec })).toBeGreaterThanOrEqual(80);
+    expect(score({ title: 'Ищу практика', text: 'Нужен человек' })).toBeLessThan(50);
+  });
+
+  it('values money on separate ladders for orders and salaries', () => {
+    const gig = (budget: string) => score({ title: 'Доработать сайт на WordPress', text: `Поправить вёрстку и форму. Бюджет ${budget}` });
+    expect(gig('500 ₽')).toBeLessThan(gig('5 000 ₽'));
+    expect(gig('5 000 ₽')).toBeLessThan(gig('50 000 ₽'));
+
+    const job = (salary: string) =>
+      score({ title: 'Python-разработчик', text: `Вакансия в продуктовую команду, Django и PostgreSQL. Зарплата ${salary} в месяц`, type: 'job' });
+    expect(job('60 000 ₽')).toBeLessThan(job('300 000 ₽'));
+  });
+
+  it('does not depend on how fresh the post was at ingest', () => {
+    const raw = { title: 'Telegram-бот на Python', text: 'Нужен бот на aiogram с оплатой, бюджет 20 000 ₽', publishedAt: TEST_NOW.toISOString() };
+    const later = new Date(TEST_NOW.getTime() + 20 * 3600 * 1000);
+    expect(score(raw, later)).toBe(score(raw, TEST_NOW));
   });
 });
