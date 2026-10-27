@@ -50,6 +50,13 @@ describe('salary & currency normalization', () => {
     expect(res.normalizedUsdMin).toBe(3000);
     expect(res.normalizedUsdMax).toBe(4000);
   });
+
+  it('reads yearly pay of international boards as a monthly figure', () => {
+    expect(normalizeSalary({ rawSalary: '$120,000 - $180,000', type: 'job' }).normalizedUsdMax).toBe(15000);
+    expect(normalizeSalary({ budget: 90000, currency: 'USD', text: 'Salary: 90000 USD per year', type: 'job' }).normalizedUsdMax).toBe(7500);
+    // A gig budget is a total, never a yearly salary.
+    expect(normalizeSalary({ budget: 30000, currency: 'USD', type: 'gig' }).normalizedUsdMax).toBe(30000);
+  });
 });
 
 describe('anchored salary extraction from free text', () => {
