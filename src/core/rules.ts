@@ -193,7 +193,7 @@ ${lead.text}`);
   if (nonItCategory && !itSignal) score -= 15;
   score += skills.length >= 3 ? 12 : skills.length === 2 ? 9 : skills.length === 1 ? 6 : itSignal ? 3 : 0;
 
-  // DATA-01: off-topic posts get half the money bonus; an IT signal earns all of it.
+  // Off-topic posts get half the money bonus; an IT signal earns all of it.
   const money = moneyPoints(lead);
   score += money > 0 && !itSignal ? Math.round(money / 2) : money;
 

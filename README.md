@@ -98,7 +98,7 @@ hub.observe([{"source": {"platform": "telegram", "channel": "-1001234567890", "v
 
 - Dashboard and lead pages, RSS (`/feed.rss`), search catalog pages.
 - HTTP API (`/api/*`) and the hub API (`/v2/*`: feed, SSE stream, lead cards, author history, rating, moderation).
-- MCP server for AI agents (`radar mcp` over stdio, `POST /mcp` over HTTP): same feed, same access rules.
+- MCP server (`radar mcp` over stdio, `POST /mcp` over HTTP) for tools that speak the Model Context Protocol: same feed, same access rules.
 - Browser extension: [docs/EXTENSION.md](docs/EXTENSION.md).
 
 ## Documentation

@@ -28,16 +28,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check secrets
+        id: check
         env:
           HOST: ${{ secrets.DEPLOY_HOST }}
           USER: ${{ secrets.DEPLOY_USER }}
           KEY: ${{ secrets.DEPLOY_SSH_KEY }}
         run: |
+          # Forks and fresh clones have no deploy target: skip quietly instead of failing.
           if [ -z "$HOST" ] || [ -z "$USER" ] || [ -z "$KEY" ]; then
-            echo "::error::Set DEPLOY_HOST, DEPLOY_USER and DEPLOY_SSH_KEY in the repository secrets"
-            exit 1
+            echo "::notice::Deploy skipped: set DEPLOY_HOST, DEPLOY_USER and DEPLOY_SSH_KEY to enable it"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Configure SSH
+        if: steps.check.outputs.ready == 'true'
         env:
           HOST: ${{ secrets.DEPLOY_HOST }}
           PORT: ${{ secrets.DEPLOY_PORT }}
@@ -48,6 +53,7 @@ jobs:
           printf '%s\n' "$KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
           if [ -n "$KNOWN" ]; then printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts; else ssh-keyscan -p "${PORT:-22}" "$HOST" > ~/.ssh/known_hosts; fi
       - name: Deploy
+        if: steps.check.outputs.ready == 'true'
         env:
           HOST: ${{ secrets.DEPLOY_HOST }}
           USER: ${{ secrets.DEPLOY_USER }}
@@ -56,9 +62,10 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy -p "${PORT:-22}" -o BatchMode=yes "$USER@$HOST" "RADAR_DIR=${DIR:-/opt/radar} bash -s" < deploy-server.sh
       - name: Public health check
+        if: steps.check.outputs.ready == 'true'
         run: |
           for i in $(seq 1 10); do
-            if curl -fsS https://openradar.fun/health; then exit 0; fi
+            if curl -fsS "${{ vars.DEPLOY_HEALTH_URL || 'https://openradar.fun/health' }}"; then exit 0; fi
             sleep 5
           done
           echo "::warning::https://openradar.fun/health did not answer; check nginx"
