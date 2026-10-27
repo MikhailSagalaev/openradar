@@ -12,10 +12,11 @@ const STOP_WORDS = new Set([
   'сделать', 'создание', 'создать', 'настройка', 'доработка', 'удаленно', 'удалённо', 'москва', 'офис',
   'the', 'and', 'for', 'with', 'remote', 'senior', 'middle', 'junior', 'lead', 'ведущий', 'старший',
   'младший', 'главный', 'специалист', 'менеджер', 'сайт', 'сайта', 'сайте', 'сайты', 'нужна', 'помощь',
+  'developer', 'engineer', 'разработчик', 'разработчика', 'программист', 'инженер',
 ]);
 
 /** Fewer similar leads than this, and the estimate falls back to a wider basis. */
-const MIN_SAMPLES = 5;
+const MIN_SAMPLES = 3;
 const MAX_SAMPLES = 40;
 
 export interface MarketQuery {
