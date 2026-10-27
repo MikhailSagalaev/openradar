@@ -60,6 +60,9 @@ export const SOURCE_PRESETS: SourcePreset[] = [
     config: {
       url: 'https://opendata.trudvsem.ru/api/v1/vacancies',
       text: 'удаленная',
+      // The API's full-text search also matches «удалению», «не удаленно»: keep real remote work.
+      includeKeywords: ['удаленно', 'удалённо', 'удаленная работа', 'удалённая работа', 'удаленный формат', 'удалённый формат', 'дистанционн'],
+      excludeKeywords: ['не удаленно', 'не удалённо', 'без удаленки', 'без удалёнки'],
     },
   },
   {
