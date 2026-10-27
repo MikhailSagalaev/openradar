@@ -123,6 +123,8 @@ runs(id, source_id, started_at, finished_at, found, inserted,
 sessions(id, user_id, created_at, expires_at)
 ```
 
+Таблицы хаба radar/2 (`RADAR_MODE=hub`): `participants`, `events`, `observations`, `lead_contacts`, `signals`, `rating_ledger`, `lead_decisions`, `contact_flags`, `auth_replay`. Их смысл и правила — в [PROTOCOL.md](PROTOCOL.md), схема — в `migrations/011`–`013`.
+
 Индексы:
 
 - `UNIQUE(fingerprint)` и `UNIQUE(source_id, external_id)` — двухуровневый дедуп;
@@ -177,12 +179,15 @@ sessions(id, user_id, created_at, expires_at)
 
 - `GET /health` — публичный.
 - `GET /auth/github` и `GET /auth/github/callback` — OAuth-вход через GitHub; сессия в HttpOnly-cookie.
-- `GET /` — лиды с поиском и фильтрами по типу и статусу.
+- `GET /` — лента с поиском и фильтром по типу; фильтр по статусу воронки и отклонённые лиды видит только админ.
 - `GET /leads/:id` — карточка лида: полный текст, источник, скор, причины.
 - `POST /leads/:id/vote` и `POST /api/leads/:id/vote` — голосование; только пользователь с GitHub-входом, один голос на сигнал.
 - `POST /leads/:id/status`, `POST /leads/:id/feedback`, `PATCH /api/leads/:id/status` — воронка; только админ.
 - `GET /submit`, `POST /submit`, `POST /api/submit`, `POST /api/preview` — добавление по ссылке; запись — только после GitHub-входа, превью ходит через SSRF-guarded fetch.
 - `GET /feed.rss`, `/feed.xml`, `/api/feed.rss` — RSS-лента под запрос.
+- `GET /catalog/:slug` — индексируемые страницы категорий; `GET /robots.txt`, `GET /sitemap.xml` — в sitemap попадают категории и лиды, которые видит гость.
+- `GET /extension`, `GET /extension/download` — страница и архив браузерного расширения.
+- `GET /assets/app.<hash>.css`, `GET /assets/logo.<hash>.svg` — стили и логотип с годовым кэшем; хэш меняется вместе с содержимым.
 - `GET /api/delta` — поток изменений для синхронизации узлов (JSON/NDJSON).
 - `GET /sources`, `/sources/new`, `/sources/:id`, `/sources/:id/edit` — дашборд источников.
 - `POST /sources`, `POST /sources/:id`, toggle/delete — управление; только админ.
@@ -191,6 +196,7 @@ sessions(id, user_id, created_at, expires_at)
 - `/api/v2/ingest/:sourceId` — наблюдения radar/2 (до 500, JSON или NDJSON), тот же доступ.
 - `/v2/*` — API хаба (`RADAR_MODE=hub`): `events`, `feed`, `stream`, `leads/:id`, `contacts/:value`, `me`, `link/github`, `moderation/*`. Описание — [PROTOCOL.md](PROTOCOL.md).
 - `/mcp` — MCP поверх ленты с теми же задержками и правилами контактов.
+- Неизвестный путь — HTML-страница 404 для браузера, `{"error":"not_found"}` для `/api`, `/v2`, `/mcp` и запросов без `Accept: text/html`.
 
 ### Browser extension
 

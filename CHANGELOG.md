@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- The `JOB_SEEKER` spam rule rejected any vacancy or order mentioning «вакансия» or
+  «резюме» (all hh.ru vacancies, «сайт-резюме» orders); it now matches only phrases of
+  people looking for work.
+- `@font-face`, `@media` and similar code fragments are no longer taken for Telegram
+  handles and hidden as contacts; handles are 5-32 characters as in Telegram.
+- The logo is a cached `/assets/logo.<hash>.svg` painted through a CSS mask instead of a
+  14 KB path inlined three times per page.
+- `deploy-server.sh` defaults back to `/opt/radar` and port 8787; the deploy workflow
+  passes the server directory from the `DEPLOY_DIR` repository variable.
 - Hub for guests: no node-internal statuses or rejected leads outside the admin view, a
   "what is this and how to join" block, score explained, HTML 404, footer cleaned up,
   public sources page without raw errors and misleading counters.
@@ -20,8 +29,8 @@
   `0.0.0.0`. Before, it listened on all interfaces while printing 127.0.0.1.
 - Loading the preset sources polls them right away, so a fresh node shows leads in
   seconds instead of after the first scheduler tick.
-- `deploy-server.sh` defaults to `/opt/radar-test` and port 8791, and no longer lets
-  `docker compose exec` swallow the rest of the script when piped over SSH.
+- `deploy-server.sh` no longer lets `docker compose exec` swallow the rest of the script
+  when piped over SSH.
 - Docs: `docs/GETTING_STARTED.md` with user scenarios, README quick start fixed, stale
   screenshots, contributors and publishing notes replaced.
 

@@ -3,6 +3,8 @@
 Send job and gig posts from any parser to an OpenRadar node or to the hub, using the radar/2 protocol ([docs/PROTOCOL.md](../../docs/PROTOCOL.md)). Standard library only; Python 3.9+.
 
 ```bash
+pip install "git+https://github.com/MikhailSagalaev/radar-oss#subdirectory=sdk/python"
+# or, from a clone of the repository:
 pip install ./sdk/python
 ```
 

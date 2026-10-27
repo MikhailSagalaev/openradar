@@ -19,6 +19,13 @@ describe('contacts', () => {
     expect(normalizeContact('whatsapp', 'https://wa.me/79991234567')).toEqual({ type: 'whatsapp', value: '+79991234567' });
     expect(normalizeContact('url', 'javascript:alert(1)')).toBeNull();
     expect(normalizeContact('telegram', 'joinchat')).toBeNull();
+  });
+
+  it('does not take CSS at-rules or decorators for Telegram handles', () => {
+    const text = 'Подключите шрифты через @font-face и @media, класс с @Override. Пишите @irina_hr.';
+    expect(extractContacts(text)).toEqual([{ type: 'telegram', value: '@irina_hr' }]);
+    expect(redactContacts(text)).toContain('@font-face');
+    expect(redactContacts(text)).not.toContain('@irina_hr');
     expect(normalizeContact('phone', '12345')).toBeNull();
   });
 
