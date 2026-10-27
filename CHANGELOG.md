@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.1
+
+- The closed-post check runs on its own and takes up to 20 leads per board each round, so
+  a long round no longer delays delivery and one busy board does not crowd out the others.
+
 ## 0.10.0
 
 - Closed posts: the node revisits the source page of active leads (Kwork, FL.ru, Habr Career,
