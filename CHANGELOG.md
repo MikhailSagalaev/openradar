@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- All categories: Kwork reads every section, We Work Remotely, Jobicy and RemoteOK
+  every job category, Работа России remote work of any profession, and a new hh.ru
+  source brings remote project work of any trade (about 500 a day). The score no longer
+  penalises non-IT work: the skills dictionary covers design, video, writing,
+  translation, ads, marketplaces, accounting, law, teaching and sales.
 - Repository cleanup: removed the design manifesto and the standalone e2e script
   (covered by the test suite), audit codes in comments; MCP described as a protocol
   server. Deploy is skipped without secrets and the uptime check runs only where

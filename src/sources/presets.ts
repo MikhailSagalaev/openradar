@@ -28,13 +28,11 @@ export const SOURCE_PRESETS: SourcePreset[] = [
     },
   },
   {
-    id: 'kwork-dev',
+    id: 'kwork-all',
     kind: 'kwork',
-    title: 'Kwork — Разработка и IT',
-    description: 'Биржа Kwork: заказы на бирже в категории «Разработка и IT» (нативный парсер)',
-    config: {
-      categoryId: '11',
-    },
+    title: 'Kwork — Все заказы',
+    description: 'Биржа Kwork: новые заказы всех разделов — разработка, дизайн, тексты, реклама, видео (нативный парсер)',
+    config: {},
   },
   {
     id: 'tg-freelance',
@@ -48,20 +46,20 @@ export const SOURCE_PRESETS: SourcePreset[] = [
   {
     id: 'weworkremotely',
     kind: 'rss',
-    title: 'We Work Remotely — Dev Projects',
-    description: 'Международный RSS-фид удаленных контрактов и задач по программированию',
+    title: 'We Work Remotely — Все вакансии',
+    description: 'Международный RSS-фид удалённых вакансий всех направлений',
     config: {
-      url: 'https://weworkremotely.com/categories/remote-programming-jobs.rss',
+      url: 'https://weworkremotely.com/remote-jobs.rss',
     },
   },
   {
-    id: 'trudvsem-it',
+    id: 'trudvsem-remote',
     kind: 'trudvsem',
-    title: 'Работа России — IT-вакансии',
-    description: 'Официальный Open API портала «Работа России» (Минтруд РФ) — вакансии в сфере IT и разработки',
+    title: 'Работа России — Удалённая работа',
+    description: 'Официальный Open API портала «Работа России» (Минтруд РФ) — удалённые вакансии всех профессий',
     config: {
       url: 'https://opendata.trudvsem.ru/api/v1/vacancies',
-      text: 'разработчик',
+      text: 'удаленная',
     },
   },
   {
@@ -74,6 +72,15 @@ export const SOURCE_PRESETS: SourcePreset[] = [
     },
   },
   {
+    id: 'hh-remote-project',
+    kind: 'rss',
+    title: 'HeadHunter — Удалённая проектная работа',
+    description: 'RSS hh.ru: удалённая проектная работа всех профессий — тексты, дизайн, аналитика, маркетинг, разработка',
+    config: {
+      url: 'https://hh.ru/search/vacancy/rss?schedule=remote&employment=project&order_by=publication_time',
+    },
+  },
+  {
     id: 'freelancehunt',
     kind: 'rss',
     title: 'Freelancehunt — Все проекты',
@@ -83,22 +90,21 @@ export const SOURCE_PRESETS: SourcePreset[] = [
     },
   },
   {
-    id: 'jobicy-dev',
+    id: 'jobicy',
     kind: 'rss',
-    title: 'Jobicy — Remote Dev Jobs',
-    description: 'RSS-фид удалённых вакансий в разработке с Jobicy',
+    title: 'Jobicy — Все вакансии',
+    description: 'RSS-фид удалённых вакансий всех направлений с Jobicy',
     config: {
-      url: 'https://jobicy.com/feed/job_feed?job_categories=dev',
+      url: 'https://jobicy.com/feed/job_feed',
     },
   },
   {
-    id: 'remoteok-dev',
+    id: 'remoteok',
     kind: 'remoteok',
-    title: 'RemoteOK — Remote Jobs',
-    description: 'Официальный публичный JSON API RemoteOK — международные удаленные вакансии',
+    title: 'RemoteOK — Все вакансии',
+    description: 'Официальный публичный JSON API RemoteOK — международные удалённые вакансии всех направлений',
     config: {
       url: 'https://remoteok.com/api',
-      tag: 'dev',
       limit: 20,
     },
   },
