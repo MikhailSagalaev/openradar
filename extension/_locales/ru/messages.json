@@ -1,0 +1,341 @@
+{
+  "extName": {
+    "message": "OpenRadar — захват вакансий и заказов"
+  },
+  "extDescription": {
+    "message": "Вакансии и заказы в открытую базу OpenRadar в один клик и оценка оплаты по рынку. Только по вашей команде."
+  },
+  "actionTitle": {
+    "message": "Отправить в OpenRadar"
+  },
+  "cmdSendPage": {
+    "message": "Отправить текущую страницу в OpenRadar"
+  },
+  "tagline": {
+    "message": "захват заказов и вакансий"
+  },
+  "update": {
+    "message": "Обновить"
+  },
+  "download": {
+    "message": "Скачать"
+  },
+  "signIn": {
+    "message": "Войти через GitHub"
+  },
+  "signInNote": {
+    "message": "Заказы будут добавляться в общую базу openradar.fun от вашего имени. Ничего вводить не нужно."
+  },
+  "signedInAs": {
+    "message": "Вы вошли как"
+  },
+  "signOut": {
+    "message": "Выйти"
+  },
+  "loadingTab": {
+    "message": "Загрузка данных вкладки..."
+  },
+  "typeGig": {
+    "message": "Заказ"
+  },
+  "typeJob": {
+    "message": "Вакансия"
+  },
+  "send": {
+    "message": "Отправить в OpenRadar"
+  },
+  "estimate": {
+    "message": "Оценить оплату на рынке"
+  },
+  "ownNode": {
+    "message": "Свой узел (необязательно)"
+  },
+  "ownNodeNote": {
+    "message": "Если у вас свой сервер OpenRadar: заказы пойдут на него в webhook-источник, а не в общую базу."
+  },
+  "contributorLabel": {
+    "message": "Подпись (необязательно)"
+  },
+  "serverLabel": {
+    "message": "Адрес сервера OpenRadar"
+  },
+  "check": {
+    "message": "Проверить"
+  },
+  "sourceIdLabel": {
+    "message": "ID источника (webhook)"
+  },
+  "sourceIdPlaceholder": {
+    "message": "ID источника"
+  },
+  "tokenLabel": {
+    "message": "Токен источника"
+  },
+  "tokenPlaceholder": {
+    "message": "Токен источника"
+  },
+  "marketLabel": {
+    "message": "Сервер рыночной оценки"
+  },
+  "save": {
+    "message": "Сохранить"
+  },
+  "errFillNode": {
+    "message": "Заполните адрес, ID и токен источника."
+  },
+  "settingsSaved": {
+    "message": "Настройки сохранены."
+  },
+  "errServerAddress": {
+    "message": "Укажите адрес сервера."
+  },
+  "checking": {
+    "message": "Проверка соединения..."
+  },
+  "serverOk": {
+    "message": "Сервер доступен$P1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "errConnect": {
+    "message": "Ошибка подключения: $P1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "errNoTab": {
+    "message": "Нет активной вкладки."
+  },
+  "remote": {
+    "message": "Удалённо"
+  },
+  "untitledTab": {
+    "message": "Вкладка без названия"
+  },
+  "selection": {
+    "message": "Выделен фрагмент ($P1$ симв.): «$P2$»",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "currentPage": {
+    "message": "Текущая страница"
+  },
+  "errNotSignedIn": {
+    "message": "Войдите через GitHub или настройте свой узел."
+  },
+  "sending": {
+    "message": "Отправляем..."
+  },
+  "errReadPage": {
+    "message": "Не удалось прочитать страницу."
+  },
+  "errNoText": {
+    "message": "На странице нет текста для отправки."
+  },
+  "errSessionExpired": {
+    "message": "Вход истёк или отозван. Войдите через GitHub ещё раз."
+  },
+  "openLead": {
+    "message": "Открыть карточку заказа →"
+  },
+  "sent": {
+    "message": "Отправлено."
+  },
+  "errNoToken": {
+    "message": "Сервер не вернул токен."
+  },
+  "signedIn": {
+    "message": "Готово: заказы будут добавляться от вашего имени."
+  },
+  "signInCancelled": {
+    "message": "Вход отменён."
+  },
+  "signedOut": {
+    "message": "Вы вышли."
+  },
+  "belowMarket": {
+    "message": "ниже рынка"
+  },
+  "aboveMarket": {
+    "message": "выше рынка"
+  },
+  "inMarket": {
+    "message": "в рынке"
+  },
+  "onThisPage": {
+    "message": "На этой странице: $P1$ — $P2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "errNoTitle": {
+    "message": "На странице нет заголовка для оценки."
+  },
+  "estimating": {
+    "message": "Считаем по похожим заказам..."
+  },
+  "tooFewBudgets": {
+    "message": "Пока мало заказов с бюджетом, чтобы оценить."
+  },
+  "perMonth": {
+    "message": " в месяц"
+  },
+  "perProject": {
+    "message": " за проект"
+  },
+  "middleHalf": {
+    "message": "Половина предложений — от $P1$ до $P2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "basisType": {
+    "message": "Похожих мало: по всем $P1$ за 90 дней ($P2$)",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "basisSimilar": {
+    "message": "По $P1$ похожим $P2$ за 90 дней",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "ofJobs": {
+    "message": "вакансиям"
+  },
+  "ofGigs": {
+    "message": "заказам"
+  },
+  "errEstimate": {
+    "message": "Не удалось получить оценку: $P1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "updateAvailable": {
+    "message": "Вышла версия $P1$ (у вас $P2$)",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "updating": {
+    "message": "Браузер скачивает обновление, оно установится в течение нескольких минут."
+  },
+  "menuSendGig": {
+    "message": "Отправить заказ в OpenRadar"
+  },
+  "menuSendJob": {
+    "message": "Отправить вакансию в OpenRadar"
+  },
+  "menuSendPage": {
+    "message": "Отправить текущую страницу в OpenRadar"
+  },
+  "notifySignIn": {
+    "message": "Откройте расширение и войдите через GitHub."
+  },
+  "notSignedIn": {
+    "message": "Нет входа"
+  },
+  "errServer": {
+    "message": "Ошибка сервера: HTTP $P1$ $P2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "notifySavedTitle": {
+    "message": "OpenRadar — сохранено"
+  },
+  "notifySavedOpen": {
+    "message": "«$P1$» добавлен. Нажмите, чтобы открыть карточку.",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "notifySaved": {
+    "message": "Сохранено в OpenRadar."
+  },
+  "leadFallback": {
+    "message": "Заказ"
+  },
+  "notifyErrorTitle": {
+    "message": "OpenRadar — ошибка"
+  },
+  "errSend": {
+    "message": "Не удалось отправить в OpenRadar."
+  },
+  "jobFromBrowser": {
+    "message": "Вакансия из браузера"
+  },
+  "gigFromBrowser": {
+    "message": "Заказ из браузера"
+  },
+  "connectingTitle": {
+    "message": "Подключаем расширение…"
+  },
+  "connectFailedTitle": {
+    "message": "Не получилось подключить"
+  },
+  "connectFailedText": {
+    "message": "Откройте расширение и нажмите «Войти через GitHub» ещё раз."
+  },
+  "connectedTitle": {
+    "message": "Готово"
+  },
+  "connectedText": {
+    "message": "Расширение подключено к $P1$ как @$P2$. Эту вкладку можно закрыть.",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  }
+}

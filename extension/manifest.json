@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "OpenRadar — захват вакансий и заказов",
-  "version": "0.9.0",
-  "description": "Вакансии и заказы в открытую базу OpenRadar в один клик и оценка оплаты по рынку. Только по вашей команде.",
+  "name": "__MSG_extName__",
+  "version": "0.11.0",
+  "description": "__MSG_extDescription__",
   "icons": {
     "16": "icon16.png",
     "32": "icon32.png",
@@ -25,7 +25,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Отправить в OpenRadar",
+    "default_title": "__MSG_actionTitle__",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icon16.png",
@@ -39,7 +39,7 @@
       "suggested_key": {
         "default": "Alt+Shift+R"
       },
-      "description": "Отправить текущую страницу в OpenRadar"
+      "description": "__MSG_cmdSendPage__"
     }
   },
   "web_accessible_resources": [
@@ -52,5 +52,6 @@
         "http://*/*"
       ]
     }
-  ]
+  ],
+  "default_locale": "ru"
 }

@@ -1,0 +1,341 @@
+{
+  "extName": {
+    "message": "OpenRadar — save jobs and orders"
+  },
+  "extDescription": {
+    "message": "Send jobs and freelance orders to the open OpenRadar base in one click and check market pay. Only on your command."
+  },
+  "actionTitle": {
+    "message": "Send to OpenRadar"
+  },
+  "cmdSendPage": {
+    "message": "Send the current page to OpenRadar"
+  },
+  "tagline": {
+    "message": "save orders and jobs"
+  },
+  "update": {
+    "message": "Update"
+  },
+  "download": {
+    "message": "Download"
+  },
+  "signIn": {
+    "message": "Sign in with GitHub"
+  },
+  "signInNote": {
+    "message": "Leads go to the shared openradar.fun base under your name. Nothing to type."
+  },
+  "signedInAs": {
+    "message": "Signed in as"
+  },
+  "signOut": {
+    "message": "Sign out"
+  },
+  "loadingTab": {
+    "message": "Reading the tab..."
+  },
+  "typeGig": {
+    "message": "Order"
+  },
+  "typeJob": {
+    "message": "Vacancy"
+  },
+  "send": {
+    "message": "Send to OpenRadar"
+  },
+  "estimate": {
+    "message": "Estimate market pay"
+  },
+  "ownNode": {
+    "message": "Your own node (optional)"
+  },
+  "ownNodeNote": {
+    "message": "If you run your own OpenRadar server, leads go to its webhook source instead of the shared base."
+  },
+  "contributorLabel": {
+    "message": "Signature (optional)"
+  },
+  "serverLabel": {
+    "message": "OpenRadar server address"
+  },
+  "check": {
+    "message": "Check"
+  },
+  "sourceIdLabel": {
+    "message": "Source ID (webhook)"
+  },
+  "sourceIdPlaceholder": {
+    "message": "Source ID"
+  },
+  "tokenLabel": {
+    "message": "Source token"
+  },
+  "tokenPlaceholder": {
+    "message": "Source token"
+  },
+  "marketLabel": {
+    "message": "Market estimate server"
+  },
+  "save": {
+    "message": "Save"
+  },
+  "errFillNode": {
+    "message": "Fill in the address, the source ID and the token."
+  },
+  "settingsSaved": {
+    "message": "Settings saved."
+  },
+  "errServerAddress": {
+    "message": "Enter the server address."
+  },
+  "checking": {
+    "message": "Checking the connection..."
+  },
+  "serverOk": {
+    "message": "Server is reachable$P1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "errConnect": {
+    "message": "Connection failed: $P1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "errNoTab": {
+    "message": "No active tab."
+  },
+  "remote": {
+    "message": "Remote"
+  },
+  "untitledTab": {
+    "message": "Untitled tab"
+  },
+  "selection": {
+    "message": "Selected text ($P1$ chars): “$P2$”",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "currentPage": {
+    "message": "Current page"
+  },
+  "errNotSignedIn": {
+    "message": "Sign in with GitHub or set up your own node."
+  },
+  "sending": {
+    "message": "Sending..."
+  },
+  "errReadPage": {
+    "message": "Could not read the page."
+  },
+  "errNoText": {
+    "message": "The page has no text to send."
+  },
+  "errSessionExpired": {
+    "message": "Your sign-in expired or was revoked. Sign in with GitHub again."
+  },
+  "openLead": {
+    "message": "Open the lead →"
+  },
+  "sent": {
+    "message": "Sent."
+  },
+  "errNoToken": {
+    "message": "The server returned no token."
+  },
+  "signedIn": {
+    "message": "Done: leads will be added under your name."
+  },
+  "signInCancelled": {
+    "message": "Sign-in cancelled."
+  },
+  "signedOut": {
+    "message": "Signed out."
+  },
+  "belowMarket": {
+    "message": "below the market"
+  },
+  "aboveMarket": {
+    "message": "above the market"
+  },
+  "inMarket": {
+    "message": "within the market"
+  },
+  "onThisPage": {
+    "message": "On this page: $P1$ — $P2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "errNoTitle": {
+    "message": "The page has no title to estimate."
+  },
+  "estimating": {
+    "message": "Looking at similar leads..."
+  },
+  "tooFewBudgets": {
+    "message": "Not enough priced leads to estimate yet."
+  },
+  "perMonth": {
+    "message": " a month"
+  },
+  "perProject": {
+    "message": " per project"
+  },
+  "middleHalf": {
+    "message": "Half of the offers: $P1$ to $P2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "basisType": {
+    "message": "Few similar ones: all $P1$ over 90 days ($P2$)",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "basisSimilar": {
+    "message": "From $P1$ similar $P2$ over 90 days",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "ofJobs": {
+    "message": "vacancies"
+  },
+  "ofGigs": {
+    "message": "orders"
+  },
+  "errEstimate": {
+    "message": "Could not get an estimate: $P1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "updateAvailable": {
+    "message": "Version $P1$ is out (you have $P2$)",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "updating": {
+    "message": "The browser is downloading the update; it installs within a few minutes."
+  },
+  "menuSendGig": {
+    "message": "Send order to OpenRadar"
+  },
+  "menuSendJob": {
+    "message": "Send vacancy to OpenRadar"
+  },
+  "menuSendPage": {
+    "message": "Send the current page to OpenRadar"
+  },
+  "notifySignIn": {
+    "message": "Open the extension and sign in with GitHub."
+  },
+  "notSignedIn": {
+    "message": "Not signed in"
+  },
+  "errServer": {
+    "message": "Server error: HTTP $P1$ $P2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "notifySavedTitle": {
+    "message": "OpenRadar — saved"
+  },
+  "notifySavedOpen": {
+    "message": "“$P1$” added. Click to open it.",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "notifySaved": {
+    "message": "Saved to OpenRadar."
+  },
+  "leadFallback": {
+    "message": "Lead"
+  },
+  "notifyErrorTitle": {
+    "message": "OpenRadar — error"
+  },
+  "errSend": {
+    "message": "Could not send to OpenRadar."
+  },
+  "jobFromBrowser": {
+    "message": "Vacancy from the browser"
+  },
+  "gigFromBrowser": {
+    "message": "Order from the browser"
+  },
+  "connectingTitle": {
+    "message": "Connecting the extension…"
+  },
+  "connectFailedTitle": {
+    "message": "Could not connect"
+  },
+  "connectFailedText": {
+    "message": "Open the extension and press “Sign in with GitHub” again."
+  },
+  "connectedTitle": {
+    "message": "Done"
+  },
+  "connectedText": {
+    "message": "The extension is connected to $P1$ as @$P2$. You can close this tab.",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  }
+}

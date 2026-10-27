@@ -982,7 +982,8 @@ export function createApp(runtime: Runtime): Hono {
 
   app.get('/extension', async (c) => {
     const lang = resolveLang(c);
-    const isAuthed = await canRead(c, runtime);
+    // Webhook sources are the operator's setup: guests on a public hub do not see them.
+    const isAuthed = await isAdmin(c, runtime);
     let webhookSources: SourceRecord[] = [];
     if (isAuthed) {
       const allSources = await runtime.store.listSources();

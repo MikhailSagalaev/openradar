@@ -2,6 +2,8 @@
 
 A dependency-free Manifest V3 extension that sends a vacancy or an order from any site to OpenRadar with one click, the context menu or `Alt+Shift+R`, and shows what similar work usually pays.
 
+The extension speaks Russian and English and follows the browser's language (other languages get Russian). Strings live in `extension/_locales/<lang>/messages.json`; a new language is one more folder.
+
 ## Installation (Chrome, Edge, Yandex Browser, Brave)
 
 1. Download the archive: **Скачать extension.zip** on [openradar.fun/extension](https://openradar.fun/extension) or `radar-extension-vX.Y.Z.zip` from the [latest release](https://github.com/MikhailSagalaev/openradar/releases/latest).
@@ -19,7 +21,7 @@ Versions before 0.8.0 have no GitHub sign-in: the popup shows **Настройк
 
 ## Sign in
 
-Press **Войти через GitHub** in the popup. A sign-in window opens on the hub (`https://openradar.fun` by default, the **Сервер рыночной оценки** setting); after GitHub sign-in the hub asks you to allow the extension to add leads as you. Nothing else to type: leads go to the shared base under your GitHub name.
+Press **Войти через GitHub** (**Sign in with GitHub** in an English browser) in the popup. A sign-in window opens on the hub (`https://openradar.fun` by default, the **Сервер рыночной оценки** setting); after GitHub sign-in the hub asks you to allow the extension to add leads as you. Nothing else to type: leads go to the shared base under your GitHub name.
 
 How it works: the extension opens `/extension/connect` in a `chrome.identity.launchWebAuthFlow` window. Browsers without that API (or where the window cannot open) get the same page in a regular tab, and the hub sends you back to the extension's own `connected.html`. Either way the personal token (`ext_…`) goes only to the extension: `https://<extension id>.chromiumapp.org/` or `chrome-extension://<extension id>/connected.html`. The token can add leads and nothing else; the hub stores only its SHA-256. **Выйти** revokes it. Firefox is not supported.
 

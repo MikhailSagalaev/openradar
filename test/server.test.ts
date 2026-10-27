@@ -1576,7 +1576,15 @@ describe('http server', () => {
     const html = await extRes.text();
     expect(html).toContain('Расширение для браузера');
     expect(html).toContain('/extension/download');
-    expect(html).toContain('chrome://extensions/');
+    expect(html).toContain('chrome://extensions');
+    expect(html).toContain('Войдите через GitHub');
+
+    // Guests of a public hub do not see the operator's webhook sources.
+    const hook = await runtime.store.createSource({ kind: 'webhook', title: 'Browser hook', config: { token: 'secret-token' } });
+    const guestHtml = await (await app.request('/extension')).text();
+    expect(guestHtml).not.toContain(hook.id);
+    const adminHtml = await (await app.request('/extension', { headers: { authorization: 'Bearer secret' } })).text();
+    expect(adminHtml).toContain(hook.id);
 
     // 3. Footer on main page contains extension link
     const indexRes = await app.request('/');

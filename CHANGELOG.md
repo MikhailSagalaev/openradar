@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.11.0
+
+- Extension 0.11.0 speaks Russian and English: the browser's language picks one
+  (`_locales/`, Russian by default). Context menu items say OpenRadar instead of Radar.
+- `/extension` redesigned: numbered install steps, what the extension does, sign-in with
+  GitHub up front, your own node as an optional side panel. Long source IDs wrap instead of
+  overflowing, and webhook sources are shown only to the operator, not to guests of a
+  public hub.
+- «Добавить по ссылке» uses the same rounded field as the feed search.
+
 ## 0.10.1
 
 - The closed-post check runs on its own and takes up to 20 leads per board each round, so
