@@ -298,12 +298,12 @@ describe('store', () => {
     const lead = makeLead({ sourceId: source.id, id: 'lead-snipe', status: 'new', score: 80 });
     await store.insertLead(lead);
 
-    // Vote scam from 91.229.8.10 (subnet 91.229.8.0/24)
-    const vote1 = await store.recordVote(lead.id, 'scam', 1, '91.229.8.0/24');
+    // Vote scam from 203.0.113.10 (subnet 203.0.113.0/24)
+    const vote1 = await store.recordVote(lead.id, 'scam', 1, '203.0.113.0/24');
     expect(vote1.votes_scam).toBe(1);
 
     // Same subnet tries to vote scam again -> ignored!
-    const vote2 = await store.recordVote(lead.id, 'scam', 1, '91.229.8.0/24');
+    const vote2 = await store.recordVote(lead.id, 'scam', 1, '203.0.113.0/24');
     expect(vote2.votes_scam).toBe(1);
 
     // Different subnet votes scam -> counted!
