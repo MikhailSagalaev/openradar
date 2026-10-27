@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import fs from 'node:fs';
 import { createApp } from '../src/server/app.ts';
 import type { Runtime } from '../src/runtime.ts';
 import type { Env } from '../src/core/types.ts';
@@ -79,6 +80,19 @@ describe('http server', () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as { ok: boolean };
     expect(body.ok).toBe(true);
+    await runtime.store.close();
+  });
+
+  it('tells the extension which version the server hands out', async () => {
+    const runtime = makeRuntime();
+    const app = createApp(runtime);
+    const response = await app.request('/api/ext/version');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('access-control-allow-origin')).toBe('*');
+    const manifest = JSON.parse(fs.readFileSync('extension/manifest.json', 'utf8')) as { version: string };
+    const body = (await response.json()) as { version: string; url: string };
+    expect(body.version).toBe(manifest.version);
+    expect(body.url).toMatch(/\/extension$/);
     await runtime.store.close();
   });
 

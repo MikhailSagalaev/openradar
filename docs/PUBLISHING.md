@@ -19,6 +19,8 @@ git push origin v0.8.0
 
 The `Release` workflow builds the app, the Docker image (`ghcr.io/<owner>/<repo>`) and `radar-extension-<tag>.zip`, and attaches the zip to the release. Attach nothing that contains a database or a `.env`.
 
+Where the repository has the secrets `CWS_EXTENSION_ID`, `CWS_PUBLISHER_ID`, `CWS_CLIENT_ID`, `CWS_CLIENT_SECRET` and `CWS_REFRESH_TOKEN`, the workflow also uploads the zip to the Chrome Web Store and submits it for review ([how to get the keys](https://github.com/fregante/chrome-webstore-upload-keys)). The first version is published by hand: the extension id exists only after that. Installed copies update themselves once the store approves the version.
+
 ## Deploying your own hub
 
 Releases are what goes to production. A server that runs OpenRadar from a git checkout pulls them itself: [scripts/autodeploy.sh](../scripts/autodeploy.sh) runs from cron, fetches tags and deploys the newest `vX.Y.Z` with `deploy-server.sh` from that tag (backup, migrations, restart, health check). Nothing on GitHub holds a key to the server.

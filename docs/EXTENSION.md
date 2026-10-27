@@ -10,7 +10,7 @@ A dependency-free Manifest V3 extension that sends a vacancy or an order from an
 
 ## Updating
 
-An extension loaded unpacked does not update itself. The current version is shown on `/extension`; the installed one is on the extensions page. If yours is older:
+When the hub hands out a newer version than the installed one (`GET /api/ext/version`), the popup says so at the top. A copy installed from a store updates itself; the **Обновить** button asks the browser to do it now. An unpacked copy does not update itself: the button opens `/extension` to download the new archive. The current version is also shown on `/extension`. To update an unpacked copy:
 
 - unpack the new archive over the old folder and press the reload arrow on the extension card (the sign-in and settings stay), or
 - remove the old extension and load the new folder (sign in again afterwards).

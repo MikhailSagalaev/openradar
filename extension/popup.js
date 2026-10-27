@@ -426,9 +426,52 @@ document.querySelectorAll('input[name="leadType"]').forEach((radio) => {
   });
 });
 
+/** True when version a is newer than b ("0.9.0" > "0.8.1"). */
+function isNewer(a, b) {
+  const pa = String(a).split('.').map(Number);
+  const pb = String(b).split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d !== 0) return d > 0;
+  }
+  return false;
+}
+
+/**
+ * Offers a newer version the hub hands out. A store install asks the browser to update
+ * right away (it would also update on its own); an unpacked install links to the download page.
+ */
+async function checkUpdate() {
+  const account = await getAccount();
+  const base = account?.base || normalizeBase(fields.marketBase.value) || DEFAULT_MARKET_BASE;
+  const res = await fetch(`${base}/api/ext/version`);
+  if (!res.ok) return;
+  const latest = await res.json();
+  const current = chrome.runtime.getManifest().version;
+  if (!latest?.version || !isNewer(latest.version, current)) return;
+
+  const self = await chrome.management?.getSelf?.().catch(() => null);
+  // Without the management API, fall back to the download page: it works for any install.
+  const unpacked = !self || self.installType === 'development';
+  document.getElementById('update-text').textContent = `Вышла версия ${latest.version} (у вас ${current})`;
+  const button = document.getElementById('update-btn');
+  button.textContent = unpacked ? 'Скачать' : 'Обновить';
+  button.addEventListener('click', async () => {
+    if (unpacked) {
+      chrome.tabs.create({ url: latest.url });
+      return;
+    }
+    const { status } = await chrome.runtime.requestUpdateCheck();
+    if (status === 'update_available') chrome.runtime.reload();
+    else document.getElementById('update-text').textContent = 'Браузер скачивает обновление, оно установится в течение нескольких минут.';
+  });
+  document.getElementById('update').hidden = false;
+}
+
 document.getElementById('sign-in').addEventListener('click', signIn);
 document.getElementById('sign-out').addEventListener('click', signOut);
 getAccount().then(renderAccount);
 
 loadConfig().catch((error) => setStatus(String(error), 'err'));
 initPreview();
+checkUpdate().catch(() => {});
