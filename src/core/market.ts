@@ -89,14 +89,16 @@ export function estimateMarket(query: MarketQuery, leads: Lead[]): MarketEstimat
     const other = titleTokens(item.lead.title);
     let shared = 0;
     for (const word of words) if (other.has(word)) shared += 1;
-    const titleSim = words.size && other.size ? shared / (words.size + other.size - shared) : 0;
+    // Share of the query's words found in the lead title: long titles are not penalised.
+    const titleSim = words.size ? shared / words.size : 0;
+    const jaccard = words.size && other.size ? shared / (words.size + other.size - shared) : 0;
     const leadSkills = (item.lead.skills?.length ? item.lead.skills : extractTechSkills(item.lead.title)).map((s) => s.toLowerCase());
     const skillHits = leadSkills.filter((s) => wanted.has(s)).length;
     const skillSim = wanted.size ? skillHits / wanted.size : 0;
-    return { ...item, titleSim, skillSim, sim: titleSim * 2 + skillSim };
+    return { ...item, titleSim, skillSim, sim: titleSim * 2 + skillSim + jaccard };
   });
 
-  const similar = scored.filter((item) => item.titleSim >= 0.2 || (item.titleSim > 0 && item.skillSim > 0));
+  const similar = scored.filter((item) => item.titleSim >= 0.5 || item.skillSim >= 0.5);
   const bySkills = scored.filter((item) => item.skillSim > 0);
   const [basis, pool] =
     similar.length >= MIN_SAMPLES
