@@ -1,6 +1,5 @@
 /**
- * OpenRadar - Popup script
- * Swiss-style typography, zero emoji.
+ * OpenRadar extension: popup (send the page, market estimate, connection settings).
  */
 
 const fields = {

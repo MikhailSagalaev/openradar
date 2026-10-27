@@ -1,6 +1,5 @@
 /**
- * OpenRadar - Content Script & schema.org/JobPosting extraction helper
- * Swiss-style typography, zero emoji.
+ * OpenRadar extension: reads the open page, including schema.org/JobPosting markup.
  */
 
 function cleanText(htmlOrText) {

@@ -17,6 +17,7 @@ import { SOURCE_PRESETS } from '../sources/presets.ts';
 import { IMAP_PASSWORD_ENV_RE } from '../sources/imap.ts';
 import { VERSION } from '../version.ts';
 import { githubOAuthConfigured, startGitHubOAuth, handleGitHubCallback } from './auth.ts';
+import { analyticsFromEnv, contentSecurityPolicy } from './analytics.ts';
 import { filterOptions, parseFeedFilters } from './filters.ts';
 import { estimateMarket } from '../core/market.ts';
 import { rateLimit } from './ratelimit.ts';
@@ -27,6 +28,7 @@ import {
   renderNewSourcePage,
   renderNotFound,
   renderProfilePage,
+  setAnalytics,
   setPublicBaseUrl,
   renderSourceCreatedPage,
   renderSourcePage,
@@ -597,16 +599,17 @@ export function createApp(runtime: Runtime): Hono {
   setPublicBaseUrl(runtime.env.RADAR_PUBLIC_URL);
 
   // Security Headers: Clickjacking, MIME-sniffing, XSS, CSRF
+  const analytics = analyticsFromEnv(runtime.env);
+  setAnalytics(analytics);
+  const csp = contentSecurityPolicy(analytics);
   app.use('*', async (c, next) => {
-    c.header('X-Frame-Options', 'DENY');
+    // frame-ancestors governs framing; X-Frame-Options only when nothing may frame us.
+    if (!analytics.yandexMetrikaId) c.header('X-Frame-Options', 'DENY');
     c.header('X-Content-Type-Options', 'nosniff');
     c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
     c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     // The dashboard uses inline scripts and styles, hence 'unsafe-inline'.
-    c.header(
-      'Content-Security-Policy',
-      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
-    );
+    c.header('Content-Security-Policy', csp);
 
     const method = c.req.method.toUpperCase();
     if (['POST', 'PATCH', 'DELETE'].includes(method)) {
@@ -1790,6 +1793,20 @@ export function createApp(runtime: Runtime): Hono {
   app.get('/api/feed.rss', serveFeed);
 
   const seoBaseUrl = (c: Context): string => publicBaseUrl(c, runtime);
+
+  // Yandex Webmaster ownership check: /yandex_<code>.html with the code in the body.
+  if (analytics.yandexVerification) {
+    const code = analytics.yandexVerification;
+    app.get(`/yandex_${code}.html`, (c) =>
+      c.html(`<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    </head>
+    <body>Verification: ${code}</body>
+</html>
+`),
+    );
+  }
 
   app.get('/robots.txt', (c) => {
     return c.text(renderRobotsTxt(seoBaseUrl(c)), 200, {

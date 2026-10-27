@@ -1,5 +1,5 @@
 /**
- * OpenRadar Nostr secp256k1 Cryptographic Engine (NIP-01 / radar/1).
+ * Participant keys: secp256k1, NIP-01 events.
  * BIP-340 Schnorr signatures via the audited @noble/curves implementation.
  * Supports nsec/npub bech32 encoding and AES-256-GCM local encrypted storage.
  */

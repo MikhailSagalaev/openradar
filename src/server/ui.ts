@@ -3,6 +3,7 @@ import type { Contact, Lead, LeadVoteSignal, RunRecord, SourceHealth, SourceReco
 import { escapeHtml, firstLine, jsonForScript } from '../core/text.ts';
 import { type SupportedLang, getTranslations } from './i18n.ts';
 import { renderLogo } from './logo.ts';
+import { type AnalyticsConfig, analyticsBody, analyticsHead } from './analytics.ts';
 import { formatLeadText } from './format.ts';
 import { BUDGET_STEPS_RUB, type FeedFilters, hasActiveFilters } from './filters.ts';
 import { SEO_CATALOG } from './seo.ts';
@@ -1402,6 +1403,14 @@ footer {
 }
 `;
 
+/** Analytics tags for every page; empty unless the deployment configures counters. */
+let analyticsHeadHtml = '';
+let analyticsBodyHtml = '';
+export function setAnalytics(config: AnalyticsConfig): void {
+  analyticsHeadHtml = analyticsHead(config);
+  analyticsBodyHtml = analyticsBody(config);
+}
+
 /** Absolute public URL (RADAR_PUBLIC_URL) for og:image and og:url; unset on a private node. */
 let publicBaseUrl: string | undefined;
 export function setPublicBaseUrl(url: string | undefined): void {
@@ -1487,8 +1496,10 @@ ${publicBaseUrl ? `<meta property="og:image" content="${escapeHtml(publicBaseUrl
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 ${input.head ?? ''}
 <link rel="stylesheet" href="${STYLE_PATH}">
+${analyticsHeadHtml}
 </head>
 <body>
+${analyticsBodyHtml}
 <main>
 <header class="top">
   <div class="top-brand-group">

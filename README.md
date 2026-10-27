@@ -4,7 +4,7 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/logo-white.png">
     <source media="(prefers-color-scheme: light)" srcset="assets/logo-black.png">
-    <img alt="OpenRadar Logo" src="assets/logo-black.png" width="360">
+    <img alt="OpenRadar" src="assets/logo-black.png" width="360">
   </picture>
 </p>
 
@@ -14,37 +14,43 @@
   <a href="docs/PROTOCOL.md"><img src="https://img.shields.io/badge/protocol-radar%2F2-purple.svg" alt="Protocol: radar/2"></a>
 </p>
 
-**OpenRadar** is an open, non-commercial network that collects job vacancies (`job`) and freelance orders (`gig`) from any source into one clean feed: public boards, RSS, Telegram channels (public or private, through your own account), email alerts, or your own scrapers.
+OpenRadar is an open base of job vacancies and freelance orders. Parsers, nodes and people add posts from boards, RSS feeds, Telegram channels and email alerts; the hub merges duplicates and keeps one clean feed.
 
-No paywalls, no paid responses, no commercial tier. Contacts stay in the post: you write to the client directly.
+Job seekers should not have to pay for subscriptions to parsers or for responding to a vacancy. OpenRadar has no paid tier: the contacts are in the post, and you write to the client directly. Anyone can run their own copy.
 
-**Try it now:** [openradar.fun](https://openradar.fun) is the shared hub, running this code.
+**Live hub:** [openradar.fun](https://openradar.fun)
 
 <p align="center">
   <a href="https://openradar.fun"><img alt="The openradar.fun feed" src="docs/screenshots/hub.jpg" width="800"></a>
 </p>
 
-> **Status:** v0.7, protocol radar/2. Node, hub, rating and SDKs are in place; see [docs/PROTOCOL.md](docs/PROTOCOL.md).
+## What it does
 
-## Two ways to use it
+- **One feed of every trade.** FL.ru, Kwork, Freelancehunt, Habr Career, hh.ru, Работа России, We Work Remotely, Jobicy, RemoteOK and public Telegram channels: development, design, video, writing, ads, sales and more. A post seen on two boards is one lead.
+- **Search, filters and a score.** Budget from, skill, remote only, language; newest, best or highest budget first. Each lead gets a 0-100 score from its pay, skills, detail and a direct contact.
+- **Market pay estimate.** The browser extension shows what similar work usually pays and whether the pay on the page you are reading is below, within or above it.
+- **Votes and submissions.** Signed-in users mark leads as useful, junk, scam or closed, and add posts by link.
+- **RSS for any query**, an HTTP API and an MCP server over the same feed.
+- **Your own node.** Run it at home or on a server, connect your sources, filters and notifications (Telegram, webhook). Nothing leaves the node unless you share a source.
 
-1. **Self-hosted node.** Run `radar` on your machine or server, connect your sources and accounts, and get your own feed and notifications (Telegram, webhook). Nothing leaves your node unless you mark a source as shared.
-2. **Join the hub.** Send observations to the shared hub (openradar.fun) from your node, from the SDK or from any scraper. The hub merges posts seen in different places into one lead, credits whoever saw it first, and gives early access by contribution: active contributors see new leads immediately, everyone else with a delay; guests see the feed without contacts.
+## The network
+
+Nodes and parsers can send their posts to the shared hub. Every post is signed with the participant's key. The hub merges the same post seen in different places, credits whoever saw it first, and lowers the weight of junk and scam by the votes and the rating of the participants who reported it.
+
+People who send leads see the feed earlier:
 
 | Tier | How | Delay | Contacts |
 | --- | --- | --- | --- |
-| Guest | not signed in | 12 h | no |
-| Member | GitHub sign-in, or rating >= 1 | 3 h | yes |
-| Active | rating >= 10 over 30 days | 30 min | yes |
-| Core | rating >= 50, or moderator | none | yes |
+| Guest | not signed in | 12 h | hidden |
+| Member | GitHub sign-in, or rating 1+ | 3 h | shown |
+| Active | rating 10+ over 30 days | 30 min | shown |
+| Core | rating 50+, or moderator | none | shown |
 
-Rating comes from confirmed leads you saw first (x1.5 for private channels and for a 6-hour exclusive), confirmations, and signals that matched the outcome; leads hidden as junk or scam cost points.
+Rating comes from confirmed leads you saw first (×1.5 for private channels and for a 6-hour exclusive), confirmations and signals that matched the outcome; leads hidden as junk or scam cost points. Details: [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
-Step-by-step scenarios (reading the hub, running a node, connecting a parser, sharing with the hub, deploying a server): **[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)**.
+## Quick start
 
-## Quick start (node)
-
-Node.js >= 22.19 and pnpm >= 11:
+Node.js 22.19+ and pnpm 11+:
 
 ```bash
 git clone https://github.com/MikhailSagalaev/openradar.git
@@ -53,31 +59,29 @@ pnpm install
 pnpm dev serve
 ```
 
-`serve` prints a one-off admin token. Open `http://127.0.0.1:8787`, sign in with it, go to **Источники** and press **Загрузить популярные биржи**: FL.ru, Habr Career, Kwork, Telegram and others are polled right away, and the first leads appear within seconds.
+`serve` prints a one-off admin token. Open `http://127.0.0.1:8787`, sign in with it, go to **Источники** and press **Загрузить популярные биржи**: the boards are polled right away and the first leads appear within seconds.
 
-Without `DATABASE_URL` the node keeps everything in memory and forgets it on restart. For a persistent node use PostgreSQL 17 through Docker:
+Without `DATABASE_URL` the node keeps everything in memory. For a persistent node, use PostgreSQL 17 through Docker:
 
 ```bash
 cp .env.example .env    # set RADAR_ADMIN_TOKEN, POSTGRES_PASSWORD, DATABASE_URL
-docker compose run --rm radar migrate   # starts PostgreSQL and creates the schema
+docker compose run --rm radar migrate
 docker compose up -d
 ```
 
-`docker compose` refuses to start without real secrets in `.env`.
+`docker compose` refuses to start with the example secrets from `.env.example`.
 
-## Sources
+## Connecting a parser
 
-RSS, public Telegram channels (`t.me/s`), Kwork, hh.ru, Работа России, RemoteOK, IMAP job alerts, webhook and the browser extension. See [docs/PLUGINS.md](docs/PLUGINS.md) to write an adapter.
-
-Any other parser (a Telethon script reading private channels, a Playwright scraper) sends radar/2 observations ([docs/PROTOCOL.md](docs/PROTOCOL.md)) to a webhook source:
+Any script (a Telethon reader for private channels, a Playwright scraper, a cron job) can send posts to a node:
 
 ```bash
 pnpm dev source add --kind webhook --title "My parser"   # prints the source id and token
-python my_parser.py | pnpm dev push --source <id>        # NDJSON, one observation per line
-# or over HTTP: POST /api/v2/ingest/<id> with header x-radar-token
+python my_parser.py | pnpm dev push --source <id>        # NDJSON, one post per line
+# or over HTTP: POST /api/v2/ingest/<id> with the header x-radar-token
 ```
 
-Straight to the hub with the Python SDK ([sdk/python](sdk/python/README.md), Telethon / Pyrogram helpers included):
+Or straight to the hub with the Python SDK (standard library only, Telethon and Pyrogram helpers included):
 
 ```bash
 pip install "git+https://github.com/MikhailSagalaev/openradar#subdirectory=sdk/python"
@@ -92,33 +96,23 @@ hub.observe([{"source": {"platform": "telegram", "channel": "-1001234567890", "v
               "text": "Ищем React-разработчика..."}])
 ```
 
-`RADAR_KEY` is your participant key (`pnpm dev key`); your rating is bound to it, so keep it secret. The TypeScript package exports the same `HubClient` and `NodeClient`. To share a node source with the hub, set `RADAR_HUB_URL` and `RADAR_NODE_KEY`, then `radar source share <id>`.
-
-## Interfaces
-
-- Dashboard and lead pages, RSS (`/feed.rss`), search catalog pages.
-- HTTP API (`/api/*`) and the hub API (`/v2/*`: feed, SSE stream, lead cards, author history, rating, moderation).
-- MCP server (`radar mcp` over stdio, `POST /mcp` over HTTP) for tools that speak the Model Context Protocol: same feed, same access rules.
-- Browser extension: [docs/EXTENSION.md](docs/EXTENSION.md).
+`RADAR_KEY` is your participant key (`pnpm dev key`); your rating is bound to it. The TypeScript package exports the same `HubClient` and `NodeClient`.
 
 ## Documentation
 
-| Document | What is inside |
+| Document | Contents |
 | --- | --- |
-| [GETTING_STARTED.md](docs/GETTING_STARTED.md) | User scenarios, from reading the feed to running a server |
-| [PROTOCOL.md](docs/PROTOCOL.md) | radar/2: events, signatures, tiers, moderation, node -> hub |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Node pipeline, data model, decisions |
+| [GETTING_STARTED.md](docs/GETTING_STARTED.md) | Scenarios: reading the hub, running a node, a server, a parser, sharing with the hub |
+| [PROTOCOL.md](docs/PROTOCOL.md) | radar/2: posts, signatures, merging, tiers, rating, moderation |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | The node pipeline, the score, the data model, HTTP routes |
 | [PLUGINS.md](docs/PLUGINS.md) | Writing a source or sink adapter |
-| [EXTENSION.md](docs/EXTENSION.md) | Browser extension |
-| [BACKUP_AND_RESTORE.md](docs/BACKUP_AND_RESTORE.md) | Backups and restore |
+| [EXTENSION.md](docs/EXTENSION.md) | The browser extension and the market estimate |
+| [BACKUP_AND_RESTORE.md](docs/BACKUP_AND_RESTORE.md) | Backups |
 | [sdk/python](sdk/python/README.md) | Python SDK |
 
-## Development
+## Contributing
 
-- `pnpm typecheck && pnpm test` must stay green. Tests never call the network.
-- `RADAR_TEST_STORE=postgres DATABASE_URL=... pnpm test` runs the same suite against PostgreSQL.
-
-Contributions: [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md).
+New boards are the most useful contribution: one adapter, one fixture, one test. See [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately: [SECURITY.md](SECURITY.md).
 
 ## License
 

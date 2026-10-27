@@ -43,6 +43,11 @@ export interface Env {
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
   RADAR_PUBLIC_URL?: string;
+  /** Optional web analytics and search console verification (see src/server/analytics.ts). */
+  RADAR_YANDEX_METRIKA_ID?: string;
+  RADAR_GA_ID?: string;
+  RADAR_GOOGLE_SITE_VERIFICATION?: string;
+  RADAR_YANDEX_VERIFICATION?: string;
   /** `node` (self-hosted, no delays) or `hub` (shared network hub with tiered delays). */
   RADAR_MODE: 'node' | 'hub';
   /** Tier delays in minutes, e.g. `guest=720,member=180,active=30,core=0`. */

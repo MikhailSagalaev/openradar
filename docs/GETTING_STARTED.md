@@ -105,6 +105,8 @@ RADAR_DIR=/opt/radar bash deploy-server.sh
 
 **Публичная лента.** `RADAR_PUBLIC_READ=true` открывает ленту без входа. `RADAR_MODE=hub` включает режим хаба: задержки по уровням и скрытые контакты для гостей. Для обычного узла оставьте `node`.
 
+**Аналитика и вебмастера** (по желанию): `RADAR_YANDEX_METRIKA_ID`, `RADAR_GA_ID`, `RADAR_GOOGLE_SITE_VERIFICATION`, `RADAR_YANDEX_VERIFICATION` в `.env`. Без них сайт не обращается ни к каким сторонним счётчикам.
+
 **Вход через GitHub** для посетителей: создайте OAuth App на [github.com/settings/developers](https://github.com/settings/developers) с адресом возврата `https://ваш-домен/auth/github/callback` и заполните `GITHUB_CLIENT_ID` и `GITHUB_CLIENT_SECRET`.
 
 ## 4. Подключить свой парсер

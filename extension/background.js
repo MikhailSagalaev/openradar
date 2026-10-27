@@ -1,6 +1,5 @@
 /**
- * OpenRadar - Background Service Worker (Manifest V3)
- * Swiss-style typography, zero emoji.
+ * OpenRadar extension: background service worker (context menu, shortcut, notifications).
  */
 
 const notificationUrls = new Map();

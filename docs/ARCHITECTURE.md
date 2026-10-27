@@ -206,6 +206,7 @@ sessions(id, user_id, created_at, expires_at)
 - `GET /extension`, `GET /extension/download` — страница и архив браузерного расширения.
 - `GET /api/market?title=&type=job|gig&skills=` — оценка оплаты для расширения: 25/50/75-й перцентили по похожим лидам с бюджетом за 90 дней (похожие — где есть половина слов запроса по основам или половина навыков; меньше трёх — по всем лидам типа). Только агрегаты по лидам, которые уже видит гость; `Access-Control-Allow-Origin: *`.
 - `GET /me` — профиль вошедшего: уровень, задержка, рейтинг привязанного ключа, как подняться.
+- `GET /yandex_<код>.html` — подтверждение Яндекс Вебмастера, если задан `RADAR_YANDEX_VERIFICATION`. Счётчики Метрики и Google Analytics и мета-тег Search Console выводятся только при `RADAR_YANDEX_METRIKA_ID`, `RADAR_GA_ID`, `RADAR_GOOGLE_SITE_VERIFICATION`; CSP расширяется на их домены только тогда же.
 - `GET /og.png` — карточка для соцсетей; `og:image` и абсолютный `og:url` выводятся, когда задан `RADAR_PUBLIC_URL`.
 - `GET /assets/app.<hash>.css`, `GET /assets/logo.<hash>.svg` — стили и логотип с годовым кэшем; хэш меняется вместе с содержимым.
 - `GET /api/delta` — поток изменений для синхронизации узлов (JSON/NDJSON).

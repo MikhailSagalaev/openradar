@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Optional analytics and search console verification per deployment:
+  `RADAR_YANDEX_METRIKA_ID`, `RADAR_GA_ID`, `RADAR_GOOGLE_SITE_VERIFICATION`,
+  `RADAR_YANDEX_VERIFICATION` (`/yandex_<code>.html`). The CSP opens only the hosts of
+  the counters that are set; without them the site loads nothing third-party.
+- README and CONTRIBUTING rewritten.
 - All categories: Kwork reads every section, We Work Remotely, Jobicy and RemoteOK
   every job category, Работа России remote work of any profession, and a new hh.ru
   source brings remote project work of any trade (about 500 a day). The score no longer
@@ -10,10 +15,8 @@
 - Работа России remote source keeps only real remote work: its full-text search also
   matched «удалению» and «не удаленно». Keyword matching normalises Unicode first, so
   «ё» written as «е» + combining diaeresis matches.
-- Repository cleanup: removed the design manifesto and the standalone e2e script
-  (covered by the test suite), audit codes in comments; MCP described as a protocol
-  server. Deploy is skipped without secrets and the uptime check runs only where
-  `UPTIME_URL` is set, so forks stay quiet.
+- Deploy is skipped without secrets and the uptime check runs only where `UPTIME_URL`
+  is set, so forks stay quiet.
 - Lead page: copy and share are icon buttons (share uses the system share sheet where
   available), votes without the «Сообщество» label, text formatted into paragraphs,
   lists and links, skill hashtags shown as tags.
@@ -146,7 +149,7 @@
 
 - Removed the commercial layer and the radar/1 mesh: B2B firehose, X-Ray, AI arbiter
   and slashing, canary traps, HRW sharding, per-week child keys, Nostr relay pool and
-  subscriber, access-tier engine, reputation module, `radar node`, investor documents.
+  subscriber, access-tier engine, reputation module, `radar node`.
   Migration 010 drops `mesh_nodes`, `lead_attestations`, `arbiter_queue` and the mesh
   columns of `leads`; lead visibility is one `state` column.
 - Access model: the viewer tier (admin, member, guest; hub tiers follow) sets the feed

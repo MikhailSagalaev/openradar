@@ -614,6 +614,37 @@ describe('http server', () => {
     expect(partial).toContain('/leads/card"');
   });
 
+  it('adds analytics and console verification only when configured', async () => {
+    const plain = createApp(makeRuntime({ RADAR_PUBLIC_READ: true }));
+    const plainRes = await plain.request('/', { headers: { accept: 'text/html' } });
+    const plainCsp = plainRes.headers.get('content-security-policy') ?? '';
+    expect(plainCsp).toContain("frame-ancestors 'none'");
+    expect(plainCsp).not.toContain('yandex');
+    expect(plainRes.headers.get('x-frame-options')).toBe('DENY');
+    expect(await plainRes.text()).not.toContain('mc.yandex.ru');
+
+    const app = createApp(makeRuntime({
+      RADAR_PUBLIC_READ: true,
+      RADAR_YANDEX_METRIKA_ID: '113821053',
+      RADAR_GA_ID: 'G-3LWJ6YD6TP',
+      RADAR_GOOGLE_SITE_VERIFICATION: '5Bbwcz78I5nEcaz3ILjY8D4lFyO8qB9ZQ68OuKlahOc',
+      RADAR_YANDEX_VERIFICATION: '3fb8622ca1035d2f',
+    }));
+    const res = await app.request('/', { headers: { accept: 'text/html' } });
+    const html = await res.text();
+    expect(html).toContain('<meta name="google-site-verification" content="5Bbwcz78I5nEcaz3ILjY8D4lFyO8qB9ZQ68OuKlahOc">');
+    expect(html).toContain("ym(113821053,'init'");
+    expect(html).toContain('https://www.googletagmanager.com/gtag/js?id=G-3LWJ6YD6TP');
+    const csp = res.headers.get('content-security-policy') ?? '';
+    expect(csp).toContain("script-src 'self' 'unsafe-inline' https://mc.yandex.ru https://yastatic.net https://www.googletagmanager.com");
+    expect(csp).toContain('frame-ancestors https://webvisor.com');
+    expect(res.headers.get('x-frame-options')).toBeNull();
+
+    const verify = await app.request('/yandex_3fb8622ca1035d2f.html');
+    expect(verify.status).toBe(200);
+    expect(await verify.text()).toContain('Verification: 3fb8622ca1035d2f');
+  });
+
   it('supports GDPR erasure with DELETE /api/leads/:id', async () => {
     const runtime = makeRuntime();
     const app = createApp(runtime);
