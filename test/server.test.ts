@@ -527,6 +527,41 @@ describe('http server', () => {
     expect(page).toContain('href="/?type=gig&amp;sort=score&amp;remote=1"');
   });
 
+  it('pages the feed, filters by language and shows similar leads and the profile', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true, RADAR_ADMIN_TOKEN: 'secret', RADAR_PUBLIC_URL: 'https://hub.example' });
+    const app = createApp(runtime);
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed' });
+    const base = Date.now() - 3600_000;
+    for (let i = 0; i < 52; i += 1) {
+      const english = i % 2 === 0;
+      await runtime.store.insertLead({
+        id: `l${i}`, sourceId: source.id, externalId: `l${i}`, titleKey: `l${i}`, fingerprint: `fp-${i}`,
+        title: english ? `Python developer ${i}` : `Бот на Python ${i}`, text: 'Подробности задачи', skills: ['Python'],
+        status: 'new', score: 60, reasons: [], createdAt: new Date(base + i * 1000).toISOString(),
+      });
+    }
+    const auth = { headers: { authorization: 'Bearer secret' } };
+
+    const first = await (await app.request('/', auth)).text();
+    expect(first).toContain('href="/?page=2"');
+    const second = await (await app.request('/?page=2', auth)).text();
+    expect(second).toContain('/leads/l0"');
+    expect(second).not.toContain('href="/?page=3"');
+
+    const english = (await (await app.request('/api/leads?language=en&limit=100', auth)).json()) as Array<{ title: string }>;
+    expect(english).toHaveLength(26);
+    expect(english.every((l) => !/[А-Яа-я]/.test(l.title))).toBe(true);
+
+    const lead = await (await app.request('/leads/l10', auth)).text();
+    expect(lead).toContain('class="similar"');
+    expect(lead).toContain('<meta property="og:image" content="https://hub.example/og.png">');
+    expect(lead).toContain('<meta property="og:url" content="https://hub.example/leads/l10">');
+
+    expect((await app.request('/me')).headers.get('location')).toBe('/login?returnTo=/me');
+    const me = await (await app.request('/me', auth)).text();
+    expect(me).toContain('Администратор');
+  });
+
   it('supports GDPR erasure with DELETE /api/leads/:id', async () => {
     const runtime = makeRuntime();
     const app = createApp(runtime);

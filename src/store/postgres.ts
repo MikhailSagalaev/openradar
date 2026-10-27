@@ -505,6 +505,9 @@ export class PostgresStore implements Store {
       );
       params.push(options.skill.trim());
     }
+    if (options.language) {
+      conditions.push(options.language === 'ru' ? `title ~ '[А-Яа-яЁё]'` : `title !~ '[А-Яа-яЁё]'`);
+    }
     if (options.createdAfter) {
       conditions.push(`created_at >= $${idx++}::timestamptz`);
       params.push(options.createdAfter);
@@ -551,7 +554,8 @@ export class PostgresStore implements Store {
           : options.sort === 'budget'
             ? 'COALESCE(normalized_usd_max, normalized_usd_min) DESC NULLS LAST, created_at DESC, id DESC'
             : 'created_at DESC, id DESC';
-    const query = `SELECT * FROM leads ${whereClause} ORDER BY ${order} LIMIT $${idx}`;
+    const offset = Math.max(0, Math.min(Math.floor(options.offset ?? 0), 10_000));
+    const query = `SELECT * FROM leads ${whereClause} ORDER BY ${order} LIMIT $${idx}${offset ? ` OFFSET ${offset}` : ''}`;
 
     const res = await this.pool.query(query, params);
     return res.rows.map((r) => this.rowToLead(r));

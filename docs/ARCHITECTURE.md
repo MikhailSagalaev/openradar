@@ -197,7 +197,7 @@ sessions(id, user_id, created_at, expires_at)
 
 - `GET /health` — публичный.
 - `GET /auth/github` и `GET /auth/github/callback` — OAuth-вход через GitHub; сессия в HttpOnly-cookie.
-- `GET /` — лента с поиском и фильтрами: тип, `sort=new|score|budget` (лучшие и дорогие — за последние 7 дней), `budget` (от суммы в рублях), `skill`, `remote=1`. Те же параметры принимают `/api/leads`, `/feed.rss` и `/v2/feed` (в `/v2/feed` курсор работает только с `sort=new`). Фильтр по статусу воронки и отклонённые лиды видит только админ.
+- `GET /` — лента с поиском и фильтрами: тип, `sort=new|score|budget` (лучшие и дорогие — за последние 7 дней), `budget` (от суммы в рублях), `skill`, `language=ru|en` (язык заголовка), `remote=1`, `page` (по 50 лидов). Те же параметры принимают `/api/leads`, `/feed.rss` и `/v2/feed` (в `/v2/feed` курсор работает только с `sort=new`). Фильтр по статусу воронки и отклонённые лиды видит только админ.
 - `GET /leads/:id` — карточка лида: полный текст, источник, скор, причины.
 - `POST /leads/:id/vote` и `POST /api/leads/:id/vote` — голосование; только пользователь с GitHub-входом, один голос на сигнал.
 - `POST /leads/:id/status`, `POST /leads/:id/feedback`, `PATCH /api/leads/:id/status` — воронка; только админ.
@@ -205,6 +205,8 @@ sessions(id, user_id, created_at, expires_at)
 - `GET /feed.rss`, `/feed.xml`, `/api/feed.rss` — RSS-лента под запрос.
 - `GET /catalog/:slug` — индексируемые страницы категорий; `GET /robots.txt`, `GET /sitemap.xml` — в sitemap попадают категории и лиды, которые видит гость.
 - `GET /extension`, `GET /extension/download` — страница и архив браузерного расширения.
+- `GET /me` — профиль вошедшего: уровень, задержка, рейтинг привязанного ключа, как подняться.
+- `GET /og.png` — карточка для соцсетей; `og:image` и абсолютный `og:url` выводятся, когда задан `RADAR_PUBLIC_URL`.
 - `GET /assets/app.<hash>.css`, `GET /assets/logo.<hash>.svg` — стили и логотип с годовым кэшем; хэш меняется вместе с содержимым.
 - `GET /api/delta` — поток изменений для синхронизации узлов (JSON/NDJSON).
 - `GET /sources`, `/sources/new`, `/sources/:id`, `/sources/:id/edit` — дашборд источников.

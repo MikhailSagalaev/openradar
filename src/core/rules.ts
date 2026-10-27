@@ -65,6 +65,13 @@ const SPAM_RULES: SpamRule[] = [
       /(?:^|[^\p{L}])(?:продам|продаю|продается|продаётся|сдам|сдается|сдаётся)\s+(?:[а-я]+\s+){0,3}(?:квартир|дом|комнат|кроват|диван|машин|авто|телефон|ноутбук|велосипед)/iu,
   },
   {
+    // «Remote data entry, 2000 EUR»: easy work for foreign-currency pay is the classic
+    // advance-fee scam. Data entry for roubles (Kwork, FL.ru) passes.
+    reason: 'DATA_ENTRY_SCAM',
+    pattern:
+      /(?:ввод[а-я]*\s+данных|data\s+entry|набор[а-я]*\s+текст)[\s\S]{0,200}?(?:\d[\d\s.,]*\s*(?:eur|€|usd|\$|долл)|(?:€|\$)\s*\d)/iu,
+  },
+  {
     // Posts by people looking for work. Bare «резюме» or «вакансия» are not enough: employers
     // write «присылайте резюме», and orders mention a «сайт-резюме» or scraping vacancies.
     reason: 'JOB_SEEKER',

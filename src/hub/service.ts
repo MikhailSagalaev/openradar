@@ -61,7 +61,7 @@ export function ensureHubSource(store: Store): Promise<SourceRecord> {
       const existing = await store.getSource(HUB_SOURCE_ID);
       if (existing) return existing;
       try {
-        return await store.createSource({ id: HUB_SOURCE_ID, kind: 'webhook', title: 'radar/2 hub', config: { hub: true } });
+        return await store.createSource({ id: HUB_SOURCE_ID, kind: 'webhook', title: 'Сеть участников', config: { hub: true } });
       } catch (err) {
         const raced = await store.getSource(HUB_SOURCE_ID);
         if (raced) return raced;

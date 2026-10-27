@@ -17,6 +17,7 @@ export interface FeedFilters {
   remote: boolean;
   budgetRub?: number;
   skill?: string;
+  language?: 'ru' | 'en';
 }
 
 export function parseFeedFilters(c: Context): FeedFilters {
@@ -25,7 +26,9 @@ export function parseFeedFilters(c: Context): FeedFilters {
   const rawRemote = c.req.query('remote');
   const budget = Number(c.req.query('budget'));
   const skill = (c.req.query('skill') ?? '').trim().slice(0, 40);
+  const language = c.req.query('language');
   return {
+    language: language === 'ru' || language === 'en' ? language : undefined,
     sort,
     remote: rawRemote === '1' || rawRemote === 'true',
     budgetRub: Number.isFinite(budget) && budget > 0 ? Math.min(Math.round(budget), 100_000_000) : undefined,
@@ -39,11 +42,14 @@ export function filterOptions(filters: FeedFilters, now: Date = new Date()): Lis
     remote: filters.remote || undefined,
     minBudgetUsd: filters.budgetRub ? rubToUsd(filters.budgetRub) : undefined,
     skill: filters.skill,
+    language: filters.language,
     createdAfter: filters.sort === 'new' ? undefined : new Date(now.getTime() - RANKED_WINDOW_MS).toISOString(),
   };
 }
 
 /** True when any filter differs from the default view. */
 export function hasActiveFilters(filters: FeedFilters): boolean {
-  return filters.sort !== 'new' || filters.remote || Boolean(filters.budgetRub) || Boolean(filters.skill);
+  return (
+    filters.sort !== 'new' || filters.remote || Boolean(filters.budgetRub) || Boolean(filters.skill) || Boolean(filters.language)
+  );
 }

@@ -115,6 +115,23 @@ export interface Translations {
   remoteOnly: string;
   resetFilters: string;
   rankedWindow: string;
+  heroTitleDelayed: string;
+  feedFoundToday: string;
+  feedDelayNote: string;
+  contactsHiddenShort: string;
+  removeDelay: string;
+  scoreWhat: string;
+  loadMore: string;
+  suggestionsTitle: string;
+  foundCount: string;
+  forQuery: string;
+  resetSearch: string;
+  langAny: string;
+  langRu: string;
+  langEn: string;
+  similarLeads: string;
+  navProfile: string;
+  profileTitle: string;
   notFoundTitle: string;
   notFoundDesc: string;
   extensionGuide: string;
@@ -259,6 +276,23 @@ export const RU: Translations = {
   remoteOnly: 'Только удалённо',
   resetFilters: 'Сбросить фильтры',
   rankedWindow: 'Лучшие и дорогие — среди заказов за последние 7 дней.',
+  heroTitleDelayed: 'Заказы и вакансии со всех площадок',
+  feedFoundToday: 'За сутки найдено {n}',
+  feedDelayNote: 'лента с задержкой {d}',
+  contactsHiddenShort: 'контакты скрыты',
+  removeDelay: 'Как смотреть без задержки',
+  scoreWhat: 'Что такое скор?',
+  loadMore: 'Показать ещё',
+  suggestionsTitle: 'Быстрый поиск и подсказки',
+  foundCount: 'Найдено',
+  forQuery: 'по запросу',
+  resetSearch: 'Сбросить',
+  langAny: 'Любой язык',
+  langRu: 'На русском',
+  langEn: 'На английском',
+  similarLeads: 'Похожие заказы',
+  navProfile: 'Профиль',
+  profileTitle: 'Мой профиль',
   extensionGuide: 'Расширение для браузера',
   submitTitle: 'Добавить по ссылке',
   submitSubtitle: 'Автоматический сбор описания вакансии или заказа через разметку страницы',
@@ -398,6 +432,23 @@ export const EN: Translations = {
   remoteOnly: 'Remote only',
   resetFilters: 'Reset filters',
   rankedWindow: 'Best and highest budget: among leads of the last 7 days.',
+  heroTitleDelayed: 'Gigs and jobs from every board',
+  feedFoundToday: '{n} found in the last 24 h',
+  feedDelayNote: 'feed delayed by {d}',
+  contactsHiddenShort: 'contacts hidden',
+  removeDelay: 'How to see it without delay',
+  scoreWhat: 'What is the score?',
+  loadMore: 'Show more',
+  suggestionsTitle: 'Quick search',
+  foundCount: 'Found',
+  forQuery: 'for',
+  resetSearch: 'Reset',
+  langAny: 'Any language',
+  langRu: 'In Russian',
+  langEn: 'In English',
+  similarLeads: 'Similar leads',
+  navProfile: 'Profile',
+  profileTitle: 'My profile',
   extensionGuide: 'Browser Extension',
   submitTitle: 'Submit by URL',
   submitSubtitle: 'Automated extraction of job or gig details using page schema',
