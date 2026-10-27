@@ -52,7 +52,11 @@ export async function processOutbox(deps: OutboxDeps, limit = 50): Promise<Outbo
       if (deps.store.getLeadDeliveries) {
         const allDeliveries = await deps.store.getLeadDeliveries(item.leadId);
         if (allDeliveries.length > 0 && allDeliveries.every((d) => d.status === 'sent')) {
-          await deps.store.updateLeadStatus(item.leadId, 'delivered', new Date().toISOString());
+          // A retry must not undo the operator's funnel (interesting, applied, in work).
+          const current = await deps.store.getLead(item.leadId);
+          if (!current || current.status === 'new' || current.status === 'failed') {
+            await deps.store.updateLeadStatus(item.leadId, 'delivered', new Date().toISOString());
+          }
         }
       }
     } else {

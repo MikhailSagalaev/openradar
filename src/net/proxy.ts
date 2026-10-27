@@ -7,6 +7,7 @@
  */
 
 import { fetch as undiciFetch, ProxyAgent } from 'undici';
+import { readTextLimited } from './body.ts';
 
 let cachedAgent: { url: string; agent: ProxyAgent } | undefined;
 
@@ -73,7 +74,7 @@ export async function fetchTextViaProxy(
       throw new Error(`HTTP ${response.status} for ${currentUrl}`);
     }
 
-    return await response.text();
+    return await readTextLimited(response);
   }
 
   throw new Error(`Too many redirects (max ${maxRedirects})`);

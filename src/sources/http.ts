@@ -1,4 +1,5 @@
 import { assertSafeUrl } from '../core/ssrf.ts';
+import { readTextLimited } from '../net/body.ts';
 import type { PollContext } from '../core/types.ts';
 
 export async function fetchText(
@@ -47,7 +48,7 @@ export async function fetchText(
         throw new Error(`HTTP ${response.status} for ${currentUrl}`);
       }
 
-      return await response.text();
+      return await readTextLimited(response);
     }
 
     throw new Error(`Too many redirects (max ${maxRedirects})`);

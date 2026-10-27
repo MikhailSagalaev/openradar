@@ -8,6 +8,7 @@ import type { Contact, Lead, LeadType, Viewer } from '../core/types.ts';
 import { evaluateLeadState, recomputeRatings, RATING_WINDOW_MS, WeightResolver } from '../hub/rating.ts';
 import { MAX_EVENTS_PER_REQUEST, parseModerators, processEvent, type HubDeps } from '../hub/service.ts';
 import type { IngestDeps } from '../pipeline/ingest.ts';
+import { feedMaxAge } from '../pipeline/liveness.ts';
 import type { Runtime } from '../runtime.ts';
 import { filterOptions, parseFeedFilters } from './filters.ts';
 import { rateLimit } from './ratelimit.ts';
@@ -114,6 +115,7 @@ export function registerV2Routes(app: Hono, runtime: Runtime, h: V2Helpers): voi
       type: type === 'job' || type === 'gig' ? (type as LeadType) : undefined,
       ...filterOptions(filters),
       createdBefore: visibleBefore(viewer, runtime.access),
+      maxAgeDays: feedMaxAge(runtime.env),
       after,
     };
     const leads = await runtime.store.getLeadsForFeed(options);

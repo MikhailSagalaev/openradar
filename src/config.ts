@@ -28,10 +28,10 @@ const envSchema = z.object({
   RADAR_HOST_PORT: z.coerce.number().int().positive().optional(),
   RADAR_USER_AGENT: z
     .string()
-    .default('RadarBot/0.9.0 (+https://github.com/MikhailSagalaev/openradar)'),
+    .default('RadarBot/0.10.0 (+https://github.com/MikhailSagalaev/openradar)'),
   RADAR_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
   RADAR_POLL_INTERVAL_SEC: z.coerce.number().int().positive().default(300),
-  RADAR_POLL_CONCURRENCY: z.coerce.number().int().positive().default(4),
+  RADAR_POLL_CONCURRENCY: z.coerce.number().int().positive().default(16),
   RADAR_LLM_ENABLED: booleanFromEnv(false),
   OPENAI_API_KEY: optionalString,
   OPENAI_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
@@ -59,6 +59,10 @@ const envSchema = z.object({
   RADAR_DIGEST_CHAT_ID: optionalString,
   RADAR_DIGEST_INTERVAL_HOURS: z.coerce.number().int().positive().default(6),
   RADAR_RETENTION_DAYS: z.coerce.number().int().positive().default(180),
+  // Closed-post checks against the boards, and feed age limits (0 turns a limit off).
+  RADAR_CHECK_CLOSED: booleanFromEnv(true),
+  RADAR_GIG_TTL_DAYS: z.coerce.number().int().nonnegative().default(14),
+  RADAR_JOB_TTL_DAYS: z.coerce.number().int().nonnegative().default(30),
   RADAR_LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   PORT: z.coerce.number().int().positive().default(8787),
   /** Interface to listen on; the Docker image sets 0.0.0.0. */

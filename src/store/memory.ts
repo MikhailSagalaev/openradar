@@ -215,6 +215,37 @@ export class MemoryStore implements Store {
     if (lead && !lead.confirmedAt) lead.confirmedAt = at;
   }
 
+  private checkedAt = new Map<string, number>();
+
+  async listLeadsToCheck(options: { hosts: string[]; limit: number; createdAfter: string; now?: Date }): Promise<Array<Pick<Lead, 'id' | 'url' | 'createdAt' | 'type'>>> {
+    const now = (options.now ?? new Date()).getTime();
+    const hosts = new Set(options.hosts);
+    const hour = 3600_000;
+    return Array.from(this.leads.values())
+      .filter((l) => {
+        if ((l.state ?? 'active') !== 'active' || !l.url || l.createdAt < options.createdAfter) return false;
+        let host: string;
+        try {
+          host = new URL(l.url).hostname.toLowerCase();
+        } catch {
+          return false;
+        }
+        if (!hosts.has(host)) return false;
+        const checked = this.checkedAt.get(l.id);
+        if (checked === undefined) return true;
+        const age = now - Date.parse(l.createdAt);
+        const every = age < 48 * hour ? 6 * hour : age < 7 * 24 * hour ? 24 * hour : 72 * hour;
+        return now - checked >= every;
+      })
+      .sort((a, b) => (this.checkedAt.get(a.id) ?? -1) - (this.checkedAt.get(b.id) ?? -1) || b.createdAt.localeCompare(a.createdAt))
+      .slice(0, options.limit)
+      .map((l) => ({ id: l.id, url: l.url, createdAt: l.createdAt, type: l.type }));
+  }
+
+  async markLeadChecked(id: string, at: Date = new Date()): Promise<void> {
+    this.checkedAt.set(id, at.getTime());
+  }
+
   async updateLeadState(id: string, state: LeadState): Promise<void> {
     const lead = this.leads.get(id);
     if (lead) {
@@ -307,6 +338,11 @@ export class MemoryStore implements Store {
       if (options.createdBefore) {
         const cutoff = options.createdBefore;
         result = result.filter((l) => l.createdAt <= cutoff);
+      }
+      if (options.maxAgeDays) {
+        const { gig, job } = options.maxAgeDays;
+        const now = Date.now();
+        result = result.filter((l) => now - Date.parse(l.createdAt) <= (l.type === 'job' ? job : gig) * 86_400_000);
       }
       if (options.after) {
         const { createdAt, id } = options.after;

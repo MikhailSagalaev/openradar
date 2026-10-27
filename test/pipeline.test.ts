@@ -389,4 +389,25 @@ describe('ingest pipeline', () => {
     expect(summaries.every((s) => s.found === 1)).toBe(true);
     await runtime.store.close();
   });
+
+  it('respects a source interval and a run deadline', async () => {
+    const { pollAll } = await import('../src/pipeline/poll.ts');
+    const runtime = makeTestRuntime();
+    await runtime.store.createSource({ kind: 'rss', title: 'Hourly', config: { url: 'https://example.com/hourly.xml', intervalSec: 3600 } });
+    const deps = {
+      store: runtime.store,
+      sinks: runtime.sinks,
+      logger: runtime.logger,
+      env: runtime.env,
+      sources: runtime.sources,
+      fetchImpl: async () => new Response('<rss version="2.0"><channel><title>T</title></channel></rss>', { status: 200 }),
+    };
+
+    // A deadline already past starts nothing.
+    expect(await pollAll(deps, { deadline: Date.now() - 1 })).toHaveLength(0);
+    // The first run polls it; within its hour the next run skips it.
+    expect(await pollAll(deps)).toHaveLength(1);
+    expect(await pollAll(deps)).toHaveLength(0);
+    await runtime.store.close();
+  });
 });

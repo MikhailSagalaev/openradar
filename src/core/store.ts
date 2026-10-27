@@ -112,6 +112,8 @@ export interface UserVoteResult {
 export interface FeedOptions extends ListLeadsOptions {
   /** Only leads first seen at or before this instant (tier delay). */
   createdBefore?: string;
+  /** Leads older than this many days drop out of the feed: orders and vacancies expire. */
+  maxAgeDays?: { gig: number; job: number };
   /** Cursor: only leads after this (created_at, id) pair, oldest first. */
   after?: { createdAt: string; id: string };
 }
@@ -140,7 +142,8 @@ export interface LedgerEntry {
 export interface LeadDecision {
   leadId: string;
   state: 'active' | 'hidden_junk' | 'hidden_scam' | 'closed';
-  decidedBy: 'moderator' | 'author';
+  /** `source`: the board itself shows the post as closed or removed (liveness check). */
+  decidedBy: 'moderator' | 'author' | 'source';
   pubkey?: string;
   reason: string;
   decidedAt: string;
@@ -254,6 +257,10 @@ export interface Store extends HubStore {
   /** Sets a recomputed base score; the stored score is the base plus the community vote adjustment. */
   updateLeadScore?(id: string, baseScore: number): Promise<number | undefined>;
   updateLeadState?(id: string, state: LeadState): Promise<void>;
+  /** Active leads on these hosts whose page is due for a closed-post check, oldest check first. */
+  listLeadsToCheck?(options: { hosts: string[]; limit: number; createdAfter: string; now?: Date }): Promise<Array<Pick<Lead, 'id' | 'url' | 'createdAt' | 'type'>>>;
+  /** Remembers that the lead's page was checked just now. */
+  markLeadChecked?(id: string, at?: Date): Promise<void>;
   /** Hub: marks a lead confirmed once; later calls keep the first time. */
   markLeadConfirmed?(id: string, at: string): Promise<void>;
   recordVote(

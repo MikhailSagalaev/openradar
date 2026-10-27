@@ -1,7 +1,10 @@
 import { assertSafeUrl } from '../core/ssrf.ts';
+import { readTextLimited } from '../net/body.ts';
 import { cleanTitle, extractCity } from '../core/extract.ts';
 import { normalizeSalary, type SalaryInfo } from '../core/salary.ts';
 import { decodeHtmlEntities, stripHtml } from '../core/text.ts';
+
+const PREVIEW_MAX_BYTES = 3 * 1024 * 1024;
 
 export interface FetchSafeOptions {
   timeoutMs?: number;
@@ -75,7 +78,8 @@ export async function fetchSafeHttp(
         throw new Error(`HTTP ${response.status} fetching ${currentUrl}`);
       }
 
-      return await response.text();
+      // A page someone asked to preview: anything bigger is not a job post.
+      return await readTextLimited(response, PREVIEW_MAX_BYTES);
     }
 
     throw new Error(`Too many redirects (max ${maxRedirects})`);
