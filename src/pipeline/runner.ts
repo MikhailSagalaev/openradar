@@ -16,6 +16,7 @@ export class PollRunner {
   private backgroundTimer: NodeJS.Timeout | undefined;
   private backgroundRunning = false;
   private lastLivenessAt = 0;
+  private livenessRunning = false;
   private lastMaintenanceAt = 0;
 
   constructor(
@@ -99,17 +100,24 @@ export class PollRunner {
     }
   }
 
+  /** Starts a closed-post round when one is due; it paces itself, so the loop does not wait. */
   private async runLivenessIfDue(): Promise<void> {
-    if (!this.deps.env.RADAR_CHECK_CLOSED || Date.now() - this.lastLivenessAt < LIVENESS_INTERVAL_MS) return;
+    if (!this.deps.env.RADAR_CHECK_CLOSED || this.livenessRunning) return;
+    if (Date.now() - this.lastLivenessAt < LIVENESS_INTERVAL_MS) return;
     this.lastLivenessAt = Date.now();
-    try {
-      const summary = await checkLeadsLiveness(this.deps);
-      if (summary.checked) this.logger.info('closed-post check finished', { ...summary });
-    } catch (error) {
-      this.logger.warn('closed-post check failed', {
-        error: error instanceof Error ? error.message : String(error),
+    this.livenessRunning = true;
+    void checkLeadsLiveness(this.deps)
+      .then((summary) => {
+        if (summary.checked) this.logger.info('closed-post check finished', { ...summary });
+      })
+      .catch((error) => {
+        this.logger.warn('closed-post check failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      })
+      .finally(() => {
+        this.livenessRunning = false;
       });
-    }
   }
 
   private async runMaintenanceIfDue(): Promise<void> {

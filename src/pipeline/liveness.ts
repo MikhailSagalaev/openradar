@@ -78,7 +78,6 @@ function archivedFlag(body: string): Liveness {
   return 'unknown';
 }
 
-export const CHECKED_HOSTS = BOARD_RULES.flatMap((rule) => rule.hosts);
 
 export function ruleFor(url: string): BoardRule | undefined {
   let host: string;
@@ -150,12 +149,13 @@ export interface LivenessSummary {
 }
 
 /**
- * Checks a batch of leads that are due. Boards are checked in parallel, the pages of one
- * board one by one with a pause, so no board sees more than one request every few seconds.
+ * Checks the leads that are due, up to `perBoard` per board, so a busy board does not take
+ * the turn of the others. Boards are checked in parallel, the pages of one board one by one
+ * with a pause, so no board sees more than one request every few seconds.
  */
 export async function checkLeadsLiveness(
   deps: LivenessDeps,
-  options: { limit?: number; perHostDelayMs?: number; now?: Date } = {},
+  options: { perBoard?: number; perHostDelayMs?: number; now?: Date } = {},
 ): Promise<LivenessSummary> {
   const summary: LivenessSummary = { checked: 0, closed: 0, open: 0, unknown: 0, failed: 0 };
   const store = deps.store;
@@ -163,19 +163,10 @@ export async function checkLeadsLiveness(
 
   const now = options.now ?? new Date();
   const maxAge = Math.max(deps.env.RADAR_GIG_TTL_DAYS || 0, deps.env.RADAR_JOB_TTL_DAYS || 0) || 30;
-  const leads = await store.listLeadsToCheck({
-    hosts: CHECKED_HOSTS,
-    limit: options.limit ?? 120,
-    createdAfter: new Date(now.getTime() - maxAge * 86_400_000).toISOString(),
-    now,
-  });
-
-  const byHost = new Map<string, typeof leads>();
-  for (const lead of leads) {
-    if (!lead.url) continue;
-    const host = new URL(lead.url).hostname.toLowerCase();
-    byHost.set(host, [...(byHost.get(host) ?? []), lead]);
-  }
+  const createdAfter = new Date(now.getTime() - maxAge * 86_400_000).toISOString();
+  const byBoard = await Promise.all(
+    BOARD_RULES.map((rule) => store.listLeadsToCheck!({ hosts: rule.hosts, limit: options.perBoard ?? 20, createdAfter, now })),
+  );
 
   const delay = options.perHostDelayMs ?? 3000;
   const fetchDeps = {
@@ -184,10 +175,10 @@ export async function checkLeadsLiveness(
     timeoutMs: deps.env.RADAR_HTTP_TIMEOUT_MS,
   };
   await Promise.all(
-    [...byHost.values()].map(async (hostLeads) => {
+    byBoard.map(async (hostLeads) => {
       for (const [i, lead] of hostLeads.entries()) {
         if (i > 0 && delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
-        const rule = ruleFor(lead.url!);
+        const rule = lead.url ? ruleFor(lead.url) : undefined;
         if (!rule) continue;
         summary.checked++;
         try {
