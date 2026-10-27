@@ -124,6 +124,13 @@ describe('rules', () => {
     expect(reasons('Ввод данных в 1С', 'Нужно внести 300 накладных в 1С, бюджет 3 000 ₽')).not.toContain('spam:DATA_ENTRY_SCAM');
   });
 
+  it('matches keywords when «ё» is written as «е» with a combining diaeresis', () => {
+    const remote = makeSource({ config: { includeKeywords: ['удаленно'] } });
+    const decomposed = 'Оператор колл-центра (удалённо)';
+    const lead = prepareRawLead({ sourceId: remote.id, title: decomposed, text: 'Работа из дома, обучение' }, remote, TEST_NOW);
+    expect(applyRules(lead, remote, TEST_NOW).reasons).not.toContain('missing_keyword');
+  });
+
   it('rejects a lead without a required keyword', () => {
     const lead = prepareRawLead(
       {
