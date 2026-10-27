@@ -67,6 +67,8 @@ export function toPlainText(input: string): string {
 
 export function normalizeForMatch(input: string): string {
   return input
+    // NFC first: some boards write «ё» as «е» + combining diaeresis.
+    .normalize('NFC')
     .toLocaleLowerCase('ru-RU')
     .replace(/\u0451/g, '\u0435')
     .replace(/\s+/g, ' ')
