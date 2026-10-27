@@ -1583,9 +1583,12 @@ function formatDate(value: string | undefined, lang: SupportedLang = 'ru'): stri
   }).format(date);
 }
 
-function formatBudget(value: number | undefined): string {
+const CURRENCY_SIGNS: Record<string, string> = { RUB: '₽', RUR: '₽', USD: '$', EUR: '€', GBP: '£', UAH: '₴', KZT: '₸', BYN: 'Br' };
+
+function formatBudget(value: number | undefined, currency = 'RUB'): string {
   if (typeof value !== 'number') return '—';
-  return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value)} ₽`;
+  const code = currency.toUpperCase();
+  return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value)} ${CURRENCY_SIGNS[code] ?? code}`;
 }
 
 function plural(value: number, forms: [string, string, string]): string {
@@ -1667,7 +1670,7 @@ function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru', 
     source?.title,
     lead.category,
     lead.city ?? (lead.isRemote !== false ? t.remote : undefined),
-    lead.rawSalary || (typeof lead.budget === 'number' ? formatBudget(lead.budget) : undefined),
+    typeof lead.budget === 'number' ? formatBudget(lead.budget, lead.currency) : lead.rawSalary,
     formatRelative(lead.createdAt, lang),
   ]
     .filter(Boolean)
@@ -1723,7 +1726,7 @@ function leadsTable(leads: Lead[], sourceById?: Map<string, SourceRecord>, lang:
         <td><a href="/leads/${escapeHtml(lead.id)}">${escapeHtml(leadTitle(lead))}</a>
           <div class="small muted">${escapeHtml([source?.title, lead.city].filter(Boolean).join(' · '))}</div>
         </td>
-        <td class="small">${formatBudget(lead.budget)}</td>
+        <td class="small">${formatBudget(lead.budget, lead.currency)}</td>
         <td class="small">${statusDot(lead.status, lang)}</td>
         <td class="small muted">${formatRelative(lead.createdAt, lang)}</td>
       </tr>`;
@@ -2057,9 +2060,9 @@ document.getElementById('copy-lead')?.addEventListener('click', async (event) =>
       </div>`
     : '';
 
-  const salaryDisplay = lead.rawSalary
-    ? escapeHtml(lead.rawSalary)
-    : formatBudget(lead.budget);
+  const salaryDisplay = typeof lead.budget === 'number'
+    ? formatBudget(lead.budget, lead.currency)
+    : lead.rawSalary ? escapeHtml(lead.rawSalary) : '—';
   const usdEstimate = lead.normalizedUsdMin
     ? ` <span class="muted small">(≈ $${lead.normalizedUsdMin}${lead.normalizedUsdMax && lead.normalizedUsdMax !== lead.normalizedUsdMin ? `–$${lead.normalizedUsdMax}` : ''})</span>`
     : '';

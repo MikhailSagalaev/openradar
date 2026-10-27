@@ -178,7 +178,8 @@ ${lead.text}`);
   }
   score += Math.min(hits * 8, 24);
 
-  const skills = lead.skills?.length ? lead.skills : extractTechSkills(`${lead.title}
+  // Dictionary skills only: board tags (RemoteOK «senior», «exec», «customer support») are not IT skills.
+  const skills = extractTechSkills(`${lead.title}
 ${lead.text}`);
   const itSignal = hits > 0 || skills.length > 0 || hasItSkillSignal(textForMatch);
   const nonItCategory = hasNonItCategorySignal(textForMatch);

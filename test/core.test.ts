@@ -182,6 +182,16 @@ describe('score', () => {
     expect(job('60 000 ₽')).toBeLessThan(job('300 000 ₽'));
   });
 
+  it('counts dictionary IT skills, not board tags', () => {
+    const raw = { title: 'Director of Product', text: 'Lead the product organisation across three business units and own the roadmap.' };
+    const tagged = scoreLead(
+      prepareRawLead({ sourceId: source.id, ...raw, skills: ['senior', 'exec', 'customer support', 'technical'] }, source, TEST_NOW),
+      source,
+      TEST_NOW,
+    );
+    expect(tagged).toBe(score(raw));
+  });
+
   it('does not depend on how fresh the post was at ingest', () => {
     const raw = { title: 'Telegram-бот на Python', text: 'Нужен бот на aiogram с оплатой, бюджет 20 000 ₽', publishedAt: TEST_NOW.toISOString() };
     const later = new Date(TEST_NOW.getTime() + 20 * 3600 * 1000);
