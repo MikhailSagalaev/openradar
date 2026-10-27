@@ -131,6 +131,7 @@ export interface Translations {
   langEn: string;
   similarLeads: string;
   navProfile: string;
+  filtersTitle: string;
   profileTitle: string;
   notFoundTitle: string;
   notFoundDesc: string;
@@ -292,6 +293,7 @@ export const RU: Translations = {
   langEn: 'На английском',
   similarLeads: 'Похожие заказы',
   navProfile: 'Профиль',
+  filtersTitle: 'Фильтры и сортировка',
   profileTitle: 'Мой профиль',
   extensionGuide: 'Расширение для браузера',
   submitTitle: 'Добавить по ссылке',
@@ -448,6 +450,7 @@ export const EN: Translations = {
   langEn: 'In English',
   similarLeads: 'Similar leads',
   navProfile: 'Profile',
+  filtersTitle: 'Filters and sorting',
   profileTitle: 'My profile',
   extensionGuide: 'Browser Extension',
   submitTitle: 'Submit by URL',

@@ -954,6 +954,7 @@ dialog::backdrop {
 .similar h2 { font-size: 15px; margin: 0 0 4px; }
 .load-more { display: flex; justify-content: center; padding: 20px 0 8px; }
 .btn-plus { display: none; }
+.filters > summary { display: none; }
 .filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
 .filter-bar select {
   height: 34px;
@@ -1335,6 +1336,7 @@ footer {
   .intro-action span { display: none; }
   .type-tab, .chip { min-height: 40px; display: inline-flex; align-items: center; }
   .btn-submit .btn-label { display: none; }
+  .filters > summary { display: block; width: max-content; margin-top: 2px; font-size: 13px; color: var(--ink); cursor: pointer; }
   .btn-submit .btn-plus { display: inline; font-size: 18px; line-height: 1; }
   .search-bar { width: 100%; }
   .search-bar input { flex: 1 1 0; min-width: 0; }
@@ -1880,12 +1882,14 @@ export function renderLeadsPage(data: LeadsPageData): string {
       ${option('ru', t.langRu, filters.language === 'ru')}
       ${option('en', t.langEn, filters.language === 'en')}
     </select>`;
-  const filterBar = `<div class="filter-bar">
+  // On phones the filters fold under one button unless some are set (see the script below).
+  const filterBar = `<details class="filters" id="feed-filters" open><summary>${escapeHtml(t.filtersTitle)}${hasActiveFilters(filters) ? ' •' : ''}</summary><div class="filter-bar">
     ${sortSelect}${budgetSelect}${skillSelect}${languageSelect}
     <label class="filter-check"><input type="checkbox" name="remote" value="1"${filters.remote ? ' checked' : ''} onchange="this.form.submit()">${escapeHtml(t.remoteOnly)}</label>
     ${hasActiveFilters(filters) ? `<a class="filter-reset" href="${escapeHtml(hrefWith({ sort: undefined, budget: undefined, skill: undefined, language: undefined, remote: undefined }))}">${escapeHtml(t.resetFilters)}</a>` : ''}
-  </div>
-  ${filters.sort !== 'new' ? `<p class="score-legend">${escapeHtml(t.rankedWindow)}</p>` : ''}`;
+  </div></details>
+  ${filters.sort !== 'new' ? `<p class="score-legend">${escapeHtml(t.rankedWindow)}</p>` : ''}
+  ${hasActiveFilters(filters) ? '' : `<script>try{if(matchMedia('(max-width: 700px)').matches){document.getElementById('feed-filters').open=false}}catch(e){}</script>`}`;
 
   const tabs = typeTabs
     .map(
