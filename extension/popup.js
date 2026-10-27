@@ -71,22 +71,22 @@ async function saveConfig(event) {
   event?.preventDefault();
   const config = await readConfig();
   if (!config.base || !config.sourceId || !config.token) {
-    setStatus('Заполните адрес, ID и токен источника.', 'err');
+    setStatus(t('errFillNode'), 'err');
     return;
   }
   await chrome.storage.local.set({ radarConfig: config });
-  setStatus('Настройки успешно сохранены.', 'ok');
+  setStatus(t('settingsSaved'), 'ok');
   fields.details.open = false;
 }
 
 async function testConnection() {
   const base = normalizeBase(fields.base.value);
   if (!base) {
-    setStatus('Укажите адрес сервера.', 'err');
+    setStatus(t('errServerAddress'), 'err');
     return;
   }
   fields.testBtn.disabled = true;
-  setStatus('Проверка соединения...');
+  setStatus(t('checking'));
   try {
     const res = await fetch(`${base}/api/ping`, { method: 'GET' });
     if (!res.ok) {
@@ -94,9 +94,9 @@ async function testConnection() {
     }
     const data = await res.json().catch(() => null);
     const ver = data?.version ? ` (v${data.version})` : '';
-    setStatus(`Сервер доступен${ver}`, 'ok');
+    setStatus(t('serverOk', [ver]), 'ok');
   } catch (err) {
-    setStatus(`Ошибка подключения: ${err.message}`, 'err');
+    setStatus(t('errConnect', [err.message]), 'err');
   } finally {
     fields.testBtn.disabled = false;
   }
@@ -104,7 +104,7 @@ async function testConnection() {
 
 async function readPage() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id) throw new Error('Нет активной вкладки.');
+  if (!tab?.id) throw new Error(t('errNoTab'));
 
   try {
     const response = await chrome.tabs.sendMessage(tab.id, { type: 'EXTRACT_PAGE_DATA' });
@@ -155,10 +155,10 @@ async function initPreview() {
         const details = [];
         if (jp.company) details.push(jp.company);
         if (jp.city) details.push(jp.city);
-        if (jp.isRemote) details.push('Удалённо');
+        if (jp.isRemote) details.push(t('remote'));
         if (typeof jp.budget === 'number') {
           const cur = jp.currency === 'RUB' ? '₽' : jp.currency;
-          details.push(`${jp.budget.toLocaleString('ru-RU')} ${cur}`);
+          details.push(`${jp.budget.toLocaleString(uiLocale())} ${cur}`);
         }
 
         if (details.length) {
@@ -166,21 +166,21 @@ async function initPreview() {
           fields.jobChip.style.display = 'inline-block';
         }
       } else {
-        fields.pageTitle.textContent = page.title || 'Вкладка без названия';
+        fields.pageTitle.textContent = page.title || t('untitledTab');
         fields.jobChip.style.display = 'none';
       }
 
       fields.pageUrl.textContent = page.url ? new URL(page.url).hostname : '';
 
       if (page.selection) {
-        fields.selectionSnippet.textContent = `Выделен фрагмент (${page.selection.length} симв.): "${page.selection.slice(0, 160)}${page.selection.length > 160 ? '...' : ''}"`;
+        fields.selectionSnippet.textContent = t('selection', [String(page.selection.length), `${page.selection.slice(0, 160)}${page.selection.length > 160 ? '...' : ''}`]);
         fields.selectionSnippet.style.display = 'block';
       } else {
         fields.selectionSnippet.style.display = 'none';
       }
     }
   } catch {
-    fields.pageTitle.textContent = 'Текущая страница';
+    fields.pageTitle.textContent = t('currentPage');
   }
 }
 
@@ -189,19 +189,19 @@ async function sendPage() {
   const config = await readConfig();
   const toNode = !account && config.base && config.sourceId && config.token;
   if (!account && !toNode) {
-    setStatus('Войдите через GitHub или настройте свой узел.', 'err');
+    setStatus(t('errNotSignedIn'), 'err');
     return;
   }
 
   fields.send.disabled = true;
-  setStatus('Отправляем...');
+  setStatus(t('sending'));
   try {
     const page = (await readPage()) || cachedPage;
-    if (!page) throw new Error('Не удалось прочитать страницу.');
+    if (!page) throw new Error(t('errReadPage'));
 
     const selectedType = getSelectedType();
     const text = page.selection || page.jobPosting?.description || page.description || page.title;
-    if (!text) throw new Error('На странице нет текста для отправки.');
+    if (!text) throw new Error(t('errNoText'));
 
     const payload = {
       type: selectedType,
@@ -240,7 +240,7 @@ async function sendPage() {
     if (response.status === 401 && account) {
       await chrome.storage.local.remove('radarAccount');
       renderAccount(null);
-      throw new Error('Вход истёк или отозван. Войдите через GitHub ещё раз.');
+      throw new Error(t('errSessionExpired'));
     }
     if (!response.ok) {
       const errText = await response.text();
@@ -253,12 +253,12 @@ async function sendPage() {
       link.href = `${base}/leads/${encodeURIComponent(leadId)}`;
       link.target = '_blank';
       link.rel = 'noopener';
-      link.textContent = 'Открыть карточку заказа →';
+      link.textContent = t('openLead');
       link.style.cssText = 'color:inherit;text-decoration:underline;display:block;margin-top:6px;font-weight:600';
-      fields.status.replaceChildren(document.createTextNode('Отправлено.'), link);
+      fields.status.replaceChildren(document.createTextNode(t('sent')), link);
       fields.status.className = 'status ok';
     } else {
-      setStatus('Отправлено.', 'ok');
+      setStatus(t('sent'), 'ok');
     }
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), 'err');
@@ -300,15 +300,15 @@ async function signIn() {
     });
     const params = new URLSearchParams(new URL(result).hash.slice(1));
     const token = params.get('token');
-    if (!token || !token.startsWith('ext_')) throw new Error('Сервер не вернул токен.');
+    if (!token || !token.startsWith('ext_')) throw new Error(t('errNoToken'));
     const account = { token, handle: params.get('handle') || '', base: normalizeBase(params.get('base') || base) };
     await chrome.storage.local.set({ radarAccount: account });
     renderAccount(account);
-    setStatus('Готово: заказы будут добавляться от вашего имени.', 'ok');
+    setStatus(t('signedIn'), 'ok');
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (/did not approve|user closed|canceled|cancelled/i.test(message)) {
-      setStatus('Вход отменён.', '');
+      setStatus(t('signInCancelled'), '');
       return;
     }
     // No chrome.identity window in this browser: sign in in a tab instead.
@@ -327,12 +327,12 @@ async function signOut() {
   }
   await chrome.storage.local.remove('radarAccount');
   renderAccount(null);
-  setStatus('Вы вышли.', '');
+  setStatus(t('signedOut'), '');
 }
 
 function formatMoney(value, currency) {
   const sign = { RUB: '₽', USD: '$', EUR: '€' }[currency] ?? currency;
-  return `${Math.round(value).toLocaleString('ru-RU')} ${sign}`;
+  return `${Math.round(value).toLocaleString(uiLocale())} ${sign}`;
 }
 
 function marketLine(className, text) {
@@ -349,8 +349,8 @@ function compareWithPage(estimate, page) {
   const currency = page.jobPosting.currency || 'RUB';
   const range = currency === 'USD' ? estimate.usd : currency === 'RUB' ? estimate.rub : null;
   if (!range) return null;
-  const verdict = budget < range.p25 ? 'ниже рынка' : budget > range.p75 ? 'выше рынка' : 'в рынке';
-  return `На этой странице: ${formatMoney(budget, currency)} — ${verdict}`;
+  const verdict = budget < range.p25 ? t('belowMarket') : budget > range.p75 ? t('aboveMarket') : t('inMarket');
+  return t('onThisPage', [formatMoney(budget, currency), verdict]);
 }
 
 /** Sends only the title, type and skills: no URL, no page text. On the user's click only. */
@@ -358,7 +358,7 @@ async function estimateMarket() {
   const page = cachedPage || (await readPage().catch(() => null));
   const title = (page?.jobPosting?.title || page?.title || '').trim();
   if (title.length < 3) {
-    setStatus('На странице нет заголовка для оценки.', 'err');
+    setStatus(t('errNoTitle'), 'err');
     return;
   }
   const base = normalizeBase(fields.marketBase.value) || DEFAULT_MARKET_BASE;
@@ -368,22 +368,22 @@ async function estimateMarket() {
 
   fields.estimate.disabled = true;
   fields.marketResult.hidden = false;
-  fields.marketResult.replaceChildren(marketLine('market-note', 'Считаем по похожим заказам...'));
+  fields.marketResult.replaceChildren(marketLine('market-note', t('estimating')));
   try {
     const res = await fetch(`${base}/api/market?${params}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const e = await res.json();
     const nodes = [];
     if (!e.rub || e.basis === 'none') {
-      nodes.push(marketLine('market-note', 'Пока мало заказов с бюджетом, чтобы оценить.'));
+      nodes.push(marketLine('market-note', t('tooFewBudgets')));
     } else {
-      const per = e.period === 'month' ? ' в месяц' : ' за проект';
+      const per = e.period === 'month' ? t('perMonth') : t('perProject');
       nodes.push(marketLine('market-median', `≈ ${formatMoney(e.rub.median, 'RUB')}${per}`));
-      nodes.push(marketLine('market-range', `Половина предложений — от ${formatMoney(e.rub.p25, 'RUB')} до ${formatMoney(e.rub.p75, 'RUB')}`));
-      const what = e.type === 'job' ? 'вакансиям' : 'заказам';
+      nodes.push(marketLine('market-range', t('middleHalf', [formatMoney(e.rub.p25, 'RUB'), formatMoney(e.rub.p75, 'RUB')])));
+      const what = e.type === 'job' ? t('ofJobs') : t('ofGigs');
       const basis = e.basis === 'type'
-        ? `Похожих мало: по всем ${what} за 90 дней (${e.count})`
-        : `По ${e.count} похожим ${what} за 90 дней`;
+        ? t('basisType', [what, String(e.count)])
+        : t('basisSimilar', [String(e.count), what]);
       nodes.push(marketLine('market-note', `${basis} · ${new URL(base).hostname}`));
       const compare = compareWithPage(e, page);
       if (compare) nodes.push(marketLine('market-compare', compare));
@@ -406,7 +406,7 @@ async function estimateMarket() {
     fields.marketResult.replaceChildren(...nodes);
   } catch (error) {
     fields.marketResult.replaceChildren(
-      marketLine('market-note', `Не удалось получить оценку: ${error instanceof Error ? error.message : String(error)}`),
+      marketLine('market-note', t('errEstimate', [error instanceof Error ? error.message : String(error)])),
     );
   } finally {
     fields.estimate.disabled = false;
@@ -453,9 +453,9 @@ async function checkUpdate() {
   const self = await chrome.management?.getSelf?.().catch(() => null);
   // Without the management API, fall back to the download page: it works for any install.
   const unpacked = !self || self.installType === 'development';
-  document.getElementById('update-text').textContent = `Вышла версия ${latest.version} (у вас ${current})`;
+  document.getElementById('update-text').textContent = t('updateAvailable', [latest.version, current]);
   const button = document.getElementById('update-btn');
-  button.textContent = unpacked ? 'Скачать' : 'Обновить';
+  button.textContent = unpacked ? t('download') : t('update');
   button.addEventListener('click', async () => {
     if (unpacked) {
       chrome.tabs.create({ url: latest.url });
@@ -463,7 +463,7 @@ async function checkUpdate() {
     }
     const { status } = await chrome.runtime.requestUpdateCheck();
     if (status === 'update_available') chrome.runtime.reload();
-    else document.getElementById('update-text').textContent = 'Браузер скачивает обновление, оно установится в течение нескольких минут.';
+    else document.getElementById('update-text').textContent = t('updating');
   });
   document.getElementById('update').hidden = false;
 }

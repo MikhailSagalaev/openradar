@@ -1288,6 +1288,39 @@ legend {
   color: var(--rose);
 }
 .lead-state-notice { margin: 12px 0 0; }
+/* Extension page */
+.ext-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.ext-head .muted { margin: 6px 0 0; max-width: 620px; }
+.ext-version { margin: 8px 0 0; }
+.ext-download { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; text-decoration: none; }
+.install-steps { list-style: none; margin: 0 0 16px; padding: 0; }
+.install-step { position: relative; display: flex; gap: 14px; padding-bottom: 24px; }
+.install-step:last-child { padding-bottom: 0; }
+.install-step:not(:last-child)::before {
+  content: ''; position: absolute; left: 13px; top: 34px; bottom: 8px; width: 2px; background: var(--line);
+}
+.install-step:not(:last-child)::after {
+  content: ''; position: absolute; left: 10px; bottom: 6px; width: 6px; height: 6px;
+  border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg);
+}
+.install-step-num {
+  flex: none; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--ink); color: var(--bg); font-weight: 700; font-size: 13px;
+}
+.install-step-body { padding-top: 3px; min-width: 0; }
+.install-step-title { font-weight: 600; margin-bottom: 3px; }
+.ext-features { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 28px; }
+@media (max-width: 640px) { .ext-features { grid-template-columns: 1fr; } }
+.ext-feature { border: 1px solid var(--line); border-radius: 10px; padding: 14px; background: var(--surface); }
+.ext-feature-title { font-weight: 600; margin-bottom: 4px; }
+.ext-privacy { margin: 0 0 28px; }
+.ext-ping { font-size: 12px; font-weight: 600; color: var(--muted); margin: 10px 0 4px; }
+.ext-ping.ok { color: #059669; }
+.ext-subhead { font-size: 13px; margin: 18px 0 0; }
+.ext-source { border-top: 1px solid var(--line); padding: 12px 0; display: grid; gap: 6px; min-width: 0; }
+.ext-source-title { font-weight: 600; font-size: 13px; }
+.ext-source-id { display: block; font-size: 12px; padding: 6px 8px; border-radius: 6px; overflow-wrap: anywhere; word-break: break-all; }
+.ext-copy { justify-self: start; font-size: 12px; padding: 5px 12px; text-decoration: none; }
 .notice {
   border: 1px solid var(--line);
   background: var(--surface);
@@ -2935,92 +2968,82 @@ export function renderExtensionPage(data: ExtensionPageData): string {
 
   const texts = isEn
     ? {
-        title: 'Browser Extension',
-        subtitle: 'One-click lead capture from any website, job board, or chat directly into your OpenRadar base.',
+        title: 'Browser extension',
+        subtitle: 'Send a vacancy or an order from any site to OpenRadar in one click, and see what similar work pays.',
         downloadZip: 'Download extension.zip',
-        installTitle: 'Fast Installation (Manifest V3)',
-        step1Title: '1. Download and unpack the archive',
-        step1Desc: 'Click the <b>Download extension.zip</b> button above or take the <code>extension/</code> folder from the repository. Extract it anywhere on your computer.',
-        step2Title: '2. Open Extension Management in browser',
-        step2Desc: 'In Chrome, Edge, Yandex Browser, or Brave, navigate to <code>chrome://extensions/</code> and enable the <b>Developer mode</b> toggle in the top-right corner.',
-        step3Title: '3. Load unpacked extension',
-        step3Desc: 'Click <b>Load unpacked</b> and select the extracted folder. The OpenRadar icon will appear in your browser toolbar. <b>Updating:</b> unpack the new archive over the old folder and press the reload arrow on the extension card, or remove the old extension and load the new folder.',
-        step4Title: '4. Sign in with GitHub',
-        step4Desc: 'Click the OpenRadar icon and press <b>Войти через GitHub</b>, then allow the extension on the hub. Nothing to type: leads go to the shared base under your GitHub name. For your own server, use <b>Свой узел</b> in the popup with the address and webhook source below.',
-        usageTitle: 'How to Use',
-        fullPageTitle: 'Full page capture (Alt+Shift+R)',
-        fullPageDesc: 'On any job posting or gig page, press <b>Alt+Shift+R</b> or click the toolbar icon. The extension parses the title, URL, and page content. If <code>schema.org/JobPosting</code> metadata is present (HeadHunter, SuperJob, LinkedIn), salary, company, location, and skills are extracted automatically.',
-        selectionTitle: 'Text selection capture (Context menu)',
-        selectionDesc: 'Select any text on a freelance board or chat (FL, Kwork, Habr Freelance, Telegram Web, Avito) → Right click:',
-        selectionItem1: '<b>"Send gig to Radar"</b> — saves the lead with type "Gig".',
-        selectionItem2: '<b>"Send job to Radar"</b> — saves the lead with type "Job".',
-        selectionAfter: 'A desktop notification will confirm the submission; clicking it opens the lead card directly.',
-        marketTitle: 'Market pay estimate',
-        marketDesc: 'On a vacancy or an order, press <b>«Оценить оплату на рынке»</b> in the popup: the median and the middle half of pay for similar leads over 90 days, and whether the pay on this page is below, within or above the market. Only the title, the type and the skills are sent, to the hub (openradar.fun by default, changeable in the settings) and only on your click.',
-        attributionTitle: 'Contributor attribution',
-        attributionDesc: 'In the extension settings, specify your username. Captured leads will display your attribution handle.',
-        privacyTitle: 'Security and Privacy',
-        privacyDesc: 'The extension is fully local and open source. Your token and settings remain solely within your local browser storage (<code>chrome.storage.local</code>) and are sent exclusively to your own OpenRadar server. The extension never tracks your browsing history and only activates on shortcut press or menu click.',
-        settingsTitle: 'Connection Settings',
-        pingChecking: 'Checking server connection...',
-        serverUrl: 'OpenRadar Server URL',
-        copyUrl: 'Copy server URL',
-        webhookSourcesTitle: 'Webhook Sources',
-        webhookSourcesDesc: 'Select an active webhook source and copy its ID into the extension:',
+        current: 'Current version',
+        updateNote: 'When a newer version is out, the extension says so at the top of its window.',
+        installTitle: 'Install in four steps',
+        steps: [
+          ['Download and unpack', 'Press <b>Download extension.zip</b> and unpack the archive into a folder you will keep.'],
+          ['Turn on developer mode', 'Open <code>chrome://extensions</code> (Yandex Browser: <code>browser://extensions</code>) and switch on <b>Developer mode</b> in the corner.'],
+          ['Load the folder', 'Press <b>Load unpacked</b> and pick the unpacked folder. Pin the OpenRadar icon to the toolbar.'],
+          ['Sign in with GitHub', 'Click the icon, press <b>Sign in with GitHub</b> and allow the extension. Nothing to type: leads go to the shared base under your GitHub name.'],
+        ],
+        storeSoon: 'Coming to the Chrome Web Store: one-click install and automatic updates.',
+        usageTitle: 'What it does',
+        features: [
+          ['Send the page', 'On a vacancy or an order press <b>Alt+Shift+R</b> or the toolbar icon. Title, link and text are read from the page; with <code>schema.org/JobPosting</code> markup also salary, company, city and skills.'],
+          ['Send a selection', 'Select text in a chat or on a board, right-click and choose <b>Send order to OpenRadar</b> or <b>Send vacancy to OpenRadar</b>. A notification links to the new lead.'],
+          ['Market pay', '<b>Estimate market pay</b> shows the median and the middle half of pay for similar leads over 90 days, and whether the pay on the page is below, within or above it.'],
+          ['Updates', 'A newer version shows a bar at the top of the extension window: <b>Update</b> for a store install, <b>Download</b> for an unpacked one.'],
+        ],
+        privacyTitle: 'Privacy',
+        privacyDesc: 'Nothing is read or sent while you browse: only the open tab and only on your click or shortcut. The market estimate sends only the title, the type and the skills. No analytics. <a href="https://github.com/MikhailSagalaev/openradar/blob/main/extension/PRIVACY.md" target="_blank" rel="noopener">Privacy policy</a>.',
+        nodeTitle: 'Your own node (optional)',
+        nodeDesc: 'Leads go to the shared hub by default. To send them to your own OpenRadar server, open <b>Your own node</b> in the extension and enter the address and a webhook source.',
+        pingChecking: 'Checking the server...',
+        serverUrl: 'Server address',
+        copyUrl: 'Copy address',
+        webhookSourcesTitle: 'Webhook sources',
         copyId: 'Copy ID',
-        noSourcesTitle: 'No active Webhook source',
-        noSourcesDesc: 'Create a Webhook source in OpenRadar to receive leads from the browser extension.',
-        createSource: 'Create Webhook source',
-        authRequiredTitle: 'Source Parameters',
-        authRequiredDesc: 'Sign in to view your Webhook sources and copy their IDs.',
+        noSourcesTitle: 'No webhook source yet',
+        noSourcesDesc: 'Create one to receive leads from the extension on this server.',
+        createSource: 'Create a webhook source',
+        authRequiredDesc: 'Sign in as the operator to see webhook sources and their IDs.',
         signInLink: 'Sign in →',
-        whereTokenTitle: 'Where to find the source token?',
-        whereTokenDesc: 'The source token is shown when creating the source or via CLI:<br><code>node bin/radar.js source add --kind webhook --title "Browser"</code><br>If forgotten, generate a new Webhook source.',
-        copied: 'Copied!',
+        whereTokenTitle: 'Source token',
+        whereTokenDesc: 'Shown once when the source is created. Lost it? Create a new webhook source.',
+        copied: 'Copied',
       }
     : {
         title: 'Расширение для браузера',
-        subtitle: 'Захват вакансий и заказов в один клик с любых сайтов, бирж и чатов прямо в вашу базу OpenRadar.',
+        subtitle: 'Отправляет вакансию или заказ с любого сайта в OpenRadar в один клик и показывает, сколько платят за такую работу.',
         downloadZip: 'Скачать extension.zip',
-        installTitle: 'Быстрая установка (Manifest V3)',
-        step1Title: '1. Скачайте и распакуйте архив',
-        step1Desc: 'Нажмите кнопку <b>«Скачать extension.zip»</b> выше или возьмите готовую папку <code>extension/</code> из репозитория проекта. Распакуйте её в удобное место на диске.',
-        step2Title: '2. Откройте управление расширениями в браузере',
-        step2Desc: 'В адресной строке Chrome, Edge, Яндекс.Браузера или Brave введите: <code>chrome://extensions/</code> и включите тумблер <b>«Режим разработчика»</b> (в правом верхнем углу).',
-        step3Title: '3. Загрузите распакованное расширение',
-        step3Desc: 'Нажмите <b>«Загрузить распакованное расширение»</b> (Load unpacked) и выберите распакованную папку. На панели появится иконка OpenRadar. <b>Обновление:</b> распакуйте новый архив поверх старой папки и нажмите стрелку «Обновить» на карточке расширения — или удалите старое расширение и загрузите новую папку.',
-        step4Title: '4. Войдите через GitHub',
-        step4Desc: 'Кликните по иконке OpenRadar и нажмите <b>«Войти через GitHub»</b>, затем разрешите расширение на сайте. Ничего вводить не нужно: заказы добавляются в общую базу от вашего имени. Для своего сервера — раздел <b>«Свой узел»</b> в попапе с адресом и webhook-источником ниже.',
-        usageTitle: 'Как пользоваться расширением',
-        fullPageTitle: 'Отправка всей страницы (горячие клавиши Alt+Shift+R)',
-        fullPageDesc: 'Находясь на любой странице с вакансией или заказом, нажмите <b>Alt+Shift+R</b> или иконку на панели. Расширение автоматически считает заголовок, URL и описание. Если на сайте есть разметка <code>schema.org/JobPosting</code> (HH, SuperJob, LinkedIn), расширение автоматически определит зарплату, компанию, город и стек навыков.',
-        selectionTitle: 'Отправка фрагмента текста (Контекстное меню)',
-        selectionDesc: 'Выделите мышью любой текст на бирже (Kwork, FL, Habr Freelance, Telegram Web, Avito, чаты) → Нажмите правую кнопку мыши:',
-        selectionItem1: '<b>«Отправить заказ в Radar»</b> — сохранит лид с типом «Заказ» (Gig).',
-        selectionItem2: '<b>«Отправить вакансию в Radar»</b> — сохранит лид с типом «Вакансия» (Job).',
-        selectionAfter: 'После отправки в браузере появится уведомление, по клику на которое сразу откроется карточка лида.',
-        marketTitle: 'Оценка оплаты на рынке',
-        marketDesc: 'На странице вакансии или заказа нажмите в попапе <b>«Оценить оплату на рынке»</b>: медиана и середина разброса оплаты по похожим заказам за 90 дней и сравнение с оплатой на этой странице — ниже, в рынке или выше. На хаб (по умолчанию openradar.fun, меняется в настройках) уходят только заголовок, тип и навыки, и только по вашему клику.',
-        attributionTitle: 'Подпись и авторство лидов',
-        attributionDesc: 'В поле «Ваш никнейм (@telegram)» укажите свой ник. Все переданные вами лиды будут сохранены с подписью контрибьютора комьюнити, что позволяет отслеживать активность команды.',
-        privacyTitle: 'Безопасность и приватность',
-        privacyDesc: 'Расширение полностью локальное и Open Source. Токен и настройки хранятся только в защищённом хранилище вашего браузера (<code>chrome.storage.local</code>) и отправляются исключительно на ваш собственный сервер OpenRadar. Расширение не собирает историю посещений и активно только при нажатии горячих клавиш или выборе в меню.',
-        settingsTitle: 'Параметры для настройки',
-        pingChecking: 'Проверка доступности сервера...',
-        serverUrl: 'Адрес сервера OpenRadar',
-        copyUrl: 'Копировать адрес сервера',
-        webhookSourcesTitle: 'Источники Webhook',
-        webhookSourcesDesc: 'Выберите подходящий источник и скопируйте его ID в расширение:',
-        copyId: 'Копировать ID',
-        noSourcesTitle: 'Нет активного Webhook-источника',
-        noSourcesDesc: 'Создайте источник типа Webhook, чтобы принимать лиды из браузера.',
-        createSource: 'Создать источник Webhook',
-        authRequiredTitle: 'Параметры источников',
-        authRequiredDesc: 'Чтобы увидеть список ваших Webhook-источников и скопировать их ID, войдите в панель управления.',
-        signInLink: 'Войти в систему →',
-        whereTokenTitle: 'Где взять токен источника?',
-        whereTokenDesc: 'Токен источника генерируется один раз при создании источника командой CLI:<br><code>node bin/radar.js source add --kind webhook --title "Browser"</code><br>Если вы забыли токен, создайте новый источник Webhook в панели управления.',
-        copied: 'Скопировано!',
+        current: 'Актуальная версия',
+        updateNote: 'Когда выйдет новая версия, расширение само скажет об этом вверху своего окна.',
+        installTitle: 'Установка в четыре шага',
+        steps: [
+          ['Скачайте и распакуйте', 'Нажмите <b>«Скачать extension.zip»</b> и распакуйте архив в папку, которую не будете удалять.'],
+          ['Включите режим разработчика', 'Откройте <code>chrome://extensions</code> (в Яндекс Браузере — <code>browser://extensions</code>) и включите <b>«Режим разработчика»</b> в углу страницы.'],
+          ['Загрузите папку', 'Нажмите <b>«Загрузить распакованное расширение»</b> и выберите распакованную папку. Закрепите значок OpenRadar на панели.'],
+          ['Войдите через GitHub', 'Нажмите на значок, затем <b>«Войти через GitHub»</b> и разрешите расширение. Ничего вводить не нужно: заказы добавляются в общую базу от вашего имени на GitHub.'],
+        ],
+        storeSoon: 'Скоро в Chrome Web Store: установка в один клик и обновления без переустановки.',
+        usageTitle: 'Что умеет',
+        features: [
+          ['Отправить страницу', 'На странице вакансии или заказа нажмите <b>Alt+Shift+R</b> или значок на панели. Заголовок, ссылка и текст берутся со страницы, а при разметке <code>schema.org/JobPosting</code> — ещё зарплата, компания, город и навыки.'],
+          ['Отправить фрагмент', 'Выделите текст в чате или на бирже, нажмите правой кнопкой и выберите <b>«Отправить заказ в OpenRadar»</b> или <b>«Отправить вакансию в OpenRadar»</b>. Уведомление откроет новую карточку.'],
+          ['Оплата на рынке', '<b>«Оценить оплату на рынке»</b> показывает медиану и середину разброса оплаты по похожим заказам за 90 дней и где оплата на странице: ниже рынка, в рынке или выше.'],
+          ['Обновления', 'Если вышла новая версия, вверху окна расширения появится плашка: <b>«Обновить»</b> для версии из магазина, <b>«Скачать»</b> для распакованной.'],
+        ],
+        privacyTitle: 'Приватность',
+        privacyDesc: 'Пока вы просто листаете сайты, расширение ничего не читает и не отправляет: только открытую вкладку и только по вашему клику или сочетанию клавиш. Для оценки оплаты уходят лишь заголовок, тип и навыки. Без аналитики. <a href="https://github.com/MikhailSagalaev/openradar/blob/main/extension/PRIVACY.md" target="_blank" rel="noopener">Политика конфиденциальности</a>.',
+        nodeTitle: 'Свой узел (необязательно)',
+        nodeDesc: 'По умолчанию заказы уходят в общий хаб. Чтобы отправлять их на свой сервер OpenRadar, откройте в расширении <b>«Свой узел»</b> и укажите адрес и webhook-источник.',
+        pingChecking: 'Проверяем сервер...',
+        serverUrl: 'Адрес сервера',
+        copyUrl: 'Скопировать адрес',
+        webhookSourcesTitle: 'Webhook-источники',
+        copyId: 'Скопировать ID',
+        noSourcesTitle: 'Webhook-источника пока нет',
+        noSourcesDesc: 'Создайте его, чтобы принимать заказы из расширения на этом сервере.',
+        createSource: 'Создать webhook-источник',
+        authRequiredDesc: 'Список webhook-источников и их ID видит оператор сервера после входа.',
+        signInLink: 'Войти →',
+        whereTokenTitle: 'Токен источника',
+        whereTokenDesc: 'Показывается один раз при создании источника. Потеряли — создайте новый webhook-источник.',
+        copied: 'Скопировано',
       };
 
   const script = `<script>
@@ -3034,142 +3057,109 @@ document.addEventListener('DOMContentLoaded', () => {
       const pingEl = document.getElementById('ping-status');
       if (pingEl && d.ok) {
         pingEl.textContent = '${isEn ? 'Server online (v' : 'Сервер онлайн (v'}' + (d.version || '') + ')';
-        pingEl.style.color = '#059669';
+        pingEl.classList.add('ok');
       }
     })
     .catch(() => {});
 
   document.querySelectorAll('[data-copy]').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      const targetId = btn.getAttribute('data-copy');
-      const target = document.getElementById(targetId);
-      if (target) {
-        await navigator.clipboard.writeText(target.textContent || target.value || '');
-        const prev = btn.textContent;
-        btn.textContent = '${texts.copied}';
-        setTimeout(() => { btn.textContent = prev; }, 2000);
-      }
+      const target = document.getElementById(btn.getAttribute('data-copy'));
+      if (!target) return;
+      await navigator.clipboard.writeText(target.textContent || '');
+      const prev = btn.textContent;
+      btn.textContent = '${texts.copied}';
+      setTimeout(() => { btn.textContent = prev; }, 1600);
     });
   });
 });
 </script>`;
 
+  const steps = texts.steps
+    .map(
+      ([title, desc], i) => `
+      <li class="install-step">
+        <span class="install-step-num" aria-hidden="true">${i + 1}</span>
+        <div class="install-step-body">
+          <div class="install-step-title">${escapeHtml(title ?? "")}</div>
+          <div class="muted small">${desc ?? ""}</div>
+        </div>
+      </li>`,
+    )
+    .join('');
+
+  const features = texts.features
+    .map(
+      ([title, desc]) => `
+      <div class="ext-feature">
+        <div class="ext-feature-title">${escapeHtml(title ?? "")}</div>
+        <div class="muted small">${desc ?? ""}</div>
+      </div>`,
+    )
+    .join('');
+
   const sourcesList = isAuthed
-    ? (webhookSources.length
-        ? webhookSources
-            .map(
-              (s) => `
-          <div style="border-top:1px solid var(--line);padding:10px 0;display:flex;justify-content:space-between;align-items:center">
-            <div>
-              <div style="font-weight:600;font-size:13px">${escapeHtml(s.title)}</div>
-              <div class="muted small">ID: <code id="src-id-${escapeHtml(s.id)}">${escapeHtml(s.id)}</code></div>
-            </div>
-            <button class="btn ghost" data-copy="src-id-${escapeHtml(s.id)}" type="button" style="font-size:11px;padding:4px 8px">${escapeHtml(texts.copyId)}</button>
-          </div>`
-            )
-            .join('')
-        : `<div style="border-top:1px solid var(--line);padding-top:12px">
-            <div style="font-weight:600;margin-bottom:4px">${escapeHtml(texts.noSourcesTitle)}</div>
-            <div class="muted small" style="margin-bottom:12px">${escapeHtml(texts.noSourcesDesc)}</div>
-            <a class="btn" href="/sources/new">${escapeHtml(texts.createSource)}</a>
-          </div>`)
-    : `<div style="border-top:1px solid var(--line);padding-top:12px">
-        <div style="font-weight:600;font-size:12.5px;margin-bottom:4px">${escapeHtml(texts.authRequiredTitle)}</div>
-        <div class="muted small" style="margin-bottom:12px">${escapeHtml(texts.authRequiredDesc)}</div>
-        <a class="btn ghost" href="/login" style="font-size:12px;padding:5px 12px;text-decoration:none">${escapeHtml(texts.signInLink)}</a>
+    ? webhookSources.length
+      ? webhookSources
+          .map(
+            (s) => `
+        <div class="ext-source">
+          <div class="ext-source-title">${escapeHtml(s.title)}</div>
+          <code class="ext-source-id" id="src-id-${escapeHtml(s.id)}">${escapeHtml(s.id)}</code>
+          <button class="btn ghost ext-copy" data-copy="src-id-${escapeHtml(s.id)}" type="button">${escapeHtml(texts.copyId)}</button>
+        </div>`,
+          )
+          .join('')
+      : `<div class="ext-source">
+          <div class="ext-source-title">${escapeHtml(texts.noSourcesTitle)}</div>
+          <div class="muted small">${escapeHtml(texts.noSourcesDesc)}</div>
+          <a class="btn ghost ext-copy" href="/sources/new">${escapeHtml(texts.createSource)}</a>
+        </div>`
+    : `<div class="ext-source">
+        <div class="muted small">${escapeHtml(texts.authRequiredDesc)}</div>
+        <a class="btn ghost ext-copy" href="/login">${escapeHtml(texts.signInLink)}</a>
       </div>`;
 
   const body = `
-<div class="page-head" style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+<div class="page-head ext-head">
   <div>
     <h1>${escapeHtml(texts.title)}</h1>
-    <p class="muted small">${escapeHtml(texts.subtitle)}</p>
-    ${data.extensionVersion ? `<p class="small" style="margin:6px 0 0">${lang === 'ru' ? 'Актуальная версия' : 'Current version'}: <strong>${escapeHtml(data.extensionVersion)}</strong>. ${lang === 'ru'
-      ? 'Распакованное расширение не обновляется само: сверьте версию на странице расширений браузера и, если она старше, переустановите (шаги ниже).'
-      : 'An unpacked extension does not update itself: compare the version on the browser extensions page and reinstall if it is older (steps below).'}</p>` : ''}
+    <p class="muted">${escapeHtml(texts.subtitle)}</p>
+    ${data.extensionVersion ? `<p class="small ext-version">${escapeHtml(texts.current)}: <strong>${escapeHtml(data.extensionVersion)}</strong>. ${escapeHtml(texts.updateNote)}</p>` : ''}
   </div>
-  <div style="display:flex;gap:10px;align-items:center">
-    <a class="btn primary" href="/extension/download" style="display:inline-flex;align-items:center;gap:7px;font-weight:600;text-decoration:none">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      ${escapeHtml(texts.downloadZip)}
-    </a>
-  </div>
+  <a class="btn primary ext-download" href="/extension/download">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    ${escapeHtml(texts.downloadZip)}
+  </a>
 </div>
 
 <div class="detail-grid">
   <section>
     <h2>${escapeHtml(texts.installTitle)}</h2>
-    <ol style="margin:0 0 32px;padding:0;list-style:none;display:grid;gap:16px">
-      <li style="border-top:1px solid var(--line);padding-top:12px">
-        <div style="font-weight:600;margin-bottom:4px">${texts.step1Title}</div>
-        <div class="muted small">${texts.step1Desc}</div>
-      </li>
-      <li style="border-top:1px solid var(--line);padding-top:12px">
-        <div style="font-weight:600;margin-bottom:4px">${texts.step2Title}</div>
-        <div class="muted small">${texts.step2Desc}</div>
-      </li>
-      <li style="border-top:1px solid var(--line);padding-top:12px">
-        <div style="font-weight:600;margin-bottom:4px">${texts.step3Title}</div>
-        <div class="muted small">${texts.step3Desc}</div>
-      </li>
-      <li style="border-top:1px solid var(--line);padding-top:12px">
-        <div style="font-weight:600;margin-bottom:4px">${texts.step4Title}</div>
-        <div class="muted small">${texts.step4Desc}</div>
-      </li>
-    </ol>
+    <ol class="install-steps">${steps}</ol>
+    <p class="notice">${escapeHtml(texts.storeSoon)}</p>
 
     <h2>${escapeHtml(texts.usageTitle)}</h2>
-    <div style="margin:0 0 32px;display:grid;gap:16px">
-      <div style="border-top:1px solid var(--line);padding-top:12px">
-        <div style="font-weight:600;margin-bottom:4px">${texts.fullPageTitle}</div>
-        <div class="muted small">${texts.fullPageDesc}</div>
-      </div>
-      <div style="border-top:1px solid var(--line);padding-top:12px">
-        <div style="font-weight:600;margin-bottom:4px">${texts.selectionTitle}</div>
-        <div class="muted small">
-          ${texts.selectionDesc}
-          <ul style="margin:6px 0 0 18px;padding:0">
-            <li>${texts.selectionItem1}</li>
-            <li>${texts.selectionItem2}</li>
-          </ul>
-          <div style="margin-top:6px">${texts.selectionAfter}</div>
-        </div>
-      </div>
-      <div style="border-top:1px solid var(--line);padding-top:12px">
-        <div style="font-weight:600;margin-bottom:4px">${texts.marketTitle}</div>
-        <div class="muted small">${texts.marketDesc}</div>
-      </div>
-      <div style="border-top:1px solid var(--line);padding-top:12px">
-        <div style="font-weight:600;margin-bottom:4px">${texts.attributionTitle}</div>
-        <div class="muted small">${texts.attributionDesc}</div>
-      </div>
-    </div>
+    <div class="ext-features">${features}</div>
 
     <h2>${escapeHtml(texts.privacyTitle)}</h2>
-    <div style="border-top:1px solid var(--line);padding-top:12px;margin-bottom:32px">
-      <div class="muted small">${texts.privacyDesc}</div>
-    </div>
+    <p class="muted small ext-privacy">${texts.privacyDesc}</p>
   </section>
 
   <aside>
-    <h2>${escapeHtml(texts.settingsTitle)}</h2>
-    <div id="ping-status" style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:12px">${escapeHtml(texts.pingChecking)}</div>
-
-    <dl class="meta-list" style="margin-bottom:16px">
-      <div style="flex-direction:column;align-items:flex-start;gap:6px">
-        <dt>${escapeHtml(texts.serverUrl)}</dt>
-        <dd style="max-width:100%"><code id="detected-url" style="white-space:nowrap;word-break:keep-all;font-size:12px;padding:3px 6px">http://127.0.0.1:8787</code></dd>
-      </div>
-    </dl>
-    <button class="btn ghost" style="width:100%;margin-bottom:24px" data-copy="detected-url" type="button">${escapeHtml(texts.copyUrl)}</button>
-
-    <h2>${escapeHtml(texts.webhookSourcesTitle)}</h2>
-    <div class="muted small" style="margin-bottom:10px">${escapeHtml(texts.webhookSourcesDesc)}</div>
+    <h2>${escapeHtml(texts.nodeTitle)}</h2>
+    <p class="muted small">${texts.nodeDesc}</p>
+    <div id="ping-status" class="ext-ping">${escapeHtml(texts.pingChecking)}</div>
+    <div class="ext-source">
+      <div class="ext-source-title">${escapeHtml(texts.serverUrl)}</div>
+      <code class="ext-source-id" id="detected-url">http://127.0.0.1:8787</code>
+      <button class="btn ghost ext-copy" data-copy="detected-url" type="button">${escapeHtml(texts.copyUrl)}</button>
+    </div>
+    <h3 class="ext-subhead">${escapeHtml(texts.webhookSourcesTitle)}</h3>
     ${sourcesList}
-
-    <div style="border-top:1px solid var(--line);padding-top:14px;margin-top:24px">
-      <div style="font-weight:600;font-size:12px;margin-bottom:4px">${texts.whereTokenTitle}</div>
-      <div class="muted small">${texts.whereTokenDesc}</div>
+    <div class="ext-source">
+      <div class="ext-source-title">${escapeHtml(texts.whereTokenTitle)}</div>
+      <div class="muted small">${escapeHtml(texts.whereTokenDesc)}</div>
     </div>
   </aside>
 </div>`;
@@ -3228,13 +3218,16 @@ export function renderSubmitPage(data: SubmitPageData): string {
 </div>
 
 <form id="submit-form" method="post" action="/submit" class="form" style="max-width:760px">
-  <div style="display:flex;gap:10px;align-items:flex-start">
-    <div style="flex:1">
-      <input id="url-input" name="url" type="url" placeholder="${escapeHtml(t.urlPlaceholder)}" required autofocus style="width:100%;padding:10px 14px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit;font-size:13.5px">
-      <div id="fetch-status" class="hint" style="margin-top:6px;min-height:18px"></div>
+  <div class="search-bar">
+    <div class="search-input-wrap">
+      <svg class="search-icon-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      <input id="url-input" name="url" type="url" placeholder="${escapeHtml(t.urlPlaceholder)}" aria-label="${escapeHtml(t.urlPlaceholder)}" required autofocus autocomplete="off">
     </div>
-    <button id="fetch-btn" type="button" class="btn" style="padding:10px 18px;white-space:nowrap">${escapeHtml(t.fetchData)}</button>
+    <div class="search-actions-inside">
+      <button id="fetch-btn" type="button" class="btn search-btn-inside">${escapeHtml(t.fetchData)}</button>
+    </div>
   </div>
+  <div id="fetch-status" class="hint" style="margin:6px 0 0 16px;min-height:18px"></div>
 
   <div id="preview-skeleton" style="display:none;padding:24px 0 32px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
     <div class="skeleton" style="height:18px;width:30%;margin-bottom:18px"></div>

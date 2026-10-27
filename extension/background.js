@@ -4,22 +4,25 @@
 
 const notificationUrls = new Map();
 
+/** Localised UI string; see _locales/. */
+const t = (key, subs) => chrome.i18n.getMessage(key, subs) || key;
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: 'radar-send-selection-gig',
-    title: 'Отправить заказ в Radar',
+    title: t('menuSendGig'),
     contexts: ['selection'],
   });
 
   chrome.contextMenus.create({
     id: 'radar-send-selection-job',
-    title: 'Отправить вакансию в Radar',
+    title: t('menuSendJob'),
     contexts: ['selection'],
   });
 
   chrome.contextMenus.create({
     id: 'radar-send-page',
-    title: 'Отправить текущую страницу в Radar',
+    title: t('menuSendPage'),
     contexts: ['page'],
   });
 });
@@ -34,10 +37,10 @@ async function sendToRadar(payload) {
         type: 'basic',
         iconUrl: 'icon48.png',
         title: 'OpenRadar',
-        message: 'Откройте расширение и войдите через GitHub.',
+        message: t('notifySignIn'),
       });
     }
-    return { ok: false, message: 'Нет входа' };
+    return { ok: false, message: t('notSignedIn') };
   }
 
   const base = (account?.token ? account.base : config.base).replace(/\/+$/, '');
@@ -56,7 +59,7 @@ async function sendToRadar(payload) {
 
     if (!response.ok) {
       const errText = (await response.text()).slice(0, 160);
-      return { ok: false, message: `Ошибка сервера: HTTP ${response.status} ${errText}` };
+      return { ok: false, message: t('errServer', [String(response.status), errText]) };
     }
 
     const data = await response.json().catch(() => null);
@@ -81,10 +84,10 @@ function notifyUser(result, itemTitle) {
         {
           type: 'basic',
           iconUrl: 'icon48.png',
-          title: 'OpenRadar — лид сохранён',
+          title: t('notifySavedTitle'),
           message: leadUrl
-            ? `${itemTitle || 'Лид'} успешно добавлен. Нажмите, чтобы открыть карточку.`
-            : 'Лид успешно сохранён в базу OpenRadar.',
+            ? t('notifySavedOpen', [itemTitle || t('leadFallback')])
+            : t('notifySaved'),
         },
         (notifId) => {
           if (leadUrl && notifId) {
@@ -96,8 +99,8 @@ function notifyUser(result, itemTitle) {
       chrome.notifications.create({
         type: 'basic',
         iconUrl: 'icon48.png',
-        title: 'OpenRadar — Ошибка',
-        message: result.message || 'Не удалось отправить лид в Radar.',
+        title: t('notifyErrorTitle'),
+        message: result.message || t('errSend'),
       });
     }
   }
@@ -123,7 +126,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
     const result = await sendToRadar({
       type,
-      title: tab?.title || (type === 'job' ? 'Вакансия из браузера' : 'Заказ из браузера'),
+      title: tab?.title || (type === 'job' ? t('jobFromBrowser') : t('gigFromBrowser')),
       text,
       url: tab?.url || info.pageUrl,
       author,

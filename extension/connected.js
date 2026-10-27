@@ -11,12 +11,12 @@
   const token = params.get('token') || '';
   const base = (params.get('base') || '').replace(/\/+$/, '');
   if (!token.startsWith('ext_') || !/^https?:\/\//.test(base)) {
-    title.textContent = 'Не получилось подключить';
-    text.textContent = 'Откройте расширение и нажмите «Войти через GitHub» ещё раз.';
+    title.textContent = t('connectFailedTitle');
+    text.textContent = t('connectFailedText');
     return;
   }
   const handle = params.get('handle') || '';
   await chrome.storage.local.set({ radarAccount: { token, handle, base } });
-  title.textContent = 'Готово';
-  text.textContent = `Расширение подключено к ${new URL(base).hostname} как @${handle}. Эту вкладку можно закрыть.`;
+  title.textContent = t('connectedTitle');
+  text.textContent = t('connectedText', [new URL(base).hostname, handle]);
 })();
