@@ -1,0 +1,66 @@
+name: Release
+run-name: Release ${{ github.ref_name }}
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract tag version
+        id: version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          CLEAN_VER=${TAG#v}
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "version=${CLEAN_VER}" >> $GITHUB_OUTPUT
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.28.5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install & Build App
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Sync extension version & package zip
+        run: |
+          VER="${{ steps.version.outputs.version }}"
+          node -e "
+            const fs = require('fs');
+            const manifest = JSON.parse(fs.readFileSync('extension/manifest.json', 'utf8'));
+            manifest.version = '$VER';
+            fs.writeFileSync('extension/manifest.json', JSON.stringify(manifest, null, 2));
+          "
+          cd extension && zip -r ../radar-extension-${{ steps.version.outputs.tag }}.zip ./* && cd ..
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Image
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}:${{ steps.version.outputs.tag }} -t ghcr.io/${{ github.repository }}:latest .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Radar ${{ steps.version.outputs.tag }}
+          files: |
+            radar-extension-${{ steps.version.outputs.tag }}.zip
+          generate_release_notes: true

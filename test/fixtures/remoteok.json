@@ -1,0 +1,57 @@
+[
+  {
+    "legal": "By using Remote OK's API you agree to our Terms and Conditions: https://remoteok.com/terms",
+    "legal_notice": "Please attribute Remote OK when using this API"
+  },
+  {
+    "slug": "1049283-senior-backend-engineer-go",
+    "id": "1049283",
+    "epoch": "1729689600",
+    "date": "2026-10-23T10:00:00+00:00",
+    "company": "Supabase",
+    "company_logo": "https://remoteok.com/assets/jobs/supabase.png",
+    "position": "Senior Backend Engineer (Go)",
+    "tags": ["golang", "backend", "postgresql", "api", "docker"],
+    "description": "<p>We are looking for a <b>Senior Backend Engineer</b> proficient in Go and PostgreSQL to scale our open source cloud infrastructure.</p><p>Contact: jobs@supabase.com or +1 (415) 555-0199 for questions.</p>",
+    "original": true,
+    "url": "https://remoteok.com/remote-jobs/1049283-senior-backend-engineer-go",
+    "apply_url": "https://supabase.com/careers",
+    "location": "Worldwide",
+    "salary_min": 130000,
+    "salary_max": 180000
+  },
+  {
+    "slug": "1049284-staff-fullstack-engineer-react-node",
+    "id": "1049284",
+    "epoch": "1729686000",
+    "date": "2026-10-23T09:00:00+00:00",
+    "company": "Vercel",
+    "company_logo": "https://remoteok.com/assets/jobs/vercel.png",
+    "position": "Staff Fullstack Engineer (React & Node.js)",
+    "tags": ["react", "typescript", "nodejs", "nextjs"],
+    "description": "<p>Join Vercel to work on Next.js and serverless infrastructure for global web applications.</p>",
+    "original": true,
+    "url": "https://remoteok.com/remote-jobs/1049284-staff-fullstack-engineer-react-node",
+    "apply_url": "https://vercel.com/careers",
+    "location": "Remote",
+    "salary_min": 160000,
+    "salary_max": 220000
+  },
+  {
+    "slug": "1049285-devops-platform-engineer",
+    "id": "1049285",
+    "epoch": "1729682400",
+    "date": "2026-10-23T08:00:00+00:00",
+    "company": "GitLab",
+    "company_logo": "https://remoteok.com/assets/jobs/gitlab.png",
+    "position": "DevOps / Platform Engineer (Kubernetes, AWS)",
+    "tags": ["devops", "kubernetes", "aws", "terraform", "ci-cd"],
+    "description": "<p>Help build scalable GitLab CI/CD runners and Kubernetes orchestration across multiple clouds.</p>",
+    "original": true,
+    "url": "https://remoteok.com/remote-jobs/1049285-devops-platform-engineer",
+    "apply_url": "https://gitlab.com/jobs",
+    "location": "Worldwide",
+    "salary_min": 140000,
+    "salary_max": null
+  }
+]

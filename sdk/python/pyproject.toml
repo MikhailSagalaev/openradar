@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openradar"
+version = "0.7.0"
+description = "radar/2 SDK: send job and gig observations from any parser to an OpenRadar node or hub"
+readme = "README.md"
+license = { text = "AGPL-3.0-only" }
+requires-python = ">=3.9"
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/MikhailSagalaev/openradar"
+Protocol = "https://github.com/MikhailSagalaev/openradar/blob/main/docs/PROTOCOL.md"
+
+[tool.setuptools]
+packages = ["openradar"]

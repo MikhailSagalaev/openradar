@@ -1,0 +1,324 @@
+{
+  "status": "200",
+  "request": {
+    "api": "v1"
+  },
+  "meta": {
+    "total": 687,
+    "limit": 5
+  },
+  "results": {
+    "vacancies": [
+      {
+        "vacancy": {
+          "id": "ec3ede23-f806-11ef-9741-e7d0d2cf29b1",
+          "source": "Вакансия работодателя",
+          "region": {
+            "region_code": "7800000000000",
+            "name": "Город Санкт-Петербург"
+          },
+          "company": {
+            "companycode": "1089847199562",
+            "email": "office@mcart.ru",
+            "hr-agency": false,
+            "inn": "7804390716",
+            "kpp": "780201001",
+            "name": "ООО \"ЭМ СИ АРТ РУС\"",
+            "ogrn": "1089847199562",
+            "site": "https://www.mcart.ru/",
+            "url": "https://trudvsem.ru/company/1089847199562"
+          },
+          "creation-date": "2025-03-03",
+          "date_modify": "2026-09-29T10:56:24+0300",
+          "salary": "от 60000",
+          "salary_min": 60000,
+          "salary_max": 80000,
+          "job-name": "Разработчик",
+          "vac_url": "https://trudvsem.ru/vacancy/card/1089847199562/ec3ede23-f806-11ef-9741-e7d0d2cf29b1",
+          "employment": "Дистанционная (удаленная) работа",
+          "schedule": "Неполный рабочий день/неполная рабочая неделя",
+          "qualification": "Middle",
+          "requirements": "Харды, которые мы ждем от вас: уверенно знаете PHP 7+; хорошо знаете платформу Битрикс; пишете свои модули и компоненты; умеете работать с Git; разбираетесь в чужом коде; умеете работать с D7.",
+          "duty": "Что вам предстоит: работать как с облачным, так и с коробочным Битрикс24; заниматься кастомизацией стандартных компонентов Битрикс; с нуля разрабатывать модули и компоненты; оптимизировать существующие решения; настраивать интеграции с помощью REST API; участвовать в этапе тестирования.",
+          "category": {
+            "specialisation": "Информационные технологии, телекоммуникации, связь"
+          },
+          "requirement": {
+            "education": "Высшее образование — бакалавриат",
+            "experience": 3
+          },
+          "addresses": {
+            "address": [
+              {
+                "location": "г Санкт-Петербург, Гельсингфорсская улица, дом: ДОМ 4;корпус: КОРПУС 1 ЛИТЕР В;офис/квартира: ЭТ/ПОМ/ОФ 5/18Н/28;",
+                "lng": "30.336431",
+                "lat": "59.974545"
+              }
+            ]
+          },
+          "social_protected": "",
+          "contact_list": [],
+          "contact_person": "Матыщак Вера Васильевна",
+          "work_places": 1,
+          "code_profession": "203191",
+          "typicalPosition": "Программист Битрикс",
+          "skills": [
+            "Умение разбираться и работать с чужим кодом",
+            "Рефакторинг/оптимизация программного кода",
+            "Разработка нового функционала",
+            "Знание Объектно-ориентированного программирования (ООП) / Object-oriented programming (OOP)",
+            "Навык работы с Git",
+            "Разработка и сопровождение веб-сайтов",
+            "Навык работы с PHP",
+            "Знание APIs",
+            "Навык работы с 1С: Битрикс"
+          ],
+          "workPlaceType": {
+            "workPlaceForeign": false,
+            "workPlaceOrdinary": false,
+            "workPlaceQuota": false,
+            "workPlaceSpecial": true
+          },
+          "shift": [],
+          "conditions": "Оптимальные",
+          "trainingDays": 0,
+          "currency": "«руб.»"
+        }
+      },
+      {
+        "vacancy": {
+          "id": "ad5ea3d9-5d7a-11f1-86a0-6d7ecfad847a",
+          "source": "Вакансия работодателя",
+          "region": {
+            "region_code": "6600000000000",
+            "name": "Свердловская область"
+          },
+          "company": {
+            "companycode": "1027739326449",
+            "email": "gosuslugi@raiffeisen.ru",
+            "hr-agency": false,
+            "inn": "7744000302",
+            "kpp": "770401001",
+            "name": "АО \"РАЙФФАЙЗЕНБАНК\"",
+            "ogrn": "1027739326449",
+            "url": "https://trudvsem.ru/company/1027739326449"
+          },
+          "creation-date": "2026-06-01",
+          "date_modify": "2026-10-05T10:58:11+0300",
+          "salary": "от 40000",
+          "salary_min": 40000,
+          "salary_max": 40000,
+          "job-name": "программист-разработчик",
+          "vac_url": "https://trudvsem.ru/vacancy/card/1027739326449/ad5ea3d9-5d7a-11f1-86a0-6d7ecfad847a",
+          "employment": "Полная занятость",
+          "schedule": "Полный рабочий день",
+          "qualification": "специалист, программист ",
+          "requirements": "Опыт работы в роли разработчика/архитектора Middleware (MW) на технологиях Java в компании с развитой ИТ инфраструктурой от 7 лет. Глубокие знания принципов проектирования систем MW, интеграционных систем, микросервисных систем. Отличные навыки коммуникации. По вопросам звонить +7(343) 379-29-00.",
+          "duty": "Работы в роли разработчика/архитектора Middleware (MW) на технологиях Java. Проектирование систем MW, интеграционных систем, микросервисных систем. Подготовка и проведение презентаций и обучающих мероприятий.",
+          "category": {
+            "specialisation": "Банки, кредит, страхование, пенсионное обеспечение"
+          },
+          "requirement": {
+            "education": "Высшее образование — специалитет, магистратура",
+            "experience": 3
+          },
+          "addresses": {
+            "address": [
+              {
+                "location": "Свердловская область, г Екатеринбург, Красноармейская улица, 10",
+                "lng": "60.618666",
+                "lat": "56.830325"
+              }
+            ]
+          },
+          "social_protected": "Инвалид",
+          "contact_list": [
+            {
+              "contact_type": "Телефон",
+              "contact_value": "+7(343) 379-29-00"
+            },
+            {
+              "contact_type": "Эл. почта",
+              "contact_value": "Maria.Y.ZAYTSEVA@raiffeisen.ru"
+            }
+          ],
+          "contact_person": "Зайцева Мария Юрьевна",
+          "work_places": 2,
+          "code_profession": "203191",
+          "typicalPosition": "Разработчик Java",
+          "skills": [],
+          "currency": "«руб.»"
+        }
+      },
+      {
+        "vacancy": {
+          "id": "82832df8-a7aa-11f1-b4b9-312b1e80675a",
+          "source": "Вакансия работодателя",
+          "region": {
+            "region_code": "5000000000000",
+            "name": "Московская область"
+          },
+          "company": {
+            "companycode": "1177746245500",
+            "email": "info@sibintek-soft.ru",
+            "hr-agency": false,
+            "inn": "7726398419",
+            "kpp": "504701001",
+            "name": "ООО \"СИБИНТЕК-СОФТ\"",
+            "ogrn": "1177746245500",
+            "url": "https://trudvsem.ru/company/1177746245500"
+          },
+          "creation-date": "2026-09-03",
+          "date_modify": "2026-10-05T11:32:29+0300",
+          "salary": "от 80000",
+          "salary_min": 80000,
+          "salary_max": 85000,
+          "job-name": "Разработчик",
+          "vac_url": "https://trudvsem.ru/vacancy/card/1177746245500/82832df8-a7aa-11f1-b4b9-312b1e80675a",
+          "schedule": "Полный рабочий день",
+          "qualification": "Высшее профессиональное образование в сфере информационных технологий",
+          "requirements": "Навыки разработки программных платформ для бизнес-приложений. Знание Python, Docker и Linux приветствуется.",
+          "duty": "Доработка существующей кодовой базы под руководством более опытных разработчиков; Дебагинг и рефакторинг кода; Написание юнит и интеграционных тестов.",
+          "category": {
+            "specialisation": "Информационные технологии, телекоммуникации, связь"
+          },
+          "requirement": {
+            "education": "Высшее образование — бакалавриат",
+            "experience": 1
+          },
+          "addresses": {
+            "address": [
+              {
+                "location": "Московская область, г Химки, Коммунальный проезд, 30, +7(495) 517-80-80 (36-290)",
+                "lng": "37.418703",
+                "lat": "55.912133"
+              }
+            ]
+          },
+          "contact_list": [
+            {
+              "contact_type": "Телефон",
+              "contact_value": "+7(495) 517-80-80"
+            },
+            {
+              "contact_type": "Эл. почта",
+              "contact_value": "resume@sibintek.ru"
+            }
+          ],
+          "contact_person": "Иванова Ольга Алексеевна",
+          "work_places": 1,
+          "typicalPosition": "Программист",
+          "skills": [],
+          "currency": "«руб.»"
+        }
+      },
+      {
+        "vacancy": {
+          "id": "bd4daf38-922b-11f1-9253-c35c7c22d563",
+          "source": "Вакансия работодателя",
+          "region": {
+            "region_code": "6600000000000",
+            "name": "Свердловская область"
+          },
+          "company": {
+            "companycode": "1169658074519",
+            "email": "vinovoselov@monetka.ru",
+            "hr-agency": false,
+            "inn": "6679095116",
+            "kpp": "667901001",
+            "name": "ООО \"СМАРТ ИТ\"",
+            "ogrn": "1169658074519",
+            "site": "http://смарт-ит.рф",
+            "url": "https://trudvsem.ru/company/1169658074519"
+          },
+          "creation-date": "2026-08-07",
+          "date_modify": "2026-10-05T08:16:37+0300",
+          "salary": "от 100000",
+          "salary_min": 100000,
+          "salary_max": 200000,
+          "job-name": "Разработчик",
+          "vac_url": "https://trudvsem.ru/vacancy/card/1169658074519/bd4daf38-922b-11f1-9253-c35c7c22d563",
+          "employment": "Полная занятость",
+          "schedule": "Полный рабочий день",
+          "requirements": "Обязателен опыт работы от 3-х лет разработчиком в сфере разработки СУБД Oracle, MS SQL, PostgreSQL, знание APEX от 1 года.",
+          "duty": "Реализация проектов по разработке современных информационных систем. Стеки технологий: базы данных Oracle 19 (PL/SQL), MS SQL, PostgreSQL.",
+          "category": {
+            "specialisation": "Информационные технологии, телекоммуникации, связь"
+          },
+          "addresses": {
+            "address": [
+              {
+                "location": "Свердловская область, г Екатеринбург, Сибирский тракт, 12",
+                "lng": "60.648607",
+                "lat": "56.821045"
+              }
+            ]
+          },
+          "contact_list": [
+            {
+              "contact_type": "Телефон",
+              "contact_value": "+7(922) 198-87-32"
+            }
+          ],
+          "contact_person": "Кузнецова Ксения",
+          "typicalPosition": "Программист баз данных",
+          "skills": [],
+          "currency": "«руб.»"
+        }
+      },
+      {
+        "vacancy": {
+          "id": "919ca968-9558-11f1-9253-c35c7c22d563",
+          "source": "Вакансия работодателя",
+          "region": {
+            "region_code": "3100000000000",
+            "name": "Белгородская область"
+          },
+          "company": {
+            "companycode": "1175476114835",
+            "email": "ustinovanv@eco.rshb.ru",
+            "hr-agency": false,
+            "inn": "5407967810",
+            "kpp": "770401001",
+            "name": "ООО \"РСХБ-ЭКОСИСТЕМА\"",
+            "ogrn": "1175476114835",
+            "url": "https://trudvsem.ru/company/1175476114835"
+          },
+          "creation-date": "2026-08-11",
+          "date_modify": "2026-09-30T17:28:48+0300",
+          "salary": "от 200000",
+          "salary_min": 200000,
+          "salary_max": 300000,
+          "job-name": "Java-разработчик",
+          "vac_url": "https://trudvsem.ru/vacancy/card/1175476114835/919ca968-9558-11f1-9253-c35c7c22d563",
+          "schedule": "Полный рабочий день",
+          "qualification": "Middle/Senior",
+          "requirements": "Опыт не менее 3 лет; Отличное знание Java 17, Spring, Kafka, PostgreSQL, Maven; Работа с GIT; Опыт работы с микросервисной архитектурой; Jira, Confluence.",
+          "duty": "Разработка бэкенда и поддержка ПО; Оценка трудоемкости задач; Разработка микросервисов и их API.",
+          "category": {
+            "specialisation": "Информационные технологии, телекоммуникации, связь"
+          },
+          "addresses": {
+            "address": [
+              {
+                "location": "Белгородская область, г Белгород, Белгородский проспект, 54 пом 10",
+                "lng": "36.596143",
+                "lat": "50.601618"
+              }
+            ]
+          },
+          "contact_list": [
+            {
+              "contact_type": "Телефон",
+              "contact_value": "+7(996) 450-29-10"
+            }
+          ],
+          "contact_person": "МЕДВЕДКИНА ОЛЬГА ВЯЧЕСЛАВОВНА",
+          "typicalPosition": "Программист Java",
+          "skills": [],
+          "currency": "«руб.»"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+name: Uptime
+
+# Checks the public hub every 15 minutes. A failed run is the alert: GitHub emails
+# the workflow owner about failed scheduled runs (Settings -> Notifications -> Actions).
+# Runs only where the repository variable UPTIME_URL is set, so forks stay quiet.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  health:
+    if: vars.UPTIME_URL != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Public /health
+        env:
+          URL: ${{ vars.UPTIME_URL }}
+        run: |
+          for i in 1 2 3; do
+            body=$(curl -fsS -m 15 "$URL") && echo "$body" | grep -q '"ok":true' && { echo "$body"; exit 0; }
+            sleep 20
+          done
+          echo "::error::$URL did not answer ok three times"
+          exit 1

@@ -1,0 +1,164 @@
+{
+  "items": [
+    {
+      "id": "11223344",
+      "premium": false,
+      "name": "Senior Go / Golang Backend Developer",
+      "department": null,
+      "has_test": false,
+      "response_letter_required": false,
+      "area": {
+        "id": "1",
+        "name": "Москва",
+        "url": "https://api.hh.ru/areas/1"
+      },
+      "salary": {
+        "from": 280000,
+        "to": 380000,
+        "currency": "RUR",
+        "gross": false
+      },
+      "type": {
+        "id": "open",
+        "name": "Открытая"
+      },
+      "address": {
+        "city": "Москва",
+        "street": "Тверская улица",
+        "building": "7",
+        "raw": "Москва, Тверская улица, 7"
+      },
+      "response_url": null,
+      "sort_point_distance": null,
+      "published_at": "2026-10-23T10:15:00+0300",
+      "created_at": "2026-10-23T10:15:00+0300",
+      "archived": false,
+      "apply_alternate_url": "https://hh.ru/applicant/vacancy_response?vacancyId=11223344",
+      "url": "https://api.hh.ru/vacancies/11223344",
+      "alternate_url": "https://hh.ru/vacancy/11223344",
+      "employer": {
+        "id": "1455",
+        "name": "HeadHunter Digital",
+        "url": "https://api.hh.ru/employers/1455",
+        "alternate_url": "https://hh.ru/employer/1455",
+        "trusted": true
+      },
+      "snippet": {
+        "requirement": "Опыт разработки на <highlighttext>Golang</highlighttext> от 4 лет. Знание PostgreSQL, Redis, Docker, Kubernetes, Kafka. Телефон для справок +7 (495) 123-45-67 или hr@company.ru.",
+        "responsibility": "Разработка микросервисов для обработки высоконагруженных потоков данных в реальном времени на Go."
+      },
+      "contacts": {
+        "name": "Иванов Иван",
+        "email": "ivanov@company.ru",
+        "phones": [
+          {
+            "country": "7",
+            "city": "495",
+            "number": "123-45-67"
+          }
+        ]
+      },
+      "schedule": {
+        "id": "remote",
+        "name": "Удаленная работа"
+      },
+      "experience": {
+        "id": "between3And6",
+        "name": "От 3 до 6 лет"
+      },
+      "employment": {
+        "id": "full",
+        "name": "Полная занятость"
+      },
+      "key_skills": [
+        { "name": "Go" },
+        { "name": "PostgreSQL" },
+        { "name": "Docker" },
+        { "name": "Kubernetes" }
+      ]
+    },
+    {
+      "id": "55667788",
+      "premium": false,
+      "name": "Frontend Разработчик (TypeScript, React)",
+      "area": {
+        "id": "2",
+        "name": "Санкт-Петербург",
+        "url": "https://api.hh.ru/areas/2"
+      },
+      "salary": {
+        "from": 180000,
+        "to": null,
+        "currency": "RUB",
+        "gross": true
+      },
+      "type": {
+        "id": "open",
+        "name": "Открытая"
+      },
+      "published_at": "2026-10-23T11:00:00+0300",
+      "created_at": "2026-10-23T11:00:00+0300",
+      "archived": false,
+      "url": "https://api.hh.ru/vacancies/55667788",
+      "alternate_url": "https://hh.ru/vacancy/55667788",
+      "employer": {
+        "id": "7890",
+        "name": "Петер-Сервис Софт",
+        "trusted": true
+      },
+      "snippet": {
+        "requirement": "Уверенное владение <highlighttext>TypeScript</highlighttext>, React, Next.js, Redux Toolkit, CSS.",
+        "responsibility": "Разработка интерфейсов личного кабинета пользователя, оптимизация рендеринга."
+      },
+      "schedule": {
+        "id": "flexible",
+        "name": "Гибкий график"
+      },
+      "employment": {
+        "id": "full",
+        "name": "Полная занятость"
+      }
+    },
+    {
+      "id": "99887766",
+      "premium": false,
+      "name": "Программист 1С",
+      "area": {
+        "id": "3",
+        "name": "Екатеринбург",
+        "url": "https://api.hh.ru/areas/3"
+      },
+      "salary": {
+        "from": null,
+        "to": 150000,
+        "currency": "RUR",
+        "gross": false
+      },
+      "published_at": "2026-10-23T09:30:00+0300",
+      "created_at": "2026-10-23T09:30:00+0300",
+      "url": "https://api.hh.ru/vacancies/99887766",
+      "alternate_url": "https://hh.ru/vacancy/99887766",
+      "employer": {
+        "id": "3344",
+        "name": "УралХолдинг",
+        "trusted": false
+      },
+      "snippet": {
+        "requirement": "Опыт конфигурирования 1С:Предприятие 8.3, знание типовых конфигураций ERP, УТ.",
+        "responsibility": "Доработка типовых и нетиповых конфигураций 1С, интеграция по REST API."
+      },
+      "schedule": {
+        "id": "fullDay",
+        "name": "Полный день"
+      },
+      "employment": {
+        "id": "full",
+        "name": "Полная занятость"
+      }
+    }
+  ],
+  "found": 3,
+  "pages": 1,
+  "page": 0,
+  "per_page": 20
+}

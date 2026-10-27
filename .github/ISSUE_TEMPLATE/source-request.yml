@@ -1,0 +1,45 @@
+name: Source request
+description: Suggest a source for Radar
+title: "source: "
+labels: ["source"]
+body:
+  - type: input
+    id: name
+    attributes:
+      label: Source name
+      placeholder: Example marketplace
+    validations:
+      required: true
+  - type: input
+    id: url
+    attributes:
+      label: URL
+      placeholder: https://example.com/orders
+    validations:
+      required: true
+  - type: dropdown
+    id: access
+    attributes:
+      label: How is the data available?
+      options:
+        - Official API
+        - RSS / Atom
+        - Public page
+        - Email notifications
+        - Personal account (use webhook/IMAP instead)
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why is it useful?
+      description: Which niche, city or order type does it add?
+    validations:
+      required: true
+  - type: checkboxes
+    id: legal
+    attributes:
+      label: Confirmation
+      options:
+        - label: The source can be read without bypassing a login, CAPTCHA or private group.
+          required: true

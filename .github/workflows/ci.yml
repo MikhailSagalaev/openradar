@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Europe/Moscow
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_DB: radar_test
+          POSTGRES_USER: radar
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.28.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - name: Run tests against the in-memory store
+        run: pnpm test
+      - name: Run tests against PostgreSQL
+        env:
+          RADAR_TEST_STORE: postgres
+          DATABASE_URL: postgres://radar:test_password@127.0.0.1:5432/radar_test
+        run: pnpm test
+      - name: Python SDK
+        run: python3 -m unittest discover -s sdk/python/tests
+      - run: pnpm build

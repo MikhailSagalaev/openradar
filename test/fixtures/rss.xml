@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Test feed</title>
+    <link>https://example.com</link>
+    <description>Test feed for Radar</description>
+    <item>
+      <title>Нужен сантехник в Ставрополе</title>
+      <link>https://example.com/orders/1?utm_source=rss</link>
+      <description><![CDATA[<p>Прорвало трубу под раковиной, бюджет 5000 ₽. Срочно, сегодня вечером.</p>]]></description>
+      <pubDate>Wed, 21 Oct 2026 09:00:00 GMT</pubDate>
+      <guid>order-1</guid>
+      <author>client@example.com</author>
+    </item>
+  </channel>
+</rss>
