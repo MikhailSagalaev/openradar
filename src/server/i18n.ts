@@ -131,6 +131,11 @@ export interface Translations {
   langEn: string;
   similarLeads: string;
   navProfile: string;
+  recentSearches: string;
+  popularSkills: string;
+  partialMatch: string;
+  shareLead: string;
+  linkCopied: string;
   filtersTitle: string;
   profileTitle: string;
   notFoundTitle: string;
@@ -198,7 +203,7 @@ export const RU: Translations = {
   metricActiveSources: 'источников',
   metricNewToday: 'новых сегодня',
   metricApplied: 'откликов',
-  searchPlaceholder: 'Поиск по любым заказам, вакансиям, навыкам... (нажмите / для фокуса)',
+  searchPlaceholder: 'Поиск по заказам, вакансиям и навыкам',
   searchBtn: 'Найти',
   emptyTitle: 'Ничего не найдено',
   emptyDesc: 'Попробуйте изменить запрос или проверить другие фильтры.',
@@ -284,7 +289,7 @@ export const RU: Translations = {
   removeDelay: 'Как смотреть без задержки',
   scoreWhat: 'Что такое скор?',
   loadMore: 'Показать ещё',
-  suggestionsTitle: 'Быстрый поиск и подсказки',
+  suggestionsTitle: 'Быстрый поиск',
   foundCount: 'Найдено',
   forQuery: 'по запросу',
   resetSearch: 'Сбросить',
@@ -293,6 +298,11 @@ export const RU: Translations = {
   langEn: 'На английском',
   similarLeads: 'Похожие заказы',
   navProfile: 'Профиль',
+  recentSearches: 'Недавние запросы',
+  popularSkills: 'Популярные навыки за неделю',
+  partialMatch: 'Точных совпадений нет — показаны заказы с частью слов.',
+  shareLead: 'Поделиться',
+  linkCopied: 'Ссылка скопирована',
   filtersTitle: 'Фильтры и сортировка',
   profileTitle: 'Мой профиль',
   extensionGuide: 'Расширение для браузера',
@@ -355,7 +365,7 @@ export const EN: Translations = {
   metricActiveSources: 'active sources',
   metricNewToday: 'new today',
   metricApplied: 'applied',
-  searchPlaceholder: 'Search all jobs, gigs, orders, skills... (press / to focus)',
+  searchPlaceholder: 'Search gigs, jobs and skills',
   searchBtn: 'Search',
   emptyTitle: 'No leads found',
   emptyDesc: 'Try adjusting your search query or switching filters.',
@@ -450,6 +460,11 @@ export const EN: Translations = {
   langEn: 'In English',
   similarLeads: 'Similar leads',
   navProfile: 'Profile',
+  recentSearches: 'Recent searches',
+  popularSkills: 'Popular skills this week',
+  partialMatch: 'No exact matches: showing leads with some of the words.',
+  shareLead: 'Share',
+  linkCopied: 'Link copied',
   filtersTitle: 'Filters and sorting',
   profileTitle: 'My profile',
   extensionGuide: 'Browser Extension',

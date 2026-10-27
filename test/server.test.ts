@@ -589,6 +589,31 @@ describe('http server', () => {
     expect((await app.request('/api/market?title=a')).status).toBe(400);
   });
 
+  it('renders the lead card with icon actions, bare votes and formatted text', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true });
+    const app = createApp(runtime);
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'Хабр Карьера — Вакансии', config: { url: 'https://career.habr.com/vacancies/rss' } });
+    await runtime.store.insertLead({
+      id: 'card', sourceId: source.id, externalId: 'card', titleKey: 'card', fingerprint: 'fp-card',
+      title: 'Аналитик DWH', text: 'Компания ищет аналитика. Требуемые навыки: #DWH, #SQL.',
+      status: 'new', score: 60, reasons: [], createdAt: new Date(Date.now() - 86_400_000).toISOString(),
+    });
+    const html = await (await app.request('/leads/card')).text();
+    expect(html).toContain('id="share-lead"');
+    expect(html).not.toContain('class="icon-btn-label"');
+    expect(html).not.toContain('Сообщество:');
+    expect(html).toContain('<div class="lead-tags"><span class="tag">DWH</span><span class="tag">SQL</span></div>');
+
+    const sources = await (await app.request('/sources')).text();
+    expect(sources).toContain('Откуда заказы');
+    expect(sources).toContain('<span class="source-scope">Вакансии</span>');
+    expect(sources).toContain('career.habr.com ↗');
+
+    const partial = await (await app.request('/?q=' + encodeURIComponent('аналитик кондитер'))).text();
+    expect(partial).toContain('Точных совпадений нет');
+    expect(partial).toContain('/leads/card"');
+  });
+
   it('supports GDPR erasure with DELETE /api/leads/:id', async () => {
     const runtime = makeRuntime();
     const app = createApp(runtime);

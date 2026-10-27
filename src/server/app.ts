@@ -4,7 +4,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { escapeHtml } from '../core/text.ts';
+import { escapeHtml, extractTechSkills } from '../core/text.ts';
 import { renderRssFeed } from './feed.ts';
 import type { ParticipantRecord, UserRecord } from '../core/store.ts';
 import type { Lead, LeadStatus, LeadType, RawLead, SourceConfig, SourceKind, SourceRecord, Viewer, VoteSignal } from '../core/types.ts';
@@ -801,6 +801,23 @@ export function createApp(runtime: Runtime): Hono {
     return c.redirect(safeReturn);
   });
 
+  // Search suggestions: dictionary skills of the last week's leads, refreshed every 10 minutes.
+  let popularCache: { at: number; items: Array<{ name: string; count: number }> } | undefined;
+  const popularSkills = async (): Promise<Array<{ name: string; count: number }>> => {
+    if (popularCache && Date.now() - popularCache.at < 10 * 60_000) return popularCache.items;
+    const recent = await runtime.store.getLeadsForFeed({
+      limit: 1500,
+      createdAfter: new Date(Date.now() - 7 * 24 * 3600_000).toISOString(),
+    });
+    const counts = new Map<string, number>();
+    for (const lead of recent) {
+      for (const skill of extractTechSkills(`${lead.title}\n${lead.text}`)) counts.set(skill, (counts.get(skill) ?? 0) + 1);
+    }
+    const items = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, count]) => ({ name, count }));
+    popularCache = { at: Date.now(), items };
+    return items;
+  };
+
   app.get('/', async (c) => {
     if (!await canRead(c, runtime)) return c.redirect('/login');
     const lang = resolveLang(c);
@@ -837,7 +854,22 @@ export function createApp(runtime: Runtime): Hono {
         ...filterOptions(filters),
       }),
     ]);
-    const leads = fetched.slice(0, pageSize);
+    let leads = fetched.slice(0, pageSize);
+    let partialMatch = false;
+    let hasMore = fetched.length > pageSize;
+    // Nothing for the whole phrase: show leads matching any of its words, marked as partial.
+    const words = query.split(/\s+/).filter((word) => word.length >= 3).slice(0, 4);
+    if (!leads.length && page === 1 && words.length >= 2) {
+      const seen = new Map<string, Lead>();
+      for (const word of words) {
+        for (const lead of await leadsFor(runtime, viewer, { limit: pageSize, status: status || undefined, query: word, type, ...filterOptions(filters) })) {
+          seen.set(lead.id, lead);
+        }
+      }
+      leads = [...seen.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, pageSize);
+      partialMatch = leads.length > 0;
+      hasMore = false;
+    }
 
     return c.html(
       renderLeadsPage({
@@ -845,7 +877,9 @@ export function createApp(runtime: Runtime): Hono {
         health,
         leads: leads.map((lead) => projectContacts(lead, viewer)),
         page,
-        hasMore: fetched.length > pageSize,
+        hasMore,
+        partialMatch,
+        popularSkills: await popularSkills(),
         query,
         status,
         type: type ?? '',

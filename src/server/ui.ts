@@ -3,6 +3,7 @@ import type { Contact, Lead, LeadVoteSignal, RunRecord, SourceHealth, SourceReco
 import { escapeHtml, firstLine, jsonForScript } from '../core/text.ts';
 import { type SupportedLang, getTranslations } from './i18n.ts';
 import { renderLogo } from './logo.ts';
+import { formatLeadText } from './format.ts';
 import { BUDGET_STEPS_RUB, type FeedFilters, hasActiveFilters } from './filters.ts';
 import { SEO_CATALOG } from './seo.ts';
 
@@ -29,6 +30,10 @@ export interface LeadsPageData {
   /** GitHub sign-in is configured: the guest intro links to it. */
   githubEnabled?: boolean;
   filters?: FeedFilters;
+  /** Most frequent skills of the last week, for search suggestions. */
+  popularSkills?: Array<{ name: string; count: number }>;
+  /** No lead matched the whole query; these match some of its words. */
+  partialMatch?: boolean;
   /** 1-based page of the feed and whether another page follows. */
   page?: number;
   hasMore?: boolean;
@@ -730,6 +735,8 @@ dialog::backdrop {
   flex-wrap: wrap;
   gap: 6px;
 }
+.suggestions-group + .suggestions-group { margin-top: 12px; }
+.sug-count { color: var(--muted); font-size: 11px; }
 .sug-chip {
   display: inline-flex;
   align-items: center;
@@ -950,8 +957,20 @@ dialog::backdrop {
 .tier-table th, .tier-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .tier-table th { color: var(--muted); font-weight: 500; }
 .tier-table tr.current td { font-weight: 600; background: var(--surface); }
+.sources-intro { max-width: 720px; margin: 0 0 18px; color: var(--muted); font-size: 13.5px; line-height: 1.6; }
+.source-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.source-card { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 6px; }
+.source-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.source-card-title { font-weight: 600; color: var(--ink); text-decoration: none; }
+.source-card-title:hover { text-decoration: underline; }
+.source-scope { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.source-card-meta { font-size: 12.5px; color: var(--muted); }
+.source-card-meta strong { color: var(--ink); }
+.source-card-meta a { color: var(--muted); }
+.sources-cta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
 .similar { margin-top: 40px; }
 .similar h2 { font-size: 15px; margin: 0 0 4px; }
+.load-more a.loading { opacity: 0.5; pointer-events: none; }
 .load-more { display: flex; justify-content: center; padding: 20px 0 8px; }
 .btn-plus { display: none; }
 .filters > summary { display: none; }
@@ -996,6 +1015,17 @@ dialog::backdrop {
 }
 .icon-btn svg {
   flex-shrink: 0;
+}
+.icon-btn.icon-only {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  justify-content: center;
+}
+.lead-actions { display: flex; flex-direction: row; align-items: center; gap: 8px; flex-wrap: nowrap; }
+.icon-btn.done {
+  color: var(--emerald);
+  border-color: var(--emerald);
 }
 .text-warn {
   color: var(--rose);
@@ -1092,12 +1122,21 @@ dialog::backdrop {
   margin-top: 26px;
 }
 .lead-text {
-  white-space: pre-wrap;
-  font-size: 14.5px;
-  line-height: 1.65;
+  font-size: 15px;
+  line-height: 1.7;
   margin: 10px 0 0;
   color: var(--ink);
+  max-width: 72ch;
+  overflow-wrap: anywhere;
 }
+.lead-text p { margin: 0 0 12px; }
+.lead-text ul { margin: 0 0 12px; padding-left: 20px; }
+.lead-text li { margin: 2px 0; }
+.lead-text a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.lead-text .lead-heading { margin-bottom: 4px; font-weight: 600; }
+.lead-text .redacted { padding: 0 6px; border-radius: 4px; background: var(--soft); color: var(--muted); font-size: 13px; }
+.lead-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.lead-tags .tag { padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 12.5px; color: var(--muted); }
 .meta-list { margin: 0; }
 .meta-list div {
   display: flex;
@@ -1253,13 +1292,12 @@ footer {
   font-size: 12px;
   line-height: 1.6;
   margin-top: auto;
-  padding-top: 56px;
-  padding-bottom: 40px;
-  border-top: 1px solid var(--line);
+  padding-top: 72px;
+  padding-bottom: 32px;
 }
 .footer-wrap {
   display: grid;
-  grid-template-columns: 1.2fr 2fr 1fr;
+  grid-template-columns: 1.1fr 1.8fr 0.9fr 0.9fr;
   gap: 36px;
   align-items: flex-start;
 }
@@ -1269,6 +1307,18 @@ footer {
     gap: 28px;
   }
 }
+.footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-top: 40px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.footer-lang { display: inline-flex; gap: 6px; align-items: center; }
+.footer-lang a { color: var(--muted); text-decoration: none; }
+.footer-lang a.current { color: var(--ink); font-weight: 600; }
 .footer-col-brand {
   max-width: 320px;
 }
@@ -1327,6 +1377,7 @@ footer {
   .page-head { flex-direction: column; align-items: flex-start; gap: 14px; }
   .lead-actions { width: 100%; display: flex; gap: 8px; }
   .lead-actions .btn { flex: 1 1 auto; text-align: center; padding: 8px 12px; }
+  .lead-actions .icon-only { flex: 0 0 40px; height: 40px; padding: 0; }
   .detail-grid { grid-template-columns: 1fr; gap: 28px; }
   .grid { grid-template-columns: 1fr; }
   .search-hero { margin: 8px 0 20px; gap: 12px; }
@@ -1355,6 +1406,12 @@ let publicBaseUrl: string | undefined;
 export function setPublicBaseUrl(url: string | undefined): void {
   publicBaseUrl = url?.replace(/\/+$/, '') || undefined;
 }
+
+/** Quick searches under the search box. */
+const QUICK_QUERIES: Record<SupportedLang, string[]> = {
+  ru: ['Парсер', 'Telegram-бот', 'Лендинг', 'Дизайн', 'Тексты', 'Видео'],
+  en: ['Parser', 'Telegram bot', 'Landing page', 'Design', 'Copywriting', 'Video'],
+};
 
 /** Skills offered in the feed filter: canonical names from extractTechSkills(). */
 const FILTER_SKILLS = ['Python', 'JavaScript', 'TypeScript', 'React', 'Node.js', 'PHP', 'Java', 'Golang', '1С', 'Битрикс', 'WordPress', 'Tilda', 'Figma', 'SQL', 'Telegram Bot', 'Нейросети'];
@@ -1447,31 +1504,41 @@ ${input.body}
   <div class="footer-wrap">
     <div class="footer-col footer-col-brand">
       <p class="footer-brand"><a href="/" aria-label="OpenRadar">${renderLogo({ height: 16 })}</a></p>
-      <p style="margin:6px 0 0">${escapeHtml(t.footerDesc)}</p>
-      <p class="muted" style="margin:6px 0 0">${escapeHtml(t.footerLicense)}</p>
+      <p style="margin:8px 0 0">${escapeHtml(t.footerDesc)}</p>
     </div>
     <div class="footer-col">
-      <div class="footer-col-title">${escapeHtml(lang === 'ru' ? 'Категории заказов' : 'Categories')}</div>
+      <div class="footer-col-title">${escapeHtml(lang === 'ru' ? 'Категории' : 'Categories')}</div>
       <div class="footer-catalog-grid">
         ${SEO_CATALOG.map((entry) => `<a href="/catalog/${escapeHtml(entry.slug)}">${escapeHtml((entry.title.split('—')[0] ?? entry.h1).trim())}</a>`).join('')}
       </div>
     </div>
     <div class="footer-col">
-      <div class="footer-col-title">${escapeHtml(lang === 'ru' ? 'Ресурсы' : 'Resources')}</div>
+      <div class="footer-col-title">${escapeHtml(lang === 'ru' ? 'Проект' : 'Project')}</div>
       <div class="footer-links-grid">
-        <a href="/extension">${escapeHtml(t.extensionGuide)}</a>
-        <a href="${REPO_URL}" target="_blank" rel="noopener noreferrer">GitHub</a>
-        <a href="${REPO_URL}/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">${escapeHtml(t.licenseLink)}</a>
-        <a href="/feed.rss">${escapeHtml(t.rssFeed)}</a>
         <a href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md" target="_blank" rel="noopener noreferrer">${escapeHtml(t.guideLink)}</a>
+        <a href="/extension">${escapeHtml(t.extensionGuide)}</a>
+        <a href="/sources">${escapeHtml(t.navSources)}</a>
+        <a href="/feed.rss">${escapeHtml(t.rssFeed)}</a>
         <a href="${REPO_URL}/blob/main/docs/PROTOCOL.md" target="_blank" rel="noopener noreferrer">${escapeHtml(t.protocolLink)}</a>
-        <span style="display:inline-flex;align-items:center;gap:5px;margin-top:2px">
-          <a href="/lang/ru" style="${lang === 'ru' ? 'font-weight:700;color:var(--ink)' : 'color:var(--muted)'}">RU</a>
-          <span style="color:var(--line-strong)">/</span>
-          <a href="/lang/en" style="${lang === 'en' ? 'font-weight:700;color:var(--ink)' : 'color:var(--muted)'}">EN</a>
-        </span>
       </div>
     </div>
+    <div class="footer-col">
+      <div class="footer-col-title">${escapeHtml(lang === 'ru' ? 'Участвовать' : 'Contribute')}</div>
+      <div class="footer-links-grid">
+        <a href="${REPO_URL}" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md#2-узел-на-своём-компьютере" target="_blank" rel="noopener noreferrer">${escapeHtml(lang === 'ru' ? 'Запустить свой узел' : 'Run your own node')}</a>
+        <a href="${REPO_URL}/issues/new?template=source-request.yml" target="_blank" rel="noopener noreferrer">${escapeHtml(lang === 'ru' ? 'Предложить источник' : 'Suggest a source')}</a>
+        <a href="${REPO_URL}/issues" target="_blank" rel="noopener noreferrer">${escapeHtml(lang === 'ru' ? 'Сообщить о проблеме' : 'Report a problem')}</a>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>${escapeHtml(t.footerLicense)}</span>
+    <span class="footer-lang">
+      <a href="/lang/ru"${lang === 'ru' ? ' class="current"' : ''}>RU</a>
+      <span aria-hidden="true">/</span>
+      <a href="/lang/en"${lang === 'en' ? ' class="current"' : ''}>EN</a>
+    </span>
   </div>
 </footer>
 </main>
@@ -1835,6 +1902,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
       ];
 
   const filters: FeedFilters = data.filters ?? { sort: 'new', remote: false };
+  const popular = data.popularSkills ?? [];
   // One builder for every link on the page, so switching a tab keeps the search and filters.
   const hrefWith = (overrides: Record<string, string | undefined>, base = '/'): string => {
     const values: Record<string, string | undefined> = {
@@ -1968,25 +2036,29 @@ ${intro}
         <a class="btn ghost search-rss-inside" href="${escapeHtml(rssHref)}" target="_blank" rel="noopener" title="RSS">RSS</a>
       </div>
       <div class="search-suggestions" id="search-suggestions">
-        <div class="suggestions-header">${escapeHtml(t.suggestionsTitle)}</div>
-        <div class="suggestions-chips">
-          <a class="sug-chip" href="/?q=Python">Python</a>
-          <a class="sug-chip" href="/?q=TypeScript">TypeScript</a>
-          <a class="sug-chip" href="/?q=React">React</a>
-          <a class="sug-chip" href="/?q=Node.js">Node.js</a>
-          <a class="sug-chip" href="/?q=Golang">Golang</a>
-          <a class="sug-chip" href="/?q=Rust">Rust</a>
-          <a class="sug-chip" href="/?q=Удаленно">Удаленно</a>
-          <a class="sug-chip" href="/?q=Парсер">Парсер</a>
-          <a class="sug-chip" href="/?q=Бот">Бот</a>
-          <a class="sug-chip" href="/?q=AI">AI</a>
-          <a class="sug-chip" href="/?q=Дизайн">Дизайн</a>
+        <div class="suggestions-group" id="recent-searches" hidden>
+          <div class="suggestions-header">${escapeHtml(t.recentSearches)}</div>
+          <div class="suggestions-chips" id="recent-chips"></div>
+        </div>
+        ${popular.length ? `<div class="suggestions-group">
+          <div class="suggestions-header">${escapeHtml(t.popularSkills)}</div>
+          <div class="suggestions-chips">
+            ${popular.map((item) => `<a class="sug-chip" href="${escapeHtml(hrefWith({ skill: item.name, page: undefined }))}">${escapeHtml(item.name)} <span class="sug-count">${item.count}</span></a>`).join('')}
+          </div>
+        </div>` : ''}
+        <div class="suggestions-group">
+          <div class="suggestions-header">${escapeHtml(t.suggestionsTitle)}</div>
+          <div class="suggestions-chips">
+            <a class="sug-chip" href="${escapeHtml(hrefWith({ remote: '1' }))}">${escapeHtml(t.remoteOnly)}</a>
+            ${QUICK_QUERIES[lang].map((q) => `<a class="sug-chip" href="${escapeHtml(hrefWith({ q }))}">${escapeHtml(q)}</a>`).join('')}
+          </div>
         </div>
       </div>
     </div>
     ${filterBar}
     ${query ? `
     <div class="search-meta-bar">
+      ${data.partialMatch ? `<span>${escapeHtml(t.partialMatch)}</span>` : ''}
       <span>${escapeHtml(t.foundCount)}: <strong>${leads.length}${data.hasMore ? '+' : ''}</strong></span>
       <span>${escapeHtml(t.forQuery)} «<strong>${escapeHtml(query)}</strong>»</span>
       <a class="search-meta-clear" href="${escapeHtml(hrefForQuery(''))}">✕ ${escapeHtml(t.resetSearch)}</a>
@@ -2005,6 +2077,51 @@ ${POLL_SCRIPT}
   const input = document.getElementById('search-input');
   const bar = document.getElementById('search-bar-wrap');
   const suggestions = document.getElementById('search-suggestions');
+
+  // «Показать ещё» appends the next page in place; without JS it stays a plain link.
+  document.addEventListener('click', async (event) => {
+    const link = event.target instanceof Element ? event.target.closest('.load-more a') : null;
+    if (!link) return;
+    event.preventDefault();
+    const box = link.closest('.load-more');
+    const list = document.querySelector('.list');
+    link.setAttribute('aria-busy', 'true');
+    link.classList.add('loading');
+    try {
+      const res = await fetch(link.href, { headers: { accept: 'text/html' } });
+      if (!res.ok) throw new Error(String(res.status));
+      const next = new DOMParser().parseFromString(await res.text(), 'text/html');
+      const rows = next.querySelector('.list');
+      if (!rows || !list) throw new Error('no list');
+      list.append(...Array.from(rows.children).filter((row) => !row.classList.contains('empty')));
+      const more = next.querySelector('.load-more');
+      if (more) box.replaceWith(more); else box.remove();
+    } catch (e) {
+      window.location.href = link.href;
+    }
+  });
+
+  // Recent searches live only in this browser.
+  const RECENT_KEY = 'openradar_recent_searches';
+  const readRecent = () => { try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch (e) { return []; } };
+  const recent = readRecent();
+  const recentBox = document.getElementById('recent-searches');
+  const recentChips = document.getElementById('recent-chips');
+  if (recent.length && recentBox && recentChips) {
+    for (const q of recent) {
+      const a = document.createElement('a');
+      a.className = 'sug-chip';
+      a.href = '/?q=' + encodeURIComponent(q);
+      a.textContent = q;
+      recentChips.append(a);
+    }
+    recentBox.hidden = false;
+  }
+  input?.form?.addEventListener('submit', () => {
+    const q = input.value.trim();
+    if (!q) return;
+    try { localStorage.setItem(RECENT_KEY, JSON.stringify([q, ...readRecent().filter((x) => x !== q)].slice(0, 6))); } catch (e) {}
+  });
 
   if (input && suggestions && bar) {
     input.addEventListener('focus', () => {
@@ -2072,16 +2189,32 @@ export function renderLeadPage(data: LeadPageData): string {
   const isUser = Boolean(auth?.handle);
   const isAdminSession = Boolean(auth) && !auth?.handle;
   const copyScript = `<script>
+// Icon buttons confirm with a colour flash and a changed tooltip; the icon stays.
+function flashDone(button, label) {
+  button.classList.add('done');
+  button.title = label;
+  setTimeout(() => { button.classList.remove('done'); button.title = button.dataset.title; }, 1600);
+}
 document.getElementById('copy-lead')?.addEventListener('click', async (event) => {
   const button = event.currentTarget;
   try {
     await navigator.clipboard.writeText(document.getElementById('lead-text')?.innerText ?? '');
-    const prev = button.textContent;
-    button.textContent = '${escapeHtml(t.copied)}';
-    setTimeout(() => { button.textContent = prev; }, 2000);
+    flashDone(button, '${escapeHtml(t.copied)}');
   } catch {
-    button.textContent = '${escapeHtml(t.copyFailed)}';
+    flashDone(button, '${escapeHtml(t.copyFailed)}');
   }
+});
+document.getElementById('share-lead')?.addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  const url = window.location.href;
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: document.title, url });
+      return;
+    }
+    await navigator.clipboard.writeText(url);
+    flashDone(button, '${escapeHtml(t.linkCopied)}');
+  } catch {}
 });
 </script>`;
 
@@ -2139,22 +2272,20 @@ document.getElementById('copy-lead')?.addEventListener('click', async (event) =>
   </form>`
     : '';
 
+  const formatted = formatLeadText(lead.text);
   const myVote = data.myVote;
   const voteControls = isUser
     ? `<form method="post" action="/leads/${escapeHtml(lead.id)}/vote" class="community-votes">
-    <span class="small muted" style="margin-right:4px">${escapeHtml(t.community)}:</span>
     <button name="signal" value="useful" class="vote-btn ${myVote === 'useful' ? 'active' : ''}" type="submit" title="${myVote === 'useful' ? 'Нажмите, чтобы отменить свой голос' : ''}">${escapeHtml(t.useful)} <span class="vote-count">${lead.votes_up ?? 0}</span></button>
     <button name="signal" value="junk" class="vote-btn ${myVote === 'junk' ? 'active' : ''}" type="submit" title="${myVote === 'junk' ? 'Нажмите, чтобы отменить свой голос' : ''}">${escapeHtml(t.junk)} <span class="vote-count">${lead.votes_down ?? 0}</span></button>
     <button name="signal" value="scam" class="vote-btn vote-btn-danger ${myVote === 'scam' ? 'active' : ''}" type="submit" title="${myVote === 'scam' ? 'Нажмите, чтобы отменить свой голос' : ''}">${escapeHtml(t.scam)} <span class="vote-count">${lead.votes_scam ?? 0}</span></button>
     <button name="signal" value="closed" class="vote-btn ${myVote === 'closed' ? 'active' : ''}" type="submit" title="${myVote === 'closed' ? 'Нажмите, чтобы отменить свой голос' : ''}">${escapeHtml(t.closed)} <span class="vote-count">${lead.votes_closed ?? 0}</span></button>
   </form>`
-    : `<div class="community-votes">
-    <span class="small muted" style="margin-right:4px">${escapeHtml(t.community)}:</span>
+    : `<div class="community-votes" title="${escapeHtml(t.signInToVote)}">
     <button type="button" class="vote-btn" onclick="openAuthVoteModal()">${escapeHtml(t.useful)} <span class="vote-count">${lead.votes_up ?? 0}</span></button>
     <button type="button" class="vote-btn" onclick="openAuthVoteModal()">${escapeHtml(t.junk)} <span class="vote-count">${lead.votes_down ?? 0}</span></button>
     <button type="button" class="vote-btn vote-btn-danger" onclick="openAuthVoteModal()">${escapeHtml(t.scam)} <span class="vote-count">${lead.votes_scam ?? 0}</span></button>
     <button type="button" class="vote-btn" onclick="openAuthVoteModal()">${escapeHtml(t.closed)} <span class="vote-count">${lead.votes_closed ?? 0}</span></button>
-    <button type="button" class="chip" onclick="openAuthVoteModal()">${escapeHtml(t.signInToVote)}</button>
   </div>`;
 
   const body = `
@@ -2166,13 +2297,11 @@ document.getElementById('copy-lead')?.addEventListener('click', async (event) =>
   </div>
   <div class="actions lead-actions">
     ${cleanUrl ? `<a class="btn" href="${escapeHtml(cleanUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t.openOriginal)}</a>` : ''}
-    <button class="btn icon-btn" id="copy-lead" type="button" title="${escapeHtml(t.copyText)}" aria-label="${escapeHtml(t.copyText)}">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-      <span class="icon-btn-label">${escapeHtml(t.copyText)}</span>
+    <button class="btn icon-btn icon-only" id="copy-lead" type="button" title="${escapeHtml(t.copyText)}" aria-label="${escapeHtml(t.copyText)}" data-title="${escapeHtml(t.copyText)}">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
     </button>
-    <button class="btn icon-btn" id="copy-link" type="button" title="${escapeHtml(lang === 'ru' ? 'Поделиться / скопировать ссылку' : 'Share / copy link')}" aria-label="Share" onclick="navigator.clipboard.writeText(window.location.href);const lbl=this.querySelector('.icon-btn-label');if(lbl){const o=lbl.textContent;lbl.textContent='Скопировано!';setTimeout(()=>lbl.textContent=o,2000)}">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
-      <span class="icon-btn-label">${escapeHtml(lang === 'ru' ? 'Поделиться' : 'Share')}</span>
+    <button class="btn icon-btn icon-only" id="share-lead" type="button" title="${escapeHtml(t.shareLead)}" aria-label="${escapeHtml(t.shareLead)}" data-title="${escapeHtml(t.shareLead)}">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
     </button>
   </div>
 </div>
@@ -2188,7 +2317,8 @@ ${cautionBanner}
   <section>
     ${aiBox}
     <h2>${escapeHtml(t.leadDescription)}</h2>
-    <p class="lead-text" id="lead-text">${escapeHtml(lead.text)}</p>
+    <div class="lead-text" id="lead-text">${formatted.html}</div>
+    ${formatted.tags.length ? `<div class="lead-tags">${formatted.tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
     ${isAdminSession && lead.reasons.length ? `<h2 style="margin-top:26px">${escapeHtml(t.scoreReasons)}</h2><ul class="reasons">${lead.reasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join('')}</ul>` : ''}
   </section>
   <aside>
@@ -2293,23 +2423,76 @@ function formatSourceError(errStr: string, kind: string): string {
   return `<div class="source-error-tooltip" title="${escapeHtml(hint)}"><span class="info-icon">?</span> <span>${escapeHtml(explanation)}</span></div>`;
 }
 
+/** Public home of a source: the board itself, not our feed URL. */
+function sourceHomepage(source: SourceRecord): string | undefined {
+  const config = source.config;
+  if (source.kind === 'telegram' && typeof config.channel === 'string') return `https://t.me/s/${config.channel}`;
+  const fixed: Partial<Record<string, string>> = {
+    kwork: 'https://kwork.ru/projects', trudvsem: 'https://trudvsem.ru', hh: 'https://hh.ru', remoteok: 'https://remoteok.com',
+  };
+  if (fixed[source.kind]) return fixed[source.kind];
+  if (typeof config.url === 'string') {
+    try {
+      return new URL(config.url).origin;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+/** Where leads come from, for readers: boards, what part of each, how much today. */
+function renderPublicSources(data: SourcesPageData, health: SourceHealth[]): string {
+  const lang = data.lang ?? 'ru';
+  const t = getTranslations(lang);
+  const ru = lang === 'ru';
+  const sorted = [...health].sort((a, b) => b.last24h.inserted - a.last24h.inserted);
+  const total = sorted.reduce((sum, item) => sum + item.last24h.inserted, 0);
+  const cards = sorted
+    .map((item) => {
+      const [platform, scope] = item.source.title.split(/\s+—\s+/, 2);
+      const fromPeople = item.source.kind === 'webhook';
+      const home = fromPeople ? undefined : sourceHomepage(item.source);
+      const down = Boolean(item.lastRun?.error);
+      return `<div class="source-card">
+        <div class="source-card-head">
+          <a class="source-card-title" href="/sources/${escapeHtml(item.source.id)}">${escapeHtml(platform ?? item.source.title)}</a>
+          ${scope ? `<span class="source-scope">${escapeHtml(scope)}</span>` : fromPeople ? `<span class="source-scope">${ru ? 'от участников' : 'from participants'}</span>` : ''}
+        </div>
+        <div class="source-card-meta">
+          <strong>${item.last24h.inserted}</strong> ${ru ? plural(item.last24h.inserted, ['новый', 'новых', 'новых']) + ' за сутки' : 'new in 24 h'}
+          ${down ? ` · <span class="text-warn">${ru ? 'временно недоступен' : 'temporarily unavailable'}</span>` : ''}
+          ${home ? ` · <a href="${escapeHtml(home)}" target="_blank" rel="noopener noreferrer">${escapeHtml(new URL(home).hostname.replace(/^www\./, ''))} ↗</a>` : ''}
+        </div>
+      </div>`;
+    })
+    .join('');
+  const body = `
+<div class="page-head">
+  <div>
+    <h1>${ru ? 'Откуда заказы' : 'Where leads come from'}</h1>
+    <p class="muted small">${sorted.length} ${ru ? plural(sorted.length, ['источник', 'источника', 'источников']) : 'sources'} · ${total} ${ru ? plural(total, ['новый', 'новых', 'новых']) + ' за сутки' : 'new in 24 h'}</p>
+  </div>
+</div>
+<p class="sources-intro">${ru
+    ? 'Хаб сам читает открытые ленты бирж, а участники присылают заказы со своих узлов и парсеров. Дубли с разных площадок склеиваются в один заказ. Сейчас часть площадок читается целиком, часть — только раздел IT и разработки.'
+    : 'The hub reads open board feeds itself, and participants send leads from their nodes and parsers. Duplicates across boards are merged into one lead. Some boards are read in full, some only in their IT and development section.'}</p>
+<div class="source-grid">${cards}</div>
+<div class="sources-cta">
+  <a class="btn ghost" href="${REPO_URL}/issues/new?template=source-request.yml" target="_blank" rel="noopener noreferrer">${ru ? 'Предложить источник' : 'Suggest a source'}</a>
+  <a class="btn ghost" href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md#5-делиться-с-хабом-и-получать-рейтинг" target="_blank" rel="noopener noreferrer">${ru ? 'Подключить свой узел или парсер' : 'Connect your node or parser'}</a>
+</div>`;
+  return layout({ title: t.navSources, version: data.version, active: 'sources', body, auth: data.auth, lang });
+}
+
 export function renderSourcesPage(data: SourcesPageData): string {
   const { version, lang = 'ru', isAdmin } = data;
   const t = getTranslations(lang);
   // Readers see the sources that work for the feed; disabled ones are the operator's business.
   const health = isAdmin ? data.health : data.health.filter((item) => item.source.enabled);
+  if (!isAdmin) return renderPublicSources(data, health);
   const rows = health
     .map((item) => {
-      if (!isAdmin) {
-        const status = publicHealthStatus(item);
-        return `<a class="row" href="/sources/${escapeHtml(item.source.id)}">
-        <div>
-          <div class="row-title">${escapeHtml(item.source.title)}</div>
-          <div class="row-meta">${escapeHtml(KIND_LABELS[item.source.kind] ?? item.source.kind)} · <span class="dot ${status.dot}"></span>${status.label}</div>
-        </div>
-        <div class="row-side">${newLeadsLabel(item.last24h.inserted)}</div>
-      </a>`;
-      }
       const status = healthStatus(item);
       const error = item.lastRun?.error;
       return `<a class="row" href="/sources/${escapeHtml(item.source.id)}">
