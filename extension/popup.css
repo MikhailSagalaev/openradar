@@ -323,3 +323,30 @@ button.ghost:hover {
 .market-examples a {
   color: var(--ink);
 }
+
+.account {
+  margin-bottom: 12px;
+}
+
+.account button#sign-in {
+  width: 100%;
+}
+
+.account-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.account-note {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+[hidden] {
+  display: none !important;
+}

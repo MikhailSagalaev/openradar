@@ -43,6 +43,8 @@ export interface Env {
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
   RADAR_PUBLIC_URL?: string;
+  /** GitHub accounts with admin rights: comma-separated numeric ids or logins. */
+  RADAR_ADMIN_GITHUB?: string;
   /** Optional web analytics and search console verification (see src/server/analytics.ts). */
   RADAR_YANDEX_METRIKA_ID?: string;
   RADAR_GA_ID?: string;

@@ -25,30 +25,34 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 async function sendToRadar(payload) {
-  const stored = await chrome.storage.local.get('radarConfig');
-  const config = stored.radarConfig;
-  if (!config?.base || !config?.sourceId || !config?.token) {
+  // The GitHub-connected account goes to the shared base; otherwise to your own node.
+  const { radarAccount: account, radarConfig: config } = await chrome.storage.local.get(['radarAccount', 'radarConfig']);
+  const toNode = !account?.token && config?.base && config?.sourceId && config?.token;
+  if (!account?.token && !toNode) {
     if (chrome.notifications) {
       chrome.notifications.create({
         type: 'basic',
         iconUrl: 'icon48.png',
         title: 'OpenRadar',
-        message: 'Настройте расширение: укажите адрес сервера и токен источника в попапе.',
+        message: 'Откройте расширение и войдите через GitHub.',
       });
     }
-    return { ok: false, message: 'Не настроены параметры сервера' };
+    return { ok: false, message: 'Нет входа' };
   }
 
-  const base = config.base.replace(/\/+$/, '');
+  const base = (account?.token ? account.base : config.base).replace(/\/+$/, '');
   try {
-    const response = await fetch(`${base}/api/ingest/${encodeURIComponent(config.sourceId)}`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-radar-token': config.token,
-      },
-      body: JSON.stringify(payload),
-    });
+    const response = account?.token
+      ? await fetch(`${base}/api/ext/submit`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${account.token}` },
+          body: JSON.stringify(payload),
+        })
+      : await fetch(`${base}/api/ingest/${encodeURIComponent(config.sourceId)}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-radar-token': config.token },
+          body: JSON.stringify(payload),
+        });
 
     if (!response.ok) {
       const errText = (await response.text()).slice(0, 160);

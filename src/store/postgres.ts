@@ -34,7 +34,9 @@ import type {
   UpsertGitHubUserInput,
   UserRecord,
   UserVoteResult,
+  AdminStats,
 } from '../core/store.ts';
+import { lastDays } from '../core/store.ts';
 
 import { checkMigrations } from './migrator.ts';
 
@@ -561,6 +563,55 @@ export class PostgresStore implements Store {
     return res.rows.map((r) => this.rowToLead(r));
   }
 
+  async getAdminStats(days = 14): Promise<AdminStats> {
+    const one = async (sql: string): Promise<number[]> => {
+      const row = (await this.pool.query(sql)).rows[0] ?? {};
+      return Object.values(row).map((v) => Number(v) || 0);
+    };
+    const [daily, sources, users, votes, participants, observations] = await Promise.all([
+      this.pool.query(
+        `SELECT to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day,
+                COUNT(*) FILTER (WHERE type = 'gig' AND status <> 'rejected') AS gigs,
+                COUNT(*) FILTER (WHERE type = 'job' AND status <> 'rejected') AS jobs,
+                COUNT(*) FILTER (WHERE status = 'rejected') AS rejected
+         FROM leads WHERE created_at >= date_trunc('day', NOW() AT TIME ZONE 'UTC') - make_interval(days => $1)
+         GROUP BY 1`,
+        [days - 1],
+      ),
+      this.pool.query(
+        `SELECT s.id, s.title, s.enabled,
+                COUNT(l.id) FILTER (WHERE l.status <> 'rejected') AS inserted,
+                COUNT(l.id) FILTER (WHERE l.status = 'rejected') AS rejected
+         FROM sources s LEFT JOIN leads l ON l.source_id = s.id AND l.created_at > NOW() - INTERVAL '7 days'
+         GROUP BY s.id, s.title, s.enabled ORDER BY inserted DESC, s.title`,
+      ),
+      one(`SELECT COUNT(*), COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') FROM app_users`),
+      one(`SELECT COUNT(*), COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') FROM lead_votes`),
+      one(`SELECT COUNT(*) FROM participants`),
+      one(`SELECT COUNT(*) FROM observations WHERE received_at > NOW() - INTERVAL '7 days'`),
+    ]);
+    const byDay = new Map(daily.rows.map((r) => [r.day as string, r]));
+    return {
+      days: lastDays(days).map((day) => {
+        const r = byDay.get(day);
+        return { day, gigs: Number(r?.gigs) || 0, jobs: Number(r?.jobs) || 0, rejected: Number(r?.rejected) || 0 };
+      }),
+      sources: sources.rows.map((r) => ({
+        sourceId: r.id,
+        title: r.title,
+        enabled: r.enabled,
+        inserted7d: Number(r.inserted) || 0,
+        rejected7d: Number(r.rejected) || 0,
+      })),
+      users: users[0] ?? 0,
+      usersNew7d: users[1] ?? 0,
+      votes: votes[0] ?? 0,
+      votes7d: votes[1] ?? 0,
+      participants: participants[0] ?? 0,
+      observations7d: observations[0] ?? 0,
+    };
+  }
+
   async getStats(): Promise<Stats> {
     const one = async (sql: string, params: any[] = []): Promise<number> => {
       const res = await this.pool.query(sql, params);
@@ -925,6 +976,28 @@ export class PostgresStore implements Store {
       [input.githubId, input.handle, input.githubCreatedAt ? new Date(input.githubCreatedAt) : null]
     );
     return rowToUser(res.rows[0]);
+  }
+
+  async saveExtensionToken(tokenHash: string, userId: number): Promise<void> {
+    await this.pool.query(`INSERT INTO extension_tokens (token_hash, user_id) VALUES ($1, $2)`, [tokenHash, userId]);
+  }
+
+  async getUserByExtensionToken(tokenHash: string): Promise<UserRecord | null> {
+    const res = await this.pool.query(
+      `UPDATE extension_tokens SET last_used_at = NOW() WHERE token_hash = $1 RETURNING user_id`,
+      [tokenHash],
+    );
+    const userId = res.rows[0]?.user_id;
+    if (userId === undefined) return null;
+    const user = await this.pool.query(
+      `SELECT id, github_id, handle, role, created_at, github_created_at FROM app_users WHERE id = $1 AND banned_at IS NULL`,
+      [userId],
+    );
+    return user.rows[0] ? rowToUser(user.rows[0]) : null;
+  }
+
+  async deleteExtensionToken(tokenHash: string): Promise<void> {
+    await this.pool.query(`DELETE FROM extension_tokens WHERE token_hash = $1`, [tokenHash]);
   }
 
   async getUserBySession(sessionId: string): Promise<UserRecord | null> {

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `/admin` for operators: leads by day for two weeks, sources over the week with errors,
+  users, votes, network participants and links to the analytics consoles. Admins sign in
+  with GitHub when listed in `RADAR_ADMIN_GITHUB` (numeric ids or logins), or with the token.
+- Browser extension 0.8.0: **Войти через GitHub** instead of a server URL, source id and
+  token. The hub issues a personal token that can only add leads (stored as SHA-256,
+  revoked by **Выйти**) through `/extension/connect` and `/api/ext/*`; leads are signed
+  with the GitHub account. Your own node stays available under **Свой узел**.
 - Security: the deploy workflow runs only after CI of a push to this repository (a
   fork's pull request from a branch named main could trigger it before), CI and deploy
   tokens are read-only, `deploy-server.sh` takes `RADAR_PUBLIC_URL` from the

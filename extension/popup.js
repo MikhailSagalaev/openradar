@@ -55,9 +55,6 @@ async function loadConfig() {
   const market = await chrome.storage.local.get('radarMarketBase');
   fields.marketBase.value = market.radarMarketBase ?? DEFAULT_MARKET_BASE;
 
-  if (!config.sourceId || !config.token) {
-    fields.details.open = true;
-  }
   return config;
 }
 
@@ -188,15 +185,16 @@ async function initPreview() {
 }
 
 async function sendPage() {
+  const account = await getAccount();
   const config = await readConfig();
-  if (!config.base || !config.sourceId || !config.token) {
-    fields.details.open = true;
-    setStatus('Сначала сохраните настройки сервера.', 'err');
+  const toNode = !account && config.base && config.sourceId && config.token;
+  if (!account && !toNode) {
+    setStatus('Войдите через GitHub или настройте свой узел.', 'err');
     return;
   }
 
   fields.send.disabled = true;
-  setStatus('Отправляем в Radar...');
+  setStatus('Отправляем...');
   try {
     const page = (await readPage()) || cachedPage;
     if (!page) throw new Error('Не удалось прочитать страницу.');
@@ -205,18 +203,15 @@ async function sendPage() {
     const text = page.selection || page.jobPosting?.description || page.description || page.title;
     if (!text) throw new Error('На странице нет текста для отправки.');
 
-    const author = config.contributor
-      ? `${config.contributor} (community)`
-      : 'Community Extension';
-
     const payload = {
       type: selectedType,
       title: (selectedType === 'job' && page.jobPosting?.title) || page.title,
       text,
       url: page.url,
-      author,
       externalId: `browser:${page.url}`,
     };
+    // On your own node the author is whoever you set; on the hub it is your GitHub account.
+    if (toNode) payload.author = config.contributor ? `${config.contributor} (community)` : 'Community Extension';
 
     if (page.jobPosting) {
       if (page.jobPosting.city) payload.city = page.jobPosting.city;
@@ -229,18 +224,24 @@ async function sendPage() {
       }
     }
 
-    const response = await fetch(
-      `${config.base}/api/ingest/${encodeURIComponent(config.sourceId)}`,
-      {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-radar-token': config.token,
-        },
-        body: JSON.stringify(payload),
-      },
-    );
+    const base = account ? account.base : config.base;
+    const response = account
+      ? await fetch(`${base}/api/ext/submit`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${account.token}` },
+          body: JSON.stringify(payload),
+        })
+      : await fetch(`${base}/api/ingest/${encodeURIComponent(config.sourceId)}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-radar-token': config.token },
+          body: JSON.stringify(payload),
+        });
 
+    if (response.status === 401 && account) {
+      await chrome.storage.local.remove('radarAccount');
+      renderAccount(null);
+      throw new Error('Вход истёк или отозван. Войдите через GitHub ещё раз.');
+    }
     if (!response.ok) {
       const errText = await response.text();
       throw new Error(errText.slice(0, 160) || `HTTP ${response.status}`);
@@ -248,17 +249,74 @@ async function sendPage() {
     const data = await response.json().catch(() => null);
     const leadId = data?.outcomes?.[0]?.lead?.id || data?.leadId;
     if (leadId) {
-      const leadUrl = `${config.base}/leads/${encodeURIComponent(leadId)}`;
-      fields.status.innerHTML = `Отправлено в Radar. <a href="${leadUrl}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;display:block;margin-top:6px;font-weight:600">Открыть карточку лида →</a>`;
+      const link = document.createElement('a');
+      link.href = `${base}/leads/${encodeURIComponent(leadId)}`;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.textContent = 'Открыть карточку заказа →';
+      link.style.cssText = 'color:inherit;text-decoration:underline;display:block;margin-top:6px;font-weight:600';
+      fields.status.replaceChildren(document.createTextNode('Отправлено.'), link);
       fields.status.className = 'status ok';
     } else {
-      setStatus('Успешно отправлено в Radar', 'ok');
+      setStatus('Отправлено.', 'ok');
     }
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), 'err');
   } finally {
     fields.send.disabled = false;
   }
+}
+
+/** The GitHub-connected account: { base, token, handle } or null. */
+async function getAccount() {
+  const stored = await chrome.storage.local.get('radarAccount');
+  const account = stored.radarAccount;
+  return account?.token && account?.base ? account : null;
+}
+
+function renderAccount(account) {
+  document.getElementById('account-signed-out').hidden = Boolean(account);
+  document.getElementById('account-signed-in').hidden = !account;
+  if (account) {
+    document.getElementById('account-handle').textContent = `@${account.handle}`;
+    document.getElementById('account-host').textContent = new URL(account.base).hostname;
+  }
+}
+
+/** GitHub sign-in on the hub through chrome.identity; the hub returns a token for this extension only. */
+async function signIn() {
+  const base = normalizeBase(fields.marketBase.value) || DEFAULT_MARKET_BASE;
+  const button = document.getElementById('sign-in');
+  button.disabled = true;
+  try {
+    const redirect = chrome.identity.getRedirectURL();
+    const result = await chrome.identity.launchWebAuthFlow({
+      url: `${base}/extension/connect?redirect_uri=${encodeURIComponent(redirect)}`,
+      interactive: true,
+    });
+    const params = new URLSearchParams(new URL(result).hash.slice(1));
+    const token = params.get('token');
+    if (!token || !token.startsWith('ext_')) throw new Error('Сервер не вернул токен.');
+    const account = { token, handle: params.get('handle') || '', base: normalizeBase(params.get('base') || base) };
+    await chrome.storage.local.set({ radarAccount: account });
+    renderAccount(account);
+    setStatus('Готово: заказы будут добавляться от вашего имени.', 'ok');
+  } catch (error) {
+    setStatus(`Вход не удался: ${error instanceof Error ? error.message : String(error)}`, 'err');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function signOut() {
+  const account = await getAccount();
+  if (account) {
+    // Revoke on the server too; the local copy goes away even if the hub is unreachable.
+    fetch(`${account.base}/api/ext/token`, { method: 'DELETE', headers: { authorization: `Bearer ${account.token}` } }).catch(() => {});
+  }
+  await chrome.storage.local.remove('radarAccount');
+  renderAccount(null);
+  setStatus('Вы вышли.', '');
 }
 
 function formatMoney(value, currency) {
@@ -356,6 +414,10 @@ document.querySelectorAll('input[name="leadType"]').forEach((radio) => {
     fields.marketResult.hidden = true;
   });
 });
+
+document.getElementById('sign-in').addEventListener('click', signIn);
+document.getElementById('sign-out').addEventListener('click', signOut);
+getAccount().then(renderAccount);
 
 loadConfig().catch((error) => setStatus(String(error), 'err'));
 initPreview();

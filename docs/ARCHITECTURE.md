@@ -205,6 +205,8 @@ sessions(id, user_id, created_at, expires_at)
 - `GET /catalog/:slug` — индексируемые страницы категорий; `GET /robots.txt`, `GET /sitemap.xml` — в sitemap попадают категории и лиды, которые видит гость.
 - `GET /extension`, `GET /extension/download` — страница и архив браузерного расширения.
 - `GET /api/market?title=&type=job|gig&skills=` — оценка оплаты для расширения: 25/50/75-й перцентили по похожим лидам с бюджетом за 90 дней (похожие — где есть половина слов запроса по основам или половина навыков; меньше трёх — по всем лидам типа). Только агрегаты по лидам, которые уже видит гость; `Access-Control-Allow-Origin: *`.
+- `GET /admin` — сводка для оператора: заказы по дням, источники за неделю, пользователи, голоса, участники сети. Админ — токен `RADAR_ADMIN_TOKEN` или GitHub-аккаунт из `RADAR_ADMIN_GITHUB`.
+- `GET|POST /extension/connect`, `/api/ext/me`, `/api/ext/submit`, `DELETE /api/ext/token` — вход расширения через GitHub: токен `ext_…` только на добавление заказов, хранится SHA-256, возвращается лишь на `https://<id>.chromiumapp.org/`.
 - `GET /me` — профиль вошедшего: уровень, задержка, рейтинг привязанного ключа, как подняться.
 - `GET /yandex_<код>.html` — подтверждение Яндекс Вебмастера, если задан `RADAR_YANDEX_VERIFICATION`. Счётчики Метрики и Google Analytics и мета-тег Search Console выводятся только при `RADAR_YANDEX_METRIKA_ID`, `RADAR_GA_ID`, `RADAR_GOOGLE_SITE_VERIFICATION`; CSP расширяется на их домены только тогда же.
 - `GET /og.png` — карточка для соцсетей; `og:image` и абсолютный `og:url` выводятся, когда задан `RADAR_PUBLIC_URL`.

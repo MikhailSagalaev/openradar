@@ -15,6 +15,17 @@
     <span class="sub">захват заказов и вакансий</span>
   </header>
 
+  <section class="account" id="account">
+    <div id="account-signed-out">
+      <button id="sign-in" type="button">Войти через GitHub</button>
+      <p class="account-note">Заказы будут добавляться в общую базу openradar.fun от вашего имени. Ничего вводить не нужно.</p>
+    </div>
+    <div id="account-signed-in" class="account-row" hidden>
+      <span>Вы вошли как <strong id="account-handle"></strong> · <span id="account-host"></span></span>
+      <button id="sign-out" type="button" class="mini-btn">Выйти</button>
+    </div>
+  </section>
+
   <div id="preview-box" class="preview-box">
     <div id="page-title" class="page-title">Загрузка данных вкладки...</div>
     <div id="page-url" class="page-url"></div>
@@ -34,7 +45,7 @@
   </div>
 
   <div class="actions-box">
-    <button id="send" type="button">Отправить в Radar</button>
+    <button id="send" type="button">Отправить в OpenRadar</button>
   </div>
   <p id="status" class="status"></p>
 
@@ -44,7 +55,8 @@
   </section>
 
   <details id="settings-details">
-    <summary>Настройки подключения</summary>
+    <summary>Свой узел (необязательно)</summary>
+    <p class="account-note">Если у вас свой сервер OpenRadar: заказы пойдут на него в webhook-источник, а не в общую базу.</p>
     <form id="config">
       <label>Ваш никнейм (@telegram)
         <input id="contributor" type="text" placeholder="@username" autocomplete="off">

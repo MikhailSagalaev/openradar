@@ -70,6 +70,25 @@ export interface UpsertGitHubUserInput {
   githubCreatedAt?: string;
 }
 
+/** Operator dashboard numbers (/admin). Days are UTC dates, oldest first, without gaps. */
+export interface AdminStats {
+  days: Array<{ day: string; gigs: number; jobs: number; rejected: number }>;
+  sources: Array<{ sourceId: string; title: string; enabled: boolean; inserted7d: number; rejected7d: number }>;
+  users: number;
+  usersNew7d: number;
+  votes: number;
+  votes7d: number;
+  participants: number;
+  observations7d: number;
+}
+
+/** The last `count` UTC dates ending today, oldest first. */
+export function lastDays(count: number, now: Date = new Date()): string[] {
+  const out: string[] = [];
+  for (let i = count - 1; i >= 0; i -= 1) out.push(new Date(now.getTime() - i * 86_400_000).toISOString().slice(0, 10));
+  return out;
+}
+
 export interface UserRecord {
   id: number;
   githubId: number;
@@ -252,6 +271,11 @@ export interface Store extends HubStore {
   listLeads(options?: ListLeadsOptions): Promise<Lead[]>;
   getStats(): Promise<Stats>;
   getSourceHealth(): Promise<SourceHealth[]>;
+  getAdminStats?(days?: number): Promise<AdminStats>;
+  /** Browser extension tokens, stored as SHA-256 hashes. */
+  saveExtensionToken?(tokenHash: string, userId: number): Promise<void>;
+  getUserByExtensionToken?(tokenHash: string): Promise<UserRecord | null>;
+  deleteExtensionToken?(tokenHash: string): Promise<void>;
 
   recordRun(run: RunRecord): Promise<void>;
   listRuns(limit?: number, sourceId?: string): Promise<RunRecord[]>;

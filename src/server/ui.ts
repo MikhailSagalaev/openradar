@@ -969,6 +969,31 @@ dialog::backdrop {
 .source-card-meta strong { color: var(--ink); }
 .source-card-meta a { color: var(--muted); }
 .sources-cta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.admin-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.admin-tile { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.admin-tile-label { font-size: 12px; color: var(--muted); }
+.admin-tile-value { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-top: 2px; }
+.admin-tile-hint { font-size: 12px; color: var(--muted); }
+.admin-section { margin-top: 32px; }
+.admin-section h2 { font-size: 15px; margin: 0 0 10px; }
+.admin-chart { display: flex; align-items: flex-end; gap: 6px; height: 180px; padding-top: 8px; border-bottom: 1px solid var(--line); }
+.admin-bar { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; }
+.admin-bar-stack { flex: 1; width: 100%; display: flex; flex-direction: column; justify-content: flex-end; }
+.admin-bar-day { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.seg { display: block; width: 100%; }
+.seg.gigs { background: var(--ink); }
+.seg.jobs { background: var(--muted); }
+.seg.rejected { background: var(--rose); opacity: 0.6; }
+.admin-legend { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.admin-legend .seg { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.admin-table th, .admin-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.admin-table th { color: var(--muted); font-weight: 500; }
+.admin-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.admin-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.connect-card { max-width: 520px; margin: 40px auto; border: 1px solid var(--line); border-radius: 12px; padding: 24px; display: grid; gap: 10px; }
+.connect-card h1 { font-size: 20px; margin: 0; }
+.connect-card p { margin: 0; line-height: 1.6; }
 .similar { margin-top: 40px; }
 .similar h2 { font-size: 15px; margin: 0 0 4px; }
 .load-more a.loading { opacity: 0.5; pointer-events: none; }
@@ -1466,9 +1491,10 @@ export function layout(input: {
         <div class="user-menu-dropdown" id="user-menu-dropdown" style="display:none">
           <div class="user-menu-info">
             <div class="user-menu-name">${escapeHtml(input.auth.handle ? '@' + input.auth.handle : 'Администратор')}</div>
-            <div class="user-menu-role">${input.auth.handle ? 'GitHub Contributor' : 'Токен администратора'}</div>
+            <div class="user-menu-role">${input.auth.isAdmin ? (lang === 'ru' ? 'Администратор' : 'Administrator') : lang === 'ru' ? 'Участник' : 'Member'}</div>
           </div>
           <div class="user-menu-sep"></div>
+          ${input.auth.isAdmin ? `<a class="user-menu-link" href="/admin">${escapeHtml(lang === 'ru' ? 'Админка' : 'Admin')}</a>` : ''}
           <a class="user-menu-link" href="/me">${escapeHtml(t.navProfile)}</a>
           <a class="user-menu-link" href="/submit">${escapeHtml(lang === 'ru' ? 'Добавить по ссылке' : 'Submit by URL')}</a>
           <a class="user-menu-link" href="/extension">${escapeHtml(lang === 'ru' ? 'Браузерное расширение' : 'Browser Extension')}</a>
@@ -2862,6 +2888,31 @@ export function renderProfilePage(data: ProfilePageData): string {
   return layout({ title: t.profileTitle, version: data.version, body, auth: data.auth, lang });
 }
 
+/** Consent before the browser extension gets a token that submits leads as this user. */
+export function renderExtensionConnectPage(data: {
+  version: string;
+  lang?: SupportedLang;
+  auth?: AuthDisplay;
+  handle: string;
+  redirectUri: string;
+}): string {
+  const lang = data.lang ?? 'ru';
+  const ru = lang === 'ru';
+  const body = `
+<div class="connect-card">
+  <h1>${ru ? 'Подключить расширение' : 'Connect the extension'}</h1>
+  <p>${ru
+    ? `Расширение OpenRadar сможет добавлять заказы от имени <strong>@${escapeHtml(data.handle)}</strong>. Других прав у него не будет: ни голосования, ни настроек, ни доступа к аккаунту GitHub.`
+    : `The OpenRadar extension will add leads as <strong>@${escapeHtml(data.handle)}</strong>. Nothing else: no voting, no settings, no access to your GitHub account.`}</p>
+  <p class="muted small">${ru ? 'Отключить можно в самом расширении кнопкой «Выйти».' : 'Disconnect it in the extension with «Выйти».'}</p>
+  <form method="post" action="/extension/connect">
+    <input type="hidden" name="redirect_uri" value="${escapeHtml(data.redirectUri)}">
+    <button class="btn" type="submit">${ru ? 'Разрешить' : 'Allow'}</button>
+  </form>
+</div>`;
+  return layout({ title: ru ? 'Подключить расширение' : 'Connect the extension', version: data.version, body, auth: data.auth, lang });
+}
+
 export function renderNotFound(version: string, lang: SupportedLang = 'ru'): string {
   const t = getTranslations(lang);
   return layout({
@@ -2888,8 +2939,8 @@ export function renderExtensionPage(data: ExtensionPageData): string {
         step2Desc: 'In Chrome, Edge, Yandex Browser, or Brave, navigate to <code>chrome://extensions/</code> and enable the <b>Developer mode</b> toggle in the top-right corner.',
         step3Title: '3. Load unpacked extension',
         step3Desc: 'Click <b>Load unpacked</b> and select the extracted folder. The OpenRadar icon will appear in your browser toolbar.',
-        step4Title: '4. Configure server URL and token',
-        step4Desc: 'Click the OpenRadar icon → expand <b>Connection settings</b>. Copy the server address and source ID from the panel on the right, enter your source webhook token, and click <b>Test</b>.',
+        step4Title: '4. Sign in with GitHub',
+        step4Desc: 'Click the OpenRadar icon and press <b>Войти через GitHub</b>, then allow the extension on the hub. Nothing to type: leads go to the shared base under your GitHub name. For your own server, use <b>Свой узел</b> in the popup with the address and webhook source below.',
         usageTitle: 'How to Use',
         fullPageTitle: 'Full page capture (Alt+Shift+R)',
         fullPageDesc: 'On any job posting or gig page, press <b>Alt+Shift+R</b> or click the toolbar icon. The extension parses the title, URL, and page content. If <code>schema.org/JobPosting</code> metadata is present (HeadHunter, SuperJob, LinkedIn), salary, company, location, and skills are extracted automatically.',
@@ -2932,8 +2983,8 @@ export function renderExtensionPage(data: ExtensionPageData): string {
         step2Desc: 'В адресной строке Chrome, Edge, Яндекс.Браузера или Brave введите: <code>chrome://extensions/</code> и включите тумблер <b>«Режим разработчика»</b> (в правом верхнем углу).',
         step3Title: '3. Загрузите распакованное расширение',
         step3Desc: 'Нажмите <b>«Загрузить распакованное расширение»</b> (Load unpacked) и выберите распакованную папку. На панели появится иконка OpenRadar.',
-        step4Title: '4. Настройте адрес сервера и токен',
-        step4Desc: 'Кликните по иконке OpenRadar → раскройте <b>«Настройки подключения»</b>. Скопируйте адрес сервера и ID источника из блока справа, введите секретный токен источника и нажмите <b>«Проверить»</b>.',
+        step4Title: '4. Войдите через GitHub',
+        step4Desc: 'Кликните по иконке OpenRadar и нажмите <b>«Войти через GitHub»</b>, затем разрешите расширение на сайте. Ничего вводить не нужно: заказы добавляются в общую базу от вашего имени. Для своего сервера — раздел <b>«Свой узел»</b> в попапе с адресом и webhook-источником ниже.',
         usageTitle: 'Как пользоваться расширением',
         fullPageTitle: 'Отправка всей страницы (горячие клавиши Alt+Shift+R)',
         fullPageDesc: 'Находясь на любой странице с вакансией или заказом, нажмите <b>Alt+Shift+R</b> или иконку на панели. Расширение автоматически считает заголовок, URL и описание. Если на сайте есть разметка <code>schema.org/JobPosting</code> (HH, SuperJob, LinkedIn), расширение автоматически определит зарплату, компанию, город и стек навыков.',

@@ -19,7 +19,9 @@ import type {
   UpsertGitHubUserInput,
   UserRecord,
   UserVoteResult,
+  AdminStats,
 } from '../core/store.ts';
+import { lastDays } from '../core/store.ts';
 import type {
   Contact,
   Lead,
@@ -369,6 +371,41 @@ export class MemoryStore implements Store {
     }));
   }
 
+  async getAdminStats(days = 14): Promise<AdminStats> {
+    const week = new Date(Date.now() - 7 * 86_400_000).toISOString();
+    const leads = Array.from(this.leads.values());
+    const sources = Array.from(this.sources.values());
+    return {
+      days: lastDays(days).map((day) => {
+        const today = leads.filter((l) => l.createdAt.slice(0, 10) === day);
+        return {
+          day,
+          gigs: today.filter((l) => (l.type ?? 'gig') === 'gig' && l.status !== 'rejected').length,
+          jobs: today.filter((l) => l.type === 'job' && l.status !== 'rejected').length,
+          rejected: today.filter((l) => l.status === 'rejected').length,
+        };
+      }),
+      sources: sources
+        .map((s) => {
+          const recent = leads.filter((l) => l.sourceId === s.id && l.createdAt > week);
+          return {
+            sourceId: s.id,
+            title: s.title,
+            enabled: s.enabled,
+            inserted7d: recent.filter((l) => l.status !== 'rejected').length,
+            rejected7d: recent.filter((l) => l.status === 'rejected').length,
+          };
+        })
+        .sort((a, b) => b.inserted7d - a.inserted7d || a.title.localeCompare(b.title)),
+      users: this.users.size,
+      usersNew7d: Array.from(this.users.values()).filter((u) => u.createdAt > week).length,
+      votes: this.userVotes.size,
+      votes7d: this.userVotes.size,
+      participants: this.participants.size,
+      observations7d: this.observations.filter((o) => o.receivedAt > week).length,
+    };
+  }
+
   async getStats(): Promise<Stats> {
     const all = Array.from(this.leads.values());
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
@@ -541,6 +578,21 @@ export class MemoryStore implements Store {
     this.users.set(user.id, user);
     this.usersByGithubId.set(input.githubId, user.id);
     return user;
+  }
+
+  private extensionTokens = new Map<string, number>();
+
+  async saveExtensionToken(tokenHash: string, userId: number): Promise<void> {
+    this.extensionTokens.set(tokenHash, userId);
+  }
+
+  async getUserByExtensionToken(tokenHash: string): Promise<UserRecord | null> {
+    const userId = this.extensionTokens.get(tokenHash);
+    return userId === undefined ? null : this.users.get(userId) ?? null;
+  }
+
+  async deleteExtensionToken(tokenHash: string): Promise<void> {
+    this.extensionTokens.delete(tokenHash);
   }
 
   async getUserBySession(sessionId: string): Promise<UserRecord | null> {

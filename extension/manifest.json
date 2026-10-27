@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "OpenRadar — захват вакансий и заказов",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "Отправляет вакансии и заказы в OpenRadar в один клик и оценивает, сколько за такую работу платят на рынке. Никаких автоматических запросов: каждое действие — только по вашей команде.",
   "icons": {
     "16": "icon16.png",
@@ -11,6 +11,7 @@
   },
   "permissions": [
     "activeTab",
+    "identity",
     "scripting",
     "storage",
     "contextMenus",

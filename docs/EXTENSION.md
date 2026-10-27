@@ -1,6 +1,6 @@
 # Browser extension (Manifest V3)
 
-A dependency-free Manifest V3 extension that sends a vacancy or an order from any site to your OpenRadar node with one click, the context menu or `Alt+Shift+R`.
+A dependency-free Manifest V3 extension that sends a vacancy or an order from any site to OpenRadar with one click, the context menu or `Alt+Shift+R`, and shows what similar work usually pays.
 
 ## Installation (Chrome, Edge, Yandex Browser, Brave)
 
@@ -8,14 +8,22 @@ A dependency-free Manifest V3 extension that sends a vacancy or an order from an
 2. Unpack it, open `chrome://extensions/`, enable **Developer mode**.
 3. **Load unpacked** and select the unpacked folder.
 
-## Configuration
+## Sign in
+
+Press **Войти через GitHub** in the popup. A sign-in window opens on the hub (`https://openradar.fun` by default, the **Сервер рыночной оценки** setting); after GitHub sign-in the hub asks you to allow the extension to add leads as you. Nothing else to type: leads go to the shared base under your GitHub name.
+
+How it works: the extension opens `/extension/connect` with `chrome.identity.launchWebAuthFlow`. The hub returns a personal token (`ext_…`) only to the extension's own `https://<extension id>.chromiumapp.org/` address. The token can add leads and nothing else; the hub stores only its SHA-256. **Выйти** revokes it. Firefox is not supported by this flow.
+
+## Your own node (optional)
+
+To send leads to your own server instead, sign out and use the settings:
 
 1. Create a webhook source on your node:
    ```bash
    node bin/radar.js source add --kind webhook --title "Browser"
    ```
    Keep the token it prints. Source ids are also listed on `/extension`.
-2. In the popup, open **Настройки подключения** and fill in the server URL (e.g. `http://127.0.0.1:8787`, check it with **Проверить**), the source id and the token. Save.
+2. In the popup, open **Свой узел (необязательно)** and fill in the server URL (e.g. `http://127.0.0.1:8787`, check it with **Проверить**), the source id and the token. Save.
 
 ## What it captures
 

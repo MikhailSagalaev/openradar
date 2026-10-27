@@ -645,6 +645,91 @@ describe('http server', () => {
     expect(await verify.text()).toContain('Verification: 3fb8622ca1035d2f');
   });
 
+  it('shows /admin to the token admin and to listed GitHub accounts only', async () => {
+    const plain = makeRuntime({ RADAR_PUBLIC_READ: true });
+    const plainApp = createApp(plain);
+    expect((await plainApp.request('/admin')).headers.get('location')).toBe('/login?returnTo=/admin');
+    const memberSession = await makeUserSession(plain, 'octocat');
+    expect((await plainApp.request('/admin', { headers: { cookie: `radar_session=${memberSession}` } })).status).toBe(302);
+
+    const source = await plain.store.createSource({ kind: 'rss', title: 'Feed' });
+    await plain.store.insertLead({
+      id: 'a1', sourceId: source.id, externalId: 'a1', titleKey: 'a1', fingerprint: 'fp-a1', title: 'Логотип', text: 'Логотип',
+      type: 'gig', status: 'new', score: 60, reasons: [], createdAt: new Date().toISOString(),
+    });
+    const tokenPage = await (await plainApp.request('/admin', { headers: { authorization: 'Bearer secret' } })).text();
+    expect(tokenPage).toContain('Админка');
+    expect(tokenPage).toContain('class="admin-chart"');
+    expect(tokenPage).toContain('<td><a href="/sources/');
+
+    // makeUserSession creates GitHub id 583231.
+    const byId = makeRuntime({ RADAR_PUBLIC_READ: true, RADAR_ADMIN_GITHUB: '583231' });
+    const session = await makeUserSession(byId, 'octocat');
+    const page = await createApp(byId).request('/admin', { headers: { cookie: `radar_session=${session}` } });
+    expect(page.status).toBe(200);
+    expect(await (await createApp(byId).request('/', { headers: { cookie: `radar_session=${session}` } })).text()).toContain('href="/admin"');
+
+    const byLogin = makeRuntime({ RADAR_PUBLIC_READ: true, RADAR_ADMIN_GITHUB: 'someone-else, OctoCat' });
+    const loginSession = await makeUserSession(byLogin, 'octocat');
+    expect((await createApp(byLogin).request('/admin', { headers: { cookie: `radar_session=${loginSession}` } })).status).toBe(200);
+  });
+
+  it('connects the browser extension through GitHub sign-in and a consent page', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true, GITHUB_CLIENT_ID: 'id', GITHUB_CLIENT_SECRET: 'secret', RADAR_PUBLIC_URL: 'https://hub.example' });
+    const app = createApp(runtime);
+    const redirect = 'https://abcdefghijklmnopabcdefghijklmnop.chromiumapp.org/';
+    const connect = `/extension/connect?redirect_uri=${encodeURIComponent(redirect)}`;
+
+    expect((await app.request('/extension/connect?redirect_uri=https://evil.example/')).status).toBe(400);
+    const anonymous = await app.request(connect);
+    expect(anonymous.headers.get('location')).toBe(`/auth/github?returnTo=${encodeURIComponent(connect)}`);
+
+    const session = await makeUserSession(runtime, 'octocat');
+    const cookie = { cookie: `radar_session=${session}` };
+    const consent = await (await app.request(connect, { headers: cookie })).text();
+    expect(consent).toContain('@octocat');
+    expect(consent).toContain(`name="redirect_uri" value="${redirect}"`);
+
+    const evil = await app.request('/extension/connect', {
+      method: 'POST',
+      headers: { ...cookie, origin: 'http://localhost', 'content-type': 'application/x-www-form-urlencoded' },
+      body: formBody({ redirect_uri: 'https://evil.example/' }),
+    });
+    expect(evil.status).toBe(400);
+
+    const granted = await app.request('/extension/connect', {
+      method: 'POST',
+      headers: { ...cookie, origin: 'http://localhost', 'content-type': 'application/x-www-form-urlencoded' },
+      body: formBody({ redirect_uri: redirect }),
+    });
+    const location = granted.headers.get('location') ?? '';
+    expect(location.startsWith(`${redirect}#`)).toBe(true);
+    const fragment = new URLSearchParams(location.split('#')[1]);
+    const token = fragment.get('token') ?? '';
+    expect(token).toMatch(/^ext_[0-9a-f]{64}$/);
+    expect(fragment.get('handle')).toBe('octocat');
+    expect(fragment.get('base')).toBe('https://hub.example');
+
+    const bearer = { authorization: `Bearer ${token}` };
+    const preflight = await app.request('/api/ext/submit', { method: 'OPTIONS' });
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get('access-control-allow-headers')).toContain('authorization');
+    expect(await (await app.request('/api/ext/me', { headers: bearer })).json()).toEqual({ handle: 'octocat' });
+
+    const submitted = await app.request('/api/ext/submit', {
+      method: 'POST',
+      headers: { ...bearer, 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'gig', title: 'Логотип для кофейни', text: 'Нужен логотип и брендбук, бюджет 20 000 ₽', url: 'https://example.com/order/1', author: 'Someone else' }),
+    });
+    const result = (await submitted.json()) as { ok: boolean; leadId: string };
+    expect(result.ok).toBe(true);
+    expect((await runtime.store.getLead(result.leadId))?.author).toBe('octocat');
+
+    await app.request('/api/ext/token', { method: 'DELETE', headers: bearer });
+    expect((await app.request('/api/ext/me', { headers: bearer })).status).toBe(401);
+    expect((await app.request('/api/ext/me', { headers: { authorization: 'Bearer ext_forged' } })).status).toBe(401);
+  });
+
   it('supports GDPR erasure with DELETE /api/leads/:id', async () => {
     const runtime = makeRuntime();
     const app = createApp(runtime);

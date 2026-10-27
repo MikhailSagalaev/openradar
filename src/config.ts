@@ -45,6 +45,7 @@ const envSchema = z.object({
   GITHUB_CLIENT_ID: optionalString,
   GITHUB_CLIENT_SECRET: optionalString,
   RADAR_PUBLIC_URL: optionalString,
+  RADAR_ADMIN_GITHUB: optionalString,
   RADAR_YANDEX_METRIKA_ID: optionalString,
   RADAR_GA_ID: optionalString,
   RADAR_GOOGLE_SITE_VERIFICATION: optionalString,

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { escapeHtml, extractTechSkills } from '../core/text.ts';
@@ -17,6 +17,7 @@ import { SOURCE_PRESETS } from '../sources/presets.ts';
 import { IMAP_PASSWORD_ENV_RE } from '../sources/imap.ts';
 import { VERSION } from '../version.ts';
 import { githubOAuthConfigured, startGitHubOAuth, handleGitHubCallback } from './auth.ts';
+import { renderAdminPage } from './admin.ts';
 import { analyticsFromEnv, contentSecurityPolicy } from './analytics.ts';
 import { filterOptions, parseFeedFilters } from './filters.ts';
 import { estimateMarket } from '../core/market.ts';
@@ -27,6 +28,7 @@ import {
   renderLeadsPage,
   renderNewSourcePage,
   renderNotFound,
+  renderExtensionConnectPage,
   renderProfilePage,
   setAnalytics,
   setPublicBaseUrl,
@@ -35,6 +37,7 @@ import {
   renderSourcesPage,
   renderSubmitPage,
   STYLE,
+  type AuthDisplay,
   STYLE_PATH,
   type SourceFormValues,
 } from './ui.ts';
@@ -70,8 +73,23 @@ function safeEqual(left: string | undefined, right: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/**
+ * GitHub accounts with admin rights (RADAR_ADMIN_GITHUB): numeric ids, or logins.
+ * Ids are safer: a login can be renamed and later taken by someone else.
+ */
+function isGitHubAdmin(user: UserRecord | undefined, runtime: Runtime): boolean {
+  const list = runtime.env.RADAR_ADMIN_GITHUB;
+  if (!user || !list) return false;
+  return list
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean)
+    .some((entry) => (/^\d+$/.test(entry) ? Number(entry) === user.githubId : entry === user.handle.toLowerCase()));
+}
+
 async function isAdmin(c: Context, runtime: Runtime): Promise<boolean> {
   const env = runtime.env;
+  if (env.RADAR_ADMIN_GITHUB && isGitHubAdmin(await currentUser(c, runtime), runtime)) return true;
   if (!env.RADAR_ADMIN_TOKEN) return false;
 
   const headerToken = tokenFromRequest(c);
@@ -103,16 +121,12 @@ async function currentUser(c: Context, runtime: Runtime): Promise<UserRecord | u
   return user ?? undefined;
 }
 
-interface AuthDisplay {
-  /** GitHub handle when the session belongs to a registered user. */
-  handle?: string;
-}
 
 async function getAuthDisplay(c: Context, runtime: Runtime): Promise<AuthDisplay | undefined> {
   const user = await currentUser(c, runtime);
-  if (user) return { handle: user.handle };
+  if (user) return { handle: user.handle, isAdmin: isGitHubAdmin(user, runtime) };
   const sessionId = getCookie(c, 'radar_session');
-  if (sessionId && (await runtime.store.validateSession?.(sessionId))) return {};
+  if (sessionId && (await runtime.store.validateSession?.(sessionId))) return { isAdmin: true };
   return undefined;
 }
 
@@ -893,6 +907,27 @@ export function createApp(runtime: Runtime): Hono {
         delayMinutes: delayMinutes(viewer, runtime.access),
         isAdmin: viewer.tier === 'admin',
         githubEnabled: githubOAuthConfigured(runtime),
+      }),
+    );
+  });
+
+  app.get('/admin', async (c) => {
+    if (!await isAdmin(c, runtime)) return c.redirect('/login?returnTo=/admin');
+    const [stats, health, admin] = await Promise.all([
+      runtime.store.getStats(),
+      runtime.store.getSourceHealth(),
+      runtime.store.getAdminStats ? runtime.store.getAdminStats(14) : undefined,
+    ]);
+    if (!admin) return c.text('This store has no admin statistics', 501);
+    return c.html(
+      renderAdminPage({
+        version: VERSION,
+        auth: await getAuthDisplay(c, runtime),
+        lang: resolveLang(c),
+        stats,
+        health,
+        admin,
+        analytics: analyticsFromEnv(runtime.env),
       }),
     );
   });
@@ -1693,15 +1728,15 @@ export function createApp(runtime: Runtime): Hono {
     }
   });
 
-  app.post('/api/submit', rateLimit({ windowMs: 10 * 60_000, max: 30 }), async (c) => {
-    const user = await currentUser(c, runtime);
-    if (!user) return c.json({ error: 'login_required' }, 401);
-    const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
-    if (!body) return c.json({ error: 'invalid_json' }, 400);
+  // A lead added by a signed-in person: from the site (/api/submit) or the extension (/api/ext/submit).
+  const submitForUser = async (
+    user: UserRecord,
+    body: Record<string, unknown>,
+  ): Promise<{ status: 200 | 400; json: Record<string, unknown> }> => {
 
     const title = asString(body.title);
     const text = asString(body.text);
-    if (!title && !text) return c.json({ error: 'title_or_text_required' }, 400);
+    if (!title && !text) return { status: 400, json: { error: 'title_or_text_required' } };
 
     const url = asString(body.url);
     const rawType = asString(body.type);
@@ -1742,13 +1777,97 @@ export function createApp(runtime: Runtime): Hono {
     };
 
     const outcome = await ingestRawLead(rawLead, source, deps(runtime));
-    return c.json({
-      ok: outcome.status === 'inserted' || outcome.status === 'duplicate' || outcome.status === 'delivered',
-      status: outcome.status,
-      lead: outcome.lead,
-      leadId: outcome.lead?.id,
-      reasons: outcome.reasons,
-    });
+    return {
+      status: 200,
+      json: {
+        ok: outcome.status === 'inserted' || outcome.status === 'duplicate' || outcome.status === 'delivered',
+        status: outcome.status,
+        lead: outcome.lead,
+        leadId: outcome.lead?.id,
+        reasons: outcome.reasons,
+      },
+    };
+  };
+
+  app.post('/api/submit', rateLimit({ windowMs: 10 * 60_000, max: 30 }), async (c) => {
+    const user = await currentUser(c, runtime);
+    if (!user) return c.json({ error: 'login_required' }, 401);
+    const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!body) return c.json({ error: 'invalid_json' }, 400);
+    const result = await submitForUser(user, body);
+    return c.json(result.json, result.status);
+  });
+
+  // Browser extension sign-in. The extension opens /extension/connect with chrome.identity;
+  // after GitHub sign-in and consent the token goes back to its chromiumapp.org redirect.
+  const EXTENSION_REDIRECT_RE = /^https:\/\/[a-p]{32}\.chromiumapp\.org\/[\w./-]*$/;
+  const extensionUser = async (c: Context): Promise<{ user: UserRecord; hash: string } | null> => {
+    const header = c.req.header('authorization') ?? '';
+    const token = header.toLowerCase().startsWith('bearer ') ? header.slice(7).trim() : '';
+    if (!token.startsWith('ext_') || !runtime.store.getUserByExtensionToken) return null;
+    const hash = createHash('sha256').update(token).digest('hex');
+    const user = await runtime.store.getUserByExtensionToken(hash);
+    return user ? { user, hash } : null;
+  };
+  const extensionCors = (c: Context): void => {
+    c.header('Access-Control-Allow-Origin', '*');
+    c.header('Access-Control-Allow-Headers', 'authorization, content-type');
+    c.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  };
+
+  app.get('/extension/connect', async (c) => {
+    const redirectUri = c.req.query('redirect_uri') ?? '';
+    if (!EXTENSION_REDIRECT_RE.test(redirectUri)) return c.text('Bad redirect_uri', 400);
+    if (!githubOAuthConfigured(runtime) || !runtime.store.saveExtensionToken) return c.text('GitHub sign-in is not configured on this server', 501);
+    const user = await currentUser(c, runtime);
+    if (!user) {
+      const back = `/extension/connect?redirect_uri=${encodeURIComponent(redirectUri)}`;
+      return c.redirect(`/auth/github?returnTo=${encodeURIComponent(back)}`);
+    }
+    return c.html(renderExtensionConnectPage({ version: VERSION, lang: resolveLang(c), auth: await getAuthDisplay(c, runtime), handle: user.handle, redirectUri }));
+  });
+
+  app.post('/extension/connect', rateLimit({ windowMs: 10 * 60_000, max: 10 }), async (c) => {
+    const user = await currentUser(c, runtime);
+    if (!user || !runtime.store.saveExtensionToken) return c.redirect('/login');
+    const form = await c.req.parseBody();
+    const redirectUri = typeof form.redirect_uri === 'string' ? form.redirect_uri : '';
+    if (!EXTENSION_REDIRECT_RE.test(redirectUri)) return c.text('Bad redirect_uri', 400);
+    const token = `ext_${randomBytes(32).toString('hex')}`;
+    await runtime.store.saveExtensionToken(createHash('sha256').update(token).digest('hex'), user.id);
+    const fragment = new URLSearchParams({ token, handle: user.handle, base: publicBaseUrl(c, runtime) });
+    return c.redirect(`${redirectUri}#${fragment.toString()}`);
+  });
+
+  app.options('/api/ext/*', (c) => {
+    extensionCors(c);
+    return c.body(null, 204);
+  });
+
+  app.get('/api/ext/me', async (c) => {
+    extensionCors(c);
+    const auth = await extensionUser(c);
+    if (!auth) return c.json({ error: 'unauthorized' }, 401);
+    return c.json({ handle: auth.user.handle });
+  });
+
+  app.post('/api/ext/submit', rateLimit({ windowMs: 10 * 60_000, max: 60 }), async (c) => {
+    extensionCors(c);
+    const auth = await extensionUser(c);
+    if (!auth) return c.json({ error: 'unauthorized' }, 401);
+    const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!body) return c.json({ error: 'invalid_json' }, 400);
+    // Leads from the extension are signed by the connected GitHub account, whatever it sends.
+    delete body.author;
+    const result = await submitForUser(auth.user, body);
+    return c.json(result.json, result.status);
+  });
+
+  app.delete('/api/ext/token', async (c) => {
+    extensionCors(c);
+    const auth = await extensionUser(c);
+    if (auth) await runtime.store.deleteExtensionToken?.(auth.hash);
+    return c.json({ ok: true });
   });
 
   const serveFeed = async (c: Context) => {
