@@ -180,6 +180,13 @@ describe('score', () => {
     expect(score({ title: 'Ищу практика', text: 'Нужен человек' })).toBeLessThan(50);
   });
 
+  it('scores orders of any trade alike: no penalty for non-IT work', () => {
+    const logo = score({ title: 'Логотип и фирменный стиль для кофейни', text: 'Нужен логотип, брендбук и вывеска. Референсы пришлю, правки до трёх раз. Бюджет 30 000 ₽. Пишите @coffee_owner_spb' });
+    const bot = score({ title: 'Telegram-бот для кофейни', text: 'Нужен бот на Python с меню и заказами. Референсы пришлю, правки до трёх раз. Бюджет 30 000 ₽. Пишите @coffee_owner_spb' });
+    expect(Math.abs(logo - bot)).toBeLessThanOrEqual(6);
+    expect(logo).toBeGreaterThanOrEqual(65);
+  });
+
   it('values money on separate ladders for orders and salaries', () => {
     const gig = (budget: string) => score({ title: 'Доработать сайт на WordPress', text: `Поправить вёрстку и форму. Бюджет ${budget}` });
     expect(gig('500 ₽')).toBeLessThan(gig('5 000 ₽'));

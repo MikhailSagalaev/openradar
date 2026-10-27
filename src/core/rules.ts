@@ -1,5 +1,5 @@
 import { budgetUsd } from './salary.ts';
-import { extractTechSkills, hasItSkillSignal, hasNonItCategorySignal, normalizeForMatch } from './text.ts';
+import { extractTechSkills, normalizeForMatch } from './text.ts';
 import type { LeadStatus, SourceRecord } from './types.ts';
 import type { PreparedLead } from './prepare.ts';
 
@@ -164,10 +164,10 @@ export function applyRules(
 /**
  * Static worth of a lead, 0-100, computed once at ingest. Freshness is not part of it:
  * at ingest every lead is fresh, and the feed already orders by time. What counts:
- * money (USD-normalised, separate ladders for gigs and monthly salaries), IT skills,
+ * money (USD-normalised, separate ladders for gigs and monthly salaries), skills of the trade,
  * how detailed the post is, a direct contact, the operator's keywords, city and trust.
- * Calibrated on the hub's leads: median ~58, a one-line post without budget ~45-50,
- * 80+ (about one lead in twenty) for a detailed, well-paid one with clear IT skills.
+ * Calibrated on the hub's leads: median ~60, a one-line post without budget ~45-50,
+ * 80+ (about one lead in twenty) for a detailed, well-paid one with clear skills.
  */
 export function scoreLead(
   lead: PreparedLead,
@@ -175,8 +175,7 @@ export function scoreLead(
   now: Date,
 ): number {
   let score = 55;
-  const textForMatch = normalizeForMatch(`${lead.title}
-${lead.text}`);
+  const textForMatch = normalizeForMatch(`${lead.title}\n${lead.text}`);
 
   const include = source.config.includeKeywords ?? [];
   let hits = 0;
@@ -185,17 +184,12 @@ ${lead.text}`);
   }
   score += Math.min(hits * 8, 24);
 
-  // Dictionary skills only: board tags (RemoteOK «senior», «exec», «customer support») are not IT skills.
-  const skills = extractTechSkills(`${lead.title}
-${lead.text}`);
-  const itSignal = hits > 0 || skills.length > 0 || hasItSkillSignal(textForMatch);
-  const nonItCategory = hasNonItCategorySignal(textForMatch);
-  if (nonItCategory && !itSignal) score -= 15;
-  score += skills.length >= 3 ? 12 : skills.length === 2 ? 9 : skills.length === 1 ? 6 : itSignal ? 3 : 0;
+  // Dictionary skills of any trade (code, design, video, texts, marketing, accounting…);
+  // board tags such as RemoteOK «senior» or «exec» are not skills.
+  const skills = extractTechSkills(`${lead.title}\n${lead.text}`);
+  score += skills.length >= 3 ? 12 : skills.length === 2 ? 9 : skills.length === 1 ? 6 : 0;
 
-  // Off-topic posts get half the money bonus; an IT signal earns all of it.
-  const money = moneyPoints(lead);
-  score += money > 0 && !itSignal ? Math.round(money / 2) : money;
+  score += moneyPoints(lead);
 
   const length = lead.text.trim().length;
   if (length < 60) score -= 10;

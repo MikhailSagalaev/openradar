@@ -2476,8 +2476,8 @@ function renderPublicSources(data: SourcesPageData, health: SourceHealth[]): str
   </div>
 </div>
 <p class="sources-intro">${ru
-    ? 'Хаб сам читает открытые ленты бирж, а участники присылают заказы со своих узлов и парсеров. Дубли с разных площадок склеиваются в один заказ. Сейчас часть площадок читается целиком, часть — только раздел IT и разработки.'
-    : 'The hub reads open board feeds itself, and participants send leads from their nodes and parsers. Duplicates across boards are merged into one lead. Some boards are read in full, some only in their IT and development section.'}</p>
+    ? 'Хаб сам читает открытые ленты бирж — заказы и вакансии всех направлений, от разработки до дизайна, текстов и маркетинга, — а участники присылают заказы со своих узлов и парсеров. Дубли с разных площадок склеиваются в один заказ.'
+    : 'The hub reads open board feeds itself, gigs and jobs of every trade from development to design, writing and marketing, and participants send leads from their nodes and parsers. Duplicates across boards are merged into one lead.'}</p>
 <div class="source-grid">${cards}</div>
 <div class="sources-cta">
   <a class="btn ghost" href="${REPO_URL}/issues/new?template=source-request.yml" target="_blank" rel="noopener noreferrer">${ru ? 'Предложить источник' : 'Suggest a source'}</a>

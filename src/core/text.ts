@@ -98,46 +98,6 @@ export function isRemoteLead(lead: { city?: string; title: string; text: string 
   return REMOTE_TEXT_RE.test(`${lead.title}\n${lead.text}`);
 }
 
-/**
- * Off-topic categories (ремонт, доставка, Repetitor…) ride the budget
- * ladder otherwise; an IT/digital signal is required before budget counts as
- * "market fit". Both match lowercase normalized text.
- */
-const NON_IT_CATEGORY_RE = new RegExp(
-  [
-    'ремонт|сантехник|электрик|плиточник|маляр|штукатур|сварщ|грузчик|курьер|водител',
-    'няня|сиделк|репетитор|уборк|клининг|массаж|маникюр|педикюр|парикмахер|швея|пошив',
-    'повар|официант|озеленен|забор|кровл|фасад|стяжк|гипсокартон|ламинат|обои|потолок',
-    'мебел|шторы|жалюзи|доставк|перевозк|такси|стройк|отделочн|кондиционер|печник',
-    'бухгалт|юрист|юридическ|налоги|кредит|займ|страхован|репетитор|фото на документы',
-  ].join('|'),
-  'i',
-);
-
-const IT_SIGNAL_RE = new RegExp(
-  [
-    'javascript|typescript|python|php|golang|\\bgo\\b|\\bjava\\b|kotlin|swift|react|vue|angular',
-    'nodejs|nextjs|django|laravel|wordpress|woocommerce|bitrix|opencart|tilda|figma|photoshop',
-    'illustrator|autocad|revit|blender|corel|\\bsql\\b|postgres\\w*|mysql|mongo\\w*|docker',
-    'kubernetes|devops|\\bqa\\b|flutter|unity|unreal|\\bapi\\b|\\bai\\b|\\bgpt\\b|chatgpt',
-    'midjourney|\\bcrm\\b|\\berp\\b|no-?code|\\bseo\\b|\\bsmm\\b|\\bux\\b|\\bui\\b',
-    // cyrillic stems (no ASCII \\b around cyrillic — use substring stems without false positives)
-    'разработ|программист|верст|фронтенд|бэкенд|фулстек|лендинг|веб-?сайта?|интернет-магазин',
-    'парсер|парсинг|скрипт|автоматизац|нейросет|приложени|дизайн|видеомонтаж|монтаж.{0,8}видео',
-    'телеграм.{0,3}бот|бота? \\(?telegram|тестирован|интеграц',
-  ].join('|'),
-  'i',
-);
-
-/** True when the text shows an IT/digital work signal (skills, dev vocabulary). */
-export function hasItSkillSignal(normalizedText: string): boolean {
-  return IT_SIGNAL_RE.test(normalizedText);
-}
-
-/** True when the text matches a known non-IT category (household, physical labor, finance). */
-export function hasNonItCategorySignal(normalizedText: string): boolean {
-  return NON_IT_CATEGORY_RE.test(normalizedText);
-}
 
 /** Lightweight tech-tag extractor: canonical skill names found in title+text. */
 const TECH_SKILL_PATTERNS: Array<[RegExp, string]> = [
@@ -186,6 +146,23 @@ const TECH_SKILL_PATTERNS: Array<[RegExp, string]> = [
   [/\bexcel\b|экзел|эксель/i, 'Excel'],
   [/телеграм\w*\s*\(?бот|telegram\s*bot/i, 'Telegram Bot'],
   [/нейросет\w*/i, 'Нейросети'],
+  [/видеомонтаж|монтаж\S*\s+(?:видео|ролик|reels|клип)|premiere|davinci|reels-?мейкер/i, 'Видеомонтаж'],
+  [/моушн|motion\s*design/i, 'Моушн-дизайн'],
+  [/логотип|брендбук|фирменн\S*\s+стил|брендинг/i, 'Брендинг'],
+  [/иллюстрац|illustration/i, 'Иллюстрация'],
+  [/(?:^|[^a-zа-яё0-9])3[dд](?:[^a-zа-яё0-9]|$)|3d-|моделировани/i, '3D'],
+  [/копирайт|рерайт|написать\s+(?:текст|стат)|статьи\s+для|сценари/i, 'Тексты'],
+  [/перевод(?:чик|\s+(?:текст|с\s|на\s))|translat/i, 'Переводы'],
+  [/таргет|targeting/i, 'Таргет'],
+  [/директолог|яндекс\.?\s?директ|google\s+ads|контекстн\S*\s+реклам|(?:^|[^а-яё])директ(?![а-яё])/i, 'Контекстная реклама'],
+  [/авито|avito/i, 'Авито'],
+  [/wildberries|(?:^|[^a-z])wb(?:[^a-z]|$)|ozon|озон|маркетплейс/i, 'Маркетплейсы'],
+  [/бухгалт|accountant/i, 'Бухгалтерия'],
+  [/юрист|юридическ|lawyer/i, 'Юриспруденция'],
+  [/репетитор|преподава|tutor|teacher/i, 'Обучение'],
+  [/фотограф|ретуш|фотосесси/i, 'Фото'],
+  [/менеджер\S*\s+по\s+продаж|холодн\S*\s+звон|sales\s+(?:manager|representative)/i, 'Продажи'],
+  [/поддержк\S*\s+(?:клиент|пользоват)|customer\s+support|оператор\S*\s+(?:чата|колл)/i, 'Поддержка'],
 ];
 
 export function extractTechSkills(input: string, max = 8): string[] {
