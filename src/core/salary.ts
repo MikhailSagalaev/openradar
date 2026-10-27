@@ -191,6 +191,9 @@ export function extractAnchoredSalary(text: string): { min?: number; max?: numbe
   return {};
 }
 
+/** A "monthly" salary above this many USD is a yearly figure (see normalizeSalary). */
+export const YEARLY_SALARY_FLOOR_USD = 25_000;
+
 export function normalizeSalary(input: {
   text?: string;
   rawSalary?: string;
@@ -218,12 +221,23 @@ export function normalizeSalary(input: {
     if (anchored.max !== undefined) max = anchored.max;
   }
 
-  const normalizedUsdMin = typeof min === 'number' && Number.isFinite(min) && min > 0
-    ? Math.round(min * rate)
-    : undefined;
-  const normalizedUsdMax = typeof max === 'number' && Number.isFinite(max) && max > 0
-    ? Math.round(max * rate)
-    : undefined;
+  // Salaries are normalised per month. International boards (Jobicy, RemoteOK) publish
+  // yearly pay: an explicit year marker, or a monthly figure no job here reaches.
+  const yearlyMarker = /(?:per\s+year|\/\s*(?:yr|year)|annual|в\s+год|\/\s*год)/i.test(combinedText);
+  const toUsd = (value: number | undefined): number | undefined =>
+    typeof value === 'number' && Number.isFinite(value) && value > 0 ? value * rate : undefined;
+  let usdMin = toUsd(min);
+  let usdMax = toUsd(max);
+  const yearly =
+    period !== 'hourly' &&
+    (input.type === 'job' || period === 'monthly') &&
+    (yearlyMarker || (usdMax ?? usdMin ?? 0) > YEARLY_SALARY_FLOOR_USD);
+  if (yearly) {
+    usdMin = usdMin === undefined ? undefined : usdMin / 12;
+    usdMax = usdMax === undefined ? undefined : usdMax / 12;
+  }
+  const normalizedUsdMin = usdMin === undefined ? undefined : Math.round(usdMin);
+  const normalizedUsdMax = usdMax === undefined ? undefined : Math.round(usdMax);
 
   return {
     paymentPeriod: period,

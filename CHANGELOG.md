@@ -12,6 +12,8 @@
   `/v2/feed`.
 - Ingest kept the budget but dropped the USD-normalised range and payment period;
   they are stored now, and migration 015 fills them for existing leads.
+- Yearly pay from international boards (Jobicy, RemoteOK) is normalised per month: an
+  explicit year marker, or a job salary above $25,000 "a month" (migration 016).
 - The `JOB_SEEKER` spam rule rejected any vacancy or order mentioning «вакансия» or
   «резюме» (all hh.ru vacancies, «сайт-резюме» orders); it now matches only phrases of
   people looking for work.
