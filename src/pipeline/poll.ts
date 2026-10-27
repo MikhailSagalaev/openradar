@@ -157,15 +157,45 @@ export function pLimit(concurrency: number) {
   };
 }
 
-export async function pollAll(deps: PollDeps): Promise<PollSummary[]> {
-  const allSources = await deps.store.listSources();
-  const sources = allSources.filter((source) => {
-    if (!source.enabled) return false;
-    const adapter = deps.sources.get(source.kind);
-    return Boolean(adapter?.poll);
-  });
+/** When each source was last started in this process; drives the order and per-source intervals. */
+const lastPolledAt = new Map<string, number>();
 
-  const concurrency = Math.max(1, deps.env.RADAR_POLL_CONCURRENCY ?? 4);
+export interface PollAllOptions {
+  /** Do not start sources after this moment (epoch ms); the rest go first on the next run. */
+  deadline?: number;
+}
+
+/**
+ * Polls the enabled sources, the longest-waiting first. A source may set `config.intervalSec`
+ * to be polled less often than every tick. With a deadline, a slow run stops starting new
+ * sources instead of growing longer than the tick.
+ */
+export async function pollAll(deps: PollDeps, options: PollAllOptions = {}): Promise<PollSummary[]> {
+  const allSources = await deps.store.listSources();
+  const now = Date.now();
+  const sources = allSources
+    .filter((source) => {
+      if (!source.enabled) return false;
+      const adapter = deps.sources.get(source.kind);
+      if (!adapter?.poll) return false;
+      const intervalSec = Number(source.config.intervalSec);
+      const last = lastPolledAt.get(source.id);
+      return !(intervalSec > 0 && last !== undefined && now - last < intervalSec * 1000);
+    })
+    .sort((a, b) => (lastPolledAt.get(a.id) ?? 0) - (lastPolledAt.get(b.id) ?? 0));
+
+  const concurrency = Math.max(1, deps.env.RADAR_POLL_CONCURRENCY ?? 16);
   const limit = pLimit(concurrency);
-  return Promise.all(sources.map((source) => limit(() => pollSource(source, deps))));
+  const results = await Promise.all(
+    sources.map((source) =>
+      limit(async () => {
+        if (options.deadline !== undefined && Date.now() > options.deadline) return null;
+        lastPolledAt.set(source.id, Date.now());
+        return pollSource(source, deps);
+      }),
+    ),
+  );
+  const skipped = results.filter((r) => r === null).length;
+  if (skipped) deps.logger.warn('poll run hit its deadline; the remaining sources go first next time', { skipped });
+  return results.filter((r): r is PollSummary => r !== null);
 }

@@ -71,6 +71,8 @@ export interface LeadPageData {
   contactsHidden?: boolean;
   /** A few leads like this one, already filtered for the viewer. */
   similar?: Lead[];
+  /** Older than the feed keeps leads of its type. */
+  expired?: boolean;
 }
 
 export interface SourceFormValues {
@@ -1285,6 +1287,7 @@ legend {
   font-weight: 600;
   color: var(--rose);
 }
+.lead-state-notice { margin: 12px 0 0; }
 .notice {
   border: 1px solid var(--line);
   background: var(--surface);
@@ -2334,6 +2337,7 @@ document.getElementById('share-lead')?.addEventListener('click', async (event) =
   <div>
     <h1>${escapeHtml(leadTitle(lead))}</h1>
     <p class="muted small">${isAdminSession ? `${statusDot(lead.status, lang)} · ` : ''}${formatRelative(lead.createdAt, lang)}</p>
+    ${lead.state === 'closed' ? `<p class="notice lead-state-notice">${escapeHtml(t.leadClosedNotice)}</p>` : data.expired ? `<p class="notice lead-state-notice">${escapeHtml(t.leadExpiredNotice)}</p>` : ''}
   </div>
   <div class="actions lead-actions">
     ${cleanUrl ? `<a class="btn" href="${escapeHtml(cleanUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t.openOriginal)}</a>` : ''}

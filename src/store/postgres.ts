@@ -473,6 +473,13 @@ export class PostgresStore implements Store {
         conditions.push(`created_at <= $${idx++}::timestamptz`);
         params.push(options.createdBefore);
       }
+      if (options.maxAgeDays) {
+        conditions.push(
+          `created_at >= NOW() - make_interval(days => CASE WHEN type = 'job' THEN $${idx}::int ELSE $${idx + 1}::int END)`,
+        );
+        params.push(options.maxAgeDays.job, options.maxAgeDays.gig);
+        idx += 2;
+      }
       if (options.after) {
         conditions.push(`(created_at, id) > ($${idx}::timestamptz, $${idx + 1})`);
         params.push(options.after.createdAt, options.after.id);
@@ -1433,6 +1440,28 @@ export class PostgresStore implements Store {
 
   async markLeadConfirmed(id: string, at: string): Promise<void> {
     await this.pool.query(`UPDATE leads SET confirmed_at = $1 WHERE id = $2 AND confirmed_at IS NULL`, [new Date(at), id]);
+  }
+
+  async listLeadsToCheck(options: { hosts: string[]; limit: number; createdAfter: string }): Promise<Array<Pick<Lead, 'id' | 'url' | 'createdAt' | 'type'>>> {
+    if (!options.hosts.length) return [];
+    // Fresh posts close fastest: every 6 hours in the first two days, daily for a week, then every three days.
+    const result = await this.pool.query(
+      `SELECT id, url, created_at, type FROM leads
+        WHERE state = 'active' AND url IS NOT NULL AND created_at >= $1::timestamptz
+          AND lower(substring(url from '^https?://([^/:]+)')) = ANY($2::text[])
+          AND (checked_at IS NULL OR checked_at < NOW() - CASE
+                WHEN created_at > NOW() - INTERVAL '2 days' THEN INTERVAL '6 hours'
+                WHEN created_at > NOW() - INTERVAL '7 days' THEN INTERVAL '1 day'
+                ELSE INTERVAL '3 days' END)
+        ORDER BY checked_at NULLS FIRST, created_at DESC
+        LIMIT $3`,
+      [options.createdAfter, options.hosts, options.limit],
+    );
+    return result.rows.map((r) => ({ id: r.id, url: r.url, createdAt: new Date(r.created_at).toISOString(), type: r.type }));
+  }
+
+  async markLeadChecked(id: string, at: Date = new Date()): Promise<void> {
+    await this.pool.query(`UPDATE leads SET checked_at = $1 WHERE id = $2`, [at.toISOString(), id]);
   }
 
   async updateLeadState(id: string, state: LeadState): Promise<void> {

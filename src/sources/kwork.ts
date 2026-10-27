@@ -1,5 +1,6 @@
 import type { PollContext, RawLead, SourceAdapter, SourceRecord } from '../core/types.ts';
 import { fetchText } from './http.ts';
+import { readJsonLimited } from '../net/body.ts';
 
 /**
  * Kwork adapter with two modes:
@@ -70,11 +71,34 @@ async function apiPost(
     body: new URLSearchParams(params).toString(),
     signal: AbortSignal.timeout(ctx.timeoutMs),
   });
-  const data = await response.json().catch(() => null);
+  const data = await readJsonLimited<any>(response).catch(() => null);
   if (!response.ok || !data) {
     throw new Error(`Kwork API ${endpoint} failed: HTTP ${response.status}`);
   }
   return data;
+}
+
+/**
+ * Tokens per login, shared by all Kwork sources of the process. Signing in on every tick
+ * (hundreds of logins a day from one account) looks like abuse to Kwork's antifraud.
+ */
+const tokenCache = new Map<string, { token: string; expiresAt: number }>();
+const TOKEN_TTL_MS = 12 * 3600 * 1000;
+
+async function kworkToken(ctx: PollContext, login: string, password: string): Promise<string> {
+  const cached = tokenCache.get(login);
+  if (cached && cached.expiresAt > Date.now()) return cached.token;
+  const signIn = await apiPost(ctx, 'signIn', { login, password });
+  const token = signIn?.response?.token ?? signIn?.token;
+  if (!token) throw new Error('Kwork signIn did not return a token');
+  tokenCache.set(login, { token: String(token), expiresAt: Date.now() + TOKEN_TTL_MS });
+  ctx.logger.info('Kwork: signed in via mobile API');
+  return String(token);
+}
+
+/** For tests: forget cached tokens. */
+export function resetKworkTokens(): void {
+  tokenCache.clear();
 }
 
 async function pollViaApi(
@@ -85,23 +109,26 @@ async function pollViaApi(
   const password = process.env.RADAR_KWORK_PASSWORD?.trim();
   if (!login || !password) throw new Error('Kwork API mode requires RADAR_KWORK_LOGIN and RADAR_KWORK_PASSWORD');
 
-  const signIn = await apiPost(ctx, 'signIn', { login, password });
-  const token = signIn?.response?.token ?? signIn?.token;
-  if (!token) throw new Error('Kwork signIn did not return a token');
-  ctx.logger.info('Kwork: signed in via mobile API');
-
   const categoryId = typeof source.config.categoryId === 'string' ? source.config.categoryId : '';
   const page = Math.max(1, Number(source.config.page ?? 1) || 1);
   const params: Record<string, string> = {
     categories: categoryId,
     page: String(page),
-    token: String(token),
   };
   if (typeof source.config.query === 'string' && source.config.query.trim()) {
     params.query = source.config.query.trim();
   }
 
-  const data = await apiPost(ctx, 'projects', params);
+  let token = await kworkToken(ctx, login, password);
+  let data: any;
+  try {
+    data = await apiPost(ctx, 'projects', { ...params, token });
+  } catch {
+    // The token may have expired: sign in again once, then give up until the next tick.
+    tokenCache.delete(login);
+    token = await kworkToken(ctx, login, password);
+    data = await apiPost(ctx, 'projects', { ...params, token });
+  }
   const wants: KworkWant[] = Array.isArray(data?.response)
     ? data.response
     : Array.isArray(data?.response?.data)

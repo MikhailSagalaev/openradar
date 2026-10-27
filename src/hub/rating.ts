@@ -157,7 +157,9 @@ export async function evaluateLeadState(
     const [signals, observations] = await Promise.all([store.listSignals(lead.id), store.listObservations(lead.id)]);
     const author = observations.find((o) => o.isFirst)?.pubkey;
     const fromSignals = stateFromSignals(await sumSignals(signals, weights, author));
-    state = decision?.decidedBy === 'author' && fromSignals === 'active' ? decision.state : fromSignals;
+    // The author or the board closing the post holds unless signals hide it.
+    const closedBy = decision && (decision.decidedBy === 'author' || decision.decidedBy === 'source') ? decision : null;
+    state = closedBy && fromSignals === 'active' ? closedBy.state : fromSignals;
   }
   if ((lead.state ?? 'active') !== state) await store.updateLeadState?.(lead.id, state);
   return state;
@@ -199,13 +201,18 @@ export async function ledgerForLead(
   }
 
   const sums = await sumSignals(signals, weights, first.pubkey);
-  let confirmedByObserver = false;
+  // Only observers with weight count: a ring of fresh keys must not confirm itself.
+  const weightyConfirmers: ObservationRecord[] = [];
   for (const o of confirmers) {
-    if ((await weights.weightOf(o.pubkey)) >= CONFIRM_MIN_WEIGHT) confirmedByObserver = true;
+    if ((await weights.weightOf(o.pubkey)) >= CONFIRM_MIN_WEIGHT) weightyConfirmers.push(o);
   }
-  const confirmed = Boolean(lead.confirmedAt) || confirmedByObserver || sums.useful >= USEFUL_CONFIRMS;
+  const confirmed = Boolean(lead.confirmedAt) || weightyConfirmers.length > 0 || sums.useful >= USEFUL_CONFIRMS;
   if (confirmed && !lead.confirmedAt) lead.confirmedAt = now.toISOString();
-  const aged = now.getTime() - Date.parse(createdAt) >= AGE_CONFIRM_MS && sums.junk + sums.scam < AGE_MAX_COMPLAINTS;
+  // Surviving a day without complaints proves little for a key nobody vouches for.
+  const aged =
+    now.getTime() - Date.parse(createdAt) >= AGE_CONFIRM_MS &&
+    sums.junk + sums.scam < AGE_MAX_COMPLAINTS &&
+    (await weights.weightOf(first.pubkey)) >= CONFIRM_MIN_WEIGHT;
   if (!confirmed && !aged) return entries;
 
   if (!first.archived) {
@@ -218,7 +225,7 @@ export async function ledgerForLead(
     if (!confirmed) points *= 0.5;
     add(first.pubkey, 'first', points);
   }
-  for (const o of confirmers.filter((c) => !c.archived).slice(0, POINTS.maxConfirmers)) add(o.pubkey, 'confirm', POINTS.confirm);
+  for (const o of weightyConfirmers.filter((c) => !c.archived).slice(0, POINTS.maxConfirmers)) add(o.pubkey, 'confirm', POINTS.confirm);
 
   if (state === 'closed') {
     for (const s of signals) if (s.signal === 'closed' && s.pubkey !== first.pubkey) add(s.pubkey, 'signal_match', POINTS.signalMatch);

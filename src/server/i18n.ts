@@ -83,6 +83,8 @@ export interface Translations {
   junk: string;
   scam: string;
   closed: string;
+  leadClosedNotice: string;
+  leadExpiredNotice: string;
   signInToVote: string;
   voteAuthTitle: string;
   voteAuthDesc: string;
@@ -250,6 +252,8 @@ export const RU: Translations = {
   junk: 'Мусор',
   scam: 'Скам',
   closed: 'Закрыто',
+  leadClosedNotice: 'Закрыто: площадка показывает этот заказ закрытым или удалила его. Откликнуться, скорее всего, уже нельзя.',
+  leadExpiredNotice: 'Опубликовано давно и уже не показывается в ленте: возможно, неактуально.',
   signInToVote: 'Войти через GitHub, чтобы голосовать',
   voteAuthTitle: 'Авторизация для голосования',
   voteAuthDesc: 'Чтобы исключить накрутку и спам, оценивать заказы и помечать скам могут только авторизованные через GitHub участники.',
@@ -412,6 +416,8 @@ export const EN: Translations = {
   junk: 'Junk',
   scam: 'Scam',
   closed: 'Closed',
+  leadClosedNotice: 'Closed: the board shows this post as closed or removed. It is probably too late to apply.',
+  leadExpiredNotice: 'Posted a while ago and no longer in the feed: it may be outdated.',
   signInToVote: 'Sign in via GitHub to vote',
   voteAuthTitle: 'Sign in to vote',
   voteAuthDesc: 'To prevent manipulation and spam, voting and scam reporting requires signing in with GitHub.',

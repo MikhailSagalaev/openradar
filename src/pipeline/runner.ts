@@ -2,14 +2,20 @@ import type { Logger } from '../core/types.ts';
 import { pollAll, type PollDeps } from './poll.ts';
 import { processOutbox } from './outbox.ts';
 import { runDigestIfDue } from './digest.ts';
+import { checkLeadsLiveness } from './liveness.ts';
 import { recomputeRatings } from '../hub/rating.ts';
 import { parseModerators } from '../hub/service.ts';
 
 const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000;
+const BACKGROUND_INTERVAL_MS = 60 * 1000;
+const LIVENESS_INTERVAL_MS = 5 * 60 * 1000;
 
 export class PollRunner {
   private timer: NodeJS.Timeout | undefined;
   private running = false;
+  private backgroundTimer: NodeJS.Timeout | undefined;
+  private backgroundRunning = false;
+  private lastLivenessAt = 0;
   private lastMaintenanceAt = 0;
 
   constructor(
@@ -27,7 +33,9 @@ export class PollRunner {
       this.running = true;
       void (async () => {
         try {
-          const summaries = await pollAll(this.deps);
+          // A run longer than the tick stops starting sources, so the schedule holds.
+          const deadline = Date.now() + Math.max(10, this.intervalSec) * 1000;
+          const summaries = await pollAll(this.deps, { deadline });
           if (summaries.length) {
             this.logger.info('scheduled poll finished', {
               sources: summaries.length,
@@ -35,35 +43,8 @@ export class PollRunner {
               errors: summaries.filter((item) => item.error).length,
             });
           }
-
-          // Запуск обработки отложенной Outbox-доставки
-          const outboxRes = await processOutbox({
-            store: this.deps.store,
-            sinks: this.deps.sinks,
-            env: this.deps.env,
-            logger: this.deps.logger,
-            fetchImpl: this.deps.fetchImpl,
-          });
-          if (outboxRes.processed > 0) {
-            this.logger.info('outbox delivery batch finished', outboxRes);
-          }
-
-          await this.runMaintenanceIfDue();
-
-          try {
-            await runDigestIfDue({
-              store: this.deps.store,
-              env: this.deps.env,
-              logger: this.deps.logger.child('digest'),
-              fetchImpl: this.deps.fetchImpl ?? fetch,
-            });
-          } catch (error) {
-            this.logger.warn('digest job failed', {
-              error: error instanceof Error ? error.message : String(error),
-            });
-          }
         } catch (error) {
-          this.logger.error('scheduled cycle failed', {
+          this.logger.error('scheduled poll failed', {
             error: error instanceof Error ? error.message : String(error),
           });
         } finally {
@@ -74,6 +55,61 @@ export class PollRunner {
 
     tick();
     this.timer = setInterval(tick, Math.max(10, this.intervalSec) * 1000);
+    // Delivery, digests and maintenance run on their own loop: a slow poll does not hold them.
+    void this.background();
+    this.backgroundTimer = setInterval(() => void this.background(), BACKGROUND_INTERVAL_MS);
+  }
+
+  private async background(): Promise<void> {
+    if (this.backgroundRunning) return;
+    this.backgroundRunning = true;
+    try {
+      const outboxRes = await processOutbox({
+        store: this.deps.store,
+        sinks: this.deps.sinks,
+        env: this.deps.env,
+        logger: this.deps.logger,
+        fetchImpl: this.deps.fetchImpl,
+      });
+      if (outboxRes.processed > 0) {
+        this.logger.info('outbox delivery batch finished', outboxRes);
+      }
+
+      await this.runMaintenanceIfDue();
+      await this.runLivenessIfDue();
+
+      try {
+        await runDigestIfDue({
+          store: this.deps.store,
+          env: this.deps.env,
+          logger: this.deps.logger.child('digest'),
+          fetchImpl: this.deps.fetchImpl ?? fetch,
+        });
+      } catch (error) {
+        this.logger.warn('digest job failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    } catch (error) {
+      this.logger.error('background cycle failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      this.backgroundRunning = false;
+    }
+  }
+
+  private async runLivenessIfDue(): Promise<void> {
+    if (!this.deps.env.RADAR_CHECK_CLOSED || Date.now() - this.lastLivenessAt < LIVENESS_INTERVAL_MS) return;
+    this.lastLivenessAt = Date.now();
+    try {
+      const summary = await checkLeadsLiveness(this.deps);
+      if (summary.checked) this.logger.info('closed-post check finished', { ...summary });
+    } catch (error) {
+      this.logger.warn('closed-post check failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   private async runMaintenanceIfDue(): Promise<void> {
@@ -107,6 +143,8 @@ export class PollRunner {
 
   stop(): void {
     if (this.timer) clearInterval(this.timer);
+    if (this.backgroundTimer) clearInterval(this.backgroundTimer);
     this.timer = undefined;
+    this.backgroundTimer = undefined;
   }
 }

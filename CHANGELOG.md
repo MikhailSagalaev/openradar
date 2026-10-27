@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.10.0
+
+- Closed posts: the node revisits the source page of active leads (Kwork, FL.ru, Habr Career,
+  hh.ru by their own closed and archived markers; We Work Remotely, Jobicy, RemoteOK and
+  Работа России by 404/410) and closes the lead when the board shows it closed. A closed
+  lead leaves the feed; its page stays and says so. `RADAR_CHECK_CLOSED` turns it off.
+- Orders leave the feed after 14 days and vacancies after 30 (`RADAR_GIG_TTL_DAYS`,
+  `RADAR_JOB_TTL_DAYS`); the market estimate still uses them.
+- Response bodies from sources and `/api/preview` are read with a size limit; request bodies
+  are limited to 1 MB, 10 MB on ingest and `/v2/events`.
+- Kwork signs in once and reuses the token instead of signing in on every poll.
+- Polling: 16 sources at once by default, the longest-waiting first, optional
+  `config.intervalSec` per source, and a run that outgrows the interval stops starting new
+  sources. Delivery, digests and maintenance run on their own loop.
+- Rating: confirmations and the 24-hour survival count only for participants with weight
+  (≥ 0.2), so a ring of fresh keys earns nothing by confirming itself.
+- The outbox no longer overwrites a lead the operator moved along the funnel;
+  `/api/delta` filters by time in the database.
+- nginx example: `client_max_body_size 10m` and a per-IP request rate.
+
 ## 0.9.0
 
 - The extension popup offers a newer version when the hub has one (`GET /api/ext/version`):

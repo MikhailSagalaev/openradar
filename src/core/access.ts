@@ -53,7 +53,9 @@ export function canSeeContacts(viewer: Viewer): boolean {
 /** Single-lead check for detail pages and APIs: hidden or not-yet-visible leads are 404 for non-admins. */
 export function viewerCanSeeLead(viewer: Viewer, lead: Lead, policy: AccessPolicy, now: Date = new Date()): boolean {
   if (viewer.tier === 'admin') return true;
-  if ((lead.state ?? 'active') !== 'active' || lead.status === 'rejected') return false;
+  // A closed lead stays readable by its link (the page says it is closed); hidden ones do not.
+  const state = lead.state ?? 'active';
+  if ((state !== 'active' && state !== 'closed') || lead.status === 'rejected') return false;
   const cutoff = visibleBefore(viewer, policy, now);
   return cutoff === undefined || lead.createdAt <= cutoff;
 }

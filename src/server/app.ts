@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
@@ -12,6 +13,7 @@ import type { ListLeadsOptions } from '../core/store.ts';
 import { pollAll, pollSource } from '../pipeline/poll.ts';
 import { ingestRawLead, type IngestDeps } from '../pipeline/ingest.ts';
 import { fetchSafeHttp } from '../pipeline/preview.ts';
+import { feedMaxAge } from '../pipeline/liveness.ts';
 import type { Runtime } from '../runtime.ts';
 import { SOURCE_PRESETS } from '../sources/presets.ts';
 import { IMAP_PASSWORD_ENV_RE } from '../sources/imap.ts';
@@ -330,8 +332,15 @@ function projectContacts(lead: Lead, viewer: Viewer): Lead {
 }
 
 /** The public feed for a viewer (active leads only, after the viewer's delay), contacts projected. */
+/** Older than the feed keeps leads of its type (RADAR_GIG_TTL_DAYS / RADAR_JOB_TTL_DAYS). */
+function isExpired(lead: Lead, env: Runtime['env']): boolean {
+  const maxAge = feedMaxAge(env);
+  if (!maxAge) return false;
+  return Date.now() - Date.parse(lead.createdAt) > (lead.type === 'job' ? maxAge.job : maxAge.gig) * 86_400_000;
+}
+
 async function feedFor(runtime: Runtime, viewer: Viewer, options: ListLeadsOptions): Promise<Lead[]> {
-  const leads = await runtime.store.getLeadsForFeed({ ...options, createdBefore: visibleBefore(viewer, runtime.access) });
+  const leads = await runtime.store.getLeadsForFeed({ maxAgeDays: feedMaxAge(runtime.env), ...options, createdBefore: visibleBefore(viewer, runtime.access) });
   return leads.map((lead) => projectContacts(lead, viewer));
 }
 
@@ -350,7 +359,7 @@ function publicBaseUrl(c: Context, runtime: Runtime): string {
 /** Leads for a viewer: admins see the whole store, everyone else the active feed after their delay. */
 async function leadsFor(runtime: Runtime, viewer: Viewer, options: ListLeadsOptions): Promise<Lead[]> {
   if (viewer.tier === 'admin') return runtime.store.listLeads(options);
-  return runtime.store.getLeadsForFeed({ ...options, createdBefore: visibleBefore(viewer, runtime.access) });
+  return runtime.store.getLeadsForFeed({ maxAgeDays: feedMaxAge(runtime.env), ...options, createdBefore: visibleBefore(viewer, runtime.access) });
 }
 
 /**
@@ -616,6 +625,17 @@ export function createApp(runtime: Runtime): Hono {
   const analytics = analyticsFromEnv(runtime.env);
   setAnalytics(analytics);
   const csp = contentSecurityPolicy(analytics);
+  // Request bodies are read into memory, so every route has a ceiling: 10 MB where nodes
+  // send batches, 1 MB for forms and JSON everywhere else.
+  const largeBodyLimit = bodyLimit({ maxSize: MAX_BATCH_BODY_BYTES, onError: (c) => c.json({ error: 'payload_too_large' }, 413) });
+  const smallBodyLimit = bodyLimit({ maxSize: MAX_BODY_BYTES, onError: (c) => c.json({ error: 'payload_too_large' }, 413) });
+  app.use('*', async (c, next) => {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(c.req.method.toUpperCase())) return next();
+    const path = c.req.path;
+    const batch = path.startsWith('/api/ingest/') || path.startsWith('/api/v2/ingest/') || path === '/v2/events';
+    return (batch ? largeBodyLimit : smallBodyLimit)(c, next);
+  });
+
   app.use('*', async (c, next) => {
     // frame-ancestors governs framing; X-Frame-Options only when nothing may frame us.
     if (!analytics.yandexMetrikaId) c.header('X-Frame-Options', 'DENY');
@@ -1312,6 +1332,7 @@ export function createApp(runtime: Runtime): Hono {
         lang,
         myVote: myVote ?? undefined,
         contactsHidden: !canSeeContacts(viewer),
+        expired: isExpired(lead, runtime.env),
       }),
     );
   });
@@ -1983,12 +2004,13 @@ export function createApp(runtime: Runtime): Hono {
 
   app.get('/api/delta', async (c) => {
     if (!await canRead(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
-    const since = c.req.query('since') || new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const sinceParam = c.req.query('since');
+    const since = sinceParam && Number.isFinite(Date.parse(sinceParam))
+      ? new Date(sinceParam).toISOString()
+      : new Date(Date.now() - 24 * 3600 * 1000).toISOString();
     const limit = Math.max(1, Math.min(Number(c.req.query('limit') ?? 200) || 200, 1000));
-    const allLeads = await feedFor(runtime, await viewerFromRequest(c, runtime), { limit: 500 });
-    const delta = allLeads
-      .filter((lead) => lead.createdAt >= since)
-      .slice(0, limit)
+    const leads = await feedFor(runtime, await viewerFromRequest(c, runtime), { limit, createdAfter: since });
+    const delta = leads
       .map((lead) => ({
         id: lead.id,
         type: lead.type,
@@ -2031,6 +2053,8 @@ export function createApp(runtime: Runtime): Hono {
 
 const MAX_V2_INGEST_ITEMS = 500;
 const MAX_V2_INGEST_BYTES = 10 * 1024 * 1024;
+const MAX_BATCH_BODY_BYTES = MAX_V2_INGEST_BYTES;
+const MAX_BODY_BYTES = 1024 * 1024;
 
 /** Observations from a JSON array, `{observations: [...]}`, a single object, or NDJSON. */
 export function parseObservationBody(body: string, contentType?: string): unknown[] | null {

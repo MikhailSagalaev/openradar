@@ -232,12 +232,27 @@ describe('radar/2 rating: hub flow', () => {
     const leadId = (await send(app, [buildObservationEvent(observation({ source: { platform: 'rss', channel: 'https://example.com/rss', message_id: 'a' } }), alice.privKey)]))[0]!.leadId!;
     const lead = (await runtime.store.getLead(leadId))!;
     const observations = await runtime.store.listObservations(leadId);
-    const weights = new WeightResolver(runtime.store, new Set());
+    // Age-only confirmation counts for an observer with weight (here a moderator key).
+    const weights = new WeightResolver(runtime.store, new Set([alice.pubKey]));
     const later = new Date(Date.parse(lead.createdAt) + 25 * 3600 * 1000);
     expect(await ledgerForLead(lead, observations, [], weights, later)).toEqual([
       expect.objectContaining({ pubkey: alice.pubKey, kind: 'first', points: 0.5 }),
     ]);
     const archived = observations.map((o) => ({ ...o, archived: true }));
     expect(await ledgerForLead(lead, archived, [], weights, later)).toEqual([]);
+  });
+
+  it('gives a ring of fresh keys nothing for confirming each other', async () => {
+    const { runtime, app } = hub();
+    const [author, ...ring] = [generateKeyPair(), generateKeyPair(), generateKeyPair(), generateKeyPair()];
+    const source = { platform: 'rss', channel: 'https://example.com/rss', message_id: 'sybil' };
+    const leadId = (await send(app, [buildObservationEvent(observation({ source }), author!.privKey)]))[0]!.leadId!;
+    for (const key of ring) await send(app, [buildObservationEvent(observation({ source }), key.privKey)]);
+    const lead = (await runtime.store.getLead(leadId))!;
+    const observations = await runtime.store.listObservations(leadId);
+    expect(observations.length).toBe(4);
+    const later = new Date(Date.parse(lead.createdAt) + 25 * 3600 * 1000);
+    // All keys have weight 0: the lead neither ages into a confirmation nor pays the confirmers.
+    expect(await ledgerForLead(lead, observations, [], new WeightResolver(runtime.store, new Set()), later)).toEqual([]);
   });
 });
