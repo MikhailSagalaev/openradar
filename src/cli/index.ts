@@ -674,7 +674,7 @@ function buildProgram(): Command {
 
   program
     .command('mcp')
-    .description('Run Model Context Protocol (MCP) server over stdio for AI agents')
+    .description('Run the Model Context Protocol (MCP) server over stdio')
     .action(async () => {
       // The stdio loop outlives this action: keep the runtime open until stdin closes.
       const runtime = await createRuntime();

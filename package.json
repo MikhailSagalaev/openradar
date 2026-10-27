@@ -24,7 +24,6 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "tsx test/e2e-tester.ts",
     "pack:extension": "node scripts/pack-extension.js",
     "new:connector": "tsx src/cli/index.ts new-connector",
     "start": "node bin/radar.js",

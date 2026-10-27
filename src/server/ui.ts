@@ -1023,6 +1023,7 @@ dialog::backdrop {
   justify-content: center;
 }
 .lead-actions { display: flex; flex-direction: row; align-items: center; gap: 8px; flex-wrap: nowrap; }
+.lead-actions .btn { white-space: nowrap; }
 .icon-btn.done {
   color: var(--emerald);
   border-color: var(--emerald);

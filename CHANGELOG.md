@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Repository cleanup: removed the design manifesto and the standalone e2e script
+  (covered by the test suite), audit codes in comments; MCP described as a protocol
+  server. Deploy is skipped without secrets and the uptime check runs only where
+  `UPTIME_URL` is set, so forks stay quiet.
 - Lead page: copy and share are icon buttons (share uses the system share sheet where
   available), votes without the «Сообщество» label, text formatted into paragraphs,
   lists and links, skill hashtags shown as tags.
@@ -153,7 +157,7 @@
 - MCP rewritten over the feed (same delay and contact rules), notifications are not
   answered, `verify_lead_url` removed.
 - Tests are hermetic (DNS stubbed in `test/setup.ts`, local proxy target).
-- Not yet fixed: SSRF filter hardening (audit C1), to be replaced by a maintained library.
+- Not yet fixed: SSRF filter hardening, to be replaced by a maintained library.
 
 ## 0.6.0
 

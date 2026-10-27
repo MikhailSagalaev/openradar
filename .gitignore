@@ -6,7 +6,6 @@ data/
 .DS_Store
 coverage/
 *.tsbuildinfo
-.zcode/
 
 # Python
 __pycache__/

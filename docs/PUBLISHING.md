@@ -28,7 +28,7 @@ Then:
 
 - archive or make private the old repository;
 - set the description, homepage (`https://openradar.fun`) and topics: `lead-generation`, `job-board`, `freelance`, `self-hosted`, `telegram`, `rss`, `postgresql`, `typescript`, `mcp`, `open-source`;
-- move the deploy secrets (`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`) and the `DEPLOY_DIR` variable, and point the server's `git remote` to the new repository;
+- move the deploy secrets (`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`) and the variables `DEPLOY_DIR`, `UPTIME_URL` (and `DEPLOY_HEALTH_URL` for another domain), and point the server's `git remote` to the new repository. Without the secrets the deploy job is skipped, without `UPTIME_URL` the uptime check does not run, so forks stay quiet;
 - update repository links in `README.md`, `.env.example`, `src/config.ts` (user agent), `deploy-server.sh` and the extension.
 
 ## Release

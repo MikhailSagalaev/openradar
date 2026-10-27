@@ -99,7 +99,7 @@ export function isRemoteLead(lead: { city?: string; title: string; text: string 
 }
 
 /**
- * DATA-01: off-topic categories (ремонт, доставка, Repetitor…) ride the budget
+ * Off-topic categories (ремонт, доставка, Repetitor…) ride the budget
  * ladder otherwise; an IT/digital signal is required before budget counts as
  * "market fit". Both match lowercase normalized text.
  */
