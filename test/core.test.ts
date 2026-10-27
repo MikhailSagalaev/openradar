@@ -116,6 +116,14 @@ describe('rules', () => {
     }
   });
 
+  it('rejects remote data entry for foreign-currency pay, keeps rouble data entry', () => {
+    const reasons = (title: string, text: string): string[] =>
+      applyRules(prepareRawLead({ sourceId: source.id, title, text }, makeSource(), TEST_NOW), makeSource(), TEST_NOW)
+        .reasons;
+    expect(reasons('Специалист по удаленному вводу данных - 2000EUR', 'Удаленная работа, без опыта')).toContain('spam:DATA_ENTRY_SCAM');
+    expect(reasons('Ввод данных в 1С', 'Нужно внести 300 накладных в 1С, бюджет 3 000 ₽')).not.toContain('spam:DATA_ENTRY_SCAM');
+  });
+
   it('rejects a lead without a required keyword', () => {
     const lead = prepareRawLead(
       {

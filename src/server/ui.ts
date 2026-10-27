@@ -29,6 +29,9 @@ export interface LeadsPageData {
   /** GitHub sign-in is configured: the guest intro links to it. */
   githubEnabled?: boolean;
   filters?: FeedFilters;
+  /** 1-based page of the feed and whether another page follows. */
+  page?: number;
+  hasMore?: boolean;
 }
 
 export interface SourcesPageData {
@@ -60,6 +63,8 @@ export interface LeadPageData {
   myVote?: LeadVoteSignal | null;
   /** The viewer is a guest: contacts were removed from the lead. */
   contactsHidden?: boolean;
+  /** A few leads like this one, already filtered for the viewer. */
+  similar?: Lead[];
 }
 
 export interface SourceFormValues {
@@ -931,6 +936,24 @@ dialog::backdrop {
 }
 .intro-close:hover { color: var(--ink); }
 .score-legend { margin: 0; font-size: 12px; color: var(--muted); }
+.feed-meta { margin: 0; font-size: 13px; color: var(--muted); }
+.feed-meta strong { color: var(--ink); }
+.feed-meta a { color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+.score-help { font-size: 12px; color: var(--muted); }
+.score-help summary { cursor: pointer; width: max-content; }
+.score-help p { margin: 6px 0 0; max-width: 720px; }
+.profile { max-width: 760px; display: grid; gap: 14px; }
+.profile h2 { font-size: 15px; margin: 10px 0 0; }
+.profile-tier { font-size: 15px; margin: 0; }
+.profile-steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 13.5px; }
+.tier-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tier-table th, .tier-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.tier-table th { color: var(--muted); font-weight: 500; }
+.tier-table tr.current td { font-weight: 600; background: var(--surface); }
+.similar { margin-top: 40px; }
+.similar h2 { font-size: 15px; margin: 0 0 4px; }
+.load-more { display: flex; justify-content: center; padding: 20px 0 8px; }
+.btn-plus { display: none; }
 .filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
 .filter-bar select {
   height: 34px;
@@ -1306,7 +1329,13 @@ footer {
   .detail-grid { grid-template-columns: 1fr; gap: 28px; }
   .grid { grid-template-columns: 1fr; }
   .search-hero { margin: 8px 0 20px; gap: 12px; }
-  .intro-action { flex: 1 1 100%; }
+  .intro { padding: 12px 14px; gap: 10px; }
+  .intro p { font-size: 13px; padding-right: 48px; }
+  .intro-action { flex: 1 1 auto; padding: 8px 10px; }
+  .intro-action span { display: none; }
+  .type-tab, .chip { min-height: 40px; display: inline-flex; align-items: center; }
+  .btn-submit .btn-label { display: none; }
+  .btn-submit .btn-plus { display: inline; font-size: 18px; line-height: 1; }
   .search-bar { width: 100%; }
   .search-bar input { flex: 1 1 0; min-width: 0; }
   .type-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
@@ -1318,6 +1347,12 @@ footer {
   .community-votes { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; padding-bottom: 4px; }
 }
 `;
+
+/** Absolute public URL (RADAR_PUBLIC_URL) for og:image and og:url; unset on a private node. */
+let publicBaseUrl: string | undefined;
+export function setPublicBaseUrl(url: string | undefined): void {
+  publicBaseUrl = url?.replace(/\/+$/, '') || undefined;
+}
 
 /** Skills offered in the feed filter: canonical names from extractTechSkills(). */
 const FILTER_SKILLS = ['Python', 'JavaScript', 'TypeScript', 'React', 'Node.js', 'PHP', 'Java', 'Golang', '1С', 'Битрикс', 'WordPress', 'Tilda', 'Figma', 'SQL', 'Telegram Bot', 'Нейросети'];
@@ -1365,6 +1400,7 @@ export function layout(input: {
             <div class="user-menu-role">${input.auth.handle ? 'GitHub Contributor' : 'Токен администратора'}</div>
           </div>
           <div class="user-menu-sep"></div>
+          <a class="user-menu-link" href="/me">${escapeHtml(t.navProfile)}</a>
           <a class="user-menu-link" href="/submit">${escapeHtml(lang === 'ru' ? 'Добавить по ссылке' : 'Submit by URL')}</a>
           <a class="user-menu-link" href="/extension">${escapeHtml(lang === 'ru' ? 'Браузерное расширение' : 'Browser Extension')}</a>
           <div class="user-menu-sep"></div>
@@ -1383,7 +1419,11 @@ export function layout(input: {
 <meta property="og:site_name" content="OpenRadar">
 <meta property="og:title" content="${escapeHtml(input.title)} · OpenRadar">
 <meta property="og:type" content="website">
-<meta name="twitter:card" content="summary">
+${publicBaseUrl ? `<meta property="og:image" content="${escapeHtml(publicBaseUrl)}/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="${escapeHtml(publicBaseUrl)}/og.png">` : '<meta name="twitter:card" content="summary">'}
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 ${input.head ?? ''}
 <link rel="stylesheet" href="${STYLE_PATH}">
@@ -1802,6 +1842,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
       sort: filters.sort === 'new' ? undefined : filters.sort,
       budget: filters.budgetRub ? String(filters.budgetRub) : undefined,
       skill: filters.skill,
+      language: filters.language,
       remote: filters.remote ? '1' : undefined,
       ...overrides,
     };
@@ -1834,10 +1875,15 @@ export function renderLeadsPage(data: LeadsPageData): string {
       ${option('', t.skillAny, !filters.skill)}
       ${skills.map((name) => option(name, name, filters.skill?.toLowerCase() === name.toLowerCase())).join('')}
     </select>`;
+  const languageSelect = `<select name="language" aria-label="${escapeHtml(t.langAny)}" onchange="this.form.submit()">
+      ${option('', t.langAny, !filters.language)}
+      ${option('ru', t.langRu, filters.language === 'ru')}
+      ${option('en', t.langEn, filters.language === 'en')}
+    </select>`;
   const filterBar = `<div class="filter-bar">
-    ${sortSelect}${budgetSelect}${skillSelect}
+    ${sortSelect}${budgetSelect}${skillSelect}${languageSelect}
     <label class="filter-check"><input type="checkbox" name="remote" value="1"${filters.remote ? ' checked' : ''} onchange="this.form.submit()">${escapeHtml(t.remoteOnly)}</label>
-    ${hasActiveFilters(filters) ? `<a class="filter-reset" href="${escapeHtml(hrefWith({ sort: undefined, budget: undefined, skill: undefined, remote: undefined }))}">${escapeHtml(t.resetFilters)}</a>` : ''}
+    ${hasActiveFilters(filters) ? `<a class="filter-reset" href="${escapeHtml(hrefWith({ sort: undefined, budget: undefined, skill: undefined, language: undefined, remote: undefined }))}">${escapeHtml(t.resetFilters)}</a>` : ''}
   </div>
   ${filters.sort !== 'new' ? `<p class="score-legend">${escapeHtml(t.rankedWindow)}</p>` : ''}`;
 
@@ -1871,11 +1917,16 @@ export function renderLeadsPage(data: LeadsPageData): string {
         </div>`;
 
   const delay = data.delayMinutes ?? 0;
-  const delayLabel = delay >= 60 ? `${Math.round(delay / 60)} ч` : `${delay} мин`;
-  const lagBanner = delay > 0
-    ? `<div class="mesh-lag-notice">
-        <span>Лента показывается с задержкой <strong>${escapeHtml(delayLabel)}</strong>${data.auth ? '' : ', контакты скрыты'}. Без задержки — участникам, которые присылают заказы в сеть.</span>
-      </div>`
+  const delayLabel = delay >= 60 ? `${Math.round(delay / 60)} ${lang === 'ru' ? 'ч' : 'h'}` : `${delay} ${lang === 'ru' ? 'мин' : 'min'}`;
+  // One quiet line instead of a banner: today's volume, and the viewer's delay if any.
+  const feedMeta = [
+    t.feedFoundToday.replace('{n}', `<strong>${new Intl.NumberFormat('ru-RU').format(stats.last24h)}</strong>`),
+    delay > 0 ? escapeHtml(t.feedDelayNote.replace('{d}', delayLabel)) + (data.auth ? '' : `, ${escapeHtml(t.contactsHiddenShort)}`) : '',
+    delay > 0 ? `<a href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md#5-делиться-с-хабом-и-получать-рейтинг" target="_blank" rel="noopener noreferrer">${escapeHtml(t.removeDelay)}</a>` : '',
+  ].filter(Boolean).join(' · ');
+  const pageNo = data.page ?? 1;
+  const loadMore = data.hasMore
+    ? `<div class="load-more"><a class="btn ghost" href="${escapeHtml(hrefWith({ page: String(pageNo + 1) }))}">${escapeHtml(t.loadMore)}</a></div>`
     : '';
 
   // First visit without an account: what this is and how to take part. Hidden once dismissed.
@@ -1896,9 +1947,9 @@ export function renderLeadsPage(data: LeadsPageData): string {
   const body = `
 ${intro}
 <div class="search-hero">
-  <h1 class="feed-title">${escapeHtml(t.heroTitle)}</h1>
+  <h1 class="feed-title">${escapeHtml(delay > 0 ? t.heroTitleDelayed : t.heroTitle)}</h1>
   <div class="type-tabs">${tabs}</div>
-  ${lagBanner}
+  <p class="feed-meta">${feedMeta}</p>
   <form class="search-form" method="get" action="/">
     ${type ? `<input type="hidden" name="type" value="${escapeHtml(type)}">` : ''}
     ${status ? `<input type="hidden" name="status" value="${escapeHtml(status)}">` : ''}
@@ -1906,14 +1957,14 @@ ${intro}
       <div class="search-input-wrap">
         <svg class="search-icon-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
         <input name="q" id="search-input" value="${escapeHtml(query)}" placeholder="${escapeHtml(t.searchPlaceholder)}" aria-label="${escapeHtml(t.searchBtn)}" autocomplete="off">
-        ${query ? `<a class="search-clear-btn" href="${escapeHtml(hrefForQuery(''))}" aria-label="Сбросить поиск" title="Сбросить">✕</a>` : `<kbd class="search-kbd">/</kbd>`}
+        ${query ? `<a class="search-clear-btn" href="${escapeHtml(hrefForQuery(''))}" aria-label="${escapeHtml(t.resetSearch)}" title="${escapeHtml(t.resetSearch)}">✕</a>` : `<kbd class="search-kbd">/</kbd>`}
       </div>
       <div class="search-actions-inside">
         <button class="btn search-btn-inside" type="submit">${escapeHtml(t.searchBtn)}</button>
         <a class="btn ghost search-rss-inside" href="${escapeHtml(rssHref)}" target="_blank" rel="noopener" title="RSS">RSS</a>
       </div>
       <div class="search-suggestions" id="search-suggestions">
-        <div class="suggestions-header">Быстрый поиск и подсказки</div>
+        <div class="suggestions-header">${escapeHtml(t.suggestionsTitle)}</div>
         <div class="suggestions-chips">
           <a class="sug-chip" href="/?q=Python">Python</a>
           <a class="sug-chip" href="/?q=TypeScript">TypeScript</a>
@@ -1932,15 +1983,16 @@ ${intro}
     ${filterBar}
     ${query ? `
     <div class="search-meta-bar">
-      <span>Найдено: <strong>${leads.length}</strong></span>
-      <span>по запросу «<strong>${escapeHtml(query)}</strong>»</span>
-      <a class="search-meta-clear" href="${escapeHtml(hrefForQuery(''))}">✕ Сбросить</a>
+      <span>${escapeHtml(t.foundCount)}: <strong>${leads.length}${data.hasMore ? '+' : ''}</strong></span>
+      <span>${escapeHtml(t.forQuery)} «<strong>${escapeHtml(query)}</strong>»</span>
+      <a class="search-meta-clear" href="${escapeHtml(hrefForQuery(''))}">✕ ${escapeHtml(t.resetSearch)}</a>
     </div>` : ''}
   </form>
-  ${chips ? `<div class="chips">${chips}</div>` : `<p class="score-legend">${escapeHtml(t.scoreHint)}</p>`}
+  ${chips ? `<div class="chips">${chips}</div>` : `<details class="score-help"><summary>${escapeHtml(t.scoreWhat)}</summary><p>${escapeHtml(t.scoreHint)}</p></details>`}
 </div>
 
-<div class="list">${rows || empty}</div>`;
+<div class="list">${rows || empty}</div>
+${loadMore}`;
 
   const searchHotkeyScript = `
 ${POLL_SCRIPT}
@@ -1990,7 +2042,7 @@ ${POLL_SCRIPT}
     version,
     active: 'leads',
     body,
-    actions: `<a class="btn" href="/submit">${escapeHtml(t.submitByUrl)}</a>`,
+    actions: `<a class="btn btn-submit" href="/submit" aria-label="${escapeHtml(t.submitByUrl)}" title="${escapeHtml(t.submitByUrl)}"><span class="btn-plus" aria-hidden="true">+</span><span class="btn-label">${escapeHtml(t.submitByUrl)}</span></a>`,
     script: searchHotkeyScript,
     auth: data.auth,
     lang,
@@ -2139,7 +2191,6 @@ ${cautionBanner}
     <h2>${escapeHtml(t.details)}</h2>
     <dl class="meta-list">
       <div><dt>${escapeHtml(t.type)}</dt><dd>${lead.type === 'job' ? escapeHtml(t.jobType) : escapeHtml(t.gigType)}</dd></div>
-      <div><dt>${escapeHtml(t.votes)}</dt><dd>+${lead.votes_up ?? 0} / -${lead.votes_down ?? 0} / ${escapeHtml(t.scam)}: ${lead.votes_scam ?? 0} / ${escapeHtml(t.closed)}: ${lead.votes_closed ?? 0}</dd></div>
       <div><dt>${escapeHtml(t.source)}</dt><dd>${source ? `<a href="/sources/${escapeHtml(source.id)}">${escapeHtml(source.title)}</a>` : escapeHtml(lead.sourceId)}</dd></div>
       ${lead.category ? `<div><dt>${escapeHtml(t.category)}</dt><dd><b>${escapeHtml(lead.category)}</b></dd></div>` : ''}
       <div><dt>${escapeHtml(t.location)}</dt><dd>${escapeHtml(lead.city ?? (lead.isRemote !== false ? t.remote : '—'))}</dd></div>
@@ -2147,7 +2198,7 @@ ${cautionBanner}
       <div><dt>${escapeHtml(t.budget)}</dt><dd>${salaryDisplay}${usdEstimate}</dd></div>
       <div><dt>${escapeHtml(t.score)}</dt><dd><span class="score" title="${escapeHtml(t.scoreHint)}">${lead.score}</span></dd></div>
       <div><dt>${escapeHtml(t.published)}</dt><dd>${formatDate(lead.publishedAt, lang)}</dd></div>
-      <div><dt>${escapeHtml(t.added)}</dt><dd>${formatDate(lead.createdAt, lang)}</dd></div>
+      ${Math.abs(Date.parse(lead.createdAt) - Date.parse(lead.publishedAt ?? lead.createdAt)) > 30 * 60_000 ? `<div><dt>${escapeHtml(t.added)}</dt><dd>${formatDate(lead.createdAt, lang)}</dd></div>` : ''}
       ${lead.author ? `<div><dt>${escapeHtml(t.author)}</dt><dd>${escapeHtml(lead.author)}</dd></div>` : ''}
       ${lead.sourceRef ? `<div><dt>${escapeHtml(t.channel)}</dt><dd>${escapeHtml(lead.sourceRef.channelTitle || lead.sourceRef.channel)}${lead.sourceRef.visibility !== 'public' ? ` (${escapeHtml(t.privateChannel)})` : ''}</dd></div>` : ''}
       ${data.contactsHidden
@@ -2156,14 +2207,18 @@ ${cautionBanner}
           ? `<div><dt>${escapeHtml(t.contacts)}</dt><dd>${lead.contacts.map(renderContact).join('<br>')}</dd></div>`
           : ''}
     </dl>
-    <p class="small muted" style="margin:10px 0 0;line-height:1.5">${escapeHtml(t.scoreHint)}</p>
+    <details class="score-help" style="margin-top:10px"><summary>${escapeHtml(t.scoreWhat)}</summary><p>${escapeHtml(t.scoreHint)}</p></details>
     ${lead.skills?.length ? `
       <h2 style="margin-top:20px">${escapeHtml(t.skills)}</h2>
       <div style="margin-top:8px;line-height:1.6">
         ${lead.skills.map((s) => `<span class="tag">${escapeHtml(s)}</span>`).join(', ')}
       </div>` : ''}
   </aside>
-</div>`;
+</div>
+${data.similar?.length ? `<section class="similar">
+  <h2>${escapeHtml(t.similarLeads)}</h2>
+  <div class="list">${data.similar.map((item) => leadRow(item, undefined, lang, false)).join('')}</div>
+</section>` : ''}`;
 
   const cleanText = (lead.text || '').replace(/\s+/g, ' ').trim().slice(0, 160);
   const headExtra = `
@@ -2171,8 +2226,7 @@ ${cautionBanner}
 <meta property="og:title" content="${escapeHtml(leadTitle(lead))} · OpenRadar">
 <meta property="og:description" content="${escapeHtml(cleanText)}">
 <meta property="og:type" content="article">
-<meta property="og:url" content="/leads/${escapeHtml(lead.id)}">
-<meta name="twitter:card" content="summary">
+${publicBaseUrl ? `<meta property="og:url" content="${escapeHtml(publicBaseUrl)}/leads/${escapeHtml(lead.id)}">` : ''}
 <meta name="twitter:title" content="${escapeHtml(leadTitle(lead))}">
 <meta name="twitter:description" content="${escapeHtml(cleanText)}">
 <script type="application/ld+json">
@@ -2547,6 +2601,66 @@ export function renderSourceCreatedPage(data: CreatedSourcePageData): string {
     body,
     lang,
   });
+}
+
+export interface ProfilePageData {
+  version: string;
+  auth?: AuthDisplay;
+  lang?: SupportedLang;
+  tier: 'guest' | 'member' | 'active' | 'core' | 'admin';
+  /** Feed delay per tier in minutes (hub mode); empty on a node without delays. */
+  delays: Partial<Record<'guest' | 'member' | 'active' | 'core', number>>;
+  hubMode: boolean;
+  pubkey?: string;
+  rating?: number;
+}
+
+const TIER_NAMES: Record<SupportedLang, Record<ProfilePageData['tier'], string>> = {
+  ru: { guest: 'Гость', member: 'Участник', active: 'Активный', core: 'Ядро', admin: 'Администратор' },
+  en: { guest: 'Guest', member: 'Member', active: 'Active', core: 'Core', admin: 'Administrator' },
+};
+
+/** Who I am in the network: tier, delay, rating and how to move up. */
+export function renderProfilePage(data: ProfilePageData): string {
+  const lang = data.lang ?? 'ru';
+  const t = getTranslations(lang);
+  const ru = lang === 'ru';
+  const names = TIER_NAMES[lang];
+  const delay = (minutes: number | undefined): string =>
+    !minutes ? (ru ? 'без задержки' : 'no delay') : minutes >= 60 ? `${Math.round(minutes / 60)} ${ru ? 'ч' : 'h'}` : `${minutes} ${ru ? 'мин' : 'min'}`;
+  const rows: Array<['guest' | 'member' | 'active' | 'core', string]> = [
+    ['guest', ru ? 'не вошли' : 'not signed in'],
+    ['member', ru ? 'вход через GitHub или рейтинг от 1' : 'GitHub sign-in or rating 1+'],
+    ['active', ru ? 'рейтинг от 10 за 30 дней' : 'rating 10+ over 30 days'],
+    ['core', ru ? 'рейтинг от 50 или модератор' : 'rating 50+ or moderator'],
+  ];
+  const table = data.hubMode
+    ? `<table class="tier-table"><thead><tr><th>${ru ? 'Уровень' : 'Tier'}</th><th>${ru ? 'Как получить' : 'How'}</th><th>${ru ? 'Задержка' : 'Delay'}</th><th>${ru ? 'Контакты' : 'Contacts'}</th></tr></thead><tbody>
+      ${rows.map(([tier, how]) => `<tr${tier === data.tier ? ' class="current"' : ''}><td>${escapeHtml(names[tier])}</td><td>${escapeHtml(how)}</td><td>${escapeHtml(delay(data.delays[tier]))}</td><td>${tier === 'guest' ? '—' : '✓'}</td></tr>`).join('')}
+    </tbody></table>`
+    : '';
+  const keyBlock = data.pubkey
+    ? `<p>${ru ? 'Ключ участника' : 'Participant key'}: <code>${escapeHtml(data.pubkey.slice(0, 12))}…${escapeHtml(data.pubkey.slice(-6))}</code> · ${ru ? 'рейтинг за 30 дней' : '30-day rating'}: <strong>${(data.rating ?? 0).toFixed(1)}</strong></p>`
+    : `<p class="muted">${ru
+        ? 'Ключ участника к аккаунту не привязан: рейтинг копится на ключе, которым подписаны ваши наблюдения.'
+        : 'No participant key is linked to this account: rating accrues to the key that signs your observations.'}</p>`;
+  const body = `
+<div class="page-head"><div><h1>${escapeHtml(t.profileTitle)}</h1>
+  <p class="muted small">${escapeHtml(data.auth?.handle ? '@' + data.auth.handle : names[data.tier])}</p></div></div>
+<section class="profile">
+  <p class="profile-tier">${ru ? 'Уровень' : 'Tier'}: <strong>${escapeHtml(names[data.tier])}</strong>${data.hubMode && data.tier !== 'admin' ? ` · ${ru ? 'задержка ленты' : 'feed delay'}: <strong>${escapeHtml(delay(data.delays[data.tier]))}</strong>` : ''}</p>
+  ${keyBlock}
+  ${table}
+  <h2>${ru ? 'Как поднять уровень' : 'How to move up'}</h2>
+  <ol class="profile-steps">
+    <li>${ru ? 'Создайте ключ участника: <code>radar key</code> на своём узле или <code>Key.generate()</code> в Python SDK.' : 'Create a participant key: <code>radar key</code> on your node or <code>Key.generate()</code> in the Python SDK.'}</li>
+    <li>${ru ? 'Присылайте заказы в сеть: со своего узла (источник с галочкой «делиться») или из своего парсера через SDK.' : 'Send leads to the network: from your node (a source marked "share") or from your own parser through the SDK.'}</li>
+    <li>${ru ? 'Очки дают подтверждённые заказы, которые вы увидели первым: ×1.5 за закрытые каналы. Мусор и скам отнимают очки.' : 'Points come from confirmed leads you saw first, ×1.5 for private channels. Junk and scam cost points.'}</li>
+    <li>${ru ? 'Привяжите ключ к GitHub (<code>POST /v2/link/github</code>), чтобы рейтинг и аккаунт на сайте были одним участником.' : 'Link the key to GitHub (<code>POST /v2/link/github</code>) so the rating and this account are one participant.'}</li>
+  </ol>
+  <p><a href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md#5-делиться-с-хабом-и-получать-рейтинг" target="_blank" rel="noopener noreferrer">${ru ? 'Подробно — в руководстве' : 'Step by step in the guide'}</a></p>
+</section>`;
+  return layout({ title: t.profileTitle, version: data.version, body, auth: data.auth, lang });
 }
 
 export function renderNotFound(version: string, lang: SupportedLang = 'ru'): string {

@@ -25,6 +25,8 @@ import {
   renderLeadsPage,
   renderNewSourcePage,
   renderNotFound,
+  renderProfilePage,
+  setPublicBaseUrl,
   renderSourceCreatedPage,
   renderSourcePage,
   renderSourcesPage,
@@ -588,6 +590,7 @@ function toRawLead(body: Record<string, unknown>, sourceId: string): RawLead | n
 
 export function createApp(runtime: Runtime): Hono {
   const app = new Hono();
+  setPublicBaseUrl(runtime.env.RADAR_PUBLIC_URL);
 
   // Security Headers: Clickjacking, MIME-sniffing, XSS, CSRF
   app.use('*', async (c, next) => {
@@ -661,6 +664,19 @@ export function createApp(runtime: Runtime): Hono {
         'cache-control': 'public, max-age=86400',
       },
     });
+  });
+
+  // Social preview card; read once, missing on a checkout without assets/.
+  const ogImage = (() => {
+    try {
+      return fs.readFileSync(path.resolve(process.cwd(), 'assets/og.png'));
+    } catch {
+      return undefined;
+    }
+  })();
+  app.get('/og.png', (c) => {
+    if (!ogImage) return c.notFound();
+    return new Response(ogImage, { headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=86400' } });
   });
 
   app.get(LOGO_ASSET_PATH, () => {
@@ -800,25 +816,32 @@ export function createApp(runtime: Runtime): Hono {
     const type: LeadType | undefined = rawType === 'job' || rawType === 'gig' ? rawType : undefined;
     const query = (c.req.query('q') ?? '').trim();
     const filters = parseFeedFilters(c);
+    const page = Math.max(1, Math.min(Math.floor(Number(c.req.query('page')) || 1), 100));
+    const pageSize = 50;
 
     const viewer = await viewerFromRequest(c, runtime);
-    const [stats, health, leads] = await Promise.all([
+    const [stats, health, fetched] = await Promise.all([
       runtime.store.getStats(),
       runtime.store.getSourceHealth(),
+      // One extra lead tells whether a next page exists.
       leadsFor(runtime, viewer, {
-        limit: 50,
+        limit: pageSize + 1,
+        offset: (page - 1) * pageSize,
         status: status || undefined,
         query: query || undefined,
         type,
         ...filterOptions(filters),
       }),
     ]);
+    const leads = fetched.slice(0, pageSize);
 
     return c.html(
       renderLeadsPage({
         stats,
         health,
         leads: leads.map((lead) => projectContacts(lead, viewer)),
+        page,
+        hasMore: fetched.length > pageSize,
         query,
         status,
         type: type ?? '',
@@ -829,6 +852,25 @@ export function createApp(runtime: Runtime): Hono {
         delayMinutes: delayMinutes(viewer, runtime.access),
         isAdmin: viewer.tier === 'admin',
         githubEnabled: githubOAuthConfigured(runtime),
+      }),
+    );
+  });
+
+  app.get('/me', async (c) => {
+    const viewer = await viewerFromRequest(c, runtime);
+    if (viewer.tier === 'guest') return c.redirect('/login?returnTo=/me');
+    const participant = viewer.pubkey ? await runtime.store.getParticipant(viewer.pubkey) : null;
+    const { admin: _admin, ...delays } = runtime.access.delays;
+    return c.html(
+      renderProfilePage({
+        version: VERSION,
+        auth: await getAuthDisplay(c, runtime),
+        lang: resolveLang(c),
+        tier: viewer.tier,
+        delays,
+        hubMode: runtime.access.mode === 'hub',
+        pubkey: viewer.pubkey,
+        rating: participant?.rating,
       }),
     );
   });
@@ -1167,8 +1209,16 @@ export function createApp(runtime: Runtime): Hono {
     const myVote = (user && runtime.store.getUserVote)
       ? await runtime.store.getUserVote(lead.id, user.id)
       : null;
+    // Similar: same type and main skill, best of the last week, as this viewer may see them.
+    const similar = (await feedFor(runtime, viewer, {
+      limit: 5,
+      type: lead.type,
+      skill: lead.skills?.[0],
+      ...filterOptions({ sort: 'score', remote: false }),
+    })).filter((item) => item.id !== lead.id).slice(0, 4);
     return c.html(
       renderLeadPage({
+        similar,
         lead,
         source: source ?? undefined,
         version: VERSION,

@@ -46,6 +46,10 @@ export interface ListLeadsOptions {
   /** Only leads first seen at or after this instant. */
   createdAfter?: string;
   sort?: LeadSort;
+  /** Only leads whose title is in Russian (Cyrillic) or in English (no Cyrillic). */
+  language?: 'ru' | 'en';
+  /** Leads to skip, for paging the HTML feed (the v2 API pages with a cursor). */
+  offset?: number;
 }
 
 export interface LeadDeliveryRecord {

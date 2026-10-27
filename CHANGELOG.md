@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Feed: «Показать ещё» paging, a language filter (Russian / English titles), one quiet
+  line with today's count and the viewer's delay instead of a banner, the score
+  explained on demand, an honest title for delayed viewers; compact intro, one-row
+  header and 40 px tap targets on phones.
+- Lead page: «Похожие заказы», no duplicated votes row, «Добавлен» only when it differs.
+- `/me` profile: tier, delay, linked key rating and how to move up.
+- Social preview card (`/og.png`, `og:image`, absolute `og:url`) when `RADAR_PUBLIC_URL` is set.
+- `DATA_ENTRY_SCAM` rule: remote data entry for foreign-currency pay.
+- The hub's own source is called «Сеть участников» instead of «radar/2 hub».
+- English UI strings that were still in Russian.
 - Score recalibrated: freshness is no longer part of the stored score (every lead was
   fresh at ingest, so two thirds of the feed scored 65). It now counts USD-normalised
   money on separate ladders for orders and salaries, IT skills, how detailed the post is

@@ -331,6 +331,10 @@ export class MemoryStore implements Store {
       const skill = options.skill.trim().toLowerCase();
       result = result.filter((l) => (l.skills ?? []).some((s) => s.toLowerCase() === skill));
     }
+    if (options.language) {
+      const russian = options.language === 'ru';
+      result = result.filter((l) => /[А-Яа-яЁё]/.test(l.title) === russian);
+    }
     if (options.createdAfter) {
       const since = options.createdAfter;
       result = result.filter((l) => l.createdAt >= since);
@@ -355,7 +359,8 @@ export class MemoryStore implements Store {
       return -order;
     });
     const limit = Math.max(1, Math.min(options.limit ?? 50, 5000));
-    return result.slice(0, limit).map((l) => ({
+    const offset = Math.max(0, Math.min(Math.floor(options.offset ?? 0), 10_000));
+    return result.slice(offset, offset + limit).map((l) => ({
       ...l,
       votes_up: l.votes_up ?? 0,
       votes_down: l.votes_down ?? 0,
