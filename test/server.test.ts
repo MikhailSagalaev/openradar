@@ -1,13 +1,20 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/server/app.ts';
 import type { Runtime } from '../src/runtime.ts';
 import type { Env } from '../src/core/types.ts';
 import { loadEnv } from '../src/config.ts';
 import { makeTestRuntime, makeUserSession } from './helpers.ts';
 
+// Every runtime opens its own store (a PostgreSQL pool in CI): close them all after
+// each test, or the database runs out of connections.
+const openRuntimes: Runtime[] = [];
+afterEach(async () => {
+  for (const runtime of openRuntimes.splice(0)) await runtime.store.close().catch(() => undefined);
+});
+
 function makeRuntime(overrides: Partial<Env> = {}, fetchImpl: typeof fetch = fetch): Runtime {
   const base = makeTestRuntime({ RADAR_ADMIN_TOKEN: 'secret', ...overrides });
-  return {
+  const runtime: Runtime = {
     env: base.env,
     logger: base.logger,
     store: base.store,
@@ -16,6 +23,8 @@ function makeRuntime(overrides: Partial<Env> = {}, fetchImpl: typeof fetch = fet
     fetchImpl,
     access: base.access,
   };
+  openRuntimes.push(runtime);
+  return runtime;
 }
 
 function formBody(values: Record<string, string>): string {
