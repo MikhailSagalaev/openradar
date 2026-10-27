@@ -17,13 +17,22 @@ on:
     types: [completed]
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: deploy-hub
   cancel-in-progress: false
 
 jobs:
   deploy:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    # Only CI runs of pushes to this repository: a fork's pull request from a branch
+    # also named main triggers workflow_run too, and must not reach the deploy secrets.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

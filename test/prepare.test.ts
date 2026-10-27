@@ -43,12 +43,12 @@ describe('prepareRawLead', () => {
       {
         sourceId: source.id,
         title: 'Нужен лендинг',
-        text: 'Пишите: ivanov@gmail.com или +7 999 123-45-67, срочно',
+        text: 'Пишите: ivanov@example.com или +7 999 123-45-67, срочно',
       },
       source,
       TEST_NOW,
     );
-    expect(prepared.text).toContain('ivanov@gmail.com');
+    expect(prepared.text).toContain('ivanov@example.com');
     expect(prepared.text).toContain('+7 999 123-45-67');
   });
 });

@@ -23,6 +23,25 @@ The `Release` workflow builds the app, the Docker image (`ghcr.io/<owner>/<repo>
 
 The `Deploy hub` workflow runs `deploy-server.sh` over SSH after a green CI on `main`. It needs the secrets `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY` (and optionally `DEPLOY_PORT`, `DEPLOY_KNOWN_HOSTS`) and the variables `DEPLOY_DIR` and `DEPLOY_HEALTH_URL`. Without the secrets the job is skipped. The `Uptime` workflow runs only where the variable `UPTIME_URL` is set.
 
+Restrict the deploy key on the server to the deploy and nothing else, so leaked repository secrets do not mean a shell on the server. A wrapper such as `/usr/local/bin/radar-deploy`:
+
+```sh
+#!/bin/sh
+set -e
+cd /opt/radar
+git fetch -q origin main
+git show origin/main:deploy-server.sh > /tmp/radar-deploy.sh
+RADAR_DIR=/opt/radar exec bash /tmp/radar-deploy.sh </dev/null
+```
+
+and in `~/.ssh/authorized_keys`:
+
+```
+command="/usr/local/bin/radar-deploy",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA... deploy
+```
+
+The workflow then only triggers the deploy; the script it pipes is ignored.
+
 ## What not to promise
 
 - "collects from every marketplace";

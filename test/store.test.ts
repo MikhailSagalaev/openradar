@@ -307,7 +307,7 @@ describe('store', () => {
     expect(vote2.votes_scam).toBe(1);
 
     // Different subnet votes scam -> counted!
-    const vote3 = await store.recordVote(lead.id, 'scam', 1, '185.12.34.0/24');
+    const vote3 = await store.recordVote(lead.id, 'scam', 1, '198.51.100.0/24');
     expect(vote3.votes_scam).toBe(2);
 
     await store.close();

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Security: the deploy workflow runs only after CI of a push to this repository (a
+  fork's pull request from a branch named main could trigger it before), CI and deploy
+  tokens are read-only, `deploy-server.sh` takes `RADAR_PUBLIC_URL` from the
+  environment, and the docs describe restricting the deploy key to a forced command.
+- Test fixtures no longer carry real names, phone numbers or e-mail addresses.
 - Optional analytics and search console verification per deployment:
   `RADAR_YANDEX_METRIKA_ID`, `RADAR_GA_ID`, `RADAR_GOOGLE_SITE_VERIFICATION`,
   `RADAR_YANDEX_VERIFICATION` (`/yandex_<code>.html`). The CSP opens only the hosts of

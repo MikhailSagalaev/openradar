@@ -123,7 +123,7 @@ describe('source adapters', () => {
     expect(fifth.skills).toContain('Git');
 
     // Direct contacts are preserved as-is for community reach
-    expect(leads[1]?.text).toContain('+7(343) 379-29-00');
+    expect(leads[1]?.text).toMatch(/\+7\(900\) 000-00-\d{2}/);
   });
 
   it('does not expose a poll function for webhook sources', () => {

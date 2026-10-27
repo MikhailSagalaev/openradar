@@ -14,19 +14,19 @@
           "id": "ec3ede23-f806-11ef-9741-e7d0d2cf29b1",
           "source": "Вакансия работодателя",
           "region": {
-            "region_code": "7800000000000",
+            "region_code": "7+7(900) 000-00-010",
             "name": "Город Санкт-Петербург"
           },
           "company": {
-            "companycode": "1089847199562",
-            "email": "office@mcart.ru",
+            "companycode": "10+7(900) 000-00-02",
+            "email": "hr1@example.ru",
             "hr-agency": false,
             "inn": "7804390716",
             "kpp": "780201001",
             "name": "ООО \"ЭМ СИ АРТ РУС\"",
-            "ogrn": "1089847199562",
+            "ogrn": "10+7(900) 000-00-03",
             "site": "https://www.mcart.ru/",
-            "url": "https://trudvsem.ru/company/1089847199562"
+            "url": "https://trudvsem.ru/company/10+7(900) 000-00-04"
           },
           "creation-date": "2025-03-03",
           "date_modify": "2026-09-29T10:56:24+0300",
@@ -34,7 +34,7 @@
           "salary_min": 60000,
           "salary_max": 80000,
           "job-name": "Разработчик",
-          "vac_url": "https://trudvsem.ru/vacancy/card/1089847199562/ec3ede23-f806-11ef-9741-e7d0d2cf29b1",
+          "vac_url": "https://trudvsem.ru/vacancy/card/10+7(900) 000-00-05/ec3ede23-f806-11ef-9741-e7d0d2cf29b1",
           "employment": "Дистанционная (удаленная) работа",
           "schedule": "Неполный рабочий день/неполная рабочая неделя",
           "qualification": "Middle",
@@ -58,7 +58,7 @@
           },
           "social_protected": "",
           "contact_list": [],
-          "contact_person": "Матыщак Вера Васильевна",
+          "contact_person": "Контактное лицо",
           "work_places": 1,
           "code_profession": "203191",
           "typicalPosition": "Программист Битрикс",
@@ -95,7 +95,7 @@
           },
           "company": {
             "companycode": "1027739326449",
-            "email": "gosuslugi@raiffeisen.ru",
+            "email": "hr2@example.ru",
             "hr-agency": false,
             "inn": "7744000302",
             "kpp": "770401001",
@@ -113,7 +113,7 @@
           "employment": "Полная занятость",
           "schedule": "Полный рабочий день",
           "qualification": "специалист, программист ",
-          "requirements": "Опыт работы в роли разработчика/архитектора Middleware (MW) на технологиях Java в компании с развитой ИТ инфраструктурой от 7 лет. Глубокие знания принципов проектирования систем MW, интеграционных систем, микросервисных систем. Отличные навыки коммуникации. По вопросам звонить +7(343) 379-29-00.",
+          "requirements": "Опыт работы в роли разработчика/архитектора Middleware (MW) на технологиях Java в компании с развитой ИТ инфраструктурой от 7 лет. Глубокие знания принципов проектирования систем MW, интеграционных систем, микросервисных систем. Отличные навыки коммуникации. По вопросам звонить +7(900) 000-00-06.",
           "duty": "Работы в роли разработчика/архитектора Middleware (MW) на технологиях Java. Проектирование систем MW, интеграционных систем, микросервисных систем. Подготовка и проведение презентаций и обучающих мероприятий.",
           "category": {
             "specialisation": "Банки, кредит, страхование, пенсионное обеспечение"
@@ -135,14 +135,14 @@
           "contact_list": [
             {
               "contact_type": "Телефон",
-              "contact_value": "+7(343) 379-29-00"
+              "contact_value": "+7(900) 000-00-07"
             },
             {
               "contact_type": "Эл. почта",
-              "contact_value": "Maria.Y.ZAYTSEVA@raiffeisen.ru"
+              "contact_value": "hr3@example.ru"
             }
           ],
-          "contact_person": "Зайцева Мария Юрьевна",
+          "contact_person": "Контактное лицо",
           "work_places": 2,
           "code_profession": "203191",
           "typicalPosition": "Разработчик Java",
@@ -160,7 +160,7 @@
           },
           "company": {
             "companycode": "1177746245500",
-            "email": "info@sibintek-soft.ru",
+            "email": "hr4@example.ru",
             "hr-agency": false,
             "inn": "7726398419",
             "kpp": "504701001",
@@ -189,7 +189,7 @@
           "addresses": {
             "address": [
               {
-                "location": "Московская область, г Химки, Коммунальный проезд, 30, +7(495) 517-80-80 (36-290)",
+                "location": "Московская область, г Химки, Коммунальный проезд, 30, +7(900) 000-00-08 (36-290)",
                 "lng": "37.418703",
                 "lat": "55.912133"
               }
@@ -198,14 +198,14 @@
           "contact_list": [
             {
               "contact_type": "Телефон",
-              "contact_value": "+7(495) 517-80-80"
+              "contact_value": "+7(900) 000-00-09"
             },
             {
               "contact_type": "Эл. почта",
-              "contact_value": "resume@sibintek.ru"
+              "contact_value": "hr5@example.ru"
             }
           ],
-          "contact_person": "Иванова Ольга Алексеевна",
+          "contact_person": "Контактное лицо",
           "work_places": 1,
           "typicalPosition": "Программист",
           "skills": [],
@@ -222,7 +222,7 @@
           },
           "company": {
             "companycode": "1169658074519",
-            "email": "vinovoselov@monetka.ru",
+            "email": "hr6@example.ru",
             "hr-agency": false,
             "inn": "6679095116",
             "kpp": "667901001",
@@ -257,10 +257,10 @@
           "contact_list": [
             {
               "contact_type": "Телефон",
-              "contact_value": "+7(922) 198-87-32"
+              "contact_value": "+7(900) 000-00-10"
             }
           ],
-          "contact_person": "Кузнецова Ксения",
+          "contact_person": "Контактное лицо",
           "typicalPosition": "Программист баз данных",
           "skills": [],
           "currency": "«руб.»"
@@ -276,7 +276,7 @@
           },
           "company": {
             "companycode": "1175476114835",
-            "email": "ustinovanv@eco.rshb.ru",
+            "email": "hr7@example.ru",
             "hr-agency": false,
             "inn": "5407967810",
             "kpp": "770401001",
@@ -310,10 +310,10 @@
           "contact_list": [
             {
               "contact_type": "Телефон",
-              "contact_value": "+7(996) 450-29-10"
+              "contact_value": "+7(900) 000-00-11"
             }
           ],
-          "contact_person": "МЕДВЕДКИНА ОЛЬГА ВЯЧЕСЛАВОВНА",
+          "contact_person": "Контактное лицо",
           "typicalPosition": "Программист Java",
           "skills": [],
           "currency": "«руб.»"

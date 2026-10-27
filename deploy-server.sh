@@ -41,7 +41,7 @@ DATABASE_URL=postgres://radar:${RAND_DB_PWD}@postgres:5432/radar
 RADAR_LOG_LEVEL=info
 RADAR_PUBLIC_READ=true
 RADAR_MODE=hub
-RADAR_PUBLIC_URL=https://openradar.fun
+RADAR_PUBLIC_URL=${RADAR_PUBLIC_URL:-}
 RADAR_CONSOLE_SINK=true
 EOF
   echo ".env файл успешно создан."
@@ -61,8 +61,8 @@ else
   if ! grep -q "^RADAR_HOST_PORT=" .env 2>/dev/null; then
     echo "RADAR_HOST_PORT=8787" >> .env
   fi
-  if ! grep -q "^RADAR_PUBLIC_URL=" .env 2>/dev/null; then
-    echo "RADAR_PUBLIC_URL=https://openradar.fun" >> .env
+  if ! grep -q "^RADAR_PUBLIC_URL=" .env 2>/dev/null && [ -n "${RADAR_PUBLIC_URL:-}" ]; then
+    echo "RADAR_PUBLIC_URL=${RADAR_PUBLIC_URL}" >> .env
   fi
   # 0.7 refuses example admin tokens: replace one if an old .env still has it.
   CURRENT_TOKEN=$(grep -E "^RADAR_ADMIN_TOKEN=" .env | cut -d '=' -f2- | tr -d ' "' || true)
