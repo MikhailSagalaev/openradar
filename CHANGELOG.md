@@ -15,6 +15,8 @@
 - The score counts dictionary IT skills only: board tags (RemoteOK «senior», «exec»)
   no longer push management and sales vacancies to the top. Budgets show their own
   currency instead of always ₽.
+- Leads stored before the currency detector fix as Belarusian roubles («мебель»,
+  «белье») are moved back to RUB (migration 017); one of them topped the budget sort.
 - Yearly pay from international boards (Jobicy, RemoteOK) is normalised per month: an
   explicit year marker, or a job salary above $25,000 "a month" (migration 016).
 - The `JOB_SEEKER` spam rule rejected any vacancy or order mentioning «вакансия» or
