@@ -17,8 +17,10 @@ fi
 
 cd "$TARGET_DIR"
 echo "Обновляем репозиторий в $TARGET_DIR..."
-git fetch origin main
-git reset --hard origin/main
+# RADAR_REF: a release tag (vX.Y.Z) set by scripts/autodeploy.sh, or origin/main.
+REF="${RADAR_REF:-origin/main}"
+git fetch -q --tags --force origin main
+git reset --hard "$REF"
 
 # 2. Создаем production .env если его нет или дополняем обязательными секретами
 if [ ! -f .env ]; then

@@ -10,3 +10,8 @@ coverage/
 # Python
 __pycache__/
 *.pyc
+
+# Pull-based deploy state (scripts/autodeploy.sh)
+.deployed-tag
+.failed-tag
+.deploy-pin

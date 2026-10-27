@@ -93,13 +93,22 @@ curl http://127.0.0.1:8787/health
 
 С примерами паролей из `.env.example` Docker Compose не запустится, это сделано намеренно.
 
-**Домен и HTTPS.** Приложение слушает только `127.0.0.1:${RADAR_HOST_PORT}`. Наружу его открывает nginx: пример в [nginx-radar.conf](../nginx-radar.conf), сертификат — `certbot --nginx -d ваш-домен`.
+**Домен и HTTPS.** Приложение слушает только `127.0.0.1:${RADAR_HOST_PORT}`. Наружу его открывает nginx: пример в [nginx.example.conf](nginx.example.conf), сертификат — `certbot --nginx -d ваш-домен`.
 
 **Обновление.** [deploy-server.sh](../deploy-server.sh) обновляет код, делает резервную копию базы, применяет миграции и перезапускает приложение:
 
 ```bash
-RADAR_DIR=/opt/radar bash deploy-server.sh
+RADAR_DIR=/opt/radar bash deploy-server.sh                    # последний main
+RADAR_DIR=/opt/radar RADAR_REF=v0.8.0 bash deploy-server.sh   # конкретный релиз
 ```
+
+**Автообновление по релизам.** [scripts/autodeploy.sh](../scripts/autodeploy.sh) из cron сам выкатывает новый тег `vX.Y.Z`, как только он появится в репозитории. Серверу не нужен ключ от GitHub, а GitHub — ключ от сервера:
+
+```cron
+*/5 * * * * root RADAR_DIR=/opt/radar /opt/radar/scripts/autodeploy.sh >> /var/log/radar-autodeploy.log 2>&1
+```
+
+Откат: записать нужный тег в `/opt/radar/.deploy-pin`; снять закрепление — удалить файл.
 
 **Резервные копии** по расписанию: [BACKUP_AND_RESTORE.md](BACKUP_AND_RESTORE.md).
 

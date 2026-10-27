@@ -13,34 +13,25 @@
 ## Release
 
 ```bash
-git tag v0.7.0
-git push origin v0.7.0
+git tag v0.8.0
+git push origin v0.8.0
 ```
 
 The `Release` workflow builds the app, the Docker image (`ghcr.io/<owner>/<repo>`) and `radar-extension-<tag>.zip`, and attaches the zip to the release. Attach nothing that contains a database or a `.env`.
 
 ## Deploying your own hub
 
-The `Deploy hub` workflow runs `deploy-server.sh` over SSH after a green CI on `main`. It needs the secrets `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY` (and optionally `DEPLOY_PORT`, `DEPLOY_KNOWN_HOSTS`) and the variables `DEPLOY_DIR` and `DEPLOY_HEALTH_URL`. Without the secrets the job is skipped. The `Uptime` workflow runs only where the variable `UPTIME_URL` is set.
+Releases are what goes to production. A server that runs OpenRadar from a git checkout pulls them itself: [scripts/autodeploy.sh](../scripts/autodeploy.sh) runs from cron, fetches tags and deploys the newest `vX.Y.Z` with `deploy-server.sh` from that tag (backup, migrations, restart, health check). Nothing on GitHub holds a key to the server.
 
-Restrict the deploy key on the server to the deploy and nothing else, so leaked repository secrets do not mean a shell on the server. A wrapper such as `/usr/local/bin/radar-deploy`:
-
-```sh
-#!/bin/sh
-set -e
-cd /opt/radar
-git fetch -q origin main
-git show origin/main:deploy-server.sh > /tmp/radar-deploy.sh
-RADAR_DIR=/opt/radar exec bash /tmp/radar-deploy.sh </dev/null
+```cron
+*/5 * * * * root RADAR_DIR=/opt/radar /opt/radar/scripts/autodeploy.sh >> /var/log/radar-autodeploy.log 2>&1
 ```
 
-and in `~/.ssh/authorized_keys`:
+- **Release:** tag and push; the server picks it up within five minutes.
+- **Rollback:** write the tag to `$RADAR_DIR/.deploy-pin`; delete the file to follow releases again.
+- **A failed deploy** leaves the previous version running and is not retried until a newer tag or `autodeploy.sh --force`.
 
-```
-command="/usr/local/bin/radar-deploy",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA... deploy
-```
-
-The workflow then only triggers the deploy; the script it pipes is ignored.
+The `Uptime` workflow checks `/health` every 15 minutes where the repository variable `UPTIME_URL` is set; forks stay quiet. An nginx example: [nginx.example.conf](nginx.example.conf).
 
 ## What not to promise
 

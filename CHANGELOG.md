@@ -1,7 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.8.0
 
+- Releases go to production by pull: `scripts/autodeploy.sh` from cron deploys the newest
+  `vX.Y.Z` tag (or a pinned one for rollback) with `deploy-server.sh` from that tag;
+  `deploy-server.sh` takes `RADAR_REF`. The SSH deploy workflow is gone, so GitHub holds
+  no key to the server. `nginx-radar.conf` became `docs/nginx.example.conf`.
+- Dependabot for npm packages and GitHub Actions.
 - `/admin` for operators: leads by day for two weeks, sources over the week with errors,
   users, votes, network participants and links to the analytics consoles. Admins sign in
   with GitHub when listed in `RADAR_ADMIN_GITHUB` (numeric ids or logins), or with the token.
