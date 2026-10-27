@@ -3,6 +3,7 @@ import type { Contact, Lead, LeadVoteSignal, RunRecord, SourceHealth, SourceReco
 import { escapeHtml, firstLine, jsonForScript } from '../core/text.ts';
 import { type SupportedLang, getTranslations } from './i18n.ts';
 import { renderLogo } from './logo.ts';
+import { BUDGET_STEPS_RUB, type FeedFilters, hasActiveFilters } from './filters.ts';
 import { SEO_CATALOG } from './seo.ts';
 
 export interface AuthDisplay {
@@ -27,6 +28,7 @@ export interface LeadsPageData {
   isAdmin?: boolean;
   /** GitHub sign-in is configured: the guest intro links to it. */
   githubEnabled?: boolean;
+  filters?: FeedFilters;
 }
 
 export interface SourcesPageData {
@@ -929,6 +931,27 @@ dialog::backdrop {
 }
 .intro-close:hover { color: var(--ink); }
 .score-legend { margin: 0; font-size: 12px; color: var(--muted); }
+.filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.filter-bar select {
+  height: 34px;
+  padding: 0 28px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2371717a' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  appearance: none;
+  cursor: pointer;
+}
+.filter-bar select:hover, .filter-bar select:focus { border-color: var(--line-strong); outline: none; }
+.filter-check { display: inline-flex; align-items: center; gap: 6px; height: 34px; font-size: 13px; color: var(--ink); cursor: pointer; }
+.filter-check input { margin: 0; accent-color: var(--ink); }
+.filter-reset { font-size: 13px; color: var(--muted); }
+@media (max-width: 640px) {
+  .filter-bar select { flex: 1 1 calc(50% - 4px); min-width: 0; height: 40px; }
+  .filter-check { height: 40px; }
+}
 .score[title] { cursor: help; }
 .sr-only {
   position: absolute;
@@ -1295,6 +1318,9 @@ footer {
   .community-votes { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; padding-bottom: 4px; }
 }
 `;
+
+/** Skills offered in the feed filter: canonical names from extractTechSkills(). */
+const FILTER_SKILLS = ['Python', 'JavaScript', 'TypeScript', 'React', 'Node.js', 'PHP', 'Java', 'Golang', '1С', 'Битрикс', 'WordPress', 'Tilda', 'Figma', 'SQL', 'Telegram Bot', 'Нейросети'];
 
 /** The stylesheet is served from a content-hashed path so browsers cache it across pages. */
 export const STYLE_PATH = `/assets/app.${createHash('sha256').update(STYLE).digest('hex').slice(0, 10)}.css`;
@@ -1763,39 +1789,54 @@ export function renderLeadsPage(data: LeadsPageData): string {
         { key: 'rejected', label: t.statusRejected },
       ];
 
-  const hrefForType = (nextType: string): string => {
+  const filters: FeedFilters = data.filters ?? { sort: 'new', remote: false };
+  // One builder for every link on the page, so switching a tab keeps the search and filters.
+  const hrefWith = (overrides: Record<string, string | undefined>, base = '/'): string => {
+    const values: Record<string, string | undefined> = {
+      type,
+      status,
+      q: query,
+      sort: filters.sort === 'new' ? undefined : filters.sort,
+      budget: filters.budgetRub ? String(filters.budgetRub) : undefined,
+      skill: filters.skill,
+      remote: filters.remote ? '1' : undefined,
+      ...overrides,
+    };
     const params = new URLSearchParams();
-    if (nextType) params.set('type', nextType);
-    if (status) params.set('status', status);
-    if (query) params.set('q', query);
+    for (const [key, value] of Object.entries(values)) if (value) params.set(key, value);
     const suffix = params.toString();
-    return suffix ? `/?${suffix}` : '/';
+    return suffix ? `${base}?${suffix}` : base;
   };
+  const hrefForType = (nextType: string): string => hrefWith({ type: nextType });
+  const hrefForStatus = (nextStatus: string): string => hrefWith({ status: nextStatus });
+  const hrefForQuery = (nextQ: string): string => hrefWith({ q: nextQ });
+  const rssHref = hrefWith({ sort: undefined }, '/feed.rss');
 
-  const hrefForStatus = (nextStatus: string): string => {
-    const params = new URLSearchParams();
-    if (type) params.set('type', type);
-    if (nextStatus) params.set('status', nextStatus);
-    if (query) params.set('q', query);
-    const suffix = params.toString();
-    return suffix ? `/?${suffix}` : '/';
-  };
-
-  const hrefForQuery = (nextQ: string): string => {
-    const params = new URLSearchParams();
-    if (type) params.set('type', type);
-    if (status) params.set('status', status);
-    if (nextQ) params.set('q', nextQ);
-    const suffix = params.toString();
-    return suffix ? `/?${suffix}` : '/';
-  };
-
-  const rssParams = new URLSearchParams();
-  if (type) rssParams.set('type', type);
-  if (status) rssParams.set('status', status);
-  if (query) rssParams.set('q', query);
-  const rssSuffix = rssParams.toString();
-  const rssHref = rssSuffix ? `/feed.rss?${rssSuffix}` : '/feed.rss';
+  const option = (value: string, label: string, selected: boolean): string =>
+    `<option value="${escapeHtml(value)}"${selected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+  const sortSelect = `<select name="sort" aria-label="${escapeHtml(t.sortNew)}" onchange="this.form.submit()">
+      ${option('', t.sortNew, filters.sort === 'new')}
+      ${option('score', t.sortScore, filters.sort === 'score')}
+      ${option('budget', t.sortBudget, filters.sort === 'budget')}
+    </select>`;
+  const budgetSelect = `<select name="budget" aria-label="${escapeHtml(t.budgetAny)}" onchange="this.form.submit()">
+      ${option('', t.budgetAny, !filters.budgetRub)}
+      ${BUDGET_STEPS_RUB.map((rub) => option(String(rub), t.budgetFrom.replace('{n}', formatBudget(rub).replace(/\s*₽$/, '')), filters.budgetRub === rub)).join('')}
+      ${filters.budgetRub && !(BUDGET_STEPS_RUB as readonly number[]).includes(filters.budgetRub) ? option(String(filters.budgetRub), t.budgetFrom.replace('{n}', formatBudget(filters.budgetRub).replace(/\s*₽$/, '')), true) : ''}
+    </select>`;
+  const skills = filters.skill && !FILTER_SKILLS.some((name) => name.toLowerCase() === filters.skill!.toLowerCase())
+    ? [...FILTER_SKILLS, filters.skill]
+    : FILTER_SKILLS;
+  const skillSelect = `<select name="skill" aria-label="${escapeHtml(t.skillAny)}" onchange="this.form.submit()">
+      ${option('', t.skillAny, !filters.skill)}
+      ${skills.map((name) => option(name, name, filters.skill?.toLowerCase() === name.toLowerCase())).join('')}
+    </select>`;
+  const filterBar = `<div class="filter-bar">
+    ${sortSelect}${budgetSelect}${skillSelect}
+    <label class="filter-check"><input type="checkbox" name="remote" value="1"${filters.remote ? ' checked' : ''} onchange="this.form.submit()">${escapeHtml(t.remoteOnly)}</label>
+    ${hasActiveFilters(filters) ? `<a class="filter-reset" href="${escapeHtml(hrefWith({ sort: undefined, budget: undefined, skill: undefined, remote: undefined }))}">${escapeHtml(t.resetFilters)}</a>` : ''}
+  </div>
+  ${filters.sort !== 'new' ? `<p class="score-legend">${escapeHtml(t.rankedWindow)}</p>` : ''}`;
 
   const tabs = typeTabs
     .map(
@@ -1885,6 +1926,7 @@ ${intro}
         </div>
       </div>
     </div>
+    ${filterBar}
     ${query ? `
     <div class="search-meta-bar">
       <span>Найдено: <strong>${leads.length}</strong></span>

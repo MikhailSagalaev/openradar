@@ -28,12 +28,24 @@ export interface UpdateSourceInput {
   config?: SourceConfig;
 }
 
+/** Feed order: newest first, by score, or by budget (USD-normalised). */
+export type LeadSort = 'new' | 'score' | 'budget';
+
 export interface ListLeadsOptions {
   limit?: number;
   status?: LeadStatus;
   sourceId?: string;
   query?: string;
   type?: LeadType;
+  /** Only leads with a known budget of at least this many USD. */
+  minBudgetUsd?: number;
+  /** Only leads that can be done remotely. */
+  remote?: boolean;
+  /** Only leads tagged with this skill (case-insensitive). */
+  skill?: string;
+  /** Only leads first seen at or after this instant. */
+  createdAfter?: string;
+  sort?: LeadSort;
 }
 
 export interface LeadDeliveryRecord {
@@ -216,6 +228,8 @@ export interface Store extends HubStore {
   /** Id, creation time and MinHash sketch of leads created since `sinceIso`, oldest first. */
   listRecentSketches(sinceIso: string, limit: number): Promise<Array<{ id: string; createdAt: string; minhash: string }>>;
   updateLeadStatus(id: string, status: LeadStatus, deliveredAt?: string, scoreDelta?: number): Promise<void>;
+  /** Sets a recomputed base score; the stored score is the base plus the community vote adjustment. */
+  updateLeadScore?(id: string, baseScore: number): Promise<number | undefined>;
   updateLeadState?(id: string, state: LeadState): Promise<void>;
   /** Hub: marks a lead confirmed once; later calls keep the first time. */
   markLeadConfirmed?(id: string, at: string): Promise<void>;

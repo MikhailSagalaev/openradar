@@ -493,6 +493,40 @@ describe('http server', () => {
     await runtime.store.close();
   });
 
+  it('filters and sorts the feed by budget, skill, remote work and score', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true, RADAR_ADMIN_TOKEN: 'secret' });
+    const app = createApp(runtime);
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed' });
+    const base = Date.now() - 3600_000;
+    const leads = [
+      { id: 'cheap', title: 'Поправить вёрстку', city: 'Онлайн', usd: 20, skills: ['WordPress'], score: 50 },
+      { id: 'rich', title: 'Интернет-магазин', city: 'Москва', usd: 1600, skills: ['Python', 'React'], score: 85 },
+      { id: 'mid', title: 'Бот для Telegram', city: undefined, usd: 220, skills: ['python'], score: 70 },
+    ];
+    for (const [i, l] of leads.entries()) {
+      await runtime.store.insertLead({
+        id: l.id, sourceId: source.id, externalId: l.id, title: l.title, titleKey: l.id, text: `${l.title}, подробности`,
+        fingerprint: `fp-${l.id}`, status: 'new', score: l.score, reasons: [], city: l.city, skills: l.skills,
+        normalizedUsdMin: l.usd, normalizedUsdMax: l.usd, createdAt: new Date(base + i * 60_000).toISOString(),
+      });
+    }
+    const ids = async (path: string): Promise<string[]> =>
+      ((await (await app.request(path, { headers: { authorization: 'Bearer secret' } })).json()) as Array<{ id: string }>).map((l) => l.id);
+
+    expect(await ids('/api/leads')).toEqual(['mid', 'rich', 'cheap']);
+    expect(await ids('/api/leads?sort=score')).toEqual(['rich', 'mid', 'cheap']);
+    expect(await ids('/api/leads?sort=budget')).toEqual(['rich', 'mid', 'cheap']);
+    // 20 000 ₽ is about 217 USD at the reference rate.
+    expect(await ids('/api/leads?budget=20000')).toEqual(['mid', 'rich']);
+    expect(await ids('/api/leads?skill=Python')).toEqual(['mid', 'rich']);
+    expect(await ids('/api/leads?remote=1')).toEqual(['mid', 'cheap']);
+
+    const page = await (await app.request('/?sort=score&remote=1', { headers: { authorization: 'Bearer secret' } })).text();
+    expect(page).toContain('<option value="score" selected>');
+    expect(page).toContain('name="remote" value="1" checked');
+    expect(page).toContain('href="/?type=gig&amp;sort=score&amp;remote=1"');
+  });
+
   it('supports GDPR erasure with DELETE /api/leads/:id', async () => {
     const runtime = makeRuntime();
     const app = createApp(runtime);

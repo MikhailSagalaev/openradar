@@ -106,6 +106,15 @@ export interface Translations {
   heroSendHint: string;
   heroDismiss: string;
   scoreHint: string;
+  sortNew: string;
+  sortScore: string;
+  sortBudget: string;
+  budgetAny: string;
+  budgetFrom: string;
+  skillAny: string;
+  remoteOnly: string;
+  resetFilters: string;
+  rankedWindow: string;
   notFoundTitle: string;
   notFoundDesc: string;
   extensionGuide: string;
@@ -240,7 +249,16 @@ export const RU: Translations = {
   heroDismiss: 'Скрыть',
   notFoundTitle: 'Страница не найдена',
   notFoundDesc: 'Такой страницы нет: ссылка устарела, или заказ уже скрыт.',
-  scoreHint: 'Скор от 0 до 100 — насколько заказ стоит внимания. Учитываются бюджет, свежесть, IT-навыки в тексте и голоса участников. От 80 — сильный заказ.',
+  scoreHint: 'Скор от 0 до 100 — насколько заказ стоит внимания: бюджет или зарплата, IT-навыки, насколько подробно описана задача, прямой контакт и голоса участников. Медиана около 58, от 80 — сильный заказ.',
+  sortNew: 'Сначала новые',
+  sortScore: 'Сначала лучшие',
+  sortBudget: 'Сначала дорогие',
+  budgetAny: 'Любой бюджет',
+  budgetFrom: 'от {n} ₽',
+  skillAny: 'Все навыки',
+  remoteOnly: 'Только удалённо',
+  resetFilters: 'Сбросить фильтры',
+  rankedWindow: 'Лучшие и дорогие — среди заказов за последние 7 дней.',
   extensionGuide: 'Расширение для браузера',
   submitTitle: 'Добавить по ссылке',
   submitSubtitle: 'Автоматический сбор описания вакансии или заказа через разметку страницы',
@@ -370,7 +388,16 @@ export const EN: Translations = {
   heroDismiss: 'Hide',
   notFoundTitle: 'Page not found',
   notFoundDesc: 'There is no such page: the link is outdated, or the lead has been hidden.',
-  scoreHint: 'Score from 0 to 100: how much a lead is worth your attention. It counts the budget, freshness, IT skills in the text and participant votes. 80 and above is a strong lead.',
+  scoreHint: 'Score from 0 to 100: how much a lead is worth your attention. It counts the budget or salary, IT skills, how well the task is described, a direct contact and participant votes. The median is about 58; 80 and above is a strong lead.',
+  sortNew: 'Newest first',
+  sortScore: 'Best first',
+  sortBudget: 'Highest budget first',
+  budgetAny: 'Any budget',
+  budgetFrom: 'from {n} ₽',
+  skillAny: 'All skills',
+  remoteOnly: 'Remote only',
+  resetFilters: 'Reset filters',
+  rankedWindow: 'Best and highest budget: among leads of the last 7 days.',
   extensionGuide: 'Browser Extension',
   submitTitle: 'Submit by URL',
   submitSubtitle: 'Automated extraction of job or gig details using page schema',

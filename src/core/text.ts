@@ -89,6 +89,15 @@ export function stripBudgetTitleSuffix(input: string): string {
   return input.replace(/\s*\(\s*(?:Бюджет|Budget)\s*:[^)]*\)\s*$/i, '').trim();
 }
 
+/** Remote work mentioned in a title or text. Kept in sync with the SQL filter in the Postgres store. */
+export const REMOTE_TEXT_RE = /удал[её]нн|удал[её]нк|можно\s+удал|remote/i;
+
+/** A lead can be done remotely: no city, an «Онлайн»/«Удалённо» city, or remote work in the text. */
+export function isRemoteLead(lead: { city?: string; title: string; text: string }): boolean {
+  if (!lead.city || /^(онлайн|удал)/i.test(lead.city)) return true;
+  return REMOTE_TEXT_RE.test(`${lead.title}\n${lead.text}`);
+}
+
 /**
  * DATA-01: off-topic categories (ремонт, доставка, Repetitor…) ride the budget
  * ladder otherwise; an IT/digital signal is required before budget counts as
