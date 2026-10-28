@@ -111,5 +111,71 @@ export const SOURCE_PRESETS: SourcePreset[] = [
       limit: 20,
     },
   },
+  {
+    id: 'remotive',
+    kind: 'remotive',
+    title: 'Remotive — Все вакансии',
+    description: 'Официальный открытый API Remotive — международные удалённые вакансии всех направлений',
+    config: {
+      url: 'https://remotive.com/api/remote-jobs',
+      limit: 50,
+    },
+  },
+  {
+    id: 'arbeitnow',
+    kind: 'arbeitnow',
+    title: 'Arbeitnow — Вакансии Германии и ЕС',
+    description: 'Официальный открытый API Arbeitnow — вакансии Германии и ЕС, в основном на английском',
+    config: {
+      url: 'https://www.arbeitnow.com/api/job-board-api',
+      limit: 50,
+    },
+  },
+  {
+    id: 'hn-hiring',
+    kind: 'hn',
+    title: 'Hacker News — Who is hiring',
+    description: 'Комментарии месячного треда «Ask HN: Who is hiring?» — вакансии стартапов, в основном удалённые',
+    config: {
+      url: 'https://hn.algolia.com/api/v1',
+      limit: 100,
+    },
+  },
+  {
+    id: 'himalayas',
+    kind: 'rss',
+    title: 'Himalayas — Все вакансии',
+    description: 'RSS-фид международной доски удалённых вакансий Himalayas',
+    config: {
+      url: 'https://himalayas.app/jobs/rss',
+    },
+  },
+  {
+    id: 'jobspresso',
+    kind: 'rss',
+    title: 'Jobspresso — Отобранные вакансии',
+    description: 'RSS-фид Jobspresso — отобранные удалённые вакансии международного рынка',
+    config: {
+      url: 'https://jobspresso.co/feed/',
+    },
+  },
+  {
+    id: 'cryptojobslist',
+    kind: 'rss',
+    title: 'CryptoJobsList — Web3 вакансии',
+    description: 'RSS-фид CryptoJobsList — вакансии web3, крипто и блокчейн-компаний',
+    config: {
+      url: 'https://api.cryptojobslist.com/jobs.rss',
+    },
+  },
+  {
+    id: 'remoteworker-uk',
+    kind: 'rss',
+    title: 'RemoteWorker UK — Все вакансии',
+    description: 'RSS-фид RemoteWorker — удалённые вакансии Великобритании и Европы',
+    config: {
+      url: 'https://remoteworker.co.uk/feeds/all.xml',
+    },
+  },
 ];
 

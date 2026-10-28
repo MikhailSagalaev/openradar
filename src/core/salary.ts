@@ -23,6 +23,10 @@ const FX_TO_USD: Record<string, number> = {
   KZT: 1 / 480.0,
   BYN: 1 / 3.25,
   UAH: 1 / 41.5,
+  PLN: 1 / 4.05,
+  CHF: 1 / 0.88,
+  AUD: 1 / 1.52,
+  CAD: 1 / 1.36,
   USDT: 1.0,
   USDC: 1.0,
 };
@@ -87,6 +91,18 @@ export function detectCurrency(text: string): string {
   }
   if (lower.includes('грн') || lower.includes('uah') || lower.includes('₴')) {
     return 'UAH';
+  }
+  if (lower.includes('zł') || lower.includes('zlot') || /pln/.test(lower)) {
+    return 'PLN';
+  }
+  if (lower.includes('chf') || lower.includes('франк')) {
+    return 'CHF';
+  }
+  if (lower.includes('a$') || lower.includes('aud') || lower.includes('australian')) {
+    return 'AUD';
+  }
+  if (lower.includes('c$') || lower.includes('cad') || lower.includes('canadian')) {
+    return 'CAD';
   }
   return 'RUB';
 }
