@@ -1,0 +1,40 @@
+{
+  "0-warning": "Only parse `jobs`",
+  "0-legal-notice": "legal notice",
+  "job-count": 2,
+  "total-record-count": 2,
+  "jobs": [
+    {
+      "id": "2091134",
+      "url": "https://remotive.com/remote-jobs/software-development/head-of-engineering",
+      "title": "Head of Engineering",
+      "company_name": "Lemon.io",
+      "company_logo": "https://remotive.com/job/2091134/logo",
+      "category": "Software Development",
+      "tags": "['AI/ML', 'startup', 'marketplace']",
+      "job_type": "full_time",
+      "publication_date": "2026-10-26T12:20:09",
+      "candidate_required_location": "Worldwide",
+      "salary": "$100k - $130k",
+      "description": "<p>Lead the <b>engineering</b> team across timezones.</p>"
+    },
+    {
+      "id": "2091200",
+      "url": "https://remotive.com/remote-jobs/customer-support/support-specialist",
+      "title": "Support Specialist",
+      "company_name": "Acme",
+      "category": "Customer Support",
+      "tags": "[]",
+      "job_type": "contract",
+      "publication_date": "2026-10-25T08:00:00",
+      "candidate_required_location": "Europe",
+      "salary": "",
+      "description": "<p>Answer tickets in English.</p>"
+    },
+    {
+      "id": "2091300",
+      "title": "",
+      "description": "no title, skipped"
+    }
+  ]
+}

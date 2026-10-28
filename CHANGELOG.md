@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.16.0
+
+- Foreign sources, queue one: Remotive (official keyless API), Arbeitnow (official
+  keyless API, Germany/EU) and the monthly Hacker News "Who is hiring?" thread through
+  the official Algolia API (top-level comments only), plus presets for the verified
+  feeds of Himalayas, Jobspresso, CryptoJobsList and RemoteWorker UK. Every adapter
+  declares access and risks and ships with a fixture and a test.
+- Currency detection and USD-normalised rates for PLN, CHF, AUD and CAD, so
+  international pay is detected, converted and filterable.
+- `src/version.ts` tracks `package.json` again: the hub reported 0.12.0 while
+  shipping 0.15.0.
+
 ## 0.15.0
 
 - Model extraction for the research reports. With `RADAR_EXTRACT_ENABLED=true` and an

@@ -1,0 +1,36 @@
+{
+  "data": [
+    {
+      "slug": "senior-backend-engineer-berlin-1001",
+      "company_name": "Amperecloud GmbH",
+      "title": "Senior Backend Engineer (m/w/d)",
+      "description": "<h2>About us</h2><p>Build the OS for renewable energy.</p>",
+      "remote": "False",
+      "url": "https://www.arbeitnow.com/jobs/companies/amperecloud-gmbh/senior-backend-engineer-berlin-1001",
+      "tags": "['backend', 'python', 'django']",
+      "job_types": "['full-time']",
+      "location": "Berlin",
+      "created_at": "1793210441"
+    },
+    {
+      "slug": "remote-frontend-developer-1002",
+      "company_name": "Remote GmbH",
+      "title": "Frontend Developer (Remote)",
+      "description": "<p>Build dashboards.</p>",
+      "remote": "True",
+      "url": "https://www.arbeitnow.com/jobs/companies/remote-gmbh/remote-frontend-developer-1002",
+      "tags": "['frontend', 'react']",
+      "job_types": "['full-time']",
+      "location": "",
+      "created_at": "1793200441"
+    },
+    {
+      "slug": "no-title-1003",
+      "company_name": "X",
+      "title": "",
+      "description": "skipped"
+    }
+  ],
+  "links": {},
+  "meta": { "current_page": 1 }
+}

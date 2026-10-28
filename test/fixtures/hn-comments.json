@@ -1,0 +1,38 @@
+{
+  "hits": [
+    {
+      "objectID": "50010001",
+      "author": "startupcto",
+      "comment_text": "Startup Y | Senior Golang Engineer | <b>Remote</b> (UTC-3 to UTC+3) | Full-time<p>We build payments infra. Salary $140k - $180k. Email jobs@example.com",
+      "created_at": "2026-10-02T10:00:00Z",
+      "parent_id": 49922569,
+      "story_id": 49922569
+    },
+    {
+      "objectID": "50010002",
+      "author": "hrbot",
+      "comment_text": "Reply to the startup above: we also hire!",
+      "created_at": "2026-10-02T11:00:00Z",
+      "parent_id": 50010001,
+      "story_id": 49922569
+    },
+    {
+      "objectID": "50010003",
+      "author": "shorty",
+      "comment_text": "hiring, dm me",
+      "created_at": "2026-10-02T12:00:00Z",
+      "parent_id": 49922569,
+      "story_id": 49922569
+    },
+    {
+      "objectID": "50010004",
+      "author": "deleted",
+      "comment_text": null,
+      "created_at": "2026-10-02T13:00:00Z",
+      "parent_id": 49922569,
+      "story_id": 49922569
+    }
+  ],
+  "nbHits": 4,
+  "page": 0
+}
