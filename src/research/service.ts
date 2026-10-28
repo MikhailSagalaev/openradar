@@ -4,7 +4,7 @@
  */
 import type { Store } from '../core/store.ts';
 import { deriveRecord, type ResearchRecord } from './derive.ts';
-import { buildReport, livePeriod, monthPeriod, REPORT_VERSION, type Report } from './report.ts';
+import { MONTHS_GEN, buildReport, livePeriod, monthPeriod, REPORT_VERSION, type Report } from './report.ts';
 
 const MAX_LEADS = 100_000;
 const LIVE_DAYS = 30;
@@ -48,6 +48,16 @@ export function previousMonth(now: Date): string {
 export async function buildMonthReport(store: Store, slug: string, now: Date = new Date()): Promise<Report> {
   const period = monthPeriod(slug);
   const records = await researchRecords(store, period.from, period.to);
+  // A month the base did not cover from its first day says which days it covers.
+  const first = records.reduce<string | undefined>((min, r) => (!min || r.date < min ? r.date : min), undefined);
+  if (first && first > period.from.slice(0, 10)) {
+    const last = new Date(Date.parse(period.to) - 86_400_000);
+    const day = (iso: string): number => Number(iso.slice(8, 10));
+    const month = MONTHS_GEN[last.getUTCMonth()]!;
+    period.from = `${first}T00:00:00.000Z`;
+    period.label = `${period.label} (с ${day(first)} ${month})`;
+    period.phrase = `с ${day(first)} по ${last.getUTCDate()} ${month} ${last.getUTCFullYear()} года`;
+  }
   return buildReport(records, period, 'month', now);
 }
 

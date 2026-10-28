@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.14.1
+
+- A monthly report over a month the base covers only in part names its days:
+  «Октябрь 2026 (с 22 октября)», and its quotes say «с 22 по 31 октября 2026 года».
+
 ## 0.14.0
 
 - Market research at `/research`: pay in vacancies (roubles per month) and order budgets,
