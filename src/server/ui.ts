@@ -1149,6 +1149,24 @@ dialog::backdrop {
   margin-bottom: 6px;
 }
 .empty p { max-width: 460px; margin: 0 auto 16px; font-size: 13px; }
+.crumbs { font-size: 12.5px; color: var(--muted); margin-bottom: 10px; }
+.crumbs a { color: var(--muted); }
+.prose { max-width: 720px; margin-top: 36px; }
+.prose h2 { font-size: 17px; text-transform: none; letter-spacing: -0.01em; color: var(--ink); margin: 28px 0 8px; }
+.prose p, .prose li { font-size: 14px; line-height: 1.65; color: var(--ink); }
+.prose p { margin: 0 0 12px; }
+.prose ul { margin: 0 0 12px; padding-left: 20px; }
+.faq details { border-bottom: 1px solid var(--line); padding: 12px 0; }
+.faq summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+.faq details p { margin: 8px 0 0; }
+.chip-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.chip-links a { border: 1px solid var(--line); border-radius: 9999px; padding: 5px 12px; font-size: 13px; color: var(--ink); text-decoration: none; }
+.chip-links a:hover { background: var(--surface-hover); }
+.catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-top: 12px; }
+.catalog-card { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; color: var(--ink); text-decoration: none; display: block; }
+.catalog-card:hover { background: var(--surface-hover); }
+.catalog-card b { display: block; font-size: 14px; margin-bottom: 4px; }
+.catalog-card span { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
 .detail-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 260px;
@@ -1483,6 +1501,9 @@ export function setPublicBaseUrl(url: string | undefined): void {
   publicBaseUrl = url?.replace(/\/+$/, '') || undefined;
 }
 
+/** The footer lists the first catalog pages; the rest are one click away on /catalog. */
+const FOOTER_CATALOG_SIZE = 12;
+
 /** Quick searches under the search box. */
 const QUICK_QUERIES: Record<SupportedLang, string[]> = {
   ru: ['Парсер', 'Telegram-бот', 'Лендинг', 'Дизайн', 'Тексты', 'Видео'],
@@ -1588,13 +1609,16 @@ ${input.body}
     <div class="footer-col">
       <div class="footer-col-title">${escapeHtml(lang === 'ru' ? 'Категории' : 'Categories')}</div>
       <div class="footer-catalog-grid">
-        ${SEO_CATALOG.map((entry) => `<a href="/catalog/${escapeHtml(entry.slug)}">${escapeHtml((entry.title.split('—')[0] ?? entry.h1).trim())}</a>`).join('')}
+        ${SEO_CATALOG.slice(0, FOOTER_CATALOG_SIZE).map((entry) => `<a href="/catalog/${escapeHtml(entry.slug)}">${escapeHtml((entry.title.split('—')[0] ?? entry.h1).trim())}</a>`).join('')}
+        <a href="/catalog">${escapeHtml(lang === 'ru' ? 'Все категории →' : 'All categories →')}</a>
       </div>
     </div>
     <div class="footer-col">
       <div class="footer-col-title">${escapeHtml(lang === 'ru' ? 'Проект' : 'Project')}</div>
       <div class="footer-links-grid">
         <a href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md" target="_blank" rel="noopener noreferrer">${escapeHtml(t.guideLink)}</a>
+        <a href="/about">${escapeHtml(lang === 'ru' ? 'О проекте' : 'About')}</a>
+        <a href="/faq">${escapeHtml(lang === 'ru' ? 'Вопросы и ответы' : 'FAQ')}</a>
         <a href="/extension">${escapeHtml(t.extensionGuide)}</a>
         <a href="/sources">${escapeHtml(t.navSources)}</a>
         <a href="/feed.rss">${escapeHtml(t.rssFeed)}</a>
@@ -2234,7 +2258,9 @@ ${POLL_SCRIPT}
     ? t.jobs
     : type === 'gig'
     ? t.gigs
-    : t.navLeads;
+    : lang === 'ru'
+    ? 'Заказы и вакансии для фрилансеров и IT — открытая лента'
+    : 'Freelance orders and IT jobs — an open feed';
 
   const typeParam = type ? `?type=${encodeURIComponent(type)}` : '';
   return layout({
@@ -2246,7 +2272,7 @@ ${POLL_SCRIPT}
     script: searchHotkeyScript,
     auth: data.auth,
     lang,
-    head: `<link rel="canonical" href="https://openradar.fun/${typeParam}">
+    head: `<link rel="canonical" href="${escapeHtml(publicBaseUrl ?? 'https://openradar.fun')}/${typeParam}">
 <meta name="description" content="OpenRadar — открытая база заказов и вакансий: свежие проекты с бирж и Telegram-каналов, вилки зарплат, фильтры по стеку и RSS на любой запрос.">`,
   });
 }
@@ -2435,8 +2461,13 @@ ${data.similar?.length ? `<section class="similar">
 </section>` : ''}`;
 
   const cleanText = (lead.text || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+  // A closed or expired lead stays readable by link but leaves the search index.
+  const gone = lead.state === 'closed' || Boolean(data.expired);
+  const posted = lead.publishedAt || lead.createdAt;
   const headExtra = `
 <meta name="description" content="${escapeHtml(cleanText)}">
+${publicBaseUrl ? `<link rel="canonical" href="${escapeHtml(publicBaseUrl)}/leads/${escapeHtml(lead.id)}">` : ''}
+${gone ? '<meta name="robots" content="noindex">' : ''}
 <meta property="og:title" content="${escapeHtml(leadTitle(lead))} · OpenRadar">
 <meta property="og:description" content="${escapeHtml(cleanText)}">
 <meta property="og:type" content="article">
@@ -2447,9 +2478,16 @@ ${publicBaseUrl ? `<meta property="og:url" content="${escapeHtml(publicBaseUrl)}
 ${jsonForScript({
   '@context': 'https://schema.org',
   '@type': lead.type === 'job' ? 'JobPosting' : 'CreativeWork',
-  title: lead.title,
+  ...(lead.type === 'job' ? { title: lead.title } : { name: lead.title }),
   description: lead.text,
-  datePosted: lead.publishedAt || lead.createdAt,
+  url: publicBaseUrl ? `${publicBaseUrl}/leads/${lead.id}` : undefined,
+  ...(lead.type === 'job'
+    ? {
+        datePosted: posted,
+        validThrough: new Date(Date.parse(posted) + 30 * 86_400_000).toISOString(),
+        jobLocationType: lead.isRemote !== false && !lead.city ? 'TELECOMMUTE' : undefined,
+      }
+    : { datePublished: posted }),
   hiringOrganization: lead.author ? { '@type': 'Organization', name: lead.author } : undefined,
   jobLocation: lead.city ? { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: lead.city } } : undefined,
   baseSalary: typeof lead.budget === 'number' ? {
@@ -3184,6 +3222,8 @@ document.addEventListener('DOMContentLoaded', () => {
     script,
     auth,
     lang,
+    head: `<meta name="description" content="${escapeHtml(texts.subtitle)}">
+${publicBaseUrl ? `<link rel="canonical" href="${escapeHtml(publicBaseUrl)}/extension">` : ''}`,
   });
 }
 

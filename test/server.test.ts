@@ -603,6 +603,7 @@ describe('http server', () => {
     expect(lead).toContain('class="similar"');
     expect(lead).toContain('<meta property="og:image" content="https://hub.example/og.png">');
     expect(lead).toContain('<meta property="og:url" content="https://hub.example/leads/l10">');
+    expect(lead).toContain('<link rel="canonical" href="https://hub.example/leads/l10">');
 
     expect((await app.request('/me')).headers.get('location')).toBe('/login?returnTo=/me');
     const me = await (await app.request('/me', auth)).text();

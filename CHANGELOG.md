@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.13.0
+
+- Search pages: 28 catalog pages instead of 14 (new: WordPress, Битрикс, парсинг,
+  нейросети, SEO, PHP, игры, тестирование; vacancies for Python, frontend, DevOps,
+  analysts, QA and designers). Each page has a paragraph on what it collects, questions
+  and answers, links to related pages and breadcrumbs, with FAQPage, BreadcrumbList and
+  ItemList markup. Rows open the lead page on the hub instead of leaving the site.
+- New pages: `/catalog` (every category), `/about`, `/faq` and `/llms.txt`. The footer
+  links them and shows the first 12 categories.
+- Lead pages get a canonical link; closed and expired leads get `noindex`. Vacancy markup
+  adds `validThrough` and remote work; orders use `name` and `datePublished`.
+- The home page title names what the site is; `/extension` gets a description and a
+  canonical link. Sitemap adds the new pages with `lastmod`; robots.txt also closes
+  `/admin`, `/me`, `/login` and `/submit`.
+
 ## 0.12.0
 
 - New source «Telegram (свой аккаунт)», kind `telegram-account`: reads the channels and
