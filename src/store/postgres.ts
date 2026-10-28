@@ -36,6 +36,8 @@ import type {
   UserVoteResult,
   AdminStats,
 } from '../core/store.ts';
+import type { LeadFactsFill } from '../core/store.ts';
+import type { PageFacts } from '../research/facts.ts';
 import { lastDays } from '../core/store.ts';
 
 import { checkMigrations } from './migrator.ts';
@@ -1466,6 +1468,73 @@ export class PostgresStore implements Store {
 
   async updateLeadState(id: string, state: LeadState): Promise<void> {
     await this.pool.query(`UPDATE leads SET state = $1 WHERE id = $2`, [state, id]);
+  }
+
+  async saveLeadFacts(id: string, facts: PageFacts, fill: LeadFactsFill): Promise<void> {
+    const hasPay = fill.normalizedUsdMin !== undefined || fill.normalizedUsdMax !== undefined;
+    // Pay from the page fills only a lead with no pay of its own.
+    const empty = `$4 AND normalized_usd_min IS NULL AND normalized_usd_max IS NULL`;
+    await this.pool.query(
+      `UPDATE leads SET
+         metadata_json = COALESCE(metadata_json, '{}'::jsonb) || jsonb_build_object('facts', $2::jsonb),
+         author = COALESCE(author, $3),
+         budget = CASE WHEN ${empty} THEN $5 ELSE budget END,
+         currency = CASE WHEN ${empty} THEN $6 ELSE currency END,
+         payment_period = CASE WHEN ${empty} THEN $7 ELSE payment_period END,
+         raw_salary = CASE WHEN ${empty} THEN $8 ELSE raw_salary END,
+         normalized_usd_min = CASE WHEN ${empty} THEN $9 ELSE normalized_usd_min END,
+         normalized_usd_max = CASE WHEN ${empty} THEN $10 ELSE normalized_usd_max END
+       WHERE id = $1`,
+      [
+        id,
+        JSON.stringify(facts),
+        fill.author ?? null,
+        hasPay,
+        fill.budget ?? null,
+        fill.currency ?? 'RUB',
+        fill.paymentPeriod ?? 'monthly',
+        fill.rawSalary ?? null,
+        fill.normalizedUsdMin ?? null,
+        fill.normalizedUsdMax ?? null,
+      ],
+    );
+  }
+
+  async listLeadsForResearch(options: { from: string; to: string; limit: number }): Promise<Lead[]> {
+    const result = await this.pool.query(
+      `SELECT id, source_id, external_id, url, canonical_url, title, left(text, 3000) AS text, author, city,
+              budget, currency, category, skills_json, is_remote, metadata_json, published_at, fingerprint,
+              title_key, status, score, reasons_json, created_at, delivered_at, type, raw_salary, payment_period,
+              normalized_usd_min, normalized_usd_max, state, contacts_json, source_platform, source_channel,
+              source_channel_title, source_visibility, source_message_id, confirmed_at,
+              votes_up, votes_down, votes_scam, votes_closed
+         FROM leads
+        WHERE COALESCE(published_at, created_at) >= $1::timestamptz AND COALESCE(published_at, created_at) < $2::timestamptz
+          AND state NOT IN ('hidden_junk', 'hidden_scam') AND status NOT IN ('rejected', 'failed')
+        ORDER BY created_at DESC
+        LIMIT $3`,
+      [options.from, options.to, options.limit],
+    );
+    return result.rows.map((r) => this.rowToLead(r));
+  }
+
+  async getResearchSnapshot(period: string): Promise<{ report: unknown; createdAt: string } | null> {
+    const result = await this.pool.query(`SELECT report, created_at FROM research_snapshots WHERE period = $1`, [period]);
+    const row = result.rows[0];
+    return row ? { report: row.report, createdAt: new Date(row.created_at).toISOString() } : null;
+  }
+
+  async saveResearchSnapshot(period: string, report: unknown): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO research_snapshots (period, report) VALUES ($1, $2::jsonb)
+       ON CONFLICT (period) DO UPDATE SET report = EXCLUDED.report, created_at = now()`,
+      [period, JSON.stringify(report)],
+    );
+  }
+
+  async listResearchSnapshots(): Promise<Array<{ period: string; createdAt: string }>> {
+    const result = await this.pool.query(`SELECT period, created_at FROM research_snapshots ORDER BY period DESC`);
+    return result.rows.map((r) => ({ period: r.period, createdAt: new Date(r.created_at).toISOString() }));
   }
 
 }

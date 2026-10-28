@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.14.0
+
+- Market research at `/research`: pay in vacancies (roubles per month) and order budgets,
+  with medians and quartiles by role, grade, language, city, remote work, skill and AI
+  mentions; top employers; weekly dynamics; findings with ready quotes that carry the
+  source, the period and the sample size. A figure needs 10 posts with pay, quartiles 20;
+  an employer posting the same vacancy many times counts once.
+- Role pages `/research/roles/<role>`, the methodology at `/research/methodology`, the live
+  report as JSON (`/research/report.json`) and the data as CSV (`/research/dataset.csv`,
+  derived fields only, CC BY 4.0). Last month's report is frozen early in the next month
+  (`/research/2026-11`, `.json`) and never changes. Private nodes keep the section closed.
+- Pay keeps what «от» and «до» mean: a range counts as its middle, one bound as itself.
+  Roles, grades, languages and employers come from the title, Хабр tags and the post.
+- The closed-post check reads schema.org JobPosting on the pages it already loads and
+  stores pay, employer, grade and specialization (`metadata.facts`); leads without pay
+  get it from the page.
+- Jobicy, We Work Remotely and RemoteOK posts are vacancies; migration 020 fixes older ones.
+
 ## 0.13.0
 
 - Search pages: 28 catalog pages instead of 14 (new: WordPress, Битрикс, парсинг,

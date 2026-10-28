@@ -677,6 +677,7 @@ export function renderLlmsTxt(baseUrl: string): string {
 ## Разделы
 
 - [Лента заказов и вакансий](${baseUrl}/): поиск, фильтры по навыкам, бюджету и удалёнке.
+- [Исследования рынка](${baseUrl}/research): зарплаты в вакансиях и бюджеты заказов — медианы и квартили по направлениям, уровням, языкам, городам и навыкам. Данные открыты (CC BY 4.0): [CSV](${baseUrl}/research/dataset.csv), [JSON](${baseUrl}/research/report.json), [методика](${baseUrl}/research/methodology).
 - [О проекте](${baseUrl}/about): как устроен OpenRadar и откуда публикации.
 - [Вопросы и ответы](${baseUrl}/faq)
 - [Расширение для браузера](${baseUrl}/extension): отправка вакансии с любого сайта и оценка рыночной оплаты.
@@ -717,6 +718,8 @@ export function renderSitemapXml(
   baseUrl: string,
   leads: Array<{ id: string; createdAt: string }> = [],
   now: Date = new Date(),
+  /** Pages that exist only while there is data behind them, such as research role pages. */
+  extraPaths: string[] = [],
 ): string {
   const today = now.toISOString().slice(0, 10);
   const urls: Array<{ loc: string; priority: string; lastmod?: string; changefreq?: string }> = [
@@ -728,6 +731,9 @@ export function renderSitemapXml(
       lastmod: today,
       changefreq: 'hourly',
     })),
+    { loc: `${baseUrl}/research`, priority: '0.9', lastmod: today, changefreq: 'daily' },
+    { loc: `${baseUrl}/research/methodology`, priority: '0.5' },
+    ...extraPaths.map((path) => ({ loc: `${baseUrl}${path}`, priority: '0.6', lastmod: today })),
     { loc: `${baseUrl}/about`, priority: '0.5' },
     { loc: `${baseUrl}/faq`, priority: '0.5' },
     { loc: `${baseUrl}/extension`, priority: '0.5' },

@@ -1,3 +1,4 @@
+import type { PageFacts } from '../research/facts.ts';
 import type {
   Contact,
   SourceVisibility,
@@ -233,6 +234,17 @@ export interface HubStore {
   getContactFlags(contacts: Contact[]): Promise<ContactFlag[]>;
 }
 
+/** Pay and employer taken from the page when the post itself had none. */
+export interface LeadFactsFill {
+  budget?: number;
+  currency?: string;
+  paymentPeriod?: 'monthly' | 'hourly' | 'fixed';
+  rawSalary?: string;
+  normalizedUsdMin?: number;
+  normalizedUsdMax?: number;
+  author?: string;
+}
+
 export interface Store extends HubStore {
   init?(): Promise<void>;
   listSources(): Promise<SourceRecord[]>;
@@ -261,6 +273,16 @@ export interface Store extends HubStore {
   listLeadsToCheck?(options: { hosts: string[]; limit: number; createdAfter: string; now?: Date }): Promise<Array<Pick<Lead, 'id' | 'url' | 'createdAt' | 'type'>>>;
   /** Remembers that the lead's page was checked just now. */
   markLeadChecked?(id: string, at?: Date): Promise<void>;
+  /**
+   * Stores facts read from the lead's source page (metadata.facts) and fills pay and the
+   * employer when the lead has none yet.
+   */
+  saveLeadFacts?(id: string, facts: PageFacts, fill: LeadFactsFill): Promise<void>;
+  /** Leads published in [from, to) for the market report: text cut to its head, junk and scam left out. */
+  listLeadsForResearch?(options: { from: string; to: string; limit: number }): Promise<Lead[]>;
+  getResearchSnapshot?(period: string): Promise<{ report: unknown; createdAt: string } | null>;
+  saveResearchSnapshot?(period: string, report: unknown): Promise<void>;
+  listResearchSnapshots?(): Promise<Array<{ period: string; createdAt: string }>>;
   /** Hub: marks a lead confirmed once; later calls keep the first time. */
   markLeadConfirmed?(id: string, at: string): Promise<void>;
   recordVote(
