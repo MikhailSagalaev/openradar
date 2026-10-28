@@ -17,6 +17,7 @@ import { feedMaxAge } from '../pipeline/liveness.ts';
 import type { Runtime } from '../runtime.ts';
 import { SOURCE_PRESETS } from '../sources/presets.ts';
 import { IMAP_PASSWORD_ENV_RE } from '../sources/imap.ts';
+import { DEFAULT_SESSION_ENV, TELEGRAM_SESSION_ENV_RE } from '../sources/telegram-account.ts';
 import { VERSION } from '../version.ts';
 import { githubOAuthConfigured, startGitHubOAuth, handleGitHubCallback } from './auth.ts';
 import { renderAdminPage } from './admin.ts';
@@ -442,6 +443,8 @@ function formValues(body: Record<string, unknown>): SourceFormValues {
     mailbox: formString(body, 'mailbox'),
     sinceDays: formString(body, 'sinceDays'),
     subjectIncludes: formString(body, 'subjectIncludes'),
+    chats: formString(body, 'chats'),
+    sessionEnv: formString(body, 'sessionEnv'),
     share: formString(body, 'share') === 'on',
   };
 }
@@ -472,6 +475,8 @@ function formValuesFromSource(source: SourceRecord): SourceFormValues {
     mailbox: text(config.mailbox),
     sinceDays: text(config.sinceDays),
     subjectIncludes: text(config.subjectIncludes),
+    chats: text(config.chats),
+    sessionEnv: text(config.sessionEnv),
     share: config.share === true,
   };
 }
@@ -525,6 +530,20 @@ function buildSourceConfig(
       return { config, error: 'Укажите корректный публичный канал Telegram (4-32 символов a-z, 0-9, _).' };
     }
     config.channel = channel;
+  }
+
+  if (kind === 'telegram-account') {
+    const chats = parseList(formString(body, 'chats'));
+    if (!chats.length) return { config, error: 'Укажите хотя бы один канал или чат.' };
+    if (chats.length > 50) return { config, error: 'Не больше 50 чатов в одном источнике.' };
+    const bad = chats.find((chat) => !/^(?:@?[a-zA-Z0-9_]{4,32}|https?:\/\/t\.me\/[a-zA-Z0-9_]{4,32}|-?\d{5,20})$/.test(chat));
+    if (bad) return { config, error: `Не похоже на канал или чат Telegram: ${bad}` };
+    const sessionEnv = formString(body, 'sessionEnv') || DEFAULT_SESSION_ENV;
+    if (!TELEGRAM_SESSION_ENV_RE.test(sessionEnv)) {
+      return { config, error: 'Переменная с сессией: RADAR_TELEGRAM_SESSION или RADAR_TELEGRAM_SESSION_ИМЯ.' };
+    }
+    config.chats = chats;
+    config.sessionEnv = sessionEnv;
   }
 
   if (kind === 'kwork') {
