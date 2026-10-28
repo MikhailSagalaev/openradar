@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.16.0
+
+- GigaChat for model extraction: `RADAR_EXTRACT_PROVIDER=gigachat` with `GIGACHAT_AUTH_KEY`.
+  The 30-minute token is cached; the Russian Trusted Root CA is trusted only for GigaChat
+  requests. Default model GigaChat-2-Pro, one request at a time.
+- Shadow mode: model answers are saved but stay out of the figures until
+  `RADAR_EXTRACT_APPLY=true`.
+- `radar research check` compares the model with the rules where both answer (role, grade,
+  pay) and says when agreement reaches 85% on 30+ comparisons; `research extract --calibrate`
+  sends posts whose pay is known first.
+
 ## 0.15.0
 
 - Model extraction for the research reports. With `RADAR_EXTRACT_ENABLED=true` and an

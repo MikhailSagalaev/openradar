@@ -408,9 +408,14 @@ export function modelFactsOf(lead: Pick<Lead, 'metadata'>): ModelFacts | undefin
   return facts && typeof facts === 'object' && facts.confidence >= MIN_CONFIDENCE ? facts : undefined;
 }
 
-export function deriveRecord(lead: Lead): ResearchRecord {
+export interface DeriveOptions {
+  /** Use the model's answers; off while their quality is being checked. */
+  useModel?: boolean;
+}
+
+export function deriveRecord(lead: Lead, options: DeriveOptions = {}): ResearchRecord {
   const facts = factsOf(lead);
-  const model = modelFactsOf(lead);
+  const model = options.useModel === false ? undefined : modelFactsOf(lead);
   const type = lead.url && JOB_BOARDS.test(lead.url) ? 'job' : (lead.type ?? 'gig');
   const head = lead.text.slice(0, 3000);
   const skills = Array.from(new Set([...(lead.skills ?? []), ...(facts?.skills ?? []), ...extractTechSkills(`${lead.title}\n${head}`, 12), ...(model?.skills ?? [])]));

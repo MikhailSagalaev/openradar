@@ -730,19 +730,44 @@ function buildProgram(): Command {
     .command('extract')
     .description('Ask the model about posts with no answer yet and print what it found')
     .option('--limit <n>', 'Posts to send', '20')
-    .action(async (options: { limit: string }) => {
+    .option('--calibrate', 'Posts whose pay the rules already know first, to measure agreement')
+    .action(async (options: { limit: string; calibrate?: boolean }) => {
       const { extractionEnabled, runModelExtraction } = await import('../research/model.ts');
-      const { deriveRecord, modelFactsOf } = await import('../research/derive.ts');
+      const { deriveRecord } = await import('../research/derive.ts');
       await withRuntime(async (runtime) => {
-        if (!extractionEnabled(runtime.env)) throw new Error('Set RADAR_EXTRACT_ENABLED=true and OPENAI_API_KEY first');
-        const summary = await runModelExtraction(runtime, { limit: Math.max(1, Number(options.limit) || 20) });
+        if (!extractionEnabled(runtime.env)) throw new Error('Set RADAR_EXTRACT_ENABLED=true and the provider key (OPENAI_API_KEY or GIGACHAT_AUTH_KEY) first');
+        const summary = await runModelExtraction(runtime, { limit: Math.max(1, Number(options.limit) || 20), withPayFirst: options.calibrate });
         console.log(`Отправлено: ${summary.asked}, сохранено: ${summary.saved}, ошибок: ${summary.failed}`);
-        const leads = await runtime.store.listLeadsForResearch?.({ from: new Date(Date.now() - 30 * 86_400_000).toISOString(), to: new Date().toISOString(), limit: 2000 });
-        for (const lead of (leads ?? []).filter((l) => l.metadata?.model).slice(0, summary.saved)) {
-          const model = modelFactsOf(lead);
-          const record = deriveRecord(lead);
-          console.log(`${lead.title.slice(0, 60).padEnd(60)} | ${model ? `${record.role} ${record.grade ?? '-'} ${record.pay ?? '-'} ${record.payOrigin ?? ''}` : 'неуверенно'}`);
+        for (const id of summary.ids) {
+          const lead = await runtime.store.getLead(id);
+          const facts = (lead?.metadata?.model as import('../research/model.ts').StoredModelFacts | undefined)?.facts;
+          if (!lead || !facts) continue;
+          const rules = deriveRecord(lead, { useModel: false });
+          const pay = facts.currency ? `${facts.payMin ?? ''}–${facts.payMax ?? ''} ${facts.currency}/${facts.period}` : '-';
+          console.log(`${lead.title.slice(0, 50).padEnd(50)} | ${facts.isPost ? '' : 'НЕ ВАКАНСИЯ '}${Math.round(facts.confidence * 100)}% | модель: ${facts.role ?? '-'} ${facts.grade ?? '-'} ${pay} | правила: ${rules.role} ${rules.grade ?? '-'} ${rules.pay ?? '-'}`);
         }
+      });
+    });
+
+  research
+    .command('check')
+    .description('Compare the model with the rules where both answer: is it good enough to count?')
+    .option('--days <n>', 'Posts of the last N days', '30')
+    .action(async (options: { days: string }) => {
+      const { modelQuality, share, APPLY_AGREEMENT } = await import('../research/quality.ts');
+      await withRuntime(async (runtime) => {
+        const from = new Date(Date.now() - Math.max(1, Number(options.days) || 30) * 86_400_000).toISOString();
+        const leads = (await runtime.store.listLeadsForResearch?.({ from, to: new Date().toISOString(), limit: 100_000 })) ?? [];
+        const q = modelQuality(leads);
+        const pct = (a: { n: number; agree: number }): string => (a.n ? `${Math.round(share(a)! * 100)}% (n = ${a.n})` : 'нет данных');
+        console.log(`Ответов модели: ${q.answered}, уверенных: ${q.confident}, из них не вакансии: ${q.notPost}`);
+        console.log(`Совпадение с правилами: направление ${pct(q.role)}, уровень ${pct(q.grade)}, оплата ${pct(q.pay)}`);
+        console.log(`Модель добавит: направление ${q.gain.role}, уровень ${q.gain.grade}, оплату ${q.gain.pay}`);
+        for (const d of q.disagreements) console.log(`  ${d.field}: правила ${d.rules} / модель ${d.model} — ${d.title}`);
+        console.log(q.ready
+          ? `Готово: совпадение ≥ ${APPLY_AGREEMENT * 100}% на направлении и оплате. Можно включить RADAR_EXTRACT_APPLY=true.`
+          : `Пока не включать: нужно ≥ ${APPLY_AGREEMENT * 100}% совпадения на направлении и оплате, по 30+ сравнений (для оплаты: research extract --calibrate).`);
+        console.log(`Сейчас в цифрах: ${runtime.env.RADAR_EXTRACT_APPLY ? 'ответы модели используются' : 'ответы модели не используются'}.`);
       });
     });
 
@@ -753,7 +778,7 @@ function buildProgram(): Command {
       if (!/^\d{4}-\d{2}$/.test(month)) throw new Error('Month must look like 2026-10');
       const { buildMonthReport } = await import('../research/service.ts');
       await withRuntime(async (runtime) => {
-        const report = await buildMonthReport(runtime.store, month);
+        const report = await buildMonthReport(runtime.store, month, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
         await runtime.store.saveResearchSnapshot?.(month, report);
         console.log(`${report.period.label}: ${report.totals.posts} публикаций, медиана ${report.jobs.pay.median ?? '—'} ₽ (n = ${report.jobs.pay.n})`);
       });
