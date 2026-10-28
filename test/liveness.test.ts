@@ -95,6 +95,9 @@ describe('closed-post check', () => {
     expect(feed.map((l) => l.id)).not.toContain('closed');
     const html = await (await app.request('/leads/closed')).text();
     expect(html).toContain('площадка показывает этот заказ закрытым');
+    expect(html).toContain('<meta name="robots" content="noindex">');
+    const open = await (await app.request('/leads/open')).text();
+    expect(open).not.toContain('noindex');
     await runtime.store.close();
   });
 

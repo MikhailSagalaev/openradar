@@ -52,7 +52,17 @@ import { isNostrAuthHeader, verifyHttpAuth } from '../net/protocol.ts';
 import { parseModerators } from '../hub/service.ts';
 import { evaluateLeadState, tierFor, WeightResolver, WEB_SIGNAL_PREFIX } from '../hub/rating.ts';
 import { registerV2Routes } from './v2.ts';
-import { SEO_CATALOG, findCatalogEntry, renderCatalogPage, renderRobotsTxt, renderSitemapXml } from './seo.ts';
+import {
+  SEO_CATALOG,
+  findCatalogEntry,
+  renderAboutPage,
+  renderCatalogIndex,
+  renderCatalogPage,
+  renderFaqPage,
+  renderLlmsTxt,
+  renderRobotsTxt,
+  renderSitemapXml,
+} from './seo.ts';
 import { extractPreviewFromHtml, validateSubmissionUrl } from './preview.ts';
 import { renderLogo, LOGO_SVG, LOGO_ASSET_PATH, FAVICON_SVG } from './logo.ts';
 
@@ -2000,6 +2010,13 @@ export function createApp(runtime: Runtime): Hono {
       'content-type': 'application/xml; charset=utf-8',
     });
   });
+
+  app.get('/llms.txt', (c) =>
+    c.text(renderLlmsTxt(seoBaseUrl(c)), 200, { 'content-type': 'text/plain; charset=utf-8' }),
+  );
+  app.get('/about', (c) => c.html(renderAboutPage({ baseUrl: seoBaseUrl(c), version: VERSION })));
+  app.get('/faq', (c) => c.html(renderFaqPage({ baseUrl: seoBaseUrl(c), version: VERSION })));
+  app.get('/catalog', (c) => c.html(renderCatalogIndex({ baseUrl: seoBaseUrl(c), version: VERSION })));
 
   // Search-driven landing pages: indexable, each one doubles as an RSS subscription.
   app.get('/catalog/:slug', async (c) => {

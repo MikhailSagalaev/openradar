@@ -1,5 +1,4 @@
-import { isHttpUrl } from '../core/url.ts';
-import { escapeHtml } from '../core/text.ts';
+import { escapeHtml, jsonForScript } from '../core/text.ts';
 import type { Lead, LeadType } from '../core/types.ts';
 import { layout } from './ui.ts';
 
@@ -9,6 +8,8 @@ export interface CatalogEntry {
   title: string;
   description: string;
   intro: string;
+  /** A paragraph under the list: what the page collects and who it is for. */
+  about: string;
   q?: string;
   type?: LeadType;
 }
@@ -27,6 +28,8 @@ export const SEO_CATALOG: CatalogEntry[] = [
       'Актуальные заказы на разработку сайтов, ботов и приложений с бирж и из Telegram-каналов. Бюджеты, стек и ссылки на первоисточник.',
     intro:
       'Свежие заказы на разработку, собранные из открытых бирж и каналов. Каждая карточка — ссылка на первоисточник, дубликаторы уже убраны.',
+    about:
+      'Здесь собраны заказы на программирование из FL.ru, Kwork, Freelancehunt и Telegram-каналов: сайты, боты, парсеры, интеграции, доработки. Один и тот же заказ, опубликованный на двух биржах, показывается одной карточкой, а у каждой карточки есть оценка от 0 до 100: за бюджет, понятное ТЗ и прямой контакт заказчика.',
     q: 'разработка',
     type: 'gig',
   },
@@ -38,6 +41,8 @@ export const SEO_CATALOG: CatalogEntry[] = [
       'Заказы на сайты: лендинги, интернет-магазины, WordPress и Tilda. Свежие проекты с бюджетами и прямыми ссылками.',
     intro:
       'Проекты на сайты: от лендингов до интернет-магазинов. Обновляется автоматически каждые пять минут.',
+    about:
+      'Лендинги, корпоративные сайты, интернет-магазины, доработка готовых сайтов на WordPress, Tilda и Битриксе. Подходит веб-разработчикам и студиям, которым нужен поток небольших проектов без абонентской платы за доступ к бирже.',
     q: 'сайт',
     type: 'gig',
   },
@@ -48,6 +53,8 @@ export const SEO_CATALOG: CatalogEntry[] = [
     description:
       'Свежие заказы на Python: парсинг данных, API, автоматизация, скрипты. Бюджеты в рублях и долларах, ссылка на заказчика.',
     intro: 'Задачи на Python из открытых источников: бэкенд, парсеры, автоматизация.',
+    about:
+      'Чаще всего на Python заказывают парсеры, Telegram-ботов, обработку таблиц, интеграции по API и бэкенд на Django или FastAPI. Небольшие задачи на день-два здесь соседствуют с проектами на несколько недель, бюджет указан в карточке, если заказчик его назвал.',
     q: 'python',
     type: 'gig',
   },
@@ -58,6 +65,8 @@ export const SEO_CATALOG: CatalogEntry[] = [
     description:
       'Актуальные заказы на ботов: Telegram, WhatsApp, чат-боты для бизнеса. Свежая лента с бюджетами.',
     intro: 'Разработка ботов и автоматизация мессенджеров — новые заказы каждые пять минут.',
+    about:
+      'Боты для записи клиентов, приёма оплат, рассылок, воронок продаж и поддержки, мини-приложения в Telegram, боты для VK и WhatsApp. Многие такие заказы публикуются только в Telegram-каналах, поэтому OpenRadar читает и биржи, и каналы.',
     q: 'бот',
     type: 'gig',
   },
@@ -68,6 +77,8 @@ export const SEO_CATALOG: CatalogEntry[] = [
     description:
       'Заказы на 1С: доработка конфигураций, обмены, внедрение. Свежая лента из бирж и каналов.',
     intro: 'Доработка и внедрение 1С — заказы обновляются автоматически.',
+    about:
+      'Доработка конфигураций, обмены с сайтом и маркетплейсами, отчёты, перенос данных, консультации по 1С:Бухгалтерии и УТ. Работы для программистов 1С много и на биржах, и в профильных каналах, здесь она собрана в одну ленту.',
     q: '1с',
     type: 'gig',
   },
@@ -78,6 +89,8 @@ export const SEO_CATALOG: CatalogEntry[] = [
     description:
       'Свежие заказы для дизайнеров: логотипы, UI/UX, баннеры, презентации. С бюджетами и ссылками на заказчика.',
     intro: 'Графический и продуктовый дизайн — свежие заказы из открытых источников.',
+    about:
+      'Логотипы и фирменный стиль, макеты сайтов в Figma, интерфейсы приложений, баннеры, презентации, оформление соцсетей. Чтобы найти задачи под свой инструмент, используйте поиск по ленте: «Figma», «презентация», «логотип».',
     q: 'дизайн',
     type: 'gig',
   },
@@ -88,6 +101,8 @@ export const SEO_CATALOG: CatalogEntry[] = [
     description:
       'Заказы на мобильные приложения: iOS, Android, Flutter, React Native. Обновляется каждые пять минут.',
     intro: 'Мобильные приложения и игры — проекты для iOS и Android разработчиков.',
+    about:
+      'Приложения под iOS и Android с нуля, доработка готовых, кроссплатформенные проекты на Flutter и React Native, публикация в сторах. Заказы на мобильную разработку редкие и крупные, поэтому их удобнее ловить через RSS этой страницы, а не заходить вручную.',
     q: 'приложени',
     type: 'gig',
   },
@@ -98,6 +113,8 @@ export const SEO_CATALOG: CatalogEntry[] = [
     description:
       'Свежие заказы на тексты: статьи, карточки товаров, SEO-тексты, сценарии. С бюджетами и ссылками.',
     intro: 'Копирайтинг, редактура и контент-маркетинг — новые заказы каждый час.',
+    about:
+      'Статьи для блогов, тексты для сайтов и лендингов, описания товаров, посты для соцсетей, сценарии роликов, редактура. Заказы приходят с бирж и из каналов для авторов.',
     q: 'текст',
     type: 'gig',
   },
@@ -108,6 +125,8 @@ export const SEO_CATALOG: CatalogEntry[] = [
     description:
       'Свежие вакансии в IT: бэкенд, фронтенд, DevOps. Вилки зарплат, стек, удалёнка и офис.',
     intro: 'IT-вакансии из официальных API и фидов: зарплатные вилки, стек и формат работы.',
+    about:
+      'Вакансии приходят из hh.ru, Хабр Карьеры, портала «Работа России» и зарубежных досок для удалёнки. В карточке есть вилка, город, формат работы и навыки, а для вакансий без вилки расширение OpenRadar показывает, сколько обычно платят за похожую работу.',
     q: 'разработчик',
     type: 'job',
   },
@@ -118,6 +137,8 @@ export const SEO_CATALOG: CatalogEntry[] = [
     description:
       'Удалённые вакансии для программистов, дизайнеров и аналитиков. Зарплатные вилки в USD и рублях.',
     intro: 'Только удалёнка: вакансии из России и мира с указанием вилки.',
+    about:
+      'Российские работодатели с удалённым форматом и международные доски We Work Remotely, Jobicy и RemoteOK. Зарплаты в долларах показаны с примерным пересчётом в рубли.',
     type: 'job',
   },
   {
@@ -126,6 +147,8 @@ export const SEO_CATALOG: CatalogEntry[] = [
     title: 'Заказы на видеомонтаж — ролики, Reels, YouTube',
     description: 'Свежие заказы на монтаж видео, Reels и Shorts, моушн-дизайн и анимацию с бирж и из Telegram-каналов.',
     intro: 'Заказы на монтаж роликов, Reels и Shorts, моушн-дизайн. Каждая карточка — ссылка на первоисточник.',
+    about:
+      'Монтаж роликов для YouTube, вертикальные видео для Reels, Shorts и TikTok, рекламные креативы, моушн-дизайн и анимация. Значительная часть таких заказов публикуется в Telegram-каналах для монтажёров.',
     q: 'видео',
     type: 'gig',
   },
@@ -135,6 +158,8 @@ export const SEO_CATALOG: CatalogEntry[] = [
     title: 'Заказы на рекламу и маркетинг — таргет, Директ, Авито, SMM',
     description: 'Заказы на настройку рекламы, таргет, Яндекс Директ, Авито и продвижение в соцсетях.',
     intro: 'Таргет, контекстная реклама, Авито и соцсети: свежие заказы с бюджетами и ссылками на первоисточник.',
+    about:
+      'Настройка Яндекс Директа и таргета VK, продвижение на Авито, ведение соцсетей, посевы в Telegram, маркетинговая аналитика. Подходит специалистам по трафику и SMM, которые ищут клиентов без агентств.',
     q: 'реклама',
     type: 'gig',
   },
@@ -144,6 +169,8 @@ export const SEO_CATALOG: CatalogEntry[] = [
     title: 'Заказы на переводы — тексты, сайты, документы',
     description: 'Свежие заказы на перевод текстов, сайтов и документов с английского и других языков.',
     intro: 'Переводы текстов, сайтов и документов: заказы с бирж, обновляются каждые пять минут.',
+    about:
+      'Переводы статей, сайтов, документации, субтитров и деловой переписки, чаще всего с английского и на английский. Срочные заказы на переводы быстро разбирают, поэтому удобнее подписаться на RSS.',
     q: 'перевод',
     type: 'gig',
   },
@@ -153,8 +180,164 @@ export const SEO_CATALOG: CatalogEntry[] = [
     title: 'Заказы для маркетплейсов — карточки, инфографика, Wildberries и Ozon',
     description: 'Заказы на карточки товаров, инфографику и ведение магазинов на Wildberries и Ozon.',
     intro: 'Карточки товаров, инфографика и ведение магазинов на маркетплейсах — свежие заказы с бирж.',
+    about:
+      'Инфографика и фото для карточек, SEO-описания, заливка товаров, аналитика продаж и ведение магазинов на Wildberries, Ozon и Яндекс Маркете. Работы много у дизайнеров и менеджеров маркетплейсов.',
     q: 'маркетплейс',
     type: 'gig',
+  },
+  {
+    slug: 'wordpress-zakazy',
+    h1: 'Заказы на WordPress',
+    title: 'Заказы на WordPress — сайты, темы, плагины, доработки',
+    description: 'Свежие заказы на WordPress: сайты под ключ, доработка тем, плагины, WooCommerce, перенос и ускорение.',
+    intro: 'Сайты и доработки на WordPress и WooCommerce — заказы из бирж и каналов.',
+    about:
+      'Сайты под ключ на WordPress, правки тем, настройка WooCommerce, плагины, перенос на другой хостинг, ускорение и исправление ошибок. Небольшие доработки на WordPress — один из самых частых типов заказа на биржах.',
+    q: 'wordpress',
+    type: 'gig',
+  },
+  {
+    slug: 'bitrix-zakazy',
+    h1: 'Заказы на Битрикс',
+    title: 'Заказы на 1С-Битрикс и Битрикс24 — доработка и интеграции',
+    description: 'Заказы на 1С-Битрикс и Битрикс24: доработка сайтов, интеграции, настройка CRM и бизнес-процессов.',
+    intro: 'Битрикс и Битрикс24: доработки сайтов, интеграции с 1С, настройка CRM.',
+    about:
+      'Доработка сайтов на 1С-Битрикс, обмен с 1С, настройка Битрикс24, роботы и бизнес-процессы, интеграции с телефонией и мессенджерами. Подходит битрикс-разработчикам и интеграторам CRM.',
+    q: 'битрикс',
+    type: 'gig',
+  },
+  {
+    slug: 'parsing-zakazy',
+    h1: 'Заказы на парсинг',
+    title: 'Заказы на парсинг сайтов и сбор данных',
+    description: 'Свежие заказы на парсеры: сбор данных с сайтов и маркетплейсов, выгрузки в Excel и Google Таблицы.',
+    intro: 'Парсеры сайтов, маркетплейсов и соцсетей — свежие заказы с бюджетами.',
+    about:
+      'Сбор цен и остатков с маркетплейсов, выгрузка каталогов, мониторинг конкурентов, парсинг объявлений и соцсетей, сохранение в Excel, Google Таблицы или базу. Обычно такие заказы делают на Python, иногда на Node.js или в готовых сервисах.',
+    q: 'парс',
+    type: 'gig',
+  },
+  {
+    slug: 'neyroseti-zakazy',
+    h1: 'Заказы на нейросети и ИИ',
+    title: 'Заказы на нейросети — ИИ-боты, автоматизация, генерация контента',
+    description: 'Заказы на нейросети и ИИ: чат-боты на GPT, автоматизация, генерация изображений и текстов, интеграции.',
+    intro: 'Нейросети в работе: ИИ-ассистенты, автоматизация и генерация контента.',
+    about:
+      'Чат-боты и ассистенты на языковых моделях, автоматизация процессов через n8n и Make, генерация изображений и видео, обработка документов. Категория быстро растёт: заказчики ищут исполнителей и среди разработчиков, и среди дизайнеров.',
+    q: 'нейросет',
+    type: 'gig',
+  },
+  {
+    slug: 'seo-prodvizhenie',
+    h1: 'Заказы на SEO-продвижение',
+    title: 'Заказы на SEO — продвижение сайтов, аудит, семантика',
+    description: 'Свежие заказы на SEO: продвижение сайтов, технический аудит, сбор семантики, SEO-тексты и ссылки.',
+    intro: 'SEO-продвижение, аудит и семантика — заказы из бирж и каналов.',
+    about:
+      'Продвижение сайтов в Яндексе и Google, технический аудит, сбор семантического ядра, внутренняя оптимизация, SEO-тексты для сайтов и маркетплейсов. Подходит SEO-специалистам и копирайтерам.',
+    q: 'seo',
+    type: 'gig',
+  },
+  {
+    slug: 'php-zakazy',
+    h1: 'Заказы на PHP',
+    title: 'Заказы на PHP — Laravel, доработка сайтов, бэкенд',
+    description: 'Свежие заказы на PHP: Laravel, Yii, доработка сайтов, API и интеграции. Бюджеты и ссылки на заказчика.',
+    intro: 'Бэкенд и доработка сайтов на PHP: Laravel, Yii, самописные CMS.',
+    about:
+      'Доработка и поддержка сайтов на PHP, проекты на Laravel и Yii, интеграции по API, исправление ошибок и перенос на новую версию PHP. Большая часть заказов — поддержка уже работающих проектов.',
+    q: 'php',
+    type: 'gig',
+  },
+  {
+    slug: 'igry-unity-zakazy',
+    h1: 'Заказы на разработку игр',
+    title: 'Заказы на разработку игр — Unity, Unreal, игровая графика',
+    description: 'Заказы на разработку игр на Unity и Unreal, игровую графику, 3D-модели и геймдизайн.',
+    intro: 'Геймдев: игры на Unity и Unreal, 3D, игровая графика.',
+    about:
+      'Мобильные и браузерные игры, прототипы на Unity и Unreal Engine, 3D-модели, анимация и игровая графика. Заказы приходят с бирж и из каналов для геймдев-фрилансеров.',
+    q: 'unity',
+    type: 'gig',
+  },
+  {
+    slug: 'testirovanie-zakazy',
+    h1: 'Заказы на тестирование',
+    title: 'Заказы на тестирование — QA, автотесты, проверка сайтов и приложений',
+    description: 'Свежие заказы на тестирование сайтов и приложений: ручное тестирование, автотесты, проверка перед релизом.',
+    intro: 'Ручное тестирование и автотесты — заказы для QA-специалистов.',
+    about:
+      'Проверка сайтов и приложений перед запуском, тест-кейсы, автотесты на Selenium и Playwright, нагрузочное тестирование. Хороший вход во фриланс для начинающих QA.',
+    q: 'тестир',
+    type: 'gig',
+  },
+  {
+    slug: 'vakansii-python',
+    h1: 'Вакансии Python-разработчика',
+    title: 'Вакансии Python-разработчика — Django, FastAPI, данные',
+    description: 'Свежие вакансии Python-разработчика: бэкенд на Django и FastAPI, данные, автоматизация. Вилки зарплат и формат работы.',
+    intro: 'Работа на Python: бэкенд, данные, автоматизация. Вилки и формат работы в каждой карточке.',
+    about:
+      'Вакансии бэкенд-разработчиков на Django и FastAPI, инженеров данных, специалистов по автоматизации и ML. В карточке видно вилку, город или удалёнку и стек, который ждёт работодатель.',
+    q: 'python',
+    type: 'job',
+  },
+  {
+    slug: 'vakansii-frontend',
+    h1: 'Вакансии фронтенд-разработчика',
+    title: 'Вакансии frontend-разработчика — React, Vue, TypeScript',
+    description: 'Свежие вакансии фронтенд-разработчика: React, Vue, TypeScript. Зарплатные вилки, удалёнка и офис.',
+    intro: 'Фронтенд: React, Vue, TypeScript — свежие вакансии с вилками.',
+    about:
+      'Вакансии фронтенд-разработчиков на React, Vue и Angular, верстальщиков и fullstack-разработчиков с упором на клиентскую часть. Отфильтровать удалёнку можно на главной ленте.',
+    q: 'frontend',
+    type: 'job',
+  },
+  {
+    slug: 'vakansii-devops',
+    h1: 'Вакансии DevOps-инженера',
+    title: 'Вакансии DevOps — Kubernetes, CI/CD, облака',
+    description: 'Свежие вакансии DevOps и SRE: Kubernetes, CI/CD, облака, мониторинг. Вилки зарплат и формат работы.',
+    intro: 'DevOps и SRE: Kubernetes, CI/CD, облака — вакансии с вилками.',
+    about:
+      'Вакансии DevOps-инженеров, SRE и системных администраторов: Kubernetes, Docker, CI/CD, Terraform, мониторинг, облака. Часть вакансий полностью удалённая.',
+    q: 'devops',
+    type: 'job',
+  },
+  {
+    slug: 'vakansii-analitik',
+    h1: 'Вакансии аналитика',
+    title: 'Вакансии аналитика — системный, бизнес- и аналитик данных',
+    description: 'Свежие вакансии аналитиков: системный и бизнес-аналитик, аналитик данных, продуктовый аналитик. Вилки и формат работы.',
+    intro: 'Системные, бизнес- и продуктовые аналитики, аналитики данных.',
+    about:
+      'Вакансии системных и бизнес-аналитиков, аналитиков данных и продуктовых аналитиков: SQL, BI, требования, A/B-тесты. Вилка и формат работы указаны в карточке.',
+    q: 'аналитик',
+    type: 'job',
+  },
+  {
+    slug: 'vakansii-testirovshchik',
+    h1: 'Вакансии тестировщика',
+    title: 'Вакансии тестировщика — QA, ручное и автоматизированное тестирование',
+    description: 'Свежие вакансии тестировщиков: ручное тестирование, автотесты, QA-инженеры. Вилки зарплат, удалёнка и офис.',
+    intro: 'QA: ручное тестирование и автоматизация — свежие вакансии.',
+    about:
+      'Вакансии QA-инженеров и тестировщиков: ручное тестирование, автотесты на Java, Python и JavaScript, нагрузочное тестирование. Есть вакансии для начинающих.',
+    q: 'тестир',
+    type: 'job',
+  },
+  {
+    slug: 'vakansii-dizaynera',
+    h1: 'Вакансии дизайнера',
+    title: 'Вакансии дизайнера — UI/UX, продуктовый и графический дизайн',
+    description: 'Свежие вакансии дизайнеров: UI/UX, продуктовый, графический и моушн-дизайн. Вилки зарплат и формат работы.',
+    intro: 'UI/UX, продуктовые и графические дизайнеры — вакансии с вилками.',
+    about:
+      'Вакансии продуктовых и UI/UX-дизайнеров, графических дизайнеров и моушн-дизайнеров в студиях, агентствах и продуктовых компаниях. Заказы для дизайнеров на фрилансе собраны в разделе «Заказы на дизайн».',
+    q: 'дизайнер',
+    type: 'job',
   },
 ];
 
@@ -163,8 +346,8 @@ export function findCatalogEntry(slug: string): CatalogEntry | undefined {
 }
 
 function leadRow(lead: Lead, baseUrl: string): string {
-  // Only http(s) links leave the site: anything else (javascript:, data:) falls back to the lead page.
-  const href = lead.url && isHttpUrl(lead.url) ? lead.url : `${baseUrl}/leads/${encodeURIComponent(lead.id)}`;
+  // Rows open the lead page on the hub: it carries the details, the score and the link to the source.
+  const href = `${baseUrl}/leads/${encodeURIComponent(lead.id)}`;
   const meta = [
     lead.city,
     typeof lead.budget === 'number'
@@ -174,13 +357,78 @@ function leadRow(lead: Lead, baseUrl: string): string {
   ]
     .filter(Boolean)
     .join(' · ');
-  return `<a class="row" href="${escapeHtml(href)}" rel="nofollow noopener" target="_blank">
+  return `<a class="row" href="${escapeHtml(href)}">
         <div>
           <div class="row-title">${escapeHtml(lead.title)}</div>
           <div class="row-meta">${escapeHtml(meta)}</div>
         </div>
         <div class="row-side">${escapeHtml(String(lead.score))}</div>
       </a>`;
+}
+
+function feedHrefOf(entry: CatalogEntry): string {
+  return `/feed.rss?${new URLSearchParams({
+    ...(entry.q ? { q: entry.q } : {}),
+    ...(entry.type ? { type: entry.type } : {}),
+  }).toString()}`;
+}
+
+/** Questions every catalog page answers; the FAQ page adds the project-wide ones. */
+function catalogFaq(entry: CatalogEntry): Array<[string, string]> {
+  const what = entry.type === 'job' ? 'вакансии' : 'заказы';
+  return [
+    [
+      `Откуда берутся ${what} на этой странице?`,
+      `Из открытых источников: бирж фриланса, сайтов вакансий, RSS-лент и Telegram-каналов, а также от участников, которые добавляют публикации по ссылке или через расширение. Источники опрашиваются автоматически, обычно раз в несколько минут.`,
+    ],
+    [
+      `Нужно ли платить, чтобы откликнуться?`,
+      `Нет. OpenRadar не берёт денег за доступ и отклики: в карточке есть ссылка на первоисточник и контакты автора, вы пишете заказчику напрямую.`,
+    ],
+    [
+      'Как получать новые публикации по этой теме?',
+      'Подпишитесь на RSS-ленту этой страницы в любом RSS-ридере или в Telegram-боте для RSS. Новые публикации появятся там без захода на сайт.',
+    ],
+    [
+      'Почему у публикаций разная оценка?',
+      'Оценка от 0 до 100 растёт за указанный бюджет, понятное описание задачи, нужные навыки и прямой контакт. Закрытые и устаревшие публикации из ленты убираются.',
+    ],
+  ];
+}
+
+function faqHtml(items: Array<[string, string]>): string {
+  return `<div class="faq">${items
+    .map(([q, a]) => `<details><summary>${escapeHtml(q)}</summary><p>${escapeHtml(a)}</p></details>`)
+    .join('')}</div>`;
+}
+
+function faqJsonLd(items: Array<[string, string]>): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: items.map(([q, a]) => ({
+      '@type': 'Question',
+      name: q,
+      acceptedAnswer: { '@type': 'Answer', text: a },
+    })),
+  };
+}
+
+function breadcrumbsJsonLd(baseUrl: string, items: Array<[string, string]>): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items.map(([name, path], index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name,
+      item: `${baseUrl}${path}`,
+    })),
+  };
+}
+
+function ldScripts(...blocks: Array<Record<string, unknown>>): string {
+  return blocks.map((block) => `<script type="application/ld+json">\n${jsonForScript(block)}\n</script>`).join('\n');
 }
 
 export function renderCatalogPage(options: {
@@ -191,16 +439,18 @@ export function renderCatalogPage(options: {
 }): string {
   const { entry, leads, baseUrl, version } = options;
   const canonical = `${baseUrl}/catalog/${entry.slug}`;
-  const searchHref = `/catalog/${entry.slug}`; // canonical stays on the landing
-  const feedHref = `/feed.rss?${new URLSearchParams({
-    ...(entry.q ? { q: entry.q } : {}),
-    ...(entry.type ? { type: entry.type } : {}),
-  }).toString()}`;
+  const feedHref = feedHrefOf(entry);
   const list = leads.length
     ? leads.map((lead) => leadRow(lead, baseUrl)).join('')
-    : `<div class="empty"><h2>Пока пусто</h2><p>Новые заказы появятся здесь в течение пяти минут — источники опрашиваются автоматически.</p></div>`;
+    : `<div class="empty"><h2>Пока пусто</h2><p>Новые публикации появятся здесь в течение нескольких минут — источники опрашиваются автоматически.</p></div>`;
+  const faq = catalogFaq(entry);
+  // Same kind first, so a page on orders links to other orders before vacancies.
+  const related = SEO_CATALOG.filter((other) => other.slug !== entry.slug)
+    .sort((a, b) => Number(b.type === entry.type) - Number(a.type === entry.type))
+    .slice(0, 10);
 
   const body = `
+<nav class="crumbs" aria-label="Навигация"><a href="/">OpenRadar</a> / <a href="/catalog">Категории</a> / ${escapeHtml(entry.h1)}</nav>
 <div class="page-head">
   <div>
     <h1>${escapeHtml(entry.h1)}</h1>
@@ -212,16 +462,240 @@ export function renderCatalogPage(options: {
   </div>
 </div>
 <div class="list">${list}</div>
-<p class="muted small" style="margin-top:20px">Открытая база <b>OpenRadar</b> собирает заказы и вакансии из открытых источников и сообщества. <a href="${escapeHtml(searchHref)}">Подписка на обновления</a> — через RSS-ленту этой страницы.</p>`;
+<section class="prose">
+  <h2>Что здесь</h2>
+  <p>${escapeHtml(entry.about)}</p>
+  <p>OpenRadar — открытая база заказов и вакансий без платных тарифов. Код проекта открыт, любой может запустить свой узел и подключить свои источники. <a href="/about">Подробнее о проекте</a>.</p>
+  <h2>Вопросы</h2>
+  ${faqHtml(faq)}
+  <h2>Похожие разделы</h2>
+  <div class="chip-links">${related.map((other) => `<a href="/catalog/${escapeHtml(other.slug)}">${escapeHtml(other.h1)}</a>`).join('')}<a href="/catalog">Все категории</a></div>
+</section>`;
+
+  const itemList = {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: entry.h1,
+    itemListElement: leads.slice(0, 20).map((lead, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      url: `${baseUrl}/leads/${lead.id}`,
+      name: lead.title,
+    })),
+  };
 
   return layout({
     title: entry.title,
     version,
     body,
     head: `<meta name="description" content="${escapeHtml(entry.description)}">
+<meta property="og:description" content="${escapeHtml(entry.description)}">
+<meta property="og:url" content="${escapeHtml(canonical)}">
 <link rel="canonical" href="${escapeHtml(canonical)}">
-<link rel="alternate" type="application/rss+xml" title="${escapeHtml(entry.h1)} — RSS" href="${escapeHtml(feedHref)}">`,
+<link rel="alternate" type="application/rss+xml" title="${escapeHtml(entry.h1)} — RSS" href="${escapeHtml(feedHref)}">
+${ldScripts(
+  breadcrumbsJsonLd(baseUrl, [['OpenRadar', '/'], ['Категории', '/catalog'], [entry.h1, `/catalog/${entry.slug}`]]),
+  ...(leads.length ? [itemList] : []),
+  faqJsonLd(faq),
+)}`,
   });
+}
+
+/** Index of every landing page, grouped into orders and vacancies. */
+export function renderCatalogIndex(options: { baseUrl: string; version: string }): string {
+  const { baseUrl, version } = options;
+  const card = (entry: CatalogEntry): string =>
+    `<a class="catalog-card" href="/catalog/${escapeHtml(entry.slug)}"><b>${escapeHtml(entry.h1)}</b><span>${escapeHtml(entry.intro)}</span></a>`;
+  const gigs = SEO_CATALOG.filter((entry) => entry.type !== 'job');
+  const jobs = SEO_CATALOG.filter((entry) => entry.type === 'job');
+  const description =
+    'Все разделы OpenRadar: заказы для фрилансеров по направлениям и IT-вакансии по специальностям. У каждого раздела своя RSS-лента.';
+  const body = `
+<nav class="crumbs" aria-label="Навигация"><a href="/">OpenRadar</a> / Категории</nav>
+<div class="page-head"><div>
+  <h1>Категории заказов и вакансий</h1>
+  <p class="muted small">${escapeHtml(description)}</p>
+</div></div>
+<h2>Заказы для фрилансеров</h2>
+<div class="catalog-grid">${gigs.map(card).join('')}</div>
+<h2 style="margin-top:32px">Вакансии</h2>
+<div class="catalog-grid">${jobs.map(card).join('')}</div>`;
+  return layout({
+    title: 'Категории заказов и вакансий',
+    version,
+    body,
+    head: `<meta name="description" content="${escapeHtml(description)}">
+<link rel="canonical" href="${escapeHtml(baseUrl)}/catalog">
+${ldScripts(breadcrumbsJsonLd(baseUrl, [['OpenRadar', '/'], ['Категории', '/catalog']]))}`,
+  });
+}
+
+const REPO_URL = 'https://github.com/MikhailSagalaev/openradar';
+
+export function renderAboutPage(options: { baseUrl: string; version: string }): string {
+  const { baseUrl, version } = options;
+  const description =
+    'OpenRadar — открытая база заказов и вакансий: собирает публикации с бирж, сайтов вакансий и Telegram-каналов в одну ленту без платных тарифов. Открытый код, свой узел, RSS и API.';
+  const body = `
+<nav class="crumbs" aria-label="Навигация"><a href="/">OpenRadar</a> / О проекте</nav>
+<div class="page-head"><div>
+  <h1>О проекте OpenRadar</h1>
+  <p class="muted small">Открытая база заказов и вакансий, которую собирают парсеры, узлы и люди.</p>
+</div></div>
+<section class="prose" style="margin-top:0">
+  <p>Чтобы найти заказ или работу, сегодня приходится держать открытыми пять бирж и десяток Telegram-каналов, а за быстрый доступ к откликам платить подписку. OpenRadar собирает эти публикации в одну ленту и не берёт денег ни за доступ, ни за отклики: контакты есть в публикации, заказчику вы пишете напрямую.</p>
+
+  <h2>Откуда публикации</h2>
+  <ul>
+    <li>Биржи фриланса: FL.ru, Kwork, Freelancehunt.</li>
+    <li>Вакансии: hh.ru, Хабр Карьера, портал «Работа России», We Work Remotely, Jobicy, RemoteOK.</li>
+    <li>Telegram-каналы с заказами и вакансиями, публичные и закрытые.</li>
+    <li>Участники: публикации по ссылке, через <a href="/extension">расширение для браузера</a> и от своих узлов.</li>
+  </ul>
+  <p>Одна и та же публикация, найденная в разных местах, показывается одной карточкой. Закрытые заказы и устаревшие вакансии убираются из ленты: сервер проверяет страницы источников, а участники отмечают закрытые публикации.</p>
+
+  <h2>Оценка и модерация</h2>
+  <p>Каждая публикация получает оценку от 0 до 100: за указанный бюджет или вилку, понятное описание, нужные навыки и прямой контакт. Участники голосуют: «полезно», «мусор», «мошенники», «закрыто». Голос участника с высоким рейтингом весит больше, поэтому мусор и мошеннические заказы уходят из ленты быстрее.</p>
+
+  <h2>Почему бесплатно</h2>
+  <p>Ленту наполняют сами участники. Кто приносит публикации, видит ленту раньше: гость — с задержкой, вошедший через GitHub — быстрее, активные участники — почти сразу. Платного тарифа нет и не планируется.</p>
+
+  <h2>Открытый код</h2>
+  <p>Код OpenRadar открыт под лицензией AGPL-3.0. Любой может запустить свой узел дома или на сервере, подключить свои источники, фильтры и уведомления в Telegram. Узлы могут отправлять публикации в общую базу, каждая публикация подписана ключом участника.</p>
+  <ul>
+    <li><a href="${REPO_URL}" target="_blank" rel="noopener">Исходный код на GitHub</a></li>
+    <li><a href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md" target="_blank" rel="noopener">Как запустить свой узел</a></li>
+    <li><a href="${REPO_URL}/blob/main/docs/PROTOCOL.md" target="_blank" rel="noopener">Протокол обмена между узлами</a></li>
+  </ul>
+
+  <h2>Как пользоваться</h2>
+  <ul>
+    <li>Ищите по ленте и фильтруйте по навыкам, бюджету и удалёнке на <a href="/">главной</a>.</li>
+    <li>Подпишитесь на RSS любого поиска или <a href="/catalog">раздела</a>.</li>
+    <li>Добавляйте найденные заказы по ссылке или через <a href="/extension">расширение</a>.</li>
+    <li>Подключайте ленту к своим сервисам через HTTP API и MCP-сервер.</li>
+  </ul>
+  <p>Остались вопросы — загляните в <a href="/faq">вопросы и ответы</a> или <a href="${REPO_URL}/issues" target="_blank" rel="noopener">напишите на GitHub</a>.</p>
+</section>`;
+  const organization = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'OpenRadar',
+    url: `${baseUrl}/`,
+    description,
+    sameAs: [REPO_URL],
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: `${baseUrl}/?q={search_term_string}`,
+      'query-input': 'required name=search_term_string',
+    },
+  };
+  return layout({
+    title: 'О проекте',
+    version,
+    body,
+    head: `<meta name="description" content="${escapeHtml(description)}">
+<meta property="og:description" content="${escapeHtml(description)}">
+<link rel="canonical" href="${escapeHtml(baseUrl)}/about">
+${ldScripts(organization, breadcrumbsJsonLd(baseUrl, [['OpenRadar', '/'], ['О проекте', '/about']]))}`,
+  });
+}
+
+export const SITE_FAQ: Array<[string, string]> = [
+  [
+    'Что такое OpenRadar?',
+    'Открытая база заказов для фрилансеров и вакансий. Публикации с бирж, сайтов вакансий и Telegram-каналов собираются в одну ленту, дубликаты склеиваются, мусор отсеивается голосами участников.',
+  ],
+  [
+    'Это бесплатно?',
+    'Да. Платного тарифа нет: ни за доступ к ленте, ни за отклики. Контакты заказчика есть в публикации или по ссылке на первоисточник.',
+  ],
+  [
+    'Почему я вижу публикации с задержкой?',
+    'Гости видят ленту с задержкой в несколько часов и без контактов. После входа через GitHub задержка меньше и контакты открыты, а участники, которые сами добавляют публикации, видят ленту почти сразу.',
+  ],
+  [
+    'Как добавить заказ или вакансию?',
+    'Войдите через GitHub и нажмите «Добавить по ссылке» или установите расширение для браузера: оно отправляет страницу или выделенный текст в один клик.',
+  ],
+  [
+    'Как получать уведомления о новых заказах?',
+    'У любого поиска и раздела есть RSS-лента: подключите её в RSS-ридере или в Telegram-боте для RSS. Владельцы своего узла могут настроить уведомления прямо в Telegram.',
+  ],
+  [
+    'Что значит оценка у публикации?',
+    'Число от 0 до 100. Оно растёт за указанный бюджет или вилку, понятное описание задачи, нужные навыки и прямой контакт заказчика.',
+  ],
+  [
+    'Что делать с мошенническим заказом?',
+    'Нажмите «Мошенники» на странице публикации. Голоса участников с рейтингом убирают такие публикации из ленты.',
+  ],
+  [
+    'Почему заказ уже закрыт?',
+    'Сервер периодически проверяет страницы источников, а участники отмечают закрытые публикации. Закрытые и устаревшие публикации уходят из ленты, но остаются доступны по прямой ссылке с пометкой.',
+  ],
+  [
+    'Можно ли подключить свой Telegram-канал или чат?',
+    'Публичные каналы подключаются как источник напрямую. Закрытые каналы и чаты владелец узла подключает через свой Telegram-аккаунт. Предложить источник для общей базы можно на GitHub.',
+  ],
+  [
+    'Можно ли запустить OpenRadar у себя?',
+    'Да, код открыт под лицензией AGPL-3.0. Узел запускается на компьютере или сервере, хранит данные у вас и по желанию делится публикациями с общей базой.',
+  ],
+];
+
+export function renderFaqPage(options: { baseUrl: string; version: string }): string {
+  const { baseUrl, version } = options;
+  const description = 'Ответы на частые вопросы об OpenRadar: откуда заказы и вакансии, почему бесплатно, как добавлять публикации и получать уведомления.';
+  const body = `
+<nav class="crumbs" aria-label="Навигация"><a href="/">OpenRadar</a> / Вопросы и ответы</nav>
+<div class="page-head"><div>
+  <h1>Вопросы и ответы</h1>
+  <p class="muted small">${escapeHtml(description)}</p>
+</div></div>
+<section class="prose" style="margin-top:0">
+  ${faqHtml(SITE_FAQ)}
+  <p style="margin-top:20px">Не нашли ответ? Прочитайте <a href="/about">о проекте</a> или <a href="${REPO_URL}/issues" target="_blank" rel="noopener">задайте вопрос на GitHub</a>.</p>
+</section>`;
+  return layout({
+    title: 'Вопросы и ответы',
+    version,
+    body,
+    head: `<meta name="description" content="${escapeHtml(description)}">
+<link rel="canonical" href="${escapeHtml(baseUrl)}/faq">
+${ldScripts(faqJsonLd(SITE_FAQ), breadcrumbsJsonLd(baseUrl, [['OpenRadar', '/'], ['Вопросы и ответы', '/faq']]))}`,
+  });
+}
+
+/** A plain-text map of the site for AI assistants (llmstxt.org). */
+export function renderLlmsTxt(baseUrl: string): string {
+  const line = (entry: CatalogEntry): string => `- [${entry.h1}](${baseUrl}/catalog/${entry.slug}): ${entry.description}`;
+  return `# OpenRadar
+
+> Открытая база заказов для фрилансеров и IT-вакансий. Собирает публикации с бирж (FL.ru, Kwork, Freelancehunt), сайтов вакансий (hh.ru, Хабр Карьера, «Работа России», We Work Remotely, Jobicy, RemoteOK) и Telegram-каналов в одну ленту. Бесплатно, без платных тарифов, код открыт (AGPL-3.0).
+
+## Разделы
+
+- [Лента заказов и вакансий](${baseUrl}/): поиск, фильтры по навыкам, бюджету и удалёнке.
+- [О проекте](${baseUrl}/about): как устроен OpenRadar и откуда публикации.
+- [Вопросы и ответы](${baseUrl}/faq)
+- [Расширение для браузера](${baseUrl}/extension): отправка вакансии с любого сайта и оценка рыночной оплаты.
+- [RSS-лента](${baseUrl}/feed.rss): параметры q (поиск) и type (gig — заказы, job — вакансии).
+
+## Заказы
+
+${SEO_CATALOG.filter((entry) => entry.type !== 'job').map(line).join('\n')}
+
+## Вакансии
+
+${SEO_CATALOG.filter((entry) => entry.type === 'job').map(line).join('\n')}
+
+## Для разработчиков
+
+- [Исходный код](${REPO_URL})
+- [Как запустить свой узел](${REPO_URL}/blob/main/docs/GETTING_STARTED.md)
+- [Протокол обмена](${REPO_URL}/blob/main/docs/PROTOCOL.md)
+`;
 }
 
 export function renderRobotsTxt(baseUrl: string): string {
@@ -229,19 +703,34 @@ export function renderRobotsTxt(baseUrl: string): string {
 Allow: /
 Disallow: /sources
 Disallow: /api
+Disallow: /admin
+Disallow: /me
+Disallow: /login
+Disallow: /submit
 
 Sitemap: ${baseUrl}/sitemap.xml
 `;
 }
 
 /** Leads are the public lead pages a guest can open; pass none for a private node. */
-export function renderSitemapXml(baseUrl: string, leads: Array<{ id: string; createdAt: string }> = []): string {
-  const urls: Array<{ loc: string; priority: string; lastmod?: string }> = [
-    { loc: `${baseUrl}/`, priority: '1.0' },
+export function renderSitemapXml(
+  baseUrl: string,
+  leads: Array<{ id: string; createdAt: string }> = [],
+  now: Date = new Date(),
+): string {
+  const today = now.toISOString().slice(0, 10);
+  const urls: Array<{ loc: string; priority: string; lastmod?: string; changefreq?: string }> = [
+    { loc: `${baseUrl}/`, priority: '1.0', lastmod: today, changefreq: 'hourly' },
+    { loc: `${baseUrl}/catalog`, priority: '0.7' },
     ...SEO_CATALOG.map((entry) => ({
       loc: `${baseUrl}/catalog/${entry.slug}`,
       priority: '0.8',
+      lastmod: today,
+      changefreq: 'hourly',
     })),
+    { loc: `${baseUrl}/about`, priority: '0.5' },
+    { loc: `${baseUrl}/faq`, priority: '0.5' },
+    { loc: `${baseUrl}/extension`, priority: '0.5' },
     ...leads.map((lead) => ({
       loc: `${baseUrl}/leads/${encodeURIComponent(lead.id)}`,
       priority: '0.5',
@@ -251,7 +740,7 @@ export function renderSitemapXml(baseUrl: string, leads: Array<{ id: string; cre
   const items = urls
     .map(
       (item) =>
-        `  <url><loc>${escapeHtml(item.loc)}</loc>${item.lastmod ? `<lastmod>${item.lastmod}</lastmod>` : ''}<priority>${item.priority}</priority></url>`,
+        `  <url><loc>${escapeHtml(item.loc)}</loc>${item.lastmod ? `<lastmod>${item.lastmod}</lastmod>` : ''}${item.changefreq ? `<changefreq>${item.changefreq}</changefreq>` : ''}<priority>${item.priority}</priority></url>`,
     )
     .join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>
