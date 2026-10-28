@@ -1,2 +1,4 @@
 allowBuilds:
   esbuild: true
+  # mtcute keeps sessions in memory here; its SQLite storage (and native build) is unused.
+  better-sqlite3: false

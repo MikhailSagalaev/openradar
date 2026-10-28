@@ -81,7 +81,7 @@ Radar — самостоятельный сервис, который превр
 
 ```ts
 interface SourceAdapter {
-  kind: 'rss' | 'telegram' | 'kwork' | 'webhook' | 'imap' | 'trudvsem' | 'hh' | 'remoteok';
+  kind: 'rss' | 'telegram' | 'telegram-account' | 'kwork' | 'webhook' | 'imap' | 'trudvsem' | 'hh' | 'remoteok';
   access: 'official' | 'public' | 'user-provided' | 'auth-required';
   description: string;
   risks: string[];
@@ -140,6 +140,7 @@ sessions(id, user_id, created_at, expires_at)
 | RSS | official | читает фид | почти нет; зависит от фида |
 | IMAP | user-provided | читает письма-оповещения | пароль в env; письма теряют вёрстку |
 | Telegram public | public | `t.me/s/<channel>` | вёрстка, лимиты, неполная история |
+| Telegram account | user-provided | каналы и чаты своего аккаунта через MTProto (mtcute), в том числе закрытые | сессия в env; частый опрос может ограничить аккаунт; посты закрытых чатов попадают в ленту узла |
 | Kwork | public | `window.stateData` | вёрстка, условия площадки |
 | Webhook | user-provided | входящий JSON | доверие к отправителю |
 | Browser extension | user-provided | отправляет страницу в webhook | токен хранится в браузере |

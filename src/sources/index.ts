@@ -5,6 +5,7 @@ import { kworkSource } from './kwork.ts';
 import { remoteokSource } from './remoteok.ts';
 import { rssSource } from './rss.ts';
 import { telegramSource } from './telegram.ts';
+import { telegramAccountSource } from './telegram-account.ts';
 import { trudvsemSource } from './trudvsem.ts';
 import { webhookSource } from './webhook.ts';
 
@@ -29,6 +30,7 @@ export function createSourceRegistry(): SourceRegistry {
   return new SourceRegistry()
     .register(rssSource)
     .register(telegramSource)
+    .register(telegramAccountSource)
     .register(kworkSource)
     .register(webhookSource)
     .register(imapSource)

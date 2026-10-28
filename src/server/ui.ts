@@ -93,6 +93,8 @@ export interface SourceFormValues {
   mailbox: string;
   sinceDays: string;
   subjectIncludes: string;
+  chats: string;
+  sessionEnv: string;
   /** Send leads of this source to the hub. */
   share?: boolean;
 }
@@ -132,6 +134,7 @@ const REPO_URL = 'https://github.com/MikhailSagalaev/openradar';
 const KIND_LABELS: Record<string, string> = {
   rss: 'RSS / Atom',
   telegram: 'Telegram',
+  'telegram-account': 'Telegram (свой аккаунт)',
   kwork: 'Kwork',
   imap: 'IMAP',
   webhook: 'Webhook',
@@ -2777,6 +2780,15 @@ ${error ? `<div class="error-box" style="margin-bottom:16px">${escapeHtml(error)
 
   <div data-kind="telegram">
     ${textField('channel', 'Публичный канал', values.channel, 'stavropol_jobs', 'text', 'Без @. Читается только публичный preview t.me/s/.')}
+  </div>
+
+  <div data-kind="telegram-account">
+    <fieldset>
+      <legend>Telegram через свой аккаунт</legend>
+      <p class="hint">Читает каналы и чаты, где состоит аккаунт, в том числе закрытые. Один раз выполните на сервере <code>radar telegram login</code> и положите сессию в <code>.env</code>; список чатов покажет <code>radar telegram chats</code>. Посты из закрытых чатов станут видны в ленте этого узла: добавляйте только чаты для заказов и вакансий.</p>
+      ${textField('chats', 'Каналы и чаты', values.chats, '@freelance_jobs, -1001234567890', 'text', 'Через запятую: @имя, ссылка t.me или числовой ID.')}
+      ${textField('sessionEnv', 'Переменная с сессией', values.sessionEnv || 'RADAR_TELEGRAM_SESSION', 'RADAR_TELEGRAM_SESSION', 'text', 'Для второго аккаунта — RADAR_TELEGRAM_SESSION_ИМЯ латиницей.')}
+    </fieldset>
   </div>
 
   <div data-kind="kwork">

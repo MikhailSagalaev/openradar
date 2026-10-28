@@ -16,7 +16,7 @@ import { runMigrations } from '../store/migrator.ts';
 import { VERSION } from '../version.ts';
 import { generateConnector } from './generator.ts';
 
-const SOURCE_KINDS: SourceKind[] = ['rss', 'telegram', 'kwork', 'webhook', 'imap', 'trudvsem'];
+const SOURCE_KINDS: SourceKind[] = ['rss', 'telegram', 'telegram-account', 'kwork', 'webhook', 'imap', 'trudvsem'];
 
 interface AddSourceOptions {
   share?: boolean;
@@ -24,6 +24,8 @@ interface AddSourceOptions {
   title: string;
   url?: string;
   channel?: string;
+  chat: string[];
+  sessionEnv?: string;
   city?: string;
   category?: string;
   include: string[];
@@ -218,6 +220,8 @@ function buildProgram(): Command {
     .requiredOption('--title <title>', 'Human-readable title')
     .option('--url <url>', 'Feed URL or page URL')
     .option('--channel <channel>', 'Telegram channel username (without @)')
+    .option('--chat <chat>', 'telegram-account: channel or chat (@name, t.me link or id); repeatable', collect, [])
+    .option('--session-env <name>', 'telegram-account: variable with the session (RADAR_TELEGRAM_SESSION by default)')
     .option('--city <city>', 'Default city')
     .option('--category <id>', 'Source category id (Kwork)')
     .option('--include <word>', 'Required keyword; repeatable', collect, [])
@@ -277,6 +281,12 @@ function buildProgram(): Command {
         if (options.from.length) config.fromIncludes = options.from;
         if (options.markSeen) config.markSeen = true;
         if (options.secure === false) config.secure = false;
+      }
+
+      if (kind === 'telegram-account') {
+        if (!options.chat.length) fail('telegram-account source requires --chat');
+        config.chats = options.chat;
+        if (options.sessionEnv) config.sessionEnv = options.sessionEnv;
       }
 
       if (kind === 'rss' && !config.url) fail('rss source requires --url');
@@ -670,6 +680,48 @@ function buildProgram(): Command {
         console.log(`nsec    ${pair.nsec}`);
         console.log('Keep the nsec secret: put it in RADAR_NODE_KEY. Your rating is bound to this key.');
       }
+    });
+
+  const telegram = program.command('telegram').description('Read Telegram through your own account');
+
+  telegram
+    .command('login')
+    .description('Sign in once and print the session for RADAR_TELEGRAM_SESSION')
+    .action(async () => {
+      const { newTelegramClient } = await import('../sources/telegram-account.ts');
+      const client = await newTelegramClient();
+      const self = await client.start({
+        phone: () => client.input('Phone (+7...): '),
+        code: () => client.input('Code from Telegram: '),
+        password: () => client.input('Two-step password: '),
+      });
+      const session = await client.exportSession();
+      console.log(`\nSigned in as ${self.displayName}${self.username ? ` (@${self.username})` : ''}.`);
+      console.log('Put this line into .env (it grants full access to the account, keep it secret):\n');
+      console.log(`RADAR_TELEGRAM_SESSION=${session}\n`);
+      console.log('A second account: RADAR_TELEGRAM_SESSION_<NAME>, and that name in the source settings.');
+      await client.destroy();
+    });
+
+  telegram
+    .command('chats')
+    .description('List the channels and chats of the account, to pick sources from')
+    .option('--session-env <name>', 'variable with the session', 'RADAR_TELEGRAM_SESSION')
+    .action(async (options: { sessionEnv: string }) => {
+      const { newTelegramClient, TELEGRAM_SESSION_ENV_RE } = await import('../sources/telegram-account.ts');
+      if (!TELEGRAM_SESSION_ENV_RE.test(options.sessionEnv)) throw new Error('--session-env must be RADAR_TELEGRAM_SESSION[_NAME]');
+      const session = process.env[options.sessionEnv]?.trim();
+      if (!session) throw new Error(`${options.sessionEnv} is empty: run "radar telegram login" first`);
+      const client = await newTelegramClient();
+      await client.importSession(session);
+      await client.connect();
+      for await (const dialog of client.iterDialogs({ limit: 500 })) {
+        const peer = dialog.peer;
+        if (peer.type === 'user') continue;
+        const name = peer.username ? `@${peer.username}` : String(peer.id);
+        console.log(`${name.padEnd(36)} ${peer.displayName}`);
+      }
+      await client.destroy();
     });
 
   program

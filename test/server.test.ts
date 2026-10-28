@@ -293,6 +293,30 @@ describe('http server', () => {
     await runtime.store.close();
   });
 
+  it('creates a Telegram account source and refuses foreign secret variables', async () => {
+    const runtime = makeRuntime();
+    const sessionId = await makeAdminSession(runtime);
+    const app = createApp(runtime);
+    const post = (fields: Record<string, string>) =>
+      app.request('/sources', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: `radar_session=${sessionId}`, origin: 'http://localhost' },
+        body: formBody({ kind: 'telegram-account', title: 'Мои чаты', ...fields }),
+      });
+
+    const refused = await post({ chats: '@freelance_jobs', sessionEnv: 'DATABASE_URL' });
+    expect(refused.status).toBe(400);
+    expect(await refused.text()).toContain('RADAR_TELEGRAM_SESSION');
+    expect((await post({ chats: 'not a chat!' })).status).toBe(400);
+
+    const created = await post({ chats: '@freelance_jobs, -1001234567890, https://t.me/remote_work' });
+    expect(created.status).toBe(302);
+    const [source] = await runtime.store.listSources();
+    expect(source?.config.chats).toEqual(['@freelance_jobs', '-1001234567890', 'https://t.me/remote_work']);
+    expect(source?.config.sessionEnv).toBe('RADAR_TELEGRAM_SESSION');
+    await runtime.store.close();
+  });
+
   it('shows a webhook token once after creation', async () => {
     const runtime = makeRuntime();
     const sessionId = await makeAdminSession(runtime);

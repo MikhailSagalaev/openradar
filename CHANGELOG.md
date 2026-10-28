@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.12.0
+
+- New source «Telegram (свой аккаунт)», kind `telegram-account`: reads the channels and
+  chats your account is in, private ones included, through MTProto (mtcute). Sign in once
+  with `radar telegram login`, keep the session in `RADAR_TELEGRAM_SESSION` (more accounts:
+  `RADAR_TELEGRAM_SESSION_<NAME>`), list chats with `radar telegram chats`. Only new
+  messages are read; the sender becomes the contact; private chats count as private on
+  the hub.
+
 ## 0.11.0
 
 - Extension 0.11.0 speaks Russian and English: the browser's language picks one
