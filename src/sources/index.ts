@@ -1,8 +1,11 @@
 import type { SourceAdapter, SourceKind } from '../core/types.ts';
 import { hhSource } from './hh.ts';
+import { hnSource } from './hn.ts';
 import { imapSource } from './imap.ts';
 import { kworkSource } from './kwork.ts';
 import { remoteokSource } from './remoteok.ts';
+import { remotiveSource } from './remotive.ts';
+import { arbeitnowSource } from './arbeitnow.ts';
 import { rssSource } from './rss.ts';
 import { telegramSource } from './telegram.ts';
 import { telegramAccountSource } from './telegram-account.ts';
@@ -36,6 +39,9 @@ export function createSourceRegistry(): SourceRegistry {
     .register(imapSource)
     .register(trudvsemSource)
     .register(hhSource)
-    .register(remoteokSource);
+    .register(remoteokSource)
+    .register(remotiveSource)
+    .register(arbeitnowSource)
+    .register(hnSource);
 }
 
