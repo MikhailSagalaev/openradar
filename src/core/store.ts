@@ -280,6 +280,10 @@ export interface Store extends HubStore {
   saveLeadFacts?(id: string, facts: PageFacts, fill: LeadFactsFill): Promise<void>;
   /** Leads published in [from, to) for the market report: text cut to its head, junk and scam left out. */
   listLeadsForResearch?(options: { from: string; to: string; limit: number }): Promise<Lead[]>;
+  /** Newest posts with no model answer of this version yet, those without pay first. */
+  listLeadsForModel?(options: { limit: number; since: string; version: number }): Promise<Array<Pick<Lead, 'id' | 'title' | 'text' | 'type'>>>;
+  /** Stores the model's answer as metadata.model. */
+  saveLeadModelFacts?(id: string, stored: unknown): Promise<void>;
   getResearchSnapshot?(period: string): Promise<{ report: unknown; createdAt: string } | null>;
   saveResearchSnapshot?(period: string, report: unknown): Promise<void>;
   listResearchSnapshots?(): Promise<Array<{ period: string; createdAt: string }>>;

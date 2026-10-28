@@ -12,6 +12,7 @@ import {
   type ResearchRecord,
 } from '../src/research/derive.ts';
 import { extractPageFacts } from '../src/research/facts.ts';
+import { parseModelAnswer, runModelExtraction } from '../src/research/model.ts';
 import { MIN_MEDIAN, buildReport, dist, monthPeriod } from '../src/research/report.ts';
 import { buildMonthReport, datasetCsv, ensureMonthlySnapshot, resetResearchCache } from '../src/research/service.ts';
 import { createApp } from '../src/server/app.ts';
@@ -256,5 +257,55 @@ describe('research pages', () => {
     const runtime = await seeded({ RADAR_PUBLIC_READ: false });
     const response = await createApp(runtime).request('/research');
     expect(response.status).toBe(302);
+  });
+});
+
+describe('model extraction', () => {
+  it('keeps only answers of the expected shape', () => {
+    expect(parseModelAnswer('{"isPost":true,"confidence":0.9,"role":"bots","payMin":50000,"payMax":50000,"currency":"rub","period":"project","skills":["Python"]}'))
+      .toEqual({ isPost: true, confidence: 0.9, role: 'bots', payMin: 50000, payMax: 50000, currency: 'RUB', period: 'project', skills: ['Python'] });
+    // An unknown role, a made-up grade and pay without a currency are dropped.
+    expect(parseModelAnswer('{"isPost":true,"confidence":2,"role":"astronaut","grade":"guru","payMin":1000}')).toEqual({ isPost: true, confidence: 1 });
+    expect(parseModelAnswer('not json')).toBeUndefined();
+    expect(parseModelAnswer('{"confidence":0.9}')).toBeUndefined();
+  });
+
+  it('fills gaps the rules left and leaves out ads', () => {
+    const stored = (facts: Record<string, unknown>) => ({ model: { v: 1, model: 'test', at: '2026-10-28T00:00:00Z', facts } });
+    const order = lead('tg', { type: 'gig', title: 'Нужна помощь', text: 'Сделайте бота для записи, оплата 50к', metadata: stored({ isPost: true, confidence: 0.9, role: 'bots', payMin: 50000, payMax: 50000, currency: 'RUB', period: 'project' }) });
+    expect(deriveRecord(order)).toMatchObject({ role: 'bots', pay: 50000, payPeriod: 'project', payOrigin: 'model' });
+
+    // The text's own figure wins over the model's.
+    const written = lead('fl', { type: 'gig', title: 'Лендинг', text: 'Бюджет 20 000 ₽', metadata: stored({ isPost: true, confidence: 0.9, payMin: 90000, payMax: 90000, currency: 'RUB', period: 'project' }) });
+    expect(deriveRecord(written)).toMatchObject({ pay: 20000, payOrigin: 'text' });
+
+    // An unsure answer is ignored; a sure «not a post» is left out of the report.
+    expect(deriveRecord(lead('unsure', { type: 'gig', title: 'Нужна помощь', metadata: stored({ isPost: true, confidence: 0.4, role: 'bots' }) })).role).toBe('other');
+    const ad = deriveRecord(lead('ad', { type: 'gig', title: 'Делаю сайты недорого', metadata: stored({ isPost: false, confidence: 0.95 }) }));
+    expect(ad.excluded).toBe(true);
+    const report = buildReport([ad, record(1)], monthPeriod('2026-10'), 'month');
+    expect(report.totals).toMatchObject({ posts: 1, excluded: 1 });
+  });
+
+  it('asks the model for posts without an answer, once', async () => {
+    const runtime = makeTestRuntime({ RADAR_EXTRACT_ENABLED: true, OPENAI_API_KEY: 'test-key', OPENAI_BASE_URL: 'https://llm.example/v1' });
+    const source = await runtime.store.createSource({ kind: 'telegram', title: 'tg', config: { channel: 'jobs' } });
+    await runtime.store.insertLead(lead('m1', { sourceId: source.id, type: 'gig', title: 'Нужен бот', text: 'Бот для записи клиентов, плачу 15 тысяч' }));
+    const requests: Array<{ url: string; body: { model: string; messages: Array<{ role: string; content: string }> } }> = [];
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      requests.push({ url: input.toString(), body: JSON.parse(String(init?.body)) });
+      const content = JSON.stringify({ isPost: true, confidence: 0.85, role: 'bots', payMin: 15000, payMax: 15000, currency: 'RUB', period: 'project' });
+      return new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status: 200 });
+    }) as typeof fetch;
+
+    const summary = await runModelExtraction({ ...runtime, fetchImpl }, { limit: 10 });
+    expect(summary).toEqual({ asked: 1, saved: 1, failed: 0 });
+    expect(requests[0]!.url).toBe('https://llm.example/v1/chat/completions');
+    expect(requests[0]!.body.messages[0]!.content).toContain('untrusted data');
+    expect(deriveRecord((await runtime.store.getLead('m1'))!)).toMatchObject({ pay: 15000, payOrigin: 'model', role: 'bots' });
+
+    expect((await runModelExtraction({ ...runtime, fetchImpl }, { limit: 10 })).asked).toBe(0);
+    // Off unless enabled with a key.
+    expect((await runModelExtraction({ ...makeTestRuntime(), fetchImpl }, { limit: 10 })).asked).toBe(0);
   });
 });

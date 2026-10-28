@@ -7,6 +7,7 @@
 import { extractTechSkills, normalizeWhitespace } from '../core/text.ts';
 import type { Lead, LeadType } from '../core/types.ts';
 import type { PageFacts, PageSalary } from './facts.ts';
+import type { ModelFacts, StoredModelFacts } from './model.ts';
 
 /** Reference rates to roubles; the methodology page prints them. */
 export const RUB_PER: Record<string, number> = {
@@ -39,7 +40,7 @@ export interface Pay {
   currency: string;
   period: 'month' | 'year' | 'hour' | 'project';
   /** Where the pay came from: the board's page markup, the text, or the stored budget. */
-  origin: 'page' | 'text' | 'budget';
+  origin: 'page' | 'text' | 'budget' | 'model';
 }
 
 export interface ResearchRecord {
@@ -64,6 +65,8 @@ export interface ResearchRecord {
   payPeriod?: 'month' | 'hour' | 'project';
   payOrigin?: Pay['origin'];
   currency?: string;
+  /** The model is sure this is an ad, a resume or chatter: left out of every figure. */
+  excluded?: boolean;
 }
 
 // ---------- Roles ----------
@@ -395,19 +398,37 @@ export function factsOf(lead: Pick<Lead, 'metadata'>): PageFacts | undefined {
 /** Boards that publish only vacancies, whatever type an older post was stored with. */
 const JOB_BOARDS = /^https?:\/\/(?:www\.)?(?:jobicy\.com|weworkremotely\.com|remoteok\.com)\//i;
 
+/** Model answers below this confidence are kept but never used in figures. */
+export const MIN_CONFIDENCE = 0.7;
+
+/** The model's answer when it is current and confident enough to use. */
+export function modelFactsOf(lead: Pick<Lead, 'metadata'>): ModelFacts | undefined {
+  const stored = lead.metadata?.model as StoredModelFacts | undefined;
+  const facts = stored?.facts;
+  return facts && typeof facts === 'object' && facts.confidence >= MIN_CONFIDENCE ? facts : undefined;
+}
+
 export function deriveRecord(lead: Lead): ResearchRecord {
   const facts = factsOf(lead);
+  const model = modelFactsOf(lead);
   const type = lead.url && JOB_BOARDS.test(lead.url) ? 'job' : (lead.type ?? 'gig');
   const head = lead.text.slice(0, 3000);
-  const skills = Array.from(new Set([...(lead.skills ?? []), ...(facts?.skills ?? []), ...extractTechSkills(`${lead.title}\n${head}`, 12)]));
-  const role = classifyRole(type, lead.title, type === 'gig' ? head.slice(0, 600) : (facts?.specialization ?? ''));
+  const skills = Array.from(new Set([...(lead.skills ?? []), ...(facts?.skills ?? []), ...extractTechSkills(`${lead.title}\n${head}`, 12), ...(model?.skills ?? [])]));
+  // Rules and page markup first; the model fills what they left open.
+  const ruled = classifyRole(type, lead.title, type === 'gig' ? head.slice(0, 600) : (facts?.specialization ?? ''));
+  const role = ruled === OTHER_ROLE.slug && model?.role ? model.role : ruled;
 
+  const fromModel: Pay | undefined = model?.currency && model.period
+    ? { min: model.payMin, max: model.payMax, currency: model.currency, period: model.period, origin: 'model' }
+    : undefined;
   const pay = payFromPage(facts?.salary) ?? parsePayText(`${lead.title}\n${head}`, type)
     ?? (typeof lead.budget === 'number' && lead.budget > 0
       ? { min: lead.budget, max: lead.budget, currency: lead.currency ?? 'RUB', period: lead.paymentPeriod === 'hourly' ? 'hour' as const : type === 'job' ? 'month' as const : 'project' as const, origin: 'budget' as const }
-      : undefined);
+      : fromModel);
   const normalized = pay ? normalizePay(pay, type) : undefined;
   const currency = pay?.currency.toUpperCase();
+  const developer = ['backend', 'fullstack', 'frontend', 'mobile', 'data-engineer', 'ml', 'qa', 'gamedev', 'embedded'].includes(role);
+  const city = lead.city ?? head.match(/Регион:\s*([^\n]{2,40})/u)?.[1] ?? head.match(/\.\s*([А-ЯЁ][а-яё-]+(?: [А-ЯЁ][а-яё-]+)?) \(Россия\)/u)?.[1] ?? model?.city;
 
   return {
     id: lead.id,
@@ -415,13 +436,14 @@ export function deriveRecord(lead: Lead): ResearchRecord {
     type,
     platform: lead.sourceRef?.platform === 'telegram' ? 'telegram' : platformOf(lead.url, lead.sourceRef?.platform ?? 'other'),
     role,
-    grade: type === 'job' ? detectGrade(lead.title, head, facts?.grade) : undefined,
-    language: type === 'job' && ['backend', 'fullstack', 'frontend', 'mobile', 'data-engineer', 'ml', 'qa', 'gamedev', 'embedded'].includes(role)
+    grade: type === 'job' ? detectGrade(lead.title, head, facts?.grade) ?? model?.grade : undefined,
+    language: type === 'job' && developer
       ? detectLanguage(lead.title, role === 'frontend' ? skills.filter((skill) => /script|^js$|^ts$/i.test(skill)) : skills)
+        ?? (model?.language ? detectLanguage(model.language, []) : undefined)
       : undefined,
-    region: regionOf(lead.city ?? head.match(/Регион:\s*([^\n]{2,40})/u)?.[1] ?? head.match(/\.\s*([А-ЯЁ][а-яё-]+(?: [А-ЯЁ][а-яё-]+)?) \(Россия\)/u)?.[1]),
-    remote: Boolean(facts?.remote) || REMOTE.test(`${lead.title}\n${head}`) || /^(?:онлайн|удал)/i.test(lead.city ?? ''),
-    company: detectCompany(lead, facts),
+    region: regionOf(city),
+    remote: Boolean(facts?.remote) || Boolean(model?.remote) || REMOTE.test(`${lead.title}\n${head}`) || /^(?:онлайн|удал)/i.test(lead.city ?? ''),
+    company: detectCompany(lead, facts) ?? model?.company,
     skills,
     ai: AI_MENTION.test(`${lead.title}\n${head}`),
     market: normalized ? (currency === 'RUB' || currency === 'RUR' || currency === 'KZT' || currency === 'BYN' ? 'ru' : 'intl') : undefined,
@@ -431,5 +453,6 @@ export function deriveRecord(lead: Lead): ResearchRecord {
     payPeriod: normalized?.period,
     payOrigin: normalized ? pay!.origin : undefined,
     currency: normalized ? currency : undefined,
+    ...(model?.isPost === false ? { excluded: true } : {}),
   };
 }

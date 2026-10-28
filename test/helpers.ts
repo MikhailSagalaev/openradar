@@ -23,6 +23,8 @@ export function testEnv(overrides: Partial<Env> = {}): Env {
     WEBHOOK_URL: undefined,
     WEBHOOK_SECRET: undefined,
     RADAR_LLM_ENABLED: false,
+    RADAR_EXTRACT_ENABLED: false,
+    RADAR_EXTRACT_PER_HOUR: 300,
     OPENAI_API_KEY: undefined,
     ...overrides,
   });
