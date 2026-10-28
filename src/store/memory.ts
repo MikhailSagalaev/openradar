@@ -286,13 +286,13 @@ export class MemoryStore implements Store {
       .map((l) => ({ ...l, text: l.text.slice(0, 3000) }));
   }
 
-  async listLeadsForModel(options: { limit: number; since: string; version: number }): Promise<Array<Pick<Lead, 'id' | 'title' | 'text' | 'type'>>> {
+  async listLeadsForModel(options: { limit: number; since: string; version: number; withPayFirst?: boolean }): Promise<Array<Pick<Lead, 'id' | 'title' | 'text' | 'type'>>> {
     const version = (l: Lead): number => Number((l.metadata?.model as { v?: number } | undefined)?.v ?? 0);
     const noPay = (l: Lead): number => (l.normalizedUsdMin === undefined && l.normalizedUsdMax === undefined ? 1 : 0);
     return Array.from(this.leads.values())
       .filter((l) => l.createdAt >= options.since && l.state !== 'hidden_junk' && l.state !== 'hidden_scam'
         && l.status !== 'rejected' && l.status !== 'failed' && version(l) < options.version)
-      .sort((a, b) => noPay(b) - noPay(a) || b.createdAt.localeCompare(a.createdAt))
+      .sort((a, b) => (options.withPayFirst ? noPay(a) - noPay(b) : noPay(b) - noPay(a)) || b.createdAt.localeCompare(a.createdAt))
       .slice(0, options.limit)
       .map((l) => ({ id: l.id, title: l.title, text: l.text.slice(0, 2500), type: l.type }));
   }

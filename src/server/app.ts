@@ -2009,7 +2009,7 @@ export function createApp(runtime: Runtime): Hono {
     // Only what a guest may open: delayed, active, not rejected.
     const leads = runtime.env.RADAR_PUBLIC_READ ? await feedFor(runtime, { tier: 'guest' }, { limit: 1000 }) : [];
     const roles = runtime.env.RADAR_PUBLIC_READ
-      ? (await liveReport(runtime.store)).report.jobs.roles.map((r) => `/research/roles/${r.slug}`)
+      ? (await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY })).report.jobs.roles.map((r) => `/research/roles/${r.slug}`)
       : [];
     return c.text(renderSitemapXml(seoBaseUrl(c), leads, new Date(), roles), 200, {
       'content-type': 'application/xml; charset=utf-8',
@@ -2026,16 +2026,16 @@ export function createApp(runtime: Runtime): Hono {
   app.use('/research/*', researchGate);
   const researchSnapshots = async (): Promise<Array<{ period: string }>> => (await runtime.store.listResearchSnapshots?.()) ?? [];
   app.get('/research', async (c) => {
-    const { report } = await liveReport(runtime.store);
+    const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
     return c.html(renderReportPage({ report, baseUrl: seoBaseUrl(c), version: VERSION, snapshots: await researchSnapshots() }));
   });
   app.get('/research/methodology', (c) => c.html(renderMethodologyPage({ baseUrl: seoBaseUrl(c), version: VERSION })));
   app.get('/research/report.json', async (c) => {
-    const { report } = await liveReport(runtime.store);
+    const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
     return c.json(report, 200, { 'access-control-allow-origin': '*' });
   });
   app.get('/research/dataset.csv', async (c) => {
-    const { records } = await liveReport(runtime.store);
+    const { records } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
     return c.body(datasetCsv(records), 200, {
       'content-type': 'text/csv; charset=utf-8',
       'content-disposition': 'attachment; filename="openradar-dataset.csv"',
@@ -2043,7 +2043,7 @@ export function createApp(runtime: Runtime): Hono {
     });
   });
   app.get('/research/roles/:slug', async (c) => {
-    const { report } = await liveReport(runtime.store);
+    const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
     const detail = report.jobs.roles.find((r) => r.slug === c.req.param('slug'));
     if (!detail) return c.html(renderNotFound(VERSION), 404);
     return c.html(renderRolePage({ detail, report, baseUrl: seoBaseUrl(c), version: VERSION }));

@@ -4,10 +4,12 @@
  * rest as strict JSON. The rules and the page markup still win; the model only fills gaps,
  * and only answers it is confident in reach the report.
  *
- * Any OpenAI-compatible API works (OpenAI, DeepSeek, OpenRouter, a local Ollama or vLLM).
+ * Any OpenAI-compatible API works (OpenAI, DeepSeek, OpenRouter, a local Ollama or vLLM),
+ * and GigaChat.
  */
 import type { Env, Lead, Logger } from '../core/types.ts';
 import { GRADE_ORDER, MIN_CONFIDENCE, ROLES, type Grade } from './derive.ts';
+import { gigachatFetch, gigachatToken, resetGigachatToken } from './gigachat.ts';
 
 export { MIN_CONFIDENCE };
 
@@ -68,13 +70,17 @@ function str(value: unknown, max = 80): string | undefined {
 
 /** Keeps only values of the expected shape: the model's answer is as untrusted as the post. */
 export function parseModelAnswer(content: string): ModelFacts | undefined {
+  // Models without a JSON mode wrap the object in fences or a sentence.
+  const start = content.indexOf('{');
+  const end = content.lastIndexOf('}');
+  if (start < 0 || end < start) return undefined;
   let raw: Record<string, unknown>;
   try {
-    raw = JSON.parse(content.replace(/^```(?:json)?\s*|\s*```$/g, '')) as Record<string, unknown>;
+    raw = JSON.parse(content.slice(start, end + 1)) as Record<string, unknown>;
   } catch {
     return undefined;
   }
-  if (typeof raw.isPost !== 'boolean') return undefined;
+  if (!raw || typeof raw.isPost !== 'boolean') return undefined;
   const confidence = typeof raw.confidence === 'number' && Number.isFinite(raw.confidence) ? Math.max(0, Math.min(1, raw.confidence)) : 0.5;
   const facts: ModelFacts = { isPost: raw.isPost, confidence };
   const role = str(raw.role);
@@ -104,12 +110,15 @@ export function parseModelAnswer(content: string): ModelFacts | undefined {
   return facts;
 }
 
+const GIGACHAT_MODEL = 'GigaChat-2-Pro';
+
 export function modelName(env: Env): string {
-  return env.RADAR_EXTRACT_MODEL || env.OPENAI_MODEL;
+  return env.RADAR_EXTRACT_MODEL || (env.RADAR_EXTRACT_PROVIDER === 'gigachat' ? GIGACHAT_MODEL : env.OPENAI_MODEL);
 }
 
 export function extractionEnabled(env: Env): boolean {
-  return env.RADAR_EXTRACT_ENABLED && Boolean(env.OPENAI_API_KEY);
+  const key = env.RADAR_EXTRACT_PROVIDER === 'gigachat' ? env.GIGACHAT_AUTH_KEY : env.OPENAI_API_KEY;
+  return env.RADAR_EXTRACT_ENABLED && Boolean(key);
 }
 
 interface ChatResponse {
@@ -121,17 +130,21 @@ export async function extractWithModel(
   deps: { env: Env; logger: Logger; fetchImpl?: typeof fetch },
 ): Promise<ModelFacts | undefined> {
   const { env } = deps;
+  const gigachat = env.RADAR_EXTRACT_PROVIDER === 'gigachat';
+  const fetchImpl = deps.fetchImpl ?? (gigachat ? gigachatFetch : fetch);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30_000);
   try {
-    const response = await (deps.fetchImpl ?? fetch)(`${env.OPENAI_BASE_URL.replace(/\/+$/, '')}/chat/completions`, {
+    const base = gigachat ? env.GIGACHAT_BASE_URL : env.OPENAI_BASE_URL;
+    const key = gigachat ? await gigachatToken(env, fetchImpl, controller.signal) : env.OPENAI_API_KEY;
+    const response = await fetchImpl(`${base.replace(/\/+$/, '')}/chat/completions`, {
       method: 'POST',
       signal: controller.signal,
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${env.OPENAI_API_KEY}` },
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
       body: JSON.stringify({
         model: modelName(env),
-        temperature: 0,
-        response_format: { type: 'json_object' },
+        // GigaChat wants a temperature above zero and has no JSON mode: the prompt asks for JSON.
+        ...(gigachat ? { temperature: 0.01 } : { temperature: 0, response_format: { type: 'json_object' } }),
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: JSON.stringify({ kind: lead.type === 'job' ? 'vacancy' : 'order', title: lead.title, text: lead.text.slice(0, 2500) }) },
@@ -139,6 +152,7 @@ export async function extractWithModel(
       }),
     });
     if (!response.ok) {
+      if (gigachat && response.status === 401) resetGigachatToken();
       deps.logger.warn('model extraction HTTP error', { status: response.status, body: (await response.text().catch(() => '')).slice(0, 200) });
       return undefined;
     }
@@ -156,6 +170,7 @@ export interface ExtractionSummary {
   asked: number;
   saved: number;
   failed: number;
+  ids: string[];
 }
 
 /**
@@ -164,13 +179,13 @@ export interface ExtractionSummary {
  */
 export async function runModelExtraction(
   deps: { store: import('../core/store.ts').Store; env: Env; logger: Logger; fetchImpl?: typeof fetch },
-  options: { limit: number; concurrency?: number; since?: Date },
+  options: { limit: number; concurrency?: number; since?: Date; withPayFirst?: boolean },
 ): Promise<ExtractionSummary> {
-  const summary: ExtractionSummary = { asked: 0, saved: 0, failed: 0 };
+  const summary: ExtractionSummary = { asked: 0, saved: 0, failed: 0, ids: [] };
   const store = deps.store;
   if (!extractionEnabled(deps.env) || !store.listLeadsForModel || !store.saveLeadModelFacts) return summary;
   const since = (options.since ?? new Date(Date.now() - 30 * 86_400_000)).toISOString();
-  const leads = await store.listLeadsForModel({ limit: options.limit, since, version: MODEL_EXTRACT_VERSION });
+  const leads = await store.listLeadsForModel({ limit: options.limit, since, version: MODEL_EXTRACT_VERSION, withPayFirst: options.withPayFirst });
   const queue = [...leads];
   const worker = async (): Promise<void> => {
     for (let lead = queue.shift(); lead; lead = queue.shift()) {
@@ -183,8 +198,11 @@ export async function runModelExtraction(
       const stored: StoredModelFacts = { v: MODEL_EXTRACT_VERSION, model: modelName(deps.env), at: new Date().toISOString(), facts };
       await store.saveLeadModelFacts!(lead.id, stored);
       summary.saved++;
+      summary.ids.push(lead.id);
     }
   };
-  await Promise.all(Array.from({ length: Math.max(1, options.concurrency ?? 3) }, worker));
+  // A personal GigaChat plan serves one request at a time.
+  const concurrency = options.concurrency ?? (deps.env.RADAR_EXTRACT_PROVIDER === 'gigachat' ? 1 : 3);
+  await Promise.all(Array.from({ length: Math.max(1, concurrency) }, worker));
   return summary;
 }

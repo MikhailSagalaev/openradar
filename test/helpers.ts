@@ -25,6 +25,11 @@ export function testEnv(overrides: Partial<Env> = {}): Env {
     RADAR_LLM_ENABLED: false,
     RADAR_EXTRACT_ENABLED: false,
     RADAR_EXTRACT_PER_HOUR: 300,
+    RADAR_EXTRACT_APPLY: false,
+    RADAR_EXTRACT_PROVIDER: 'openai',
+    GIGACHAT_SCOPE: 'GIGACHAT_API_PERS',
+    GIGACHAT_BASE_URL: 'https://gigachat.devices.sberbank.ru/api/v1',
+    GIGACHAT_OAUTH_URL: 'https://ngw.devices.sberbank.ru:9443/api/v2/oauth',
     OPENAI_API_KEY: undefined,
     ...overrides,
   });
