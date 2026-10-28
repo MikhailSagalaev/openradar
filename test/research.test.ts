@@ -13,7 +13,7 @@ import {
 } from '../src/research/derive.ts';
 import { extractPageFacts } from '../src/research/facts.ts';
 import { MIN_MEDIAN, buildReport, dist, monthPeriod } from '../src/research/report.ts';
-import { datasetCsv, ensureMonthlySnapshot, resetResearchCache } from '../src/research/service.ts';
+import { buildMonthReport, datasetCsv, ensureMonthlySnapshot, resetResearchCache } from '../src/research/service.ts';
 import { createApp } from '../src/server/app.ts';
 import { makeTestRuntime } from './helpers.ts';
 
@@ -240,6 +240,16 @@ describe('research pages', () => {
     expect(page).toContain('Цифры зафиксированы');
     expect((await app.request('/research/2026-09.json')).status).toBe(200);
     expect((await app.request('/research/2026-08')).status).toBe(404);
+  });
+
+  it('labels a month the base covers only in part', async () => {
+    resetResearchCache();
+    const runtime = makeTestRuntime();
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'hh', config: { url: 'https://example.com/rss' } });
+    await runtime.store.insertLead(lead('late', { sourceId: source.id, publishedAt: '2026-10-22T10:00:00.000Z', createdAt: '2026-10-22T10:00:00.000Z' }));
+    const report = await buildMonthReport(runtime.store, '2026-10', new Date('2026-11-01T01:00:00Z'));
+    expect(report.period.label).toBe('Октябрь 2026 (с 22 октября)');
+    expect(report.period.phrase).toBe('с 22 по 31 октября 2026 года');
   });
 
   it('stays closed on a private node', async () => {
