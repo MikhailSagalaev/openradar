@@ -36,6 +36,10 @@ const envSchema = z.object({
   OPENAI_API_KEY: optionalString,
   OPENAI_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
   OPENAI_MODEL: z.string().default('gpt-4o-mini'),
+  // Model extraction of pay, role and grade for the research reports (same API as above).
+  RADAR_EXTRACT_ENABLED: booleanFromEnv(false),
+  RADAR_EXTRACT_MODEL: optionalString,
+  RADAR_EXTRACT_PER_HOUR: z.coerce.number().int().nonnegative().default(300),
   TELEGRAM_BOT_TOKEN: optionalString,
   TELEGRAM_CHAT_ID: optionalString,
   WEBHOOK_URL: z.string().url().optional().or(z.literal('').transform(() => undefined)),

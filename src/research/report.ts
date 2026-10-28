@@ -54,7 +54,19 @@ export interface Report {
   kind: 'live' | 'month';
   period: { from: string; to: string; label: string; phrase: string; slug?: string };
   generatedAt: string;
-  totals: { posts: number; jobs: number; gigs: number; jobsWithPay: number; gigsWithBudget: number; companies: number; platforms: Array<{ key: string; n: number }> };
+  totals: {
+    posts: number;
+    jobs: number;
+    gigs: number;
+    jobsWithPay: number;
+    gigsWithBudget: number;
+    companies: number;
+    platforms: Array<{ key: string; n: number }>;
+    /** Where the pay of the posts came from: page markup, the text, the board's budget, the model. */
+    payOrigins?: Record<string, number>;
+    /** Posts the model found to be ads, resumes or chatter, left out of every figure. */
+    excluded?: number;
+  };
   jobs: {
     pay: Dist;
     payShare: number;
@@ -170,6 +182,8 @@ export function buildReport(
   kind: Report['kind'],
   now: Date = new Date(),
 ): Report {
+  const excluded = records.filter((r) => r.excluded).length;
+  records = records.filter((r) => !r.excluded);
   const jobs = records.filter((r) => r.type === 'job');
   const gigs = records.filter((r) => r.type === 'gig');
   // One employer often posts the same vacancy in many cities: in pay figures it counts once.
@@ -218,6 +232,8 @@ export function buildReport(
       gigsWithBudget: gigsPaid.length,
       companies: new Set(jobs.map((r) => r.company).filter(Boolean)).size,
       platforms: topCounts(records.map((r) => r.platform), 20).map(({ name, n }) => ({ key: name, n })),
+      payOrigins: Object.fromEntries(topCounts(records.map((r) => r.payOrigin), 4).map(({ name, n }) => [name, n])),
+      excluded,
     },
     jobs: {
       pay: dist(ruJobs.map((r) => r.pay!)),

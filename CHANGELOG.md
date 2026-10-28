@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.15.0
+
+- Model extraction for the research reports. With `RADAR_EXTRACT_ENABLED=true` and an
+  OpenAI-compatible API key, a language model reads posts in batches (up to
+  `RADAR_EXTRACT_PER_HOUR`, newest and those without pay first) and returns pay, role,
+  grade, language, city and employer as strict JSON (`metadata.model`). The answer is
+  checked field by field; page markup, the rules and the board's budget always win, and
+  answers below 70% confidence are not used. Posts the model is sure are ads, resumes or
+  spam are left out of every figure.
+- The report shows where the pay came from (page, text, budget, model) and how many posts
+  the model left out; the methodology describes the model step.
+- `radar research extract --limit 20` runs a batch and prints what the model found;
+  `radar research snapshot 2026-10` freezes a month by hand.
+
 ## 0.14.1
 
 - A monthly report over a month the base covers only in part names its days:

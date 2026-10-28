@@ -31,6 +31,9 @@ export interface Env {
   RADAR_POLL_INTERVAL_SEC: number;
   RADAR_POLL_CONCURRENCY: number;
   RADAR_LLM_ENABLED: boolean;
+  RADAR_EXTRACT_ENABLED: boolean;
+  RADAR_EXTRACT_MODEL?: string;
+  RADAR_EXTRACT_PER_HOUR: number;
   OPENAI_API_KEY?: string;
   OPENAI_BASE_URL: string;
   OPENAI_MODEL: string;

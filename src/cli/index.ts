@@ -724,6 +724,41 @@ function buildProgram(): Command {
       await client.destroy();
     });
 
+  const research = program.command('research').description('Market research reports');
+
+  research
+    .command('extract')
+    .description('Ask the model about posts with no answer yet and print what it found')
+    .option('--limit <n>', 'Posts to send', '20')
+    .action(async (options: { limit: string }) => {
+      const { extractionEnabled, runModelExtraction } = await import('../research/model.ts');
+      const { deriveRecord, modelFactsOf } = await import('../research/derive.ts');
+      await withRuntime(async (runtime) => {
+        if (!extractionEnabled(runtime.env)) throw new Error('Set RADAR_EXTRACT_ENABLED=true and OPENAI_API_KEY first');
+        const summary = await runModelExtraction(runtime, { limit: Math.max(1, Number(options.limit) || 20) });
+        console.log(`Отправлено: ${summary.asked}, сохранено: ${summary.saved}, ошибок: ${summary.failed}`);
+        const leads = await runtime.store.listLeadsForResearch?.({ from: new Date(Date.now() - 30 * 86_400_000).toISOString(), to: new Date().toISOString(), limit: 2000 });
+        for (const lead of (leads ?? []).filter((l) => l.metadata?.model).slice(0, summary.saved)) {
+          const model = modelFactsOf(lead);
+          const record = deriveRecord(lead);
+          console.log(`${lead.title.slice(0, 60).padEnd(60)} | ${model ? `${record.role} ${record.grade ?? '-'} ${record.pay ?? '-'} ${record.payOrigin ?? ''}` : 'неуверенно'}`);
+        }
+      });
+    });
+
+  research
+    .command('snapshot <month>')
+    .description('Build and freeze the report for a month, e.g. 2026-10 (replaces a saved one)')
+    .action(async (month: string) => {
+      if (!/^\d{4}-\d{2}$/.test(month)) throw new Error('Month must look like 2026-10');
+      const { buildMonthReport } = await import('../research/service.ts');
+      await withRuntime(async (runtime) => {
+        const report = await buildMonthReport(runtime.store, month);
+        await runtime.store.saveResearchSnapshot?.(month, report);
+        console.log(`${report.period.label}: ${report.totals.posts} публикаций, медиана ${report.jobs.pay.median ?? '—'} ₽ (n = ${report.jobs.pay.n})`);
+      });
+    });
+
   program
     .command('mcp')
     .description('Run the Model Context Protocol (MCP) server over stdio')

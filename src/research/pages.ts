@@ -4,7 +4,9 @@
  */
 import { escapeHtml, jsonForScript } from '../core/text.ts';
 import { layout } from '../server/ui.ts';
-import { GRADE_LABELS, RUB_PER, ROLES } from './derive.ts';
+import { GRADE_LABELS, MIN_CONFIDENCE, RUB_PER, ROLES } from './derive.ts';
+
+const MIN_CONFIDENCE_PCT = Math.round(MIN_CONFIDENCE * 100);
 import {
   MIN_MEDIAN,
   MIN_QUARTILES,
@@ -20,6 +22,12 @@ import {
 } from './report.ts';
 
 const REPO_URL = 'https://github.com/MikhailSagalaev/openradar';
+const ORIGIN_LABELS: Record<string, string> = {
+  page: 'разметка страницы вакансии',
+  text: 'текст публикации',
+  budget: 'бюджет, указанный площадкой',
+  model: 'разбор текста моделью',
+};
 const LICENSE = 'CC BY 4.0';
 
 interface BarRow {
@@ -232,6 +240,7 @@ ${intlMedian ? `<section class="rs-section">
 <section class="rs-section">
   <h2>Откуда данные</h2>
   ${countBars(totals.platforms.slice(0, 12).map((p) => ({ label: p.key, n: p.n })))}
+  ${totals.payOrigins && Object.keys(totals.payOrigins).length ? `<p class="small">Откуда взята оплата: ${Object.entries(totals.payOrigins).map(([origin, n]) => `${escapeHtml(ORIGIN_LABELS[origin] ?? origin)} — ${num(n)}`).join(', ')}.${totals.excluded ? ` Модель отсеяла ${num(totals.excluded)} рекламных и нерелевантных публикаций.` : ''}</p>` : ''}
 </section>
 
 <section class="rs-section prose" style="margin-top:36px">
@@ -357,6 +366,9 @@ export function renderMethodologyPage(options: { baseUrl: string; version: strin
     <li>Значения меньше 12 000 ₽ или больше 3 000 000 ₽ в месяц считаются ошибкой разбора и отбрасываются.</li>
     <li>Указана ли сумма до или после вычета налогов, площадки сообщают не всегда, поэтому эти суммы не разделяются.</li>
   </ul>
+
+  <h2>Языковая модель</h2>
+  <p>Часть публикаций написана свободным текстом: «оплата 50к», «нужен мидл на питоне». Такие публикации дополнительно читает языковая модель и возвращает строгий набор полей: оплату, направление, уровень, язык, город, компанию. Модель только заполняет пробелы: разметка страницы, правила и бюджет площадки всегда важнее. Ответы с уверенностью ниже ${MIN_CONFIDENCE_PCT}% в статистику не попадают. Если модель уверена, что публикация — реклама услуг, резюме или спам, публикация исключается из всех цифр. Сколько зарплат получено каждым способом, указано в отчёте в разделе «Откуда данные».</p>
 
   <h2>Направление, уровень, язык</h2>
   <p>Направление определяется по названию вакансии по словарю правил, а если название ничего не говорит — по специализации, которую указала площадка. Направления: ${escapeHtml(roles)}. Уровень (Стажёр, Junior, Middle, Senior, Lead) берётся из названия, из отметки площадки или из тегов вроде #middle. Когда в названии несколько уровней («Middle/Senior»), берётся старший. Язык программирования — из названия, затем из списка навыков.</p>

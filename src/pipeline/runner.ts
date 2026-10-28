@@ -6,10 +6,12 @@ import { checkLeadsLiveness } from './liveness.ts';
 import { recomputeRatings } from '../hub/rating.ts';
 import { parseModerators } from '../hub/service.ts';
 import { ensureMonthlySnapshot } from '../research/service.ts';
+import { extractionEnabled, runModelExtraction } from '../research/model.ts';
 
 const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000;
 const BACKGROUND_INTERVAL_MS = 60 * 1000;
 const LIVENESS_INTERVAL_MS = 5 * 60 * 1000;
+const EXTRACTION_INTERVAL_MS = 10 * 60 * 1000;
 
 export class PollRunner {
   private timer: NodeJS.Timeout | undefined;
@@ -19,6 +21,8 @@ export class PollRunner {
   private lastLivenessAt = 0;
   private livenessRunning = false;
   private lastMaintenanceAt = 0;
+  private lastExtractionAt = 0;
+  private extractionRunning = false;
 
   constructor(
     private readonly deps: PollDeps,
@@ -79,6 +83,7 @@ export class PollRunner {
 
       await this.runMaintenanceIfDue();
       await this.runLivenessIfDue();
+      this.runExtractionIfDue();
 
       try {
         await runDigestIfDue({
@@ -118,6 +123,26 @@ export class PollRunner {
       })
       .finally(() => {
         this.livenessRunning = false;
+      });
+  }
+
+  /** A batch of model extraction every ten minutes, sized to RADAR_EXTRACT_PER_HOUR. */
+  private runExtractionIfDue(): void {
+    const env = this.deps.env;
+    if (!extractionEnabled(env) || this.extractionRunning || env.RADAR_EXTRACT_PER_HOUR <= 0) return;
+    if (Date.now() - this.lastExtractionAt < EXTRACTION_INTERVAL_MS) return;
+    this.lastExtractionAt = Date.now();
+    this.extractionRunning = true;
+    const limit = Math.max(1, Math.round(env.RADAR_EXTRACT_PER_HOUR / 6));
+    void runModelExtraction({ store: this.deps.store, env, logger: this.deps.logger.child('extract'), fetchImpl: this.deps.fetchImpl }, { limit })
+      .then((summary) => {
+        if (summary.asked) this.logger.info('model extraction finished', { ...summary });
+      })
+      .catch((error) => {
+        this.logger.warn('model extraction failed', { error: error instanceof Error ? error.message : String(error) });
+      })
+      .finally(() => {
+        this.extractionRunning = false;
       });
   }
 
