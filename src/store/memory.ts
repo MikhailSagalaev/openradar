@@ -21,6 +21,8 @@ import type {
   UserVoteResult,
   AdminStats,
 } from '../core/store.ts';
+import type { LeadFactsFill } from '../core/store.ts';
+import type { PageFacts } from '../research/facts.ts';
 import { lastDays } from '../core/store.ts';
 import type {
   Contact,
@@ -251,6 +253,51 @@ export class MemoryStore implements Store {
     if (lead) {
       lead.state = state;
     }
+  }
+
+  async saveLeadFacts(id: string, facts: PageFacts, fill: LeadFactsFill): Promise<void> {
+    const lead = this.leads.get(id);
+    if (!lead) return;
+    lead.metadata = { ...(lead.metadata ?? {}), facts };
+    if (!lead.author && fill.author) lead.author = fill.author;
+    const hasPay = fill.normalizedUsdMin !== undefined || fill.normalizedUsdMax !== undefined;
+    if (hasPay && lead.normalizedUsdMin === undefined && lead.normalizedUsdMax === undefined) {
+      Object.assign(lead, {
+        budget: fill.budget,
+        currency: fill.currency ?? 'RUB',
+        paymentPeriod: fill.paymentPeriod ?? 'monthly',
+        rawSalary: fill.rawSalary,
+        normalizedUsdMin: fill.normalizedUsdMin,
+        normalizedUsdMax: fill.normalizedUsdMax,
+      });
+    }
+  }
+
+  async listLeadsForResearch(options: { from: string; to: string; limit: number }): Promise<Lead[]> {
+    return Array.from(this.leads.values())
+      .filter((l) => {
+        const at = l.publishedAt ?? l.createdAt;
+        return at >= options.from && at < options.to
+          && l.state !== 'hidden_junk' && l.state !== 'hidden_scam'
+          && l.status !== 'rejected' && l.status !== 'failed';
+      })
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, options.limit)
+      .map((l) => ({ ...l, text: l.text.slice(0, 3000) }));
+  }
+
+  private researchSnapshots = new Map<string, { report: unknown; createdAt: string }>();
+
+  async getResearchSnapshot(period: string): Promise<{ report: unknown; createdAt: string } | null> {
+    return this.researchSnapshots.get(period) ?? null;
+  }
+
+  async saveResearchSnapshot(period: string, report: unknown): Promise<void> {
+    this.researchSnapshots.set(period, { report, createdAt: new Date().toISOString() });
+  }
+
+  async listResearchSnapshots(): Promise<Array<{ period: string; createdAt: string }>> {
+    return Array.from(this.researchSnapshots, ([period, v]) => ({ period, createdAt: v.createdAt })).sort((a, b) => b.period.localeCompare(a.period));
   }
 
   async recordVote(

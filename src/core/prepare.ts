@@ -22,8 +22,12 @@ const MAX_TEXT_LENGTH = 20_000;
 
 const JOB_HINT = /ваканс|vacanc|career|hiring|в\s+штат|оклад|трудоустр|соискател/i;
 
+/** Boards that publish only vacancies: a post from them is a job whatever its title says. */
+const JOB_BOARD_URL = /^https?:\/\/(?:www\.)?(?:jobicy\.com|weworkremotely\.com|remoteok\.com|hh\.ru\/vacancy|career\.habr\.com\/vacancies|trudvsem\.ru)\b/i;
+
 function detectLeadType(raw: RawLead, title: string, url?: string): LeadType {
   if (raw.type === 'job' || raw.type === 'gig') return raw.type;
+  if (url && JOB_BOARD_URL.test(url)) return 'job';
   return JOB_HINT.test(`${title} ${url ?? ''}`) ? 'job' : 'gig';
 }
 

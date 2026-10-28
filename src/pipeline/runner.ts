@@ -5,6 +5,7 @@ import { runDigestIfDue } from './digest.ts';
 import { checkLeadsLiveness } from './liveness.ts';
 import { recomputeRatings } from '../hub/rating.ts';
 import { parseModerators } from '../hub/service.ts';
+import { ensureMonthlySnapshot } from '../research/service.ts';
 
 const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000;
 const BACKGROUND_INTERVAL_MS = 60 * 1000;
@@ -135,6 +136,9 @@ export class PollRunner {
         const rating = await recomputeRatings(store, parseModerators(this.deps.env.RADAR_MODERATORS));
         this.logger.info('rating recomputed', { ...rating });
       }
+      // Last month's market report is frozen once, early in the next month.
+      const snapshot = await ensureMonthlySnapshot(store);
+      if (snapshot) this.logger.info('research snapshot saved', { period: snapshot });
       if (leads || runs || sessions) {
         this.logger.info('maintenance cleanup finished', {
           leads,

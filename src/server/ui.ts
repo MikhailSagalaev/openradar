@@ -1167,6 +1167,43 @@ dialog::backdrop {
 .catalog-card:hover { background: var(--surface-hover); }
 .catalog-card b { display: block; font-size: 14px; margin-bottom: 4px; }
 .catalog-card span { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.rs-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 8px 0 8px; }
+.rs-kpi { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+.rs-kpi b { display: block; font-size: 22px; letter-spacing: -0.02em; color: var(--ink); }
+.rs-kpi span { font-size: 12.5px; color: var(--muted); }
+.rs-section { margin-top: 36px; }
+.rs-section > h2 { font-size: 17px; text-transform: none; letter-spacing: -0.01em; color: var(--ink); margin-bottom: 6px; }
+.rs-chart { margin-top: 12px; }
+.rs-row { display: grid; grid-template-columns: minmax(110px, 30%) 1fr minmax(96px, auto); align-items: center; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.rs-label { font-size: 13px; line-height: 1.3; overflow-wrap: anywhere; }
+.rs-label a { color: var(--ink); }
+.rs-track { position: relative; height: 12px; background: var(--soft); border-radius: 9999px; }
+.rs-band { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--emerald) 35%, transparent); border-radius: 9999px; }
+.rs-fill { position: absolute; left: 0; top: 0; bottom: 0; background: color-mix(in srgb, var(--emerald) 55%, transparent); border-radius: 9999px; }
+.rs-dot { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; background: var(--emerald); border: 2px solid var(--bg); border-radius: 50%; box-sizing: border-box; }
+.rs-val { text-align: right; font-size: 13px; white-space: nowrap; }
+.rs-val b { display: block; color: var(--ink); }
+.rs-n { font-size: 11.5px; color: var(--muted); }
+.rs-legend { font-size: 12px; color: var(--muted); margin-top: 8px; }
+.rs-dot-key, .rs-band-key { display: inline-block; vertical-align: middle; margin: 0 4px 0 8px; }
+.rs-dot-key { width: 9px; height: 9px; border-radius: 50%; background: var(--emerald); }
+.rs-band-key { width: 22px; height: 9px; border-radius: 9999px; background: color-mix(in srgb, var(--emerald) 35%, transparent); }
+.rs-hist { display: flex; align-items: flex-end; gap: 4px; height: 180px; margin-top: 12px; }
+.rs-hist-col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; min-width: 0; }
+.rs-hist-bar { width: 100%; background: color-mix(in srgb, var(--emerald) 55%, transparent); border-radius: 3px 3px 0 0; min-height: 1px; }
+.rs-hist-n { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+.rs-hist-x { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.rs-findings { list-style: none; padding: 0; margin: 10px 0; }
+.rs-findings li { display: flex; gap: 12px; align-items: baseline; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; line-height: 1.5; }
+.rs-quote { flex: none; border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 9999px; padding: 3px 10px; font-size: 12px; cursor: pointer; }
+.rs-quote:hover { color: var(--ink); background: var(--surface-hover); }
+.rs-cite code { font-size: 12.5px; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .rs-row { grid-template-columns: 1fr minmax(84px, auto); }
+  .rs-track { grid-column: 1 / -1; grid-row: 2; }
+  .rs-findings li { flex-direction: column; }
+  .rs-hist-n { display: none; }
+}
 .detail-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 260px;
@@ -1520,7 +1557,7 @@ export { STYLE };
 export function layout(input: {
   title: string;
   version: string;
-  active?: 'leads' | 'sources' | 'extension';
+  active?: 'leads' | 'sources' | 'extension' | 'research';
   body: string;
   actions?: string;
   script?: string;
@@ -1531,7 +1568,7 @@ export function layout(input: {
 }): string {
   const lang = input.lang ?? 'ru';
   const t = getTranslations(lang);
-  const nav = (key: 'leads' | 'sources' | 'extension', label: string, href: string): string =>
+  const nav = (key: 'leads' | 'sources' | 'extension' | 'research', label: string, href: string): string =>
     `<a href="${href}"${input.active === key ? ' class="active"' : ''}>${label}</a>`;
 
   const isMember = Boolean(input.auth?.handle || input.auth?.isAdmin);
@@ -1595,6 +1632,7 @@ ${analyticsBodyHtml}
   </div>
   <nav class="nav">
     ${nav('leads', t.navLeads, '/')}
+    ${nav('research', lang === 'ru' ? 'Исследования' : 'Research', '/research')}
     ${nav('sources', t.navSources, '/sources')}
   </nav>
   <div class="actions">${input.actions ?? ''}${authWidget}</div>
@@ -1617,6 +1655,7 @@ ${input.body}
       <div class="footer-col-title">${escapeHtml(lang === 'ru' ? 'Проект' : 'Project')}</div>
       <div class="footer-links-grid">
         <a href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md" target="_blank" rel="noopener noreferrer">${escapeHtml(t.guideLink)}</a>
+        <a href="/research">${escapeHtml(lang === 'ru' ? 'Исследования рынка' : 'Market research')}</a>
         <a href="/about">${escapeHtml(lang === 'ru' ? 'О проекте' : 'About')}</a>
         <a href="/faq">${escapeHtml(lang === 'ru' ? 'Вопросы и ответы' : 'FAQ')}</a>
         <a href="/extension">${escapeHtml(t.extensionGuide)}</a>

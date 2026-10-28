@@ -63,6 +63,8 @@ import {
   renderRobotsTxt,
   renderSitemapXml,
 } from './seo.ts';
+import { datasetCsv, liveReport, monthSnapshot } from '../research/service.ts';
+import { renderMethodologyPage, renderReportPage, renderRolePage } from '../research/pages.ts';
 import { extractPreviewFromHtml, validateSubmissionUrl } from './preview.ts';
 import { renderLogo, LOGO_SVG, LOGO_ASSET_PATH, FAVICON_SVG } from './logo.ts';
 
@@ -2006,9 +2008,53 @@ export function createApp(runtime: Runtime): Hono {
   app.get('/sitemap.xml', async (c) => {
     // Only what a guest may open: delayed, active, not rejected.
     const leads = runtime.env.RADAR_PUBLIC_READ ? await feedFor(runtime, { tier: 'guest' }, { limit: 1000 }) : [];
-    return c.text(renderSitemapXml(seoBaseUrl(c), leads), 200, {
+    const roles = runtime.env.RADAR_PUBLIC_READ
+      ? (await liveReport(runtime.store)).report.jobs.roles.map((r) => `/research/roles/${r.slug}`)
+      : [];
+    return c.text(renderSitemapXml(seoBaseUrl(c), leads, new Date(), roles), 200, {
       'content-type': 'application/xml; charset=utf-8',
     });
+  });
+
+  // Market research: the live report, frozen monthly reports, role pages, methodology and data.
+  // A private node keeps its figures to itself: the section opens to whoever may read the feed.
+  const researchGate = async (c: Context, next: () => Promise<void>): Promise<Response | void> => {
+    if (!await canRead(c, runtime)) return c.redirect('/login?returnTo=/research');
+    await next();
+  };
+  app.use('/research', researchGate);
+  app.use('/research/*', researchGate);
+  const researchSnapshots = async (): Promise<Array<{ period: string }>> => (await runtime.store.listResearchSnapshots?.()) ?? [];
+  app.get('/research', async (c) => {
+    const { report } = await liveReport(runtime.store);
+    return c.html(renderReportPage({ report, baseUrl: seoBaseUrl(c), version: VERSION, snapshots: await researchSnapshots() }));
+  });
+  app.get('/research/methodology', (c) => c.html(renderMethodologyPage({ baseUrl: seoBaseUrl(c), version: VERSION })));
+  app.get('/research/report.json', async (c) => {
+    const { report } = await liveReport(runtime.store);
+    return c.json(report, 200, { 'access-control-allow-origin': '*' });
+  });
+  app.get('/research/dataset.csv', async (c) => {
+    const { records } = await liveReport(runtime.store);
+    return c.body(datasetCsv(records), 200, {
+      'content-type': 'text/csv; charset=utf-8',
+      'content-disposition': 'attachment; filename="openradar-dataset.csv"',
+      'access-control-allow-origin': '*',
+    });
+  });
+  app.get('/research/roles/:slug', async (c) => {
+    const { report } = await liveReport(runtime.store);
+    const detail = report.jobs.roles.find((r) => r.slug === c.req.param('slug'));
+    if (!detail) return c.html(renderNotFound(VERSION), 404);
+    return c.html(renderRolePage({ detail, report, baseUrl: seoBaseUrl(c), version: VERSION }));
+  });
+  app.get('/research/:period{[0-9]{4}-[0-9]{2}(\.json)?}', async (c) => {
+    const param = c.req.param('period');
+    const slug = param.slice(0, 7);
+    const report = await monthSnapshot(runtime.store, slug);
+    if (!report) return c.html(renderNotFound(VERSION), 404);
+    if (param.endsWith('.json')) return c.json(report, 200, { 'access-control-allow-origin': '*' });
+    return c.html(renderReportPage({ report, baseUrl: seoBaseUrl(c), version: VERSION, snapshots: await researchSnapshots() }));
   });
 
   app.get('/llms.txt', (c) =>

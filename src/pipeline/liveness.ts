@@ -10,6 +10,10 @@ import { assertSafeUrl } from '../core/ssrf.ts';
 import type { Store } from '../core/store.ts';
 import type { Env, Logger } from '../core/types.ts';
 import { readTextLimited } from '../net/body.ts';
+import type { LeadFactsFill } from '../core/store.ts';
+import type { LeadType } from '../core/types.ts';
+import { RUB_PER, normalizePay } from '../research/derive.ts';
+import { extractPageFacts, hasFacts, type PageFacts } from '../research/facts.ts';
 
 export type Liveness = 'open' | 'closed' | 'unknown';
 
@@ -146,6 +150,8 @@ export interface LivenessSummary {
   open: number;
   unknown: number;
   failed: number;
+  /** Leads whose page markup added pay, employer or grade. */
+  enriched: number;
 }
 
 /**
@@ -153,11 +159,27 @@ export interface LivenessSummary {
  * the turn of the others. Boards are checked in parallel, the pages of one board one by one
  * with a pause, so no board sees more than one request every few seconds.
  */
+/** Pay and employer from the page, in the units the lead row keeps (USD per month). */
+export function factsFill(facts: PageFacts, type: LeadType): LeadFactsFill {
+  const fill: LeadFactsFill = { author: facts.company };
+  const pay = facts.salary ? normalizePay({ ...facts.salary, origin: 'page' }, type) : undefined;
+  if (facts.salary && pay) {
+    const usd = (rub: number | undefined): number | undefined => (rub === undefined ? undefined : Math.round(rub / RUB_PER.USD!));
+    fill.budget = facts.salary.max ?? facts.salary.min;
+    fill.currency = facts.salary.currency;
+    fill.paymentPeriod = pay.period === 'hour' ? 'hourly' : pay.period === 'month' ? 'monthly' : 'fixed';
+    fill.rawSalary = [facts.salary.min, facts.salary.max].filter((v) => v !== undefined).join('–') + ` ${facts.salary.currency}`;
+    fill.normalizedUsdMin = usd(pay.min ?? pay.max);
+    fill.normalizedUsdMax = usd(pay.max ?? pay.min);
+  }
+  return fill;
+}
+
 export async function checkLeadsLiveness(
   deps: LivenessDeps,
   options: { perBoard?: number; perHostDelayMs?: number; now?: Date } = {},
 ): Promise<LivenessSummary> {
-  const summary: LivenessSummary = { checked: 0, closed: 0, open: 0, unknown: 0, failed: 0 };
+  const summary: LivenessSummary = { checked: 0, closed: 0, open: 0, unknown: 0, failed: 0, enriched: 0 };
   const store = deps.store;
   if (!store.listLeadsToCheck || !store.markLeadChecked || !store.updateLeadState) return summary;
 
@@ -182,11 +204,19 @@ export async function checkLeadsLiveness(
         if (!rule) continue;
         summary.checked++;
         try {
-          const result = rule.check(await fetchPage(lead.url!, fetchDeps));
+          const page = await fetchPage(lead.url!, fetchDeps);
+          const result = rule.check(page);
           summary[result]++;
           if (result === 'closed') {
             await store.setLeadDecision(lead.id, { state: 'closed', decidedBy: 'source', reason: 'closed on the board' });
             await store.updateLeadState!(lead.id, 'closed');
+          } else if (page.status === 200 && store.saveLeadFacts) {
+            // The page is already loaded: keep what its markup says about pay, employer and grade.
+            const facts = extractPageFacts(page.body);
+            if (hasFacts(facts)) {
+              await store.saveLeadFacts(lead.id, facts, factsFill(facts, lead.type ?? 'gig'));
+              summary.enriched++;
+            }
           }
         } catch (error) {
           // A network error or a block says nothing about the post: try again on the next round.
