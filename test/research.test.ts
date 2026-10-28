@@ -12,7 +12,9 @@ import {
   type ResearchRecord,
 } from '../src/research/derive.ts';
 import { extractPageFacts } from '../src/research/facts.ts';
+import { resetGigachatToken } from '../src/research/gigachat.ts';
 import { parseModelAnswer, runModelExtraction } from '../src/research/model.ts';
+import { modelQuality } from '../src/research/quality.ts';
 import { MIN_MEDIAN, buildReport, dist, monthPeriod } from '../src/research/report.ts';
 import { buildMonthReport, datasetCsv, ensureMonthlySnapshot, resetResearchCache } from '../src/research/service.ts';
 import { createApp } from '../src/server/app.ts';
@@ -268,6 +270,8 @@ describe('model extraction', () => {
     expect(parseModelAnswer('{"isPost":true,"confidence":2,"role":"astronaut","grade":"guru","payMin":1000}')).toEqual({ isPost: true, confidence: 1 });
     expect(parseModelAnswer('not json')).toBeUndefined();
     expect(parseModelAnswer('{"confidence":0.9}')).toBeUndefined();
+    // Without a JSON mode the object may come wrapped in prose or fences.
+    expect(parseModelAnswer('Вот ответ:\n```json\n{"isPost":false,"confidence":0.8}\n```')).toEqual({ isPost: false, confidence: 0.8 });
   });
 
   it('fills gaps the rules left and leaves out ads', () => {
@@ -299,7 +303,7 @@ describe('model extraction', () => {
     }) as typeof fetch;
 
     const summary = await runModelExtraction({ ...runtime, fetchImpl }, { limit: 10 });
-    expect(summary).toEqual({ asked: 1, saved: 1, failed: 0 });
+    expect(summary).toEqual({ asked: 1, saved: 1, failed: 0, ids: ['m1'] });
     expect(requests[0]!.url).toBe('https://llm.example/v1/chat/completions');
     expect(requests[0]!.body.messages[0]!.content).toContain('untrusted data');
     expect(deriveRecord((await runtime.store.getLead('m1'))!)).toMatchObject({ pay: 15000, payOrigin: 'model', role: 'bots' });
@@ -307,5 +311,66 @@ describe('model extraction', () => {
     expect((await runModelExtraction({ ...runtime, fetchImpl }, { limit: 10 })).asked).toBe(0);
     // Off unless enabled with a key.
     expect((await runModelExtraction({ ...makeTestRuntime(), fetchImpl }, { limit: 10 })).asked).toBe(0);
+  });
+
+  it('stays out of the figures in shadow mode', () => {
+    const metadata = { model: { v: 1, model: 'test', at: '2026-10-28T00:00:00Z', facts: { isPost: true, confidence: 0.9, role: 'bots', payMin: 50000, payMax: 50000, currency: 'RUB', period: 'project' } } };
+    const order = lead('shadow', { type: 'gig', title: 'Нужна помощь', metadata });
+    expect(deriveRecord(order, { useModel: false })).toMatchObject({ role: 'other', pay: undefined });
+    expect(deriveRecord(order)).toMatchObject({ role: 'bots', payOrigin: 'model' });
+  });
+
+  it('measures agreement with the rules before the model is trusted', () => {
+    const stored = (facts: Record<string, unknown>) => ({ model: { v: 1, model: 'test', at: '2026-10-28T00:00:00Z', facts } });
+    const leads = [
+      // Agrees on role and pay.
+      ...Array.from({ length: 30 }, (_, i) => lead(`a${i}`, { type: 'gig', title: 'Telegram-бот для записи', text: 'Бюджет 20 000 ₽', metadata: stored({ isPost: true, confidence: 0.9, role: 'bots', payMin: 20000, payMax: 20000, currency: 'RUB', period: 'project' }) })),
+      // Disagrees on pay.
+      lead('b', { type: 'gig', title: 'Telegram-бот для записи', text: 'Бюджет 20 000 ₽', metadata: stored({ isPost: true, confidence: 0.9, role: 'bots', payMin: 90000, payMax: 90000, currency: 'RUB', period: 'project' }) }),
+      // Adds what the rules miss; an ad; an unsure answer.
+      lead('c', { type: 'gig', title: 'Нужна помощь', metadata: stored({ isPost: true, confidence: 0.9, role: 'bots', payMin: 5000, payMax: 5000, currency: 'RUB', period: 'project' }) }),
+      lead('d', { type: 'gig', title: 'Делаю сайты', metadata: stored({ isPost: false, confidence: 0.9 }) }),
+      lead('e', { type: 'gig', title: 'Что-то', metadata: stored({ isPost: true, confidence: 0.3, role: 'bots' }) }),
+      lead('f', { type: 'gig', title: 'Без ответа' }),
+    ];
+    const q = modelQuality(leads);
+    expect(q).toMatchObject({ answered: 34, confident: 33, notPost: 1, gain: { role: 1, pay: 1 } });
+    expect(q.role).toEqual({ n: 31, agree: 31 });
+    expect(q.pay).toEqual({ n: 31, agree: 30 });
+    expect(q.disagreements[0]).toMatchObject({ id: 'b', field: 'pay' });
+    expect(q.ready).toBe(true);
+    expect(modelQuality(leads.slice(30)).ready).toBe(false); // too few comparisons
+  });
+
+  it('talks to GigaChat with a cached token and no JSON mode', async () => {
+    resetGigachatToken();
+    const runtime = makeTestRuntime({ RADAR_EXTRACT_ENABLED: true, RADAR_EXTRACT_PROVIDER: 'gigachat', GIGACHAT_AUTH_KEY: 'auth-key' });
+    const source = await runtime.store.createSource({ kind: 'telegram', title: 'tg', config: { channel: 'jobs' } });
+    for (const id of ['g1', 'g2']) await runtime.store.insertLead(lead(id, { sourceId: source.id, type: 'gig', title: 'Нужен бот', text: 'Бот для записи' }));
+    const calls: Array<{ url: string; headers: Record<string, string>; body: string }> = [];
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input.toString();
+      calls.push({ url, headers: Object.fromEntries(new Headers(init?.headers).entries()), body: String(init?.body) });
+      if (url.endsWith('/oauth')) return new Response(JSON.stringify({ access_token: 'tok', expires_at: Date.now() + 30 * 60_000 }), { status: 200 });
+      const content = 'Ответ: {"isPost":true,"confidence":0.9,"role":"bots"}';
+      return new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status: 200 });
+    }) as typeof fetch;
+
+    const summary = await runModelExtraction({ ...runtime, fetchImpl }, { limit: 10 });
+    expect(summary).toMatchObject({ asked: 2, saved: 2, failed: 0 });
+    const oauth = calls.filter((c) => c.url.endsWith('/oauth'));
+    expect(oauth).toHaveLength(1);
+    expect(oauth[0]!.url).toBe('https://ngw.devices.sberbank.ru:9443/api/v2/oauth');
+    expect(oauth[0]!.headers).toMatchObject({ authorization: 'Basic auth-key' });
+    expect(oauth[0]!.headers.rquid).toMatch(/^[0-9a-f-]{36}$/);
+    expect(oauth[0]!.body).toBe('scope=GIGACHAT_API_PERS');
+    const chat = calls.find((c) => c.url.endsWith('/chat/completions'))!;
+    expect(chat.url).toBe('https://gigachat.devices.sberbank.ru/api/v1/chat/completions');
+    expect(chat.headers.authorization).toBe('Bearer tok');
+    const body = JSON.parse(chat.body) as Record<string, unknown>;
+    expect(body).toMatchObject({ model: 'GigaChat-2-Pro' });
+    expect(body.response_format).toBeUndefined();
+    expect(body.temperature).toBeGreaterThan(0);
+    resetGigachatToken();
   });
 });

@@ -3,7 +3,7 @@
  * and frozen monthly snapshots, saved once the month is over.
  */
 import type { Store } from '../core/store.ts';
-import { deriveRecord, type ResearchRecord } from './derive.ts';
+import { deriveRecord, type DeriveOptions, type ResearchRecord } from './derive.ts';
 import { MONTHS_GEN, buildReport, livePeriod, monthPeriod, REPORT_VERSION, type Report } from './report.ts';
 
 const MAX_LEADS = 100_000;
@@ -12,10 +12,10 @@ const CACHE_MS = 15 * 60_000;
 /** A month with fewer vacancies than this gets no report of its own. */
 const MIN_MONTH_JOBS = 300;
 
-export async function researchRecords(store: Store, from: string, to: string): Promise<ResearchRecord[]> {
+export async function researchRecords(store: Store, from: string, to: string, options: DeriveOptions = {}): Promise<ResearchRecord[]> {
   if (!store.listLeadsForResearch) return [];
   const leads = await store.listLeadsForResearch({ from, to, limit: MAX_LEADS });
-  return leads.map(deriveRecord);
+  return leads.map((lead) => deriveRecord(lead, options));
 }
 
 let cached: { at: number; report: Report; records: ResearchRecord[] } | undefined;
@@ -24,10 +24,10 @@ export function resetResearchCache(): void {
   cached = undefined;
 }
 
-export async function liveReport(store: Store, now: Date = new Date()): Promise<{ report: Report; records: ResearchRecord[] }> {
+export async function liveReport(store: Store, now: Date = new Date(), options: DeriveOptions = {}): Promise<{ report: Report; records: ResearchRecord[] }> {
   if (cached && now.getTime() - cached.at < CACHE_MS) return cached;
   const period = livePeriod(now, LIVE_DAYS);
-  const records = await researchRecords(store, period.from, period.to);
+  const records = await researchRecords(store, period.from, period.to, options);
   // The base is younger than the window: say from when the data really starts.
   const first = records.reduce<string | undefined>((min, r) => (!min || r.date < min ? r.date : min), undefined);
   if (first && first > period.from.slice(0, 10)) {
@@ -45,9 +45,9 @@ export function previousMonth(now: Date): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
-export async function buildMonthReport(store: Store, slug: string, now: Date = new Date()): Promise<Report> {
+export async function buildMonthReport(store: Store, slug: string, now: Date = new Date(), options: DeriveOptions = {}): Promise<Report> {
   const period = monthPeriod(slug);
-  const records = await researchRecords(store, period.from, period.to);
+  const records = await researchRecords(store, period.from, period.to, options);
   // A month the base did not cover from its first day says which days it covers.
   const first = records.reduce<string | undefined>((min, r) => (!min || r.date < min ? r.date : min), undefined);
   if (first && first > period.from.slice(0, 10)) {
@@ -62,11 +62,11 @@ export async function buildMonthReport(store: Store, slug: string, now: Date = n
 }
 
 /** Saves last month's report once; returns the period when a new snapshot was made. */
-export async function ensureMonthlySnapshot(store: Store, now: Date = new Date()): Promise<string | undefined> {
+export async function ensureMonthlySnapshot(store: Store, now: Date = new Date(), options: DeriveOptions = {}): Promise<string | undefined> {
   if (!store.getResearchSnapshot || !store.saveResearchSnapshot) return undefined;
   const slug = previousMonth(now);
   if (await store.getResearchSnapshot(slug)) return undefined;
-  const report = await buildMonthReport(store, slug, now);
+  const report = await buildMonthReport(store, slug, now, options);
   if (report.totals.jobs < MIN_MONTH_JOBS) return undefined;
   await store.saveResearchSnapshot(slug, report);
   return slug;

@@ -1518,13 +1518,13 @@ export class PostgresStore implements Store {
     return result.rows.map((r) => this.rowToLead(r));
   }
 
-  async listLeadsForModel(options: { limit: number; since: string; version: number }): Promise<Array<Pick<Lead, 'id' | 'title' | 'text' | 'type'>>> {
+  async listLeadsForModel(options: { limit: number; since: string; version: number; withPayFirst?: boolean }): Promise<Array<Pick<Lead, 'id' | 'title' | 'text' | 'type'>>> {
     const result = await this.pool.query(
       `SELECT id, title, left(text, 2500) AS text, type FROM leads
         WHERE created_at >= $1::timestamptz
           AND state NOT IN ('hidden_junk', 'hidden_scam') AND status NOT IN ('rejected', 'failed')
           AND COALESCE((metadata_json->'model'->>'v')::int, 0) < $2
-        ORDER BY (normalized_usd_min IS NULL AND normalized_usd_max IS NULL) DESC, created_at DESC
+        ORDER BY (normalized_usd_min IS NULL AND normalized_usd_max IS NULL) ${options.withPayFirst ? 'ASC' : 'DESC'}, created_at DESC
         LIMIT $3`,
       [options.since, options.version, options.limit],
     );

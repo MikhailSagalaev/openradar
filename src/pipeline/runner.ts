@@ -136,7 +136,7 @@ export class PollRunner {
     const limit = Math.max(1, Math.round(env.RADAR_EXTRACT_PER_HOUR / 6));
     void runModelExtraction({ store: this.deps.store, env, logger: this.deps.logger.child('extract'), fetchImpl: this.deps.fetchImpl }, { limit })
       .then((summary) => {
-        if (summary.asked) this.logger.info('model extraction finished', { ...summary });
+        if (summary.asked) this.logger.info('model extraction finished', { asked: summary.asked, saved: summary.saved, failed: summary.failed });
       })
       .catch((error) => {
         this.logger.warn('model extraction failed', { error: error instanceof Error ? error.message : String(error) });
@@ -162,7 +162,7 @@ export class PollRunner {
         this.logger.info('rating recomputed', { ...rating });
       }
       // Last month's market report is frozen once, early in the next month.
-      const snapshot = await ensureMonthlySnapshot(store);
+      const snapshot = await ensureMonthlySnapshot(store, new Date(), { useModel: this.deps.env.RADAR_EXTRACT_APPLY });
       if (snapshot) this.logger.info('research snapshot saved', { period: snapshot });
       if (leads || runs || sessions) {
         this.logger.info('maintenance cleanup finished', {

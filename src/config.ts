@@ -40,6 +40,13 @@ const envSchema = z.object({
   RADAR_EXTRACT_ENABLED: booleanFromEnv(false),
   RADAR_EXTRACT_MODEL: optionalString,
   RADAR_EXTRACT_PER_HOUR: z.coerce.number().int().nonnegative().default(300),
+  // Answers are saved either way; figures use them only once their quality is checked.
+  RADAR_EXTRACT_APPLY: booleanFromEnv(false),
+  RADAR_EXTRACT_PROVIDER: z.enum(['openai', 'gigachat']).default('openai'),
+  GIGACHAT_AUTH_KEY: optionalString,
+  GIGACHAT_SCOPE: z.string().default('GIGACHAT_API_PERS'),
+  GIGACHAT_BASE_URL: z.string().url().default('https://gigachat.devices.sberbank.ru/api/v1'),
+  GIGACHAT_OAUTH_URL: z.string().url().default('https://ngw.devices.sberbank.ru:9443/api/v2/oauth'),
   TELEGRAM_BOT_TOKEN: optionalString,
   TELEGRAM_CHAT_ID: optionalString,
   WEBHOOK_URL: z.string().url().optional().or(z.literal('').transform(() => undefined)),

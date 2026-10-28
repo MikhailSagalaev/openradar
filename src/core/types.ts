@@ -34,6 +34,12 @@ export interface Env {
   RADAR_EXTRACT_ENABLED: boolean;
   RADAR_EXTRACT_MODEL?: string;
   RADAR_EXTRACT_PER_HOUR: number;
+  RADAR_EXTRACT_APPLY: boolean;
+  RADAR_EXTRACT_PROVIDER: 'openai' | 'gigachat';
+  GIGACHAT_AUTH_KEY?: string;
+  GIGACHAT_SCOPE: string;
+  GIGACHAT_BASE_URL: string;
+  GIGACHAT_OAUTH_URL: string;
   OPENAI_API_KEY?: string;
   OPENAI_BASE_URL: string;
   OPENAI_MODEL: string;
