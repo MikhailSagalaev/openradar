@@ -95,6 +95,25 @@ describe('http server', () => {
     await runtime.store.close();
   });
 
+  it('limits the sitemap to 10 requests a minute per client, with retry-after', async () => {
+    const runtime = makeRuntime();
+    const app = createApp(runtime);
+    const get = () => app.request('/sitemap.xml', { headers: { 'x-forwarded-for': '203.0.113.11' } });
+    for (let i = 0; i < 10; i++) expect((await get()).status).toBe(200);
+    const limited = await get();
+    expect(limited.status).toBe(429);
+    expect(Number(limited.headers.get('retry-after'))).toBeGreaterThan(0);
+  });
+
+  it('takes public rate limits from the environment', async () => {
+    const runtime = makeRuntime({ RADAR_RSS_RATE_PER_MIN: 2 } as Partial<Env>);
+    const app = createApp(runtime);
+    const get = () => app.request('/feed.xml', { headers: { 'x-forwarded-for': '203.0.113.12' } });
+    expect((await get()).status).not.toBe(429);
+    expect((await get()).status).not.toBe(429);
+    expect((await get()).status).toBe(429);
+  });
+
   it('tells the extension which version the server hands out', async () => {
     const runtime = makeRuntime();
     const app = createApp(runtime);
