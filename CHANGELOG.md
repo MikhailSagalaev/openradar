@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.25.4
+
+- `radar telegram folder` gives a new folder an id above every existing folder, shared ones
+  included. mtcute chose it over plain folders only, so the new folder took the id of a shared
+  folder and Telegram replaced that folder.
+
 ## 0.25.3
 
 - A Telegram folder is found by its title whether Telegram returns it as a plain folder or a
