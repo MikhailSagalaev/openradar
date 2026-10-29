@@ -131,7 +131,10 @@ export async function extractWithModel(
 ): Promise<ModelFacts | undefined> {
   const { env } = deps;
   const gigachat = env.RADAR_EXTRACT_PROVIDER === 'gigachat';
-  const fetchImpl = deps.fetchImpl ?? (gigachat ? gigachatFetch : fetch);
+  // The runtime hands everyone the global fetch, which does not trust GigaChat's root:
+  // only a substitute (a test's) replaces gigachatFetch.
+  const injected = deps.fetchImpl && deps.fetchImpl !== globalThis.fetch ? deps.fetchImpl : undefined;
+  const fetchImpl = injected ?? (gigachat ? gigachatFetch : fetch);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30_000);
   try {

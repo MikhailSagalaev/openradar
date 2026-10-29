@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.1
+
+- GigaChat requests from the hub and the CLI went through the global fetch, which does not
+  trust the Russian root CA, and all failed with "fetch failed". They now use the GigaChat
+  TLS client unless a test substitutes its own fetch.
+
 ## 0.17.0
 
 - GigaChat for model extraction: `RADAR_EXTRACT_PROVIDER=gigachat` with `GIGACHAT_AUTH_KEY`.
