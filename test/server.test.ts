@@ -78,8 +78,19 @@ describe('http server', () => {
     const app = createApp(runtime);
     const response = await app.request('/health');
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { ok: boolean };
-    expect(body.ok).toBe(true);
+    const body = (await response.json()) as { ok: boolean; enabledSources: number; last24h: number };
+    expect(body).toMatchObject({ ok: true, enabledSources: 0, last24h: 0 });
+    await runtime.store.close();
+  });
+
+  it('limits a client looping over the public feed', async () => {
+    const runtime = makeRuntime();
+    const app = createApp(runtime);
+    const get = (path: string, ip: string) => app.request(path, { headers: { 'x-forwarded-for': ip } });
+    let last = 0;
+    for (let i = 0; i < 121; i++) last = (await get('/api/leads', '203.0.113.9')).status;
+    expect(last).toBe(429);
+    expect((await get('/api/leads', '203.0.113.10')).status).not.toBe(429);
     await runtime.store.close();
   });
 

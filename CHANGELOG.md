@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.18.0
+
+- Public feeds (`/`, `/api/leads`, `/feed.rss`, `/api/delta`) are limited to 120 requests a
+  minute per client, so a scraper loop cannot pin the database on a node without a proxy
+  limit.
+- `/health` also reports `enabledSources` (the sources actually polled) and `last24h`.
+
 ## 0.17.1
 
 - GigaChat requests from the hub and the CLI went through the global fetch, which does not
