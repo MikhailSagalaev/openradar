@@ -9,6 +9,7 @@ import {
   detectLanguage,
   normalizePay,
   parsePayText,
+  scopeOf,
   type ResearchRecord,
 } from '../src/research/derive.ts';
 import { extractPageFacts } from '../src/research/facts.ts';
@@ -154,7 +155,7 @@ describe('page facts', () => {
 function record(i: number, overrides: Partial<ResearchRecord> = {}): ResearchRecord {
   return {
     id: `r${i}`, date: '2026-10-20', type: 'job', platform: 'hh.ru', role: 'backend', region: 'Москва',
-    remote: false, skills: [], ai: false, market: 'ru', pay: 100000 + i * 1000, payPeriod: 'month', company: `Company ${i}`,
+    remote: false, skills: [], ai: false, market: 'ru', pay: 100000 + i * 1000, payPeriod: 'month', company: `Company ${i}`, scope: 'ru',
     ...overrides,
   };
 }
@@ -259,6 +260,20 @@ describe('research pages', () => {
     const runtime = await seeded({ RADAR_PUBLIC_READ: false });
     const response = await createApp(runtime).request('/research');
     expect(response.status).toBe(302);
+  });
+});
+
+describe('market scope', () => {
+  it('keeps English-language vacancies out of the main figures', () => {
+    expect(scopeOf('Backend-разработчик', 'Ищем разработчика на Go в команду платежей')).toBe('ru');
+    expect(scopeOf('Senior Backend Engineer', 'We are hiring a Go engineer, remote in EU')).toBe('intl');
+    expect(scopeOf('Go developer', 'Компания ищет Go developer в команду, удалённо')).toBe('ru');
+    const intl = Array.from({ length: 5 }, (_, i) => record(100 + i, { scope: 'intl', market: 'intl', remote: true, company: 'Stripe' }));
+    const report = buildReport([...Array.from({ length: 12 }, (_, i) => record(i)), ...intl], monthPeriod('2026-10'), 'month');
+    expect(report.totals).toMatchObject({ jobs: 12, intlJobs: 5 });
+    expect(report.jobs.remote.share).toBe(0);
+    expect(report.jobs.companies.map((c) => c.name)).not.toContain('Stripe');
+    expect(report.jobs.intl.n).toBe(5);
   });
 });
 

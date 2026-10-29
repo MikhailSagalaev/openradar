@@ -66,6 +66,8 @@ export interface Report {
     payOrigins?: Record<string, number>;
     /** Posts the model found to be ads, resumes or chatter, left out of every figure. */
     excluded?: number;
+    /** English-language vacancies, counted apart from the main figures. */
+    intlJobs?: number;
   };
   jobs: {
     pay: Dist;
@@ -184,7 +186,10 @@ export function buildReport(
 ): Report {
   const excluded = records.filter((r) => r.excluded).length;
   records = records.filter((r) => !r.excluded);
-  const jobs = records.filter((r) => r.type === 'job');
+  // The main figures describe the Russian-language market; English-language boards and
+  // company career pages make the international section.
+  const intlScope = records.filter((r) => r.type === 'job' && r.scope === 'intl');
+  const jobs = records.filter((r) => r.type === 'job' && r.scope !== 'intl');
   const gigs = records.filter((r) => r.type === 'gig');
   // One employer often posts the same vacancy in many cities: in pay figures it counts once.
   const repeated = new Set<string>();
@@ -198,7 +203,7 @@ export function buildReport(
   // Russian-market monthly pay is the headline figure; international boards pay in USD and are kept apart.
   const ruPaid = (r: ResearchRecord): boolean => r.market === 'ru' && r.payPeriod === 'month' && r.pay !== undefined && !repeated.has(r.id);
   const ruJobs = jobs.filter(ruPaid);
-  const intlJobs = jobs.filter((r) => r.market === 'intl' && r.payPeriod === 'month' && !repeated.has(r.id));
+  const intlJobs = intlScope.filter((r) => r.market === 'intl' && r.payPeriod === 'month' && r.pay !== undefined);
   const projectPaid = (r: ResearchRecord): boolean => r.payPeriod === 'project' && r.pay !== undefined;
   const gigsPaid = gigs.filter(projectPaid);
 
@@ -228,7 +233,8 @@ export function buildReport(
       posts: records.length,
       jobs: jobs.length,
       gigs: gigs.length,
-      jobsWithPay: ruJobs.length + intlJobs.length,
+      jobsWithPay: ruJobs.length,
+      intlJobs: intlScope.length,
       gigsWithBudget: gigsPaid.length,
       companies: new Set(jobs.map((r) => r.company).filter(Boolean)).size,
       platforms: topCounts(records.map((r) => r.platform), 20).map(({ name, n }) => ({ key: name, n })),
@@ -237,7 +243,7 @@ export function buildReport(
     },
     jobs: {
       pay: dist(ruJobs.map((r) => r.pay!)),
-      payShare: share(ruJobs.length + intlJobs.length, jobs.length),
+      payShare: share(ruJobs.length, jobs.length),
       intl: dist(intlJobs.map((r) => r.pay!)),
       byRole: sliceBy(jobs, (r) => r.role, (k) => roleDef(k)?.label ?? OTHER_ROLE.label, ruPaid),
       byGrade: sliceBy(jobs, (r) => r.grade, (k) => GRADE_LABELS[k as keyof typeof GRADE_LABELS], ruPaid, GRADE_ORDER),
