@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { PollContext, SourceRecord } from '../core/types.ts';
+import { sourceProxyUrl } from '../net/proxy.ts';
 import type { SourceRegistry } from '../sources/index.ts';
 import { type IngestDeps, ingestRawLeads } from './ingest.ts';
 
@@ -80,6 +81,7 @@ export async function pollSource(
     timeoutMs: deps.env.RADAR_HTTP_TIMEOUT_MS,
     logger,
     now: deps.now ?? (() => new Date()),
+    proxyUrl: sourceProxyUrl(source.config),
   };
 
   try {

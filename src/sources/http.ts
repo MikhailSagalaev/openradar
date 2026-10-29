@@ -1,5 +1,6 @@
 import { assertSafeUrl } from '../core/ssrf.ts';
 import { readTextLimited } from '../net/body.ts';
+import { fetchTextViaProxy } from '../net/proxy.ts';
 import type { PollContext } from '../core/types.ts';
 
 export async function fetchText(
@@ -7,6 +8,15 @@ export async function fetchText(
   initialUrl: string,
   extraHeaders?: Record<string, string>,
 ): Promise<string> {
+  if (ctx.proxyUrl) {
+    return fetchTextViaProxy(initialUrl, {
+      proxyUrl: ctx.proxyUrl,
+      userAgent: ctx.userAgent,
+      timeoutMs: ctx.timeoutMs,
+      headers: extraHeaders,
+    });
+  }
+
   let currentUrl = initialUrl;
   let redirects = 0;
   const maxRedirects = 5;

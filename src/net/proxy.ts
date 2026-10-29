@@ -11,6 +11,15 @@ import { readTextLimited } from './body.ts';
 
 let cachedAgent: { url: string; agent: ProxyAgent } | undefined;
 
+/**
+ * The proxy a source asked for: its own `config.proxyUrl`, or RADAR_PROXY_URL with
+ * `config.proxy: true`. Boards reachable directly stay direct.
+ */
+export function sourceProxyUrl(config?: Record<string, unknown>): string | undefined {
+  if (typeof config?.proxyUrl === 'string' && config.proxyUrl.trim()) return config.proxyUrl.trim();
+  return config?.proxy === true ? process.env.RADAR_PROXY_URL?.trim() || undefined : undefined;
+}
+
 export function resolveProxyUrl(config?: Record<string, unknown>): string | undefined {
   const fromConfig = typeof config?.proxyUrl === 'string' ? config.proxyUrl.trim() : '';
   return fromConfig || process.env.RADAR_PROXY_URL?.trim() || undefined;
