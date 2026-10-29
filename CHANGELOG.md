@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.25.2
+
+- The Telegram account source reads a folder from the folder's own chat list: listing dialogs
+  by folder failed with INPUT_PEERS_EMPTY for a folder with no pinned chats.
+  `radar telegram chats --folder` lists the same chats.
+
 ## 0.25.1
 
 - `/mcp` answers GET and DELETE with 405, as Streamable HTTP asks of a server without a
