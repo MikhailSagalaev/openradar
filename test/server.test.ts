@@ -1608,6 +1608,14 @@ describe('http server', () => {
     expect((await app.request('/lang/en', { headers: { referer: 'https://evil.example/x' } })).headers.get('location')).toBe('/');
   });
 
+  it('answers GET and DELETE on /mcp with 405: there is no server-sent stream', async () => {
+    const app = createApp(makeRuntime({ RADAR_PUBLIC_READ: true }));
+    const res = await app.request('/mcp');
+    expect(res.status).toBe(405);
+    expect(res.headers.get('allow')).toBe('POST');
+    expect((await app.request('/mcp', { method: 'DELETE' })).status).toBe(405);
+  });
+
   it('lists the platform catalog and connects one platform', async () => {
     const fetchImpl = (async () => new Response('', { status: 503 })) as unknown as typeof fetch;
     const runtime = makeRuntime({}, fetchImpl);
