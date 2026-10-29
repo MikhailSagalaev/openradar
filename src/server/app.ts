@@ -27,6 +27,7 @@ import { estimateMarket } from '../core/market.ts';
 import { rateLimit } from './ratelimit.ts';
 import { indexCsv, openradarIndex } from '../research/index.ts';
 import { renderIndexPage } from '../research/index-page.ts';
+import { renderIndexPageEn, renderMethodologyPageEn, renderReportPageEn } from '../research/pages-en.ts';
 import {
   renderExtensionPage,
   renderLeadPage,
@@ -458,6 +459,7 @@ function formValues(body: Record<string, unknown>): SourceFormValues {
     sinceDays: formString(body, 'sinceDays'),
     subjectIncludes: formString(body, 'subjectIncludes'),
     chats: formString(body, 'chats'),
+    folder: formString(body, 'folder'),
     sessionEnv: formString(body, 'sessionEnv'),
     share: formString(body, 'share') === 'on',
   };
@@ -490,6 +492,7 @@ function formValuesFromSource(source: SourceRecord): SourceFormValues {
     sinceDays: text(config.sinceDays),
     subjectIncludes: text(config.subjectIncludes),
     chats: text(config.chats),
+    folder: text(config.folder),
     sessionEnv: text(config.sessionEnv),
     share: config.share === true,
   };
@@ -548,7 +551,9 @@ function buildSourceConfig(
 
   if (kind === 'telegram-account') {
     const chats = parseList(formString(body, 'chats'));
-    if (!chats.length) return { config, error: 'Укажите хотя бы один канал или чат.' };
+    const folder = formString(body, 'folder').trim();
+    if (folder.length > 64) return { config, error: 'Название папки — не длиннее 64 символов.' };
+    if (!chats.length && !folder) return { config, error: 'Укажите папку Telegram или хотя бы один канал или чат.' };
     if (chats.length > 50) return { config, error: 'Не больше 50 чатов в одном источнике.' };
     const bad = chats.find((chat) => !/^(?:@?[a-zA-Z0-9_]{4,32}|https?:\/\/t\.me\/[a-zA-Z0-9_]{4,32}|-?\d{5,20})$/.test(chat));
     if (bad) return { config, error: `Не похоже на канал или чат Telegram: ${bad}` };
@@ -557,6 +562,7 @@ function buildSourceConfig(
       return { config, error: 'Переменная с сессией: RADAR_TELEGRAM_SESSION или RADAR_TELEGRAM_SESSION_ИМЯ.' };
     }
     config.chats = chats;
+    if (folder) config.folder = folder;
     config.sessionEnv = sessionEnv;
   }
 
@@ -2016,7 +2022,7 @@ export function createApp(runtime: Runtime): Hono {
     // Only what a guest may open: delayed, active, not rejected.
     const leads = runtime.env.RADAR_PUBLIC_READ ? await feedFor(runtime, { tier: 'guest' }, { limit: 1000 }) : [];
     const roles = runtime.env.RADAR_PUBLIC_READ
-      ? ['/research/index', ...(await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY })).report.jobs.roles.map((r) => `/research/roles/${r.slug}`)]
+      ? ['/research/index', '/en/research', '/en/research/index', '/en/research/methodology', ...(await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY })).report.jobs.roles.map((r) => `/research/roles/${r.slug}`)]
       : [];
     return c.text(renderSitemapXml(seoBaseUrl(c), leads, new Date(), roles), 200, {
       'content-type': 'application/xml; charset=utf-8',
@@ -2031,14 +2037,16 @@ export function createApp(runtime: Runtime): Hono {
   };
   app.use('/research', researchGate);
   app.use('/research/*', researchGate);
+  app.use('/en/research', researchGate);
+  app.use('/en/research/*', researchGate);
   const researchSnapshots = async (): Promise<Array<{ period: string }>> => (await runtime.store.listResearchSnapshots?.()) ?? [];
   app.get('/research', async (c) => {
     const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
-    return c.html(renderReportPage({ report, baseUrl: seoBaseUrl(c), version: VERSION, snapshots: await researchSnapshots() }));
+    return c.html(renderReportPage({ report, baseUrl: seoBaseUrl(c), version: VERSION, snapshots: await researchSnapshots(), auth: await getAuthDisplay(c, runtime) }));
   });
   app.get('/research/index', async (c) => {
     const index = await openradarIndex(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
-    return c.html(renderIndexPage({ index, baseUrl: seoBaseUrl(c), version: VERSION }));
+    return c.html(renderIndexPage({ index, baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime) }));
   });
   app.get('/research/index.json', async (c) => {
     const index = await openradarIndex(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
@@ -2052,7 +2060,21 @@ export function createApp(runtime: Runtime): Hono {
       'access-control-allow-origin': '*',
     });
   });
-  app.get('/research/methodology', (c) => c.html(renderMethodologyPage({ baseUrl: seoBaseUrl(c), version: VERSION })));
+  app.get('/en/research', async (c) => {
+    const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+    return c.html(renderReportPageEn({ report, baseUrl: seoBaseUrl(c), version: VERSION, snapshots: await researchSnapshots(), auth: await getAuthDisplay(c, runtime) }));
+  });
+  app.get('/en/research/index', async (c) => {
+    const index = await openradarIndex(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+    return c.html(renderIndexPageEn({ index, baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime) }));
+  });
+  app.get('/en/research/methodology', async (c) => c.html(renderMethodologyPageEn({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime) })));
+  app.get('/en/research/:period{[0-9]{4}-[0-9]{2}}', async (c) => {
+    const report = await monthSnapshot(runtime.store, c.req.param('period'));
+    if (!report) return c.html(renderNotFound(VERSION), 404);
+    return c.html(renderReportPageEn({ report, baseUrl: seoBaseUrl(c), version: VERSION, snapshots: await researchSnapshots(), auth: await getAuthDisplay(c, runtime) }));
+  });
+  app.get('/research/methodology', async (c) => c.html(renderMethodologyPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime) })));
   app.get('/research/report.json', async (c) => {
     const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
     return c.json(report, 200, { 'access-control-allow-origin': '*' });
@@ -2069,7 +2091,7 @@ export function createApp(runtime: Runtime): Hono {
     const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
     const detail = report.jobs.roles.find((r) => r.slug === c.req.param('slug'));
     if (!detail) return c.html(renderNotFound(VERSION), 404);
-    return c.html(renderRolePage({ detail, report, baseUrl: seoBaseUrl(c), version: VERSION }));
+    return c.html(renderRolePage({ detail, report, baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime) }));
   });
   app.get('/research/:period{[0-9]{4}-[0-9]{2}(\.json)?}', async (c) => {
     const param = c.req.param('period');
@@ -2077,15 +2099,15 @@ export function createApp(runtime: Runtime): Hono {
     const report = await monthSnapshot(runtime.store, slug);
     if (!report) return c.html(renderNotFound(VERSION), 404);
     if (param.endsWith('.json')) return c.json(report, 200, { 'access-control-allow-origin': '*' });
-    return c.html(renderReportPage({ report, baseUrl: seoBaseUrl(c), version: VERSION, snapshots: await researchSnapshots() }));
+    return c.html(renderReportPage({ report, baseUrl: seoBaseUrl(c), version: VERSION, snapshots: await researchSnapshots(), auth: await getAuthDisplay(c, runtime) }));
   });
 
   app.get('/llms.txt', (c) =>
     c.text(renderLlmsTxt(seoBaseUrl(c)), 200, { 'content-type': 'text/plain; charset=utf-8' }),
   );
-  app.get('/about', (c) => c.html(renderAboutPage({ baseUrl: seoBaseUrl(c), version: VERSION })));
-  app.get('/faq', (c) => c.html(renderFaqPage({ baseUrl: seoBaseUrl(c), version: VERSION })));
-  app.get('/catalog', (c) => c.html(renderCatalogIndex({ baseUrl: seoBaseUrl(c), version: VERSION })));
+  app.get('/about', async (c) => c.html(renderAboutPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime) })));
+  app.get('/faq', async (c) => c.html(renderFaqPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime) })));
+  app.get('/catalog', async (c) => c.html(renderCatalogIndex({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime) })));
 
   // Search-driven landing pages: indexable, each one doubles as an RSS subscription.
   app.get('/catalog/:slug', async (c) => {
@@ -2104,6 +2126,7 @@ export function createApp(runtime: Runtime): Hono {
         leads: await canRead(c, runtime) ? leads : [],
         baseUrl: seoBaseUrl(c),
         version: VERSION,
+        auth: await getAuthDisplay(c, runtime),
       }),
     );
   });

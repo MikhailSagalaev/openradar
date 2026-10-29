@@ -1,6 +1,6 @@
 import { escapeHtml, jsonForScript } from '../core/text.ts';
 import type { Lead, LeadType } from '../core/types.ts';
-import { layout } from './ui.ts';
+import { layout, type AuthDisplay } from './ui.ts';
 
 export interface CatalogEntry {
   slug: string;
@@ -436,6 +436,7 @@ export function renderCatalogPage(options: {
   leads: Lead[];
   baseUrl: string;
   version: string;
+  auth?: AuthDisplay;
 }): string {
   const { entry, leads, baseUrl, version } = options;
   const canonical = `${baseUrl}/catalog/${entry.slug}`;
@@ -485,6 +486,7 @@ export function renderCatalogPage(options: {
   };
 
   return layout({
+    auth: options.auth,
     title: entry.title,
     version,
     body,
@@ -502,7 +504,7 @@ ${ldScripts(
 }
 
 /** Index of every landing page, grouped into orders and vacancies. */
-export function renderCatalogIndex(options: { baseUrl: string; version: string }): string {
+export function renderCatalogIndex(options: { baseUrl: string; version: string; auth?: AuthDisplay }): string {
   const { baseUrl, version } = options;
   const card = (entry: CatalogEntry): string =>
     `<a class="catalog-card" href="/catalog/${escapeHtml(entry.slug)}"><b>${escapeHtml(entry.h1)}</b><span>${escapeHtml(entry.intro)}</span></a>`;
@@ -521,6 +523,7 @@ export function renderCatalogIndex(options: { baseUrl: string; version: string }
 <h2 style="margin-top:32px">Вакансии</h2>
 <div class="catalog-grid">${jobs.map(card).join('')}</div>`;
   return layout({
+    auth: options.auth,
     title: 'Категории заказов и вакансий',
     version,
     body,
@@ -532,7 +535,7 @@ ${ldScripts(breadcrumbsJsonLd(baseUrl, [['openradar', '/'], ['Категории
 
 const REPO_URL = 'https://github.com/MikhailSagalaev/openradar';
 
-export function renderAboutPage(options: { baseUrl: string; version: string }): string {
+export function renderAboutPage(options: { baseUrl: string; version: string; auth?: AuthDisplay }): string {
   const { baseUrl, version } = options;
   const description =
     'openradar — открытая база заказов и вакансий: собирает публикации с бирж, сайтов вакансий и Telegram-каналов в одну ленту без платных тарифов. Открытый код, свой узел, RSS и API.';
@@ -591,6 +594,7 @@ export function renderAboutPage(options: { baseUrl: string; version: string }): 
     },
   };
   return layout({
+    auth: options.auth,
     title: 'О проекте',
     version,
     body,
@@ -644,7 +648,7 @@ export const SITE_FAQ: Array<[string, string]> = [
   ],
 ];
 
-export function renderFaqPage(options: { baseUrl: string; version: string }): string {
+export function renderFaqPage(options: { baseUrl: string; version: string; auth?: AuthDisplay }): string {
   const { baseUrl, version } = options;
   const description = 'Ответы на частые вопросы об openradar: откуда заказы и вакансии, почему бесплатно, как добавлять публикации и получать уведомления.';
   const body = `
@@ -658,6 +662,7 @@ export function renderFaqPage(options: { baseUrl: string; version: string }): st
   <p style="margin-top:20px">Не нашли ответ? Прочитайте <a href="/about">о проекте</a> или <a href="${REPO_URL}/issues" target="_blank" rel="noopener">задайте вопрос на GitHub</a>.</p>
 </section>`;
   return layout({
+    auth: options.auth,
     title: 'Вопросы и ответы',
     version,
     body,

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.23.0
+
+- Research in English: `/en/research` (live and monthly reports, findings written from the
+  same figures), `/en/research/index` and `/en/research/methodology`, linked both ways with
+  hreflang and listed in the sitemap.
+- The research, catalog, about and FAQ pages show the signed-in account; they used to show
+  «Войти» to everyone.
+- The Telegram account source can read a Telegram folder (`config.folder`): every channel
+  and group in it, refreshed every half hour; private dialogs are never read.
+  `radar telegram chats --folder <title>` shows what the folder holds and lists the folders.
+- The new-source form explains each type and offers only the types it can fill; career
+  pages, sitemaps and international APIs come from the presets.
+
 ## 0.22.0
 
 - The openradar index (`/research/index`, `.json`, `.csv`): new Russian-language
