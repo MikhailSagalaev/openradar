@@ -8,6 +8,17 @@ export interface SourcePreset {
   config: SourceConfig;
 }
 
+/** The node's source that came from this preset, if any. */
+export function presetSource<T extends { title: string; kind: string; config: SourceConfig }>(preset: SourcePreset, sources: T[]): T | undefined {
+  return sources.find(
+    (source) =>
+      source.title === preset.title ||
+      (preset.config.url !== undefined && source.config.url === preset.config.url) ||
+      (preset.config.channel !== undefined && source.config.channel === preset.config.channel) ||
+      (preset.kind === 'ats' && source.kind === 'ats' && source.config.provider === preset.config.provider),
+  );
+}
+
 export const SOURCE_PRESETS: SourcePreset[] = [
   {
     id: 'fl-all',
@@ -33,15 +44,6 @@ export const SOURCE_PRESETS: SourcePreset[] = [
     title: 'Kwork — Все заказы',
     description: 'Биржа Kwork: новые заказы всех разделов — разработка, дизайн, тексты, реклама, видео (нативный парсер)',
     config: {},
-  },
-  {
-    id: 'tg-freelance',
-    kind: 'telegram',
-    title: 'Telegram — @freelance_orders',
-    description: 'Публичный Telegram-канал с заказами фриланса (чтение через t.me/s/)',
-    config: {
-      channel: 'freelance_orders',
-    },
   },
   {
     id: 'weworkremotely',

@@ -1,6 +1,7 @@
 import { escapeHtml, jsonForScript } from '../core/text.ts';
 import type { Lead, LeadType } from '../core/types.ts';
 import { layout, type AuthDisplay } from './ui.ts';
+import type { SupportedLang } from './i18n.ts';
 
 export interface CatalogEntry {
   slug: string;
@@ -437,6 +438,7 @@ export function renderCatalogPage(options: {
   baseUrl: string;
   version: string;
   auth?: AuthDisplay;
+  lang?: SupportedLang;
 }): string {
   const { entry, leads, baseUrl, version } = options;
   const canonical = `${baseUrl}/catalog/${entry.slug}`;
@@ -487,6 +489,7 @@ export function renderCatalogPage(options: {
 
   return layout({
     auth: options.auth,
+    lang: options.lang,
     title: entry.title,
     version,
     body,
@@ -504,7 +507,7 @@ ${ldScripts(
 }
 
 /** Index of every landing page, grouped into orders and vacancies. */
-export function renderCatalogIndex(options: { baseUrl: string; version: string; auth?: AuthDisplay }): string {
+export function renderCatalogIndex(options: { baseUrl: string; version: string; auth?: AuthDisplay; lang?: SupportedLang }): string {
   const { baseUrl, version } = options;
   const card = (entry: CatalogEntry): string =>
     `<a class="catalog-card" href="/catalog/${escapeHtml(entry.slug)}"><b>${escapeHtml(entry.h1)}</b><span>${escapeHtml(entry.intro)}</span></a>`;
@@ -524,6 +527,7 @@ export function renderCatalogIndex(options: { baseUrl: string; version: string; 
 <div class="catalog-grid">${jobs.map(card).join('')}</div>`;
   return layout({
     auth: options.auth,
+    lang: options.lang,
     title: 'Категории заказов и вакансий',
     version,
     body,
@@ -535,8 +539,63 @@ ${ldScripts(breadcrumbsJsonLd(baseUrl, [['openradar', '/'], ['Категории
 
 const REPO_URL = 'https://github.com/MikhailSagalaev/openradar';
 
-export function renderAboutPage(options: { baseUrl: string; version: string; auth?: AuthDisplay }): string {
+const ABOUT_EN = `
+<nav class="crumbs" aria-label="Breadcrumbs"><a href="/">openradar</a> / About</nav>
+<div class="page-head"><div>
+  <h1>About openradar</h1>
+  <p class="muted small">An open base of freelance orders and vacancies, gathered by parsers, nodes and people.</p>
+</div></div>
+<section class="prose" style="margin-top:0">
+  <p>Finding an order or a job today means keeping five boards and a dozen Telegram channels open, and paying a subscription for fast access to replies. openradar gathers these posts into one feed and charges nothing for access or replies: the contacts are in the post, and you write to the client directly.</p>
+
+  <h2>Where the posts come from</h2>
+  <ul>
+    <li>Freelance boards: FL.ru, Kwork, Freelancehunt.</li>
+    <li>Vacancies: hh.ru, Habr Career, the state portal «Работа России», company career pages on Greenhouse, Lever and Ashby, We Work Remotely, RemoteOK and other remote boards.</li>
+    <li>Telegram channels with orders and vacancies, public and private.</li>
+    <li>Participants: posts added by link, through the <a href="/extension">browser extension</a> and from their own nodes.</li>
+  </ul>
+  <p>The same post found in several places is shown as one card. Closed orders and stale vacancies leave the feed: the server rechecks source pages, and participants mark closed posts.</p>
+
+  <h2>Scoring and moderation</h2>
+  <p>Every post gets a score from 0 to 100 for a stated budget or pay range, a clear description, the skills needed and a direct contact. Participants vote: useful, spam, scam, closed. A vote from a participant with a high rating weighs more, so spam and scams leave the feed faster.</p>
+
+  <h2>Why it is free</h2>
+  <p>The participants fill the feed. Those who bring posts see the feed earlier: a guest with a delay, a member signed in with GitHub sooner, active participants almost at once. There is no paid plan and none is planned.</p>
+
+  <h2>Open source</h2>
+  <p>The code is open under AGPL-3.0. Anyone can run a node at home or on a server with their own sources, filters and Telegram notifications. Nodes can send posts to the shared base, each one signed with the participant's key.</p>
+  <ul>
+    <li><a href="${REPO_URL}" target="_blank" rel="noopener">Source code on GitHub</a></li>
+    <li><a href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md" target="_blank" rel="noopener">How to run your own node</a></li>
+    <li><a href="${REPO_URL}/blob/main/docs/PROTOCOL.md" target="_blank" rel="noopener">The protocol between nodes</a></li>
+  </ul>
+
+  <h2>How to use it</h2>
+  <ul>
+    <li>Search the feed and filter by skills, budget and remote work on the <a href="/">home page</a>.</li>
+    <li>Subscribe to the RSS of any search or <a href="/catalog">category</a>.</li>
+    <li>Add orders you find by link or with the <a href="/extension">extension</a>.</li>
+    <li>Connect the feed to your tools through the HTTP API and the MCP server.</li>
+    <li>Read the <a href="/en/research">research on the Russian IT and freelance market</a>.</li>
+  </ul>
+  <p>Questions left? See the <a href="/faq">FAQ</a> or <a href="${REPO_URL}/issues" target="_blank" rel="noopener">write on GitHub</a>.</p>
+</section>`;
+
+export function renderAboutPage(options: { baseUrl: string; version: string; auth?: AuthDisplay; lang?: SupportedLang }): string {
   const { baseUrl, version } = options;
+  if (options.lang === 'en') {
+    const descriptionEn = 'openradar is an open base of freelance orders and vacancies: posts from boards, job sites and Telegram channels in one feed, with no paid plans. Open source, your own node, RSS and API.';
+    return layout({
+      auth: options.auth,
+      lang: 'en',
+      title: 'About',
+      version,
+      body: ABOUT_EN,
+      head: `<meta name="description" content="${escapeHtml(descriptionEn)}">
+<link rel="canonical" href="${escapeHtml(baseUrl)}/about">`,
+    });
+  }
   const description =
     'openradar — открытая база заказов и вакансий: собирает публикации с бирж, сайтов вакансий и Telegram-каналов в одну ленту без платных тарифов. Открытый код, свой узел, RSS и API.';
   const body = `
@@ -648,8 +707,42 @@ export const SITE_FAQ: Array<[string, string]> = [
   ],
 ];
 
-export function renderFaqPage(options: { baseUrl: string; version: string; auth?: AuthDisplay }): string {
+export const SITE_FAQ_EN: Array<[string, string]> = [
+  ['What is openradar?', 'An open base of freelance orders and vacancies. Posts from boards, job sites and Telegram channels are gathered into one feed, duplicates are merged and spam is weeded out by participants\' votes.'],
+  ['Is it free?', 'Yes. There is no paid plan, neither for the feed nor for replies. The client\'s contacts are in the post or behind the link to the original.'],
+  ['Why do I see posts with a delay?', 'Guests see the feed a few hours late and without contacts. Signed in with GitHub, the delay is shorter and contacts are open; participants who add posts themselves see the feed almost at once.'],
+  ['How do I add an order or a vacancy?', 'Sign in with GitHub and press «Submit by URL», or install the browser extension: it sends a page or the selected text in one click.'],
+  ['How do I get notified of new orders?', 'Every search and category has an RSS feed: add it to an RSS reader or an RSS bot in Telegram. Node owners can set up notifications straight to Telegram.'],
+  ['What does the score of a post mean?', 'A number from 0 to 100. It grows for a stated budget or pay range, a clear task, the skills needed and a direct contact.'],
+  ['What do I do with a scam?', 'Press «Scam» on the post page. Votes of participants with a rating take such posts out of the feed.'],
+  ['Why is an order already closed?', 'The server rechecks source pages and participants mark closed posts. Closed and stale posts leave the feed but stay available by direct link with a mark.'],
+  ['Can I connect my Telegram channel or chat?', 'Public channels are added as a source directly. A node owner connects private channels and chats through their own Telegram account. You can suggest a source for the shared base on GitHub.'],
+  ['Can I run openradar myself?', 'Yes, the code is open under AGPL-3.0. A node runs on a computer or a server, keeps your data with you and, if you wish, shares posts with the shared base.'],
+];
+
+export function renderFaqPage(options: { baseUrl: string; version: string; auth?: AuthDisplay; lang?: SupportedLang }): string {
   const { baseUrl, version } = options;
+  if (options.lang === 'en') {
+    const descriptionEn = 'Answers about openradar: where the orders and vacancies come from, why it is free, how to add posts and get notified.';
+    return layout({
+      auth: options.auth,
+      lang: 'en',
+      title: 'FAQ',
+      version,
+      body: `
+<nav class="crumbs" aria-label="Breadcrumbs"><a href="/">openradar</a> / FAQ</nav>
+<div class="page-head"><div>
+  <h1>Questions and answers</h1>
+  <p class="muted small">${escapeHtml(descriptionEn)}</p>
+</div></div>
+<section class="prose" style="margin-top:0">
+  ${faqHtml(SITE_FAQ_EN)}
+  <p style="margin-top:20px">No answer here? Read <a href="/about">about the project</a> or <a href="${REPO_URL}/issues" target="_blank" rel="noopener">ask on GitHub</a>.</p>
+</section>`,
+      head: `<meta name="description" content="${escapeHtml(descriptionEn)}">
+<link rel="canonical" href="${escapeHtml(baseUrl)}/faq">`,
+    });
+  }
   const description = 'Ответы на частые вопросы об openradar: откуда заказы и вакансии, почему бесплатно, как добавлять публикации и получать уведомления.';
   const body = `
 <nav class="crumbs" aria-label="Навигация"><a href="/">openradar</a> / Вопросы и ответы</nav>

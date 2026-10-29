@@ -533,7 +533,7 @@ export function detectBrowserLang(header?: string): SupportedLang {
     if (token.code === 'ru' || token.code === 'be' || token.code === 'uk' || token.code === 'kk') {
       return 'ru';
     }
-    if (token.code === 'en') {
+    if (token.code && token.code !== '*' && token.q > 0) {
       return 'en';
     }
   }

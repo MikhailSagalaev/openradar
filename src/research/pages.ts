@@ -156,7 +156,7 @@ export function renderReportPage(options: {
     ? `Живой отчёт по ${num(totals.posts)} публикациям за ${escapeHtml(report.period.label)}. Пересчитывается каждые 15 минут.`
     : `Отчёт за ${escapeHtml(report.period.label.toLowerCase())}: ${num(totals.posts)} публикаций. Цифры зафиксированы и не меняются.`}
   Источники: биржи фриланса, hh.ru, Хабр Карьера, «Работа России», Telegram-каналы и участники openradar.</p>
-</div><div class="actions"><a class="btn ghost" href="/en/research" hreflang="en">English</a><a class="btn ghost" href="/research/index">Индекс</a><a class="btn ghost" href="/research/methodology">Методика</a><a class="btn ghost" href="/research/dataset.csv">Данные CSV</a></div></div>
+</div><div class="actions"><a class="btn ghost" href="/research/index">Индекс</a><a class="btn ghost" href="/research/methodology">Методика</a><a class="btn ghost" href="/research/dataset.csv">Данные CSV</a></div></div>
 
 <div class="rs-kpis">
   ${kpi(num(totals.jobs), 'вакансий')}

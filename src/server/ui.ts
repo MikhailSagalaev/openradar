@@ -7,6 +7,7 @@ import { type AnalyticsConfig, analyticsBody, analyticsHead } from './analytics.
 import { formatLeadText } from './format.ts';
 import { BUDGET_STEPS_RUB, type FeedFilters, hasActiveFilters } from './filters.ts';
 import { SEO_CATALOG } from './seo.ts';
+import type { SourcePreset } from '../sources/presets.ts';
 
 export interface AuthDisplay {
   /** GitHub handle when the session belongs to a registered user. */
@@ -46,6 +47,13 @@ export interface SourcesPageData {
   auth?: AuthDisplay;
   lang?: SupportedLang;
   isAdmin?: boolean;
+}
+
+export interface SourceCatalogPageData {
+  items: Array<{ preset: SourcePreset; sourceId?: string; enabled?: boolean }>;
+  version: string;
+  auth?: AuthDisplay;
+  lang?: SupportedLang;
 }
 
 export interface SourcePageData {
@@ -96,6 +104,18 @@ export interface SourceFormValues {
   chats: string;
   folder: string;
   sessionEnv: string;
+  /** Search query: hh.ru, Работа России, RemoteOK tag. */
+  query: string;
+  /** hh.ru region id. */
+  area: string;
+  /** Remotive category. */
+  remotiveCategory: string;
+  /** ATS: greenhouse, lever or ashby. */
+  provider: string;
+  /** ATS: company slugs, "slug" or "slug=Name". */
+  companies: string;
+  /** Sitemap: regex that picks vacancy pages. */
+  pattern: string;
   /** Send leads of this source to the hub. */
   share?: boolean;
 }
@@ -149,25 +169,28 @@ const KIND_LABELS: Record<string, string> = {
   sitemap: 'Карта сайта (JobPosting)',
 };
 
-/** What each source type is for, shown under the type picker. */
+/** What each source type is for, one line on its card in the type picker. */
 const KIND_HINTS: Record<string, string> = {
-  rss: 'Лента RSS или Atom: биржа, блог, рассылка, поиск hh.ru или Хабр Карьеры. Самый надёжный тип.',
-  telegram: 'Публичный Telegram-канал: читается веб-превью t.me/s/, без аккаунта.',
-  'telegram-account': 'Ваш Telegram-аккаунт: закрытые чаты и группы, где вы состоите. Нужен вход на сервере (radar telegram login).',
-  kwork: 'Заказы Kwork, все или одной рубрики.',
-  imap: 'Почтовый ящик: письма-рассылки с заказами и вакансиями.',
-  webhook: 'Приём публикаций извне: расширение браузера, скрипт или другой узел шлёт их по токену.',
-  trudvsem: 'Официальный открытый API портала «Работа России».',
-  hh: 'Вакансии hh.ru.',
-  remoteok: 'Удалённые вакансии RemoteOK.',
-  remotive: 'Удалённые вакансии Remotive (официальный API).',
-  arbeitnow: 'Вакансии Германии и ЕС (официальный API Arbeitnow).',
-  hn: 'Ежемесячный тред «Ask HN: Who is hiring?».',
-  ats: 'Вакансии компаний через публичные API Greenhouse, Lever и Ashby. Удобнее добавлять из готовых наборов: кнопка «Загрузить биржи».',
-  sitemap: 'Страницы вакансий из карты сайта с разметкой JobPosting — для площадок без ленты. Удобнее добавлять из готовых наборов.',
+  rss: 'Лента RSS или Atom: биржа, блог, поиск hh.ru или Хабр Карьеры',
+  telegram: 'Публичный канал, читается без аккаунта',
+  'telegram-account': 'Закрытые каналы и группы через ваш аккаунт',
+  imap: 'Почтовый ящик с рассылками заказов',
+  webhook: 'Приём от расширения, скрипта или другого узла',
+  kwork: 'Заказы Kwork, все или одной рубрики',
+  hh: 'Вакансии hh.ru по поисковому запросу',
+  trudvsem: 'Открытый API портала «Работа России»',
+  remoteok: 'Удалённые вакансии RemoteOK',
+  remotive: 'Удалённые вакансии Remotive',
+  arbeitnow: 'Вакансии Германии и ЕС',
+  hn: 'Ежемесячный тред «Who is hiring?»',
+  ats: 'Компании на Greenhouse, Lever или Ashby',
+  sitemap: 'Страницы вакансий с разметкой JobPosting',
 };
-/** Types whose settings this form can fill; the rest come from presets. */
-const FORM_KINDS = new Set(['rss', 'telegram', 'telegram-account', 'kwork', 'imap', 'webhook']);
+const KIND_GROUPS: Array<{ title: string; kinds: string[] }> = [
+  { title: 'Ленты и каналы', kinds: ['rss', 'telegram', 'telegram-account', 'imap', 'webhook'] },
+  { title: 'Биржи и сайты вакансий', kinds: ['kwork', 'hh', 'trudvsem', 'remoteok', 'remotive', 'arbeitnow', 'hn'] },
+  { title: 'Сайты компаний', kinds: ['ats', 'sitemap'] },
+];
 
 const STATUS_LABELS: Record<string, string> = {
   new: 'новый',
@@ -1331,6 +1354,22 @@ legend {
   padding: 0 6px;
 }
 .hint { color: var(--muted); font-size: 12px; }
+.kind-picker { display: grid; gap: 14px; }
+.catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+.catalog-card { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.catalog-card-body { min-width: 0; }
+.catalog-card-title { font-weight: 600; }
+.catalog-card-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.catalog-card-desc { font-size: 13px; color: var(--muted); margin: 6px 0 0; line-height: 1.45; }
+.catalog-card-side { flex: none; }
+.kind-group-title { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.kind-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.kind-card { position: relative; display: grid; gap: 3px; padding: 10px 12px 10px 34px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); cursor: pointer; }
+.kind-card:hover { border-color: var(--muted); }
+.kind-card:has(input:checked) { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.kind-card input { position: absolute; left: 12px; top: 12px; margin: 0; accent-color: var(--ink); }
+.kind-card-name { font-weight: 600; font-size: 13.5px; color: var(--ink); }
+.kind-card-hint { font-size: 12px; color: var(--muted); line-height: 1.4; }
 .type-selector {
   display: inline-flex;
   gap: 16px;
@@ -1378,21 +1417,17 @@ legend {
 .ext-version { margin: 8px 0 0; }
 .ext-download { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; text-decoration: none; }
 .install-steps { list-style: none; margin: 0 0 16px; padding: 0; }
-.install-step { position: relative; display: flex; gap: 14px; padding-bottom: 24px; }
+.install-step { position: relative; display: flex; gap: 16px; padding-bottom: 28px; }
 .install-step:last-child { padding-bottom: 0; }
 .install-step:not(:last-child)::before {
-  content: ''; position: absolute; left: 13px; top: 34px; bottom: 8px; width: 2px; background: var(--line);
-}
-.install-step:not(:last-child)::after {
-  content: ''; position: absolute; left: 10px; bottom: 6px; width: 6px; height: 6px;
-  border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg);
+  content: ''; position: absolute; left: 11.5px; top: 30px; bottom: 6px; width: 1px; background: var(--line);
 }
 .install-step-num {
-  flex: none; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-  background: var(--ink); color: var(--bg); font-weight: 700; font-size: 13px;
+  flex: none; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-weight: 600; font-size: 12px;
 }
-.install-step-body { padding-top: 3px; min-width: 0; }
-.install-step-title { font-weight: 600; margin-bottom: 3px; }
+.install-step-body { padding-top: 2px; min-width: 0; }
+.install-step-title { font-weight: 600; margin-bottom: 4px; }
 .ext-features { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 28px; }
 @media (max-width: 640px) { .ext-features { grid-template-columns: 1fr; } }
 .ext-feature { border: 1px solid var(--line); border-radius: 10px; padding: 14px; background: var(--surface); }
@@ -2668,6 +2703,44 @@ function renderPublicSources(data: SourcesPageData, health: SourceHealth[]): str
   return layout({ title: t.navSources, version: data.version, active: 'sources', body, auth: data.auth, lang });
 }
 
+/** Russian-language boards; the rest of the boards are foreign. */
+const RU_PRESETS = new Set(['fl-all', 'habr-career', 'kwork-all', 'trudvsem-remote', 'hh-it', 'hh-remote-project', 'freelancehunt', 'getmatch']);
+const CATALOG_GROUPS: Array<{ title: string; test: (preset: SourcePreset) => boolean }> = [
+  { title: 'Российские биржи и вакансии', test: (preset) => RU_PRESETS.has(preset.id) },
+  { title: 'Зарубежные доски', test: (preset) => !RU_PRESETS.has(preset.id) && preset.kind !== 'ats' },
+  { title: 'Карьерные страницы компаний', test: (preset) => preset.kind === 'ats' },
+];
+
+/** Ready-made platforms: what each one is and whether this node already reads it. */
+export function renderSourceCatalogPage(data: SourceCatalogPageData): string {
+  const missing = data.items.filter((item) => !item.sourceId).length;
+  const groups = CATALOG_GROUPS.map((group) => ({
+    title: group.title,
+    items: data.items.filter((item) => group.test(item.preset)),
+  })).filter((group) => group.items.length);
+  const card = (item: SourceCatalogPageData['items'][number]): string => `<div class="catalog-card">
+    <div class="catalog-card-body">
+      <div class="catalog-card-title">${escapeHtml(item.preset.title)}</div>
+      <div class="catalog-card-meta">${escapeHtml(KIND_LABELS[item.preset.kind] ?? item.preset.kind)}</div>
+      <p class="catalog-card-desc">${escapeHtml(item.preset.description)}</p>
+    </div>
+    <div class="catalog-card-side">${item.sourceId
+      ? `<a class="btn ghost" href="/sources/${escapeHtml(item.sourceId)}">${item.enabled ? 'Подключено' : 'Выключено'}</a>`
+      : `<form method="post" action="/sources/catalog/${escapeHtml(item.preset.id)}"><button class="btn" type="submit">Подключить</button></form>`}</div>
+  </div>`;
+  const body = `
+<a class="back" href="/sources">← Источники</a>
+<div class="page-head">
+  <div>
+    <h1>Каталог площадок</h1>
+    <p class="muted small">Готовые настройки проверенных бирж и досок. Подключённая площадка становится источником этого узла и опрашивается сразу.</p>
+  </div>
+  ${missing ? `<div class="actions"><form method="post" action="/sources/presets"><button class="btn ghost" type="submit">Подключить все (${missing})</button></form></div>` : ''}
+</div>
+${groups.map((group) => `<section><h2>${escapeHtml(group.title)}</h2><div class="catalog-grid">${group.items.map(card).join('')}</div></section>`).join('')}`;
+  return layout({ title: 'Каталог площадок', version: data.version, active: 'sources', body, auth: data.auth, lang: data.lang });
+}
+
 export function renderSourcesPage(data: SourcesPageData): string {
   const { version, lang = 'ru', isAdmin } = data;
   const t = getTranslations(lang);
@@ -2695,14 +2768,11 @@ export function renderSourcesPage(data: SourcesPageData): string {
 
   const empty = `<div class="empty">
     <h2>Источников пока нет</h2>
-    <p>Начните с готового набора популярных бирж (FL.ru, Хабр, Kwork, Telegram) или добавьте свой источник вручную.</p>
-    ${isAdmin ? `
+    <p>Подключите площадки из каталога (FL.ru, Хабр Карьера, Kwork, hh.ru, зарубежные доски) или добавьте свой источник вручную.</p>
     <div style="display:flex;gap:8px;justify-content:center;margin-top:14px">
-      <form method="post" action="/sources/presets">
-        <button class="btn" type="submit">Загрузить популярные биржи</button>
-      </form>
+      <a class="btn" href="/sources/catalog">Открыть каталог</a>
       <a class="btn ghost" href="/sources/new">Добавить вручную</a>
-    </div>` : ''}
+    </div>
   </div>`;
 
   const body = `
@@ -2711,6 +2781,7 @@ export function renderSourcesPage(data: SourcesPageData): string {
     <h1>${escapeHtml(t.navSources)}</h1>
     <p class="muted small">${subtitle}</p>
   </div>
+  <div class="actions"><a class="btn ghost" href="/sources/catalog">Каталог площадок</a><a class="btn" href="/sources/new">${escapeHtml(t.addSource)}</a></div>
 </div>
 <div class="list">${rows || empty}</div>`;
 
@@ -2719,9 +2790,6 @@ export function renderSourcesPage(data: SourcesPageData): string {
     version,
     active: 'sources',
     body,
-    actions: isAdmin
-      ? `<form method="post" action="/sources/presets" style="display:inline"><button class="btn ghost" type="submit">Загрузить биржи</button></form><a class="btn" href="/sources/new">${escapeHtml(t.addSource)}</a>`
-      : undefined,
     auth: data.auth,
     lang,
   });
@@ -2767,6 +2835,16 @@ ${notice ? `<div class="notice">${escapeHtml(notice)}</div>` : ''}
     <h1>${escapeHtml(source.title)}</h1>
     <p class="muted small">${escapeHtml(KIND_LABELS[source.kind] ?? source.kind)} · ${source.enabled ? 'включён' : 'выключен'} · <span class="dot ${status.dot}"></span>${status.label}</p>
   </div>
+  <div class="actions">
+    <button class="btn" data-poll="/api/sources/${escapeHtml(source.id)}/poll">Опросить</button>
+    <a class="btn ghost" href="/sources/${escapeHtml(source.id)}/edit">Редактировать</a>
+    <form class="inline" method="post" action="/sources/${escapeHtml(source.id)}/toggle">
+      <button class="btn ghost" type="submit">${source.enabled ? 'Выключить' : 'Включить'}</button>
+    </form>
+    <form class="inline" method="post" action="/sources/${escapeHtml(source.id)}/delete" onsubmit="return confirm('Удалить источник?')">
+      <button class="btn ghost danger" type="submit">Удалить</button>
+    </form>
+  </div>
 </div>
 
 ${metricRow([
@@ -2794,23 +2872,11 @@ ${metricRow([
   ${runsTable(runs, undefined, false, lang)}
 </section>`;
 
-  const adminActions = data.isAdmin
-    ? `<button class="btn" data-poll="/api/sources/${escapeHtml(source.id)}/poll">Опросить</button>
-      <a class="btn ghost" href="/sources/${escapeHtml(source.id)}/edit">Редактировать</a>
-      <form class="inline" method="post" action="/sources/${escapeHtml(source.id)}/toggle">
-        <button class="btn ghost" type="submit">${source.enabled ? 'Выключить' : 'Включить'}</button>
-      </form>
-      <form class="inline" method="post" action="/sources/${escapeHtml(source.id)}/delete" onsubmit="return confirm('Удалить источник?')">
-        <button class="btn ghost danger" type="submit">Удалить</button>
-      </form>`
-    : undefined;
-
   return layout({
     title: source.title,
     version,
     active: 'sources',
     body,
-    actions: adminActions,
     script: POLL_SCRIPT,
     auth: data.auth,
     lang,
@@ -2849,12 +2915,21 @@ function textField(
 export function renderNewSourcePage(data: NewSourcePageData): string {
   const { kinds, values, error, version, mode, action, submitLabel, sourceId } = data;
   const editing = mode === 'edit';
-  const options = kinds
-    .filter((kind) => FORM_KINDS.has(kind) || kind === values.kind)
-    .map(
-      (kind) =>
-        `<option value="${escapeHtml(kind)}"${kind === values.kind ? ' selected' : ''}>${escapeHtml(KIND_LABELS[kind] ?? kind)}</option>`,
-    )
+  const known = new Set(KIND_GROUPS.flatMap((group) => group.kinds));
+  const groups = [...KIND_GROUPS, { title: 'Другие', kinds: kinds.filter((kind) => !known.has(kind)) }]
+    .map((group) => ({ ...group, kinds: group.kinds.filter((kind) => kinds.includes(kind) && (!editing || kind === values.kind)) }))
+    .filter((group) => group.kinds.length);
+  const picker = groups
+    .map((group) => `<div class="kind-group">
+      ${editing ? '' : `<div class="kind-group-title">${escapeHtml(group.title)}</div>`}
+      <div class="kind-grid">${group.kinds
+        .map((kind) => `<label class="kind-card">
+          <input type="radio" name="kind" value="${escapeHtml(kind)}"${kind === values.kind ? ' checked' : ''}${editing ? ' readonly' : ''}>
+          <span class="kind-card-name">${escapeHtml(KIND_LABELS[kind] ?? kind)}</span>
+          ${KIND_HINTS[kind] ? `<span class="kind-card-hint">${escapeHtml(KIND_HINTS[kind]!)}</span>` : ''}
+        </label>`)
+        .join('')}</div>
+    </div>`)
     .join('');
 
   const body = `
@@ -2862,22 +2937,19 @@ export function renderNewSourcePage(data: NewSourcePageData): string {
 <div class="page-head">
   <div>
     <h1>${editing ? 'Редактировать источник' : 'Новый источник'}</h1>
-    <p class="muted small">${editing ? 'Название и фильтры можно менять. Тип источника фиксирован.' : 'Источник опрашивается этим узлом, и найденное попадает в его ленту. Готовые наборы площадок (биржи, карьерные страницы компаний, зарубежные доски) добавляет кнопка «Загрузить биржи» на странице источников.'}</p>
+    <p class="muted small">${editing ? 'Название и фильтры можно менять. Тип источника фиксирован.' : 'Источник опрашивается этим узлом, и найденное попадает в его ленту. Известные биржи и доски уже настроены в <a href="/sources/catalog">каталоге площадок</a>: там их подключают одной кнопкой.'}</p>
   </div>
 </div>
 ${error ? `<div class="error-box" style="margin-bottom:16px">${escapeHtml(error)}</div>` : ''}
 
 <form class="form" method="post" action="${escapeHtml(action)}">
-  <div class="grid">
-    <label class="field">Тип
-      <select name="${editing ? 'kind-disabled' : 'kind'}" id="kind"${editing ? ' disabled' : ''}>${options}</select>
-      ${editing ? `<input type="hidden" name="kind" value="${escapeHtml(values.kind)}">` : ''}
-      ${kinds.map((kind) => (KIND_HINTS[kind] ? `<span class="hint" data-kind="${escapeHtml(kind)}">${escapeHtml(KIND_HINTS[kind]!)}</span>` : '')).join('')}
-    </label>
-    <label class="field">Название
-      <input name="title" value="${escapeHtml(values.title)}" placeholder="Например, Городские чаты" required>
-    </label>
-  </div>
+  <fieldset class="kind-picker">
+    <legend>Тип</legend>
+    ${picker}
+  </fieldset>
+  <label class="field">Название
+    <input name="title" value="${escapeHtml(values.title)}" placeholder="Например, Городские чаты" required>
+  </label>
 
   <div data-kind="rss">
     ${textField('url', 'URL фида', values.url, 'https://example.com/rss', 'url', 'RSS или Atom. Самый безопасный источник.')}
@@ -2899,6 +2971,47 @@ ${error ? `<div class="error-box" style="margin-bottom:16px">${escapeHtml(error)
 
   <div data-kind="kwork">
     ${textField('categoryId', 'ID рубрики Kwork', values.categoryId, '11', 'text', 'Необязательно. Пусто — все проекты.')}
+  </div>
+
+  <div data-kind="hh">
+    <div class="grid">
+      ${textField('query', 'Поисковый запрос', values.query, 'python OR golang', 'text', 'Как в поиске hh.ru. Пусто — все вакансии.')}
+      ${textField('area', 'Регион', values.area, '113', 'text', 'ID региона hh.ru: 113 — Россия, 1 — Москва, 2 — Санкт-Петербург.')}
+    </div>
+  </div>
+
+  <div data-kind="trudvsem">
+    ${textField('query', 'Поисковый запрос', values.query, 'программист', 'text', 'Пусто — все вакансии портала.')}
+  </div>
+
+  <div data-kind="remoteok">
+    ${textField('query', 'Тег', values.query, 'dev', 'text', 'Тег RemoteOK, например dev, design, marketing. Пусто — все вакансии.')}
+  </div>
+
+  <div data-kind="remotive">
+    ${textField('remotiveCategory', 'Категория', values.remotiveCategory, 'software-dev', 'text', 'Категория Remotive, например software-dev, design. Пусто — все.')}
+  </div>
+
+  <div data-kind="arbeitnow">
+    <p class="hint">Настраивать нечего: источник читает свежие вакансии открытого API Arbeitnow.</p>
+  </div>
+
+  <div data-kind="hn">
+    <p class="hint">Настраивать нечего: источник находит тред текущего месяца и читает его комментарии.</p>
+  </div>
+
+  <div data-kind="ats">
+    <label class="field">Система найма
+      <select name="provider">
+        ${['greenhouse', 'lever', 'ashby'].map((provider) => `<option value="${provider}"${values.provider === provider ? ' selected' : ''}>${provider[0]!.toUpperCase()}${provider.slice(1)}</option>`).join('')}
+      </select>
+    </label>
+    ${textField('companies', 'Компании', values.companies, 'gitlab=GitLab, cloudflare=Cloudflare', 'text', 'Через запятую: имя компании в адресе её доски (boards.greenhouse.io/gitlab → gitlab), после «=» — название для ленты. За опрос читается несколько компаний по кругу.')}
+  </div>
+
+  <div data-kind="sitemap">
+    ${textField('url', 'Адрес карты сайта', values.url, 'https://example.com/sitemap.xml', 'url', 'sitemap.xml площадки; вложенные карты читаются тоже.')}
+    ${textField('pattern', 'Шаблон страниц вакансий', values.pattern, '/vacancies/(\\d+)', 'text', 'Регулярное выражение для адресов вакансий; группа в скобках — номер вакансии. Новые страницы читаются с паузой, разметка JobPosting даёт зарплату и компанию.')}
   </div>
 
   <div data-kind="webhook">
@@ -2941,14 +3054,15 @@ ${error ? `<div class="error-box" style="margin-bottom:16px">${escapeHtml(error)
 </form>
 
 <script>
-const kind = document.getElementById('kind');
 function syncKind() {
-  if (!kind) return;
+  const kind = document.querySelector('input[name="kind"]:checked')?.value;
   for (const group of document.querySelectorAll('[data-kind]')) {
-    group.hidden = group.dataset.kind !== kind.value;
+    group.hidden = group.dataset.kind !== kind;
+    // Several types share field names (url, query): only the shown group is sent.
+    for (const field of group.querySelectorAll('input, select')) field.disabled = group.hidden;
   }
 }
-kind?.addEventListener('change', syncKind);
+for (const radio of document.querySelectorAll('input[name="kind"]')) radio.addEventListener('change', syncKind);
 syncKind();
 </script>`;
 
@@ -2957,7 +3071,6 @@ syncKind();
     version,
     active: 'sources',
     body,
-    actions: '<a class="btn ghost" href="/sources">Отмена</a>',
     auth: data.auth,
     lang: data.lang,
   });
