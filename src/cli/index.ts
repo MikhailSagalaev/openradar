@@ -724,9 +724,12 @@ function buildProgram(): Command {
       const client = await newTelegramClient();
       await client.importSession(session);
       await client.connect();
-      for await (const dialog of client.iterDialogs({ limit: 500, ...(options.folder ? { folder: options.folder } : {}) })) {
+      const { folderChats } = await import('../sources/telegram-account.ts');
+      const inFolder = options.folder ? new Set(await folderChats(client, `cli:${options.folder}`, options.folder)) : undefined;
+      for await (const dialog of client.iterDialogs({ limit: 2000, archived: 'keep' })) {
         const peer = dialog.peer;
         if (peer.type === 'user') continue;
+        if (inFolder && !inFolder.has(String(peer.id))) continue;
         const name = peer.username ? `@${peer.username}` : String(peer.id);
         console.log(`${name.padEnd(36)} ${peer.displayName}`);
       }

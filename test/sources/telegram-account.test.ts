@@ -70,16 +70,21 @@ describe('Telegram account source', () => {
   it('reads the channels and groups of a folder, never private dialogs, and caches them', async () => {
     let calls = 0;
     const client = {
-      async *iterDialogs(options: { folder?: string }) {
+      async findFolder(params: { title?: string }) {
         calls++;
-        expect(options.folder).toBe('openradar');
-        yield { peer: { type: 'chat', id: -1001234567890 } };
-        yield { peer: { type: 'user', id: 42 } };
-        yield { peer: { type: 'chat', id: -100777 } };
+        expect(params.title).toBe('openradar');
+        return {
+          pinnedPeers: [],
+          includePeers: [
+            { _: 'inputPeerChannel', channelId: 1234567890, accessHash: 1n },
+            { _: 'inputPeerUser', userId: 42, accessHash: 2n },
+            { _: 'inputPeerChat', chatId: 777 },
+          ],
+        };
       },
     } as never;
-    expect(await folderChats(client, 'k', 'openradar', 1000)).toEqual(['-1001234567890', '-100777']);
-    expect(await folderChats(client, 'k', 'openradar', 2000)).toEqual(['-1001234567890', '-100777']);
+    expect(await folderChats(client, 'k', 'openradar', 1000)).toEqual(['-1001234567890', '-777']);
+    expect(await folderChats(client, 'k', 'openradar', 2000)).toEqual(['-1001234567890', '-777']);
     expect(calls).toBe(1);
     expect(folderOf(makeSource({ kind: 'telegram-account', config: { folder: ' openradar ' } }))).toBe('openradar');
     expect(folderOf(makeSource({ kind: 'telegram-account', config: {} }))).toBeUndefined();

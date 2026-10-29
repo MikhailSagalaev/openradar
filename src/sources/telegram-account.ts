@@ -85,24 +85,29 @@ const folderCache = new Map<string, { at: number; chats: string[] }>();
 const FOLDER_TTL_MS = 30 * 60_000;
 
 /**
- * The channels and groups in a folder of the account. Private dialogs with people are never
- * read, even when they sit in the folder: only chats meant for posts become sources.
+ * The channels and groups in a folder of the account, as marked chat ids. Private dialogs with
+ * people are never read, even when they sit in the folder: only chats meant for posts become
+ * sources. The folder's own peer list is read: listing dialogs by folder fails with
+ * INPUT_PEERS_EMPTY when the folder has no pinned chats.
  */
 export async function folderChats(
-  client: Pick<TelegramClient, 'iterDialogs'>,
+  client: Pick<TelegramClient, 'findFolder'>,
   key: string,
   folder: string,
   now = Date.now(),
 ): Promise<string[]> {
   const cached = folderCache.get(key);
   if (cached && now - cached.at < FOLDER_TTL_MS) return cached.chats;
+  const found = await client.findFolder({ title: folder });
+  if (!found) throw new Error(`Telegram folder not found: ${folder}`);
   const chats: string[] = [];
-  for await (const dialog of client.iterDialogs({ folder, limit: 200 })) {
-    if (dialog.peer.type === 'user') continue;
-    chats.push(String(dialog.peer.id));
+  for (const peer of [...found.pinnedPeers, ...found.includePeers]) {
+    if (peer._ === 'inputPeerChannel') chats.push(`-100${peer.channelId}`);
+    else if (peer._ === 'inputPeerChat') chats.push(`-${peer.chatId}`);
   }
-  folderCache.set(key, { at: now, chats });
-  return chats;
+  const unique = [...new Set(chats)];
+  folderCache.set(key, { at: now, chats: unique });
+  return unique;
 }
 
 export function sessionEnvOf(source: SourceRecord): string {
