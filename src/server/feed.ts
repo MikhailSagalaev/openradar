@@ -1,5 +1,5 @@
 /**
- * OpenRadar - Saved Search RSS 2.0 Feed Generator
+ * openradar - Saved Search RSS 2.0 Feed Generator
  */
 
 import { isHttpUrl } from '../core/url.ts';
@@ -45,7 +45,7 @@ export function renderRssFeed(options: {
   <channel>
     <title>${escapeXml(title)}</title>
     <link>${escapeXml(baseUrl)}</link>
-    <description>OpenRadar — открытый децентрализованный агрегатор заказов и вакансий</description>
+    <description>openradar — открытый децентрализованный агрегатор заказов и вакансий</description>
     <language>ru</language>
     <atom:link href="${escapeXml(feedUrl)}" rel="self" type="application/rss+xml" />
     <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>

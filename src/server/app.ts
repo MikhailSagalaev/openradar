@@ -160,7 +160,7 @@ function loginPage(error?: string, githubEnabled = false, returnTo?: string): st
 .divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--line)}`
     : '';
   return `<!doctype html><html lang="ru"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>OpenRadar — вход</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>openradar — вход</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <style>
 :root{--bg:#ffffff;--surface:#ffffff;--ink:#09090b;--muted:#71717a;--line:#e4e4e7;--btn:#09090b;--btn-text:#ffffff;--error:#ef4444}
@@ -1970,7 +1970,7 @@ export function createApp(runtime: Runtime): Hono {
     // internal http hop and would advertise http:// in atom:link.
     const feedPath = new URL(c.req.url).pathname + new URL(c.req.url).search;
     const feedUrl = `${baseUrl}${feedPath}`;
-    const feedTitle = q ? `OpenRadar — Поиск: ${q}` : 'OpenRadar — Свежие заказы и вакансии';
+    const feedTitle = q ? `openradar — Поиск: ${q}` : 'openradar — Свежие заказы и вакансии';
 
     const xml = renderRssFeed({
       leads,

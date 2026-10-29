@@ -195,7 +195,7 @@ export const hhSource: SourceAdapter = {
     // HH API requires a meaningful User-Agent with contact info; RADAR_USER_AGENT
     // carries the operator's real project URL, the fallback keeps the old one.
     // hh.ru explicitly documents the HH-User-Agent header for API clients.
-    const userAgent = ctx.userAgent || 'OpenRadar/0.4.0 (+https://github.com/MikhailSagalaev/openradar)';
+    const userAgent = ctx.userAgent || 'openradar/0.4.0 (+https://github.com/MikhailSagalaev/openradar)';
     const headers: Record<string, string> = {
       Accept: 'application/json',
       'User-Agent': userAgent,

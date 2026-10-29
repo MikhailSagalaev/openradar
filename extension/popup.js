@@ -1,5 +1,5 @@
 /**
- * OpenRadar extension: popup (send the page, market estimate, connection settings).
+ * openradar extension: popup (send the page, market estimate, connection settings).
  */
 
 const fields = {
@@ -20,7 +20,7 @@ const fields = {
   marketResult: document.getElementById('market-result'),
 };
 
-/** The hub answers market estimates; any OpenRadar server with priced leads can. */
+/** The hub answers market estimates; any openradar server with priced leads can. */
 const DEFAULT_MARKET_BASE = 'https://openradar.fun';
 
 function normalizeBase(value) {

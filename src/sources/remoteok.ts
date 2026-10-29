@@ -53,7 +53,7 @@ export const remoteokSource: SourceAdapter = {
 
     const jsonText = await fetchText(ctx, url.toString(), {
       Accept: 'application/json',
-      'User-Agent': ctx.userAgent || 'OpenRadar/1.0 (https://github.com/MikhailSagalaev/openradar)',
+      'User-Agent': ctx.userAgent || 'openradar/1.0 (https://github.com/MikhailSagalaev/openradar)',
     });
 
     let items: RemoteOkJobItem[];

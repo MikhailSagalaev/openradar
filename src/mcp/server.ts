@@ -1,5 +1,5 @@
 /**
- * OpenRadar Model Context Protocol (MCP) server.
+ * openradar Model Context Protocol (MCP) server.
  * A free machine interface over the same feed people read: the caller's tier
  * (delay, contacts) is applied by the backend it is given, never here.
  */

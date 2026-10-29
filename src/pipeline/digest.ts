@@ -34,7 +34,7 @@ export function formatDigestMessage(leads: Lead[], hours: number, publicUrl?: st
       .join(' · ');
     return `• ${link}${meta ? ` — ${escapeHtml(meta)}` : ''}`;
   });
-  return `<b>OpenRadar — лучшие заказы за ${hours} ч</b>\n\n${lines.join('\n')}\n\n<a href="${escapeHtml(publicUrl ?? 'https://openradar.fun')}">Все заказы и поиск</a>`;
+  return `<b>openradar — лучшие заказы за ${hours} ч</b>\n\n${lines.join('\n')}\n\n<a href="${escapeHtml(publicUrl ?? 'https://openradar.fun')}">Все заказы и поиск</a>`;
 }
 
 /**

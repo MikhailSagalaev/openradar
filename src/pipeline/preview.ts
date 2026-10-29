@@ -29,7 +29,7 @@ export interface UrlPreview {
   skills?: string[];
 }
 
-const DEFAULT_USER_AGENT = 'OpenRadar/1.0 (https://github.com/MikhailSagalaev/openradar)';
+const DEFAULT_USER_AGENT = 'openradar/1.0 (https://github.com/MikhailSagalaev/openradar)';
 
 export async function fetchSafeHttp(
   initialUrl: string,

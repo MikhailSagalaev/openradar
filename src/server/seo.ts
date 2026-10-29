@@ -66,7 +66,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
       'Актуальные заказы на ботов: Telegram, WhatsApp, чат-боты для бизнеса. Свежая лента с бюджетами.',
     intro: 'Разработка ботов и автоматизация мессенджеров — новые заказы каждые пять минут.',
     about:
-      'Боты для записи клиентов, приёма оплат, рассылок, воронок продаж и поддержки, мини-приложения в Telegram, боты для VK и WhatsApp. Многие такие заказы публикуются только в Telegram-каналах, поэтому OpenRadar читает и биржи, и каналы.',
+      'Боты для записи клиентов, приёма оплат, рассылок, воронок продаж и поддержки, мини-приложения в Telegram, боты для VK и WhatsApp. Многие такие заказы публикуются только в Telegram-каналах, поэтому openradar читает и биржи, и каналы.',
     q: 'бот',
     type: 'gig',
   },
@@ -126,7 +126,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
       'Свежие вакансии в IT: бэкенд, фронтенд, DevOps. Вилки зарплат, стек, удалёнка и офис.',
     intro: 'IT-вакансии из официальных API и фидов: зарплатные вилки, стек и формат работы.',
     about:
-      'Вакансии приходят из hh.ru, Хабр Карьеры, портала «Работа России» и зарубежных досок для удалёнки. В карточке есть вилка, город, формат работы и навыки, а для вакансий без вилки расширение OpenRadar показывает, сколько обычно платят за похожую работу.',
+      'Вакансии приходят из hh.ru, Хабр Карьеры, портала «Работа России» и зарубежных досок для удалёнки. В карточке есть вилка, город, формат работы и навыки, а для вакансий без вилки расширение openradar показывает, сколько обычно платят за похожую работу.',
     q: 'разработчик',
     type: 'job',
   },
@@ -383,7 +383,7 @@ function catalogFaq(entry: CatalogEntry): Array<[string, string]> {
     ],
     [
       `Нужно ли платить, чтобы откликнуться?`,
-      `Нет. OpenRadar не берёт денег за доступ и отклики: в карточке есть ссылка на первоисточник и контакты автора, вы пишете заказчику напрямую.`,
+      `Нет. openradar не берёт денег за доступ и отклики: в карточке есть ссылка на первоисточник и контакты автора, вы пишете заказчику напрямую.`,
     ],
     [
       'Как получать новые публикации по этой теме?',
@@ -450,7 +450,7 @@ export function renderCatalogPage(options: {
     .slice(0, 10);
 
   const body = `
-<nav class="crumbs" aria-label="Навигация"><a href="/">OpenRadar</a> / <a href="/catalog">Категории</a> / ${escapeHtml(entry.h1)}</nav>
+<nav class="crumbs" aria-label="Навигация"><a href="/">openradar</a> / <a href="/catalog">Категории</a> / ${escapeHtml(entry.h1)}</nav>
 <div class="page-head">
   <div>
     <h1>${escapeHtml(entry.h1)}</h1>
@@ -465,7 +465,7 @@ export function renderCatalogPage(options: {
 <section class="prose">
   <h2>Что здесь</h2>
   <p>${escapeHtml(entry.about)}</p>
-  <p>OpenRadar — открытая база заказов и вакансий без платных тарифов. Код проекта открыт, любой может запустить свой узел и подключить свои источники. <a href="/about">Подробнее о проекте</a>.</p>
+  <p>openradar — открытая база заказов и вакансий без платных тарифов. Код проекта открыт, любой может запустить свой узел и подключить свои источники. <a href="/about">Подробнее о проекте</a>.</p>
   <h2>Вопросы</h2>
   ${faqHtml(faq)}
   <h2>Похожие разделы</h2>
@@ -494,7 +494,7 @@ export function renderCatalogPage(options: {
 <link rel="canonical" href="${escapeHtml(canonical)}">
 <link rel="alternate" type="application/rss+xml" title="${escapeHtml(entry.h1)} — RSS" href="${escapeHtml(feedHref)}">
 ${ldScripts(
-  breadcrumbsJsonLd(baseUrl, [['OpenRadar', '/'], ['Категории', '/catalog'], [entry.h1, `/catalog/${entry.slug}`]]),
+  breadcrumbsJsonLd(baseUrl, [['openradar', '/'], ['Категории', '/catalog'], [entry.h1, `/catalog/${entry.slug}`]]),
   ...(leads.length ? [itemList] : []),
   faqJsonLd(faq),
 )}`,
@@ -509,9 +509,9 @@ export function renderCatalogIndex(options: { baseUrl: string; version: string }
   const gigs = SEO_CATALOG.filter((entry) => entry.type !== 'job');
   const jobs = SEO_CATALOG.filter((entry) => entry.type === 'job');
   const description =
-    'Все разделы OpenRadar: заказы для фрилансеров по направлениям и IT-вакансии по специальностям. У каждого раздела своя RSS-лента.';
+    'Все разделы openradar: заказы для фрилансеров по направлениям и IT-вакансии по специальностям. У каждого раздела своя RSS-лента.';
   const body = `
-<nav class="crumbs" aria-label="Навигация"><a href="/">OpenRadar</a> / Категории</nav>
+<nav class="crumbs" aria-label="Навигация"><a href="/">openradar</a> / Категории</nav>
 <div class="page-head"><div>
   <h1>Категории заказов и вакансий</h1>
   <p class="muted small">${escapeHtml(description)}</p>
@@ -526,7 +526,7 @@ export function renderCatalogIndex(options: { baseUrl: string; version: string }
     body,
     head: `<meta name="description" content="${escapeHtml(description)}">
 <link rel="canonical" href="${escapeHtml(baseUrl)}/catalog">
-${ldScripts(breadcrumbsJsonLd(baseUrl, [['OpenRadar', '/'], ['Категории', '/catalog']]))}`,
+${ldScripts(breadcrumbsJsonLd(baseUrl, [['openradar', '/'], ['Категории', '/catalog']]))}`,
   });
 }
 
@@ -535,15 +535,15 @@ const REPO_URL = 'https://github.com/MikhailSagalaev/openradar';
 export function renderAboutPage(options: { baseUrl: string; version: string }): string {
   const { baseUrl, version } = options;
   const description =
-    'OpenRadar — открытая база заказов и вакансий: собирает публикации с бирж, сайтов вакансий и Telegram-каналов в одну ленту без платных тарифов. Открытый код, свой узел, RSS и API.';
+    'openradar — открытая база заказов и вакансий: собирает публикации с бирж, сайтов вакансий и Telegram-каналов в одну ленту без платных тарифов. Открытый код, свой узел, RSS и API.';
   const body = `
-<nav class="crumbs" aria-label="Навигация"><a href="/">OpenRadar</a> / О проекте</nav>
+<nav class="crumbs" aria-label="Навигация"><a href="/">openradar</a> / О проекте</nav>
 <div class="page-head"><div>
-  <h1>О проекте OpenRadar</h1>
+  <h1>О проекте openradar</h1>
   <p class="muted small">Открытая база заказов и вакансий, которую собирают парсеры, узлы и люди.</p>
 </div></div>
 <section class="prose" style="margin-top:0">
-  <p>Чтобы найти заказ или работу, сегодня приходится держать открытыми пять бирж и десяток Telegram-каналов, а за быстрый доступ к откликам платить подписку. OpenRadar собирает эти публикации в одну ленту и не берёт денег ни за доступ, ни за отклики: контакты есть в публикации, заказчику вы пишете напрямую.</p>
+  <p>Чтобы найти заказ или работу, сегодня приходится держать открытыми пять бирж и десяток Telegram-каналов, а за быстрый доступ к откликам платить подписку. openradar собирает эти публикации в одну ленту и не берёт денег ни за доступ, ни за отклики: контакты есть в публикации, заказчику вы пишете напрямую.</p>
 
   <h2>Откуда публикации</h2>
   <ul>
@@ -561,7 +561,7 @@ export function renderAboutPage(options: { baseUrl: string; version: string }): 
   <p>Ленту наполняют сами участники. Кто приносит публикации, видит ленту раньше: гость — с задержкой, вошедший через GitHub — быстрее, активные участники — почти сразу. Платного тарифа нет и не планируется.</p>
 
   <h2>Открытый код</h2>
-  <p>Код OpenRadar открыт под лицензией AGPL-3.0. Любой может запустить свой узел дома или на сервере, подключить свои источники, фильтры и уведомления в Telegram. Узлы могут отправлять публикации в общую базу, каждая публикация подписана ключом участника.</p>
+  <p>Код openradar открыт под лицензией AGPL-3.0. Любой может запустить свой узел дома или на сервере, подключить свои источники, фильтры и уведомления в Telegram. Узлы могут отправлять публикации в общую базу, каждая публикация подписана ключом участника.</p>
   <ul>
     <li><a href="${REPO_URL}" target="_blank" rel="noopener">Исходный код на GitHub</a></li>
     <li><a href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md" target="_blank" rel="noopener">Как запустить свой узел</a></li>
@@ -580,7 +580,7 @@ export function renderAboutPage(options: { baseUrl: string; version: string }): 
   const organization = {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
-    name: 'OpenRadar',
+    name: 'openradar',
     url: `${baseUrl}/`,
     description,
     sameAs: [REPO_URL],
@@ -597,13 +597,13 @@ export function renderAboutPage(options: { baseUrl: string; version: string }): 
     head: `<meta name="description" content="${escapeHtml(description)}">
 <meta property="og:description" content="${escapeHtml(description)}">
 <link rel="canonical" href="${escapeHtml(baseUrl)}/about">
-${ldScripts(organization, breadcrumbsJsonLd(baseUrl, [['OpenRadar', '/'], ['О проекте', '/about']]))}`,
+${ldScripts(organization, breadcrumbsJsonLd(baseUrl, [['openradar', '/'], ['О проекте', '/about']]))}`,
   });
 }
 
 export const SITE_FAQ: Array<[string, string]> = [
   [
-    'Что такое OpenRadar?',
+    'Что такое openradar?',
     'Открытая база заказов для фрилансеров и вакансий. Публикации с бирж, сайтов вакансий и Telegram-каналов собираются в одну ленту, дубликаты склеиваются, мусор отсеивается голосами участников.',
   ],
   [
@@ -639,16 +639,16 @@ export const SITE_FAQ: Array<[string, string]> = [
     'Публичные каналы подключаются как источник напрямую. Закрытые каналы и чаты владелец узла подключает через свой Telegram-аккаунт. Предложить источник для общей базы можно на GitHub.',
   ],
   [
-    'Можно ли запустить OpenRadar у себя?',
+    'Можно ли запустить openradar у себя?',
     'Да, код открыт под лицензией AGPL-3.0. Узел запускается на компьютере или сервере, хранит данные у вас и по желанию делится публикациями с общей базой.',
   ],
 ];
 
 export function renderFaqPage(options: { baseUrl: string; version: string }): string {
   const { baseUrl, version } = options;
-  const description = 'Ответы на частые вопросы об OpenRadar: откуда заказы и вакансии, почему бесплатно, как добавлять публикации и получать уведомления.';
+  const description = 'Ответы на частые вопросы об openradar: откуда заказы и вакансии, почему бесплатно, как добавлять публикации и получать уведомления.';
   const body = `
-<nav class="crumbs" aria-label="Навигация"><a href="/">OpenRadar</a> / Вопросы и ответы</nav>
+<nav class="crumbs" aria-label="Навигация"><a href="/">openradar</a> / Вопросы и ответы</nav>
 <div class="page-head"><div>
   <h1>Вопросы и ответы</h1>
   <p class="muted small">${escapeHtml(description)}</p>
@@ -663,14 +663,14 @@ export function renderFaqPage(options: { baseUrl: string; version: string }): st
     body,
     head: `<meta name="description" content="${escapeHtml(description)}">
 <link rel="canonical" href="${escapeHtml(baseUrl)}/faq">
-${ldScripts(faqJsonLd(SITE_FAQ), breadcrumbsJsonLd(baseUrl, [['OpenRadar', '/'], ['Вопросы и ответы', '/faq']]))}`,
+${ldScripts(faqJsonLd(SITE_FAQ), breadcrumbsJsonLd(baseUrl, [['openradar', '/'], ['Вопросы и ответы', '/faq']]))}`,
   });
 }
 
 /** A plain-text map of the site for AI assistants (llmstxt.org). */
 export function renderLlmsTxt(baseUrl: string): string {
   const line = (entry: CatalogEntry): string => `- [${entry.h1}](${baseUrl}/catalog/${entry.slug}): ${entry.description}`;
-  return `# OpenRadar
+  return `# openradar
 
 > Открытая база заказов для фрилансеров и IT-вакансий. Собирает публикации с бирж (FL.ru, Kwork, Freelancehunt), сайтов вакансий (hh.ru, Хабр Карьера, «Работа России», We Work Remotely, Jobicy, RemoteOK) и Telegram-каналов в одну ленту. Бесплатно, без платных тарифов, код открыт (AGPL-3.0).
 
@@ -678,7 +678,7 @@ export function renderLlmsTxt(baseUrl: string): string {
 
 - [Лента заказов и вакансий](${baseUrl}/): поиск, фильтры по навыкам, бюджету и удалёнке.
 - [Исследования рынка](${baseUrl}/research): зарплаты в вакансиях и бюджеты заказов — медианы и квартили по направлениям, уровням, языкам, городам и навыкам. Данные открыты (CC BY 4.0): [CSV](${baseUrl}/research/dataset.csv), [JSON](${baseUrl}/research/report.json), [методика](${baseUrl}/research/methodology).
-- [О проекте](${baseUrl}/about): как устроен OpenRadar и откуда публикации.
+- [О проекте](${baseUrl}/about): как устроен openradar и откуда публикации.
 - [Вопросы и ответы](${baseUrl}/faq)
 - [Расширение для браузера](${baseUrl}/extension): отправка вакансии с любого сайта и оценка рыночной оплаты.
 - [RSS-лента](${baseUrl}/feed.rss): параметры q (поиск) и type (gig — заказы, job — вакансии).

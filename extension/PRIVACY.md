@@ -1,11 +1,11 @@
-# Privacy Policy for the OpenRadar Extension
+# Privacy Policy for the openradar Extension
 
 **Extension version:** 0.11.0
 **Effective date:** October 27, 2026
 
 ## What the extension does
 
-The extension sends the page you are looking at, or the text you selected, to OpenRadar, and only when you ask it to: the popup button, the context menu or the `Alt+Shift+R` shortcut. Nothing is sent while you browse.
+The extension sends the page you are looking at, or the text you selected, to openradar, and only when you ask it to: the popup button, the context menu or the `Alt+Shift+R` shortcut. Nothing is sent while you browse.
 
 ## What is sent, and where
 

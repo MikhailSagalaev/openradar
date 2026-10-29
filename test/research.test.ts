@@ -182,7 +182,7 @@ describe('report', () => {
     ];
     const report = buildReport(records, monthPeriod('2026-10'), 'month');
     const quote = report.findings[0]!.quote;
-    expect(quote).toMatch(/^По данным OpenRadar, медианная зарплата/);
+    expect(quote).toMatch(/^По данным openradar, медианная зарплата/);
     expect(quote).toContain('в октябре 2026 года');
     expect(quote).toContain('выборка: 50 вакансий');
     expect(report.findings.some((f) => /Senior .* раза больше, чем Junior/.test(f.text))).toBe(true);
@@ -219,7 +219,7 @@ describe('research pages', () => {
     const app = createApp(runtime);
     const html = await (await app.request('/research')).text();
     expect(html).toContain('<h1>Рынок труда в IT и фрилансе</h1>');
-    expect(html).toContain('data-quote="По данным OpenRadar');
+    expect(html).toContain('data-quote="По данным openradar');
     expect(html).toContain('"@type": "Dataset"');
     expect(html).toContain('href="/research/roles/backend"');
 

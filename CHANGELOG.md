@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.21.1
+
+- The name is written openradar, in lowercase, across the site, the reports, the extension
+  and the docs (docs/BRAND.md).
+
 ## 0.21.0
 
 - A `sitemap` source: vacancy pages listed in a site's sitemap, read through their

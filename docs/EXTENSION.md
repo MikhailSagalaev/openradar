@@ -1,6 +1,6 @@
 # Browser extension (Manifest V3)
 
-A dependency-free Manifest V3 extension that sends a vacancy or an order from any site to OpenRadar with one click, the context menu or `Alt+Shift+R`, and shows what similar work usually pays.
+A dependency-free Manifest V3 extension that sends a vacancy or an order from any site to openradar with one click, the context menu or `Alt+Shift+R`, and shows what similar work usually pays.
 
 The extension speaks Russian and English and follows the browser's language (other languages get Russian). Strings live in `extension/_locales/<lang>/messages.json`; a new language is one more folder.
 

@@ -1,10 +1,10 @@
-# OpenRadar
+# openradar
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/logo-white.png">
     <source media="(prefers-color-scheme: light)" srcset="assets/logo-black.png">
-    <img alt="OpenRadar" src="assets/logo-black.png" width="360">
+    <img alt="openradar" src="assets/logo-black.png" width="360">
   </picture>
 </p>
 
@@ -14,9 +14,9 @@
   <a href="docs/PROTOCOL.md"><img src="https://img.shields.io/badge/protocol-radar%2F2-purple.svg" alt="Protocol: radar/2"></a>
 </p>
 
-OpenRadar is an open base of job vacancies and freelance orders. Parsers, nodes and people add posts from boards, RSS feeds, Telegram channels and email alerts; the hub merges duplicates and keeps one clean feed.
+openradar is an open base of job vacancies and freelance orders. Parsers, nodes and people add posts from boards, RSS feeds, Telegram channels and email alerts; the hub merges duplicates and keeps one clean feed.
 
-Job seekers should not have to pay for subscriptions to parsers or for responding to a vacancy. OpenRadar has no paid tier: the contacts are in the post, and you write to the client directly. Anyone can run their own copy.
+Job seekers should not have to pay for subscriptions to parsers or for responding to a vacancy. openradar has no paid tier: the contacts are in the post, and you write to the client directly. Anyone can run their own copy.
 
 **Live hub:** [openradar.fun](https://openradar.fun)
 

@@ -23,7 +23,7 @@ Where the repository has the secrets `CWS_EXTENSION_ID`, `CWS_PUBLISHER_ID`, `CW
 
 ## Deploying your own hub
 
-Releases are what goes to production. A server that runs OpenRadar from a git checkout pulls them itself: [scripts/autodeploy.sh](../scripts/autodeploy.sh) runs from cron, fetches tags and deploys the newest `vX.Y.Z` with `deploy-server.sh` from that tag (backup, migrations, restart, health check). Nothing on GitHub holds a key to the server.
+Releases are what goes to production. A server that runs openradar from a git checkout pulls them itself: [scripts/autodeploy.sh](../scripts/autodeploy.sh) runs from cron, fetches tags and deploys the newest `vX.Y.Z` with `deploy-server.sh` from that tag (backup, migrations, restart, health check). Nothing on GitHub holds a key to the server.
 
 ```cron
 */5 * * * * root RADAR_DIR=/opt/radar /opt/radar/scripts/autodeploy.sh >> /var/log/radar-autodeploy.log 2>&1

@@ -1,5 +1,5 @@
 /**
- * OpenRadar extension: finishes GitHub sign-in in browsers without chrome.identity.
+ * openradar extension: finishes GitHub sign-in in browsers without chrome.identity.
  * The hub redirects here with #token=…&handle=…&base=… after the user allows the extension.
  */
 (async () => {

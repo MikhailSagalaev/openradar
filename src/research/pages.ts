@@ -130,7 +130,7 @@ function reportUrl(report: Report): string {
 }
 
 function citeLine(report: Report, baseUrl: string): string {
-  return `OpenRadar, «Рынок труда в IT и фрилансе», ${report.period.label}. ${baseUrl}${reportUrl(report)}`;
+  return `openradar, «Рынок труда в IT и фрилансе», ${report.period.label}. ${baseUrl}${reportUrl(report)}`;
 }
 
 export function renderReportPage(options: {
@@ -148,13 +148,13 @@ export function renderReportPage(options: {
   const intlMedian = jobs.intl.median;
 
   const body = `
-<nav class="crumbs" aria-label="Навигация"><a href="/">OpenRadar</a> / ${isLive ? 'Исследования' : `<a href="/research">Исследования</a> / ${escapeHtml(report.period.label)}`}</nav>
+<nav class="crumbs" aria-label="Навигация"><a href="/">openradar</a> / ${isLive ? 'Исследования' : `<a href="/research">Исследования</a> / ${escapeHtml(report.period.label)}`}</nav>
 <div class="page-head"><div>
   <h1>${escapeHtml(title)}</h1>
   <p class="muted small">${isLive
     ? `Живой отчёт по ${num(totals.posts)} публикациям за ${escapeHtml(report.period.label)}. Пересчитывается каждые 15 минут.`
     : `Отчёт за ${escapeHtml(report.period.label.toLowerCase())}: ${num(totals.posts)} публикаций. Цифры зафиксированы и не меняются.`}
-  Источники: биржи фриланса, hh.ru, Хабр Карьера, «Работа России», Telegram-каналы и участники OpenRadar.</p>
+  Источники: биржи фриланса, hh.ru, Хабр Карьера, «Работа России», Telegram-каналы и участники openradar.</p>
 </div><div class="actions"><a class="btn ghost" href="/research/methodology">Методика</a><a class="btn ghost" href="/research/dataset.csv">Данные CSV</a></div></div>
 
 <div class="rs-kpis">
@@ -245,7 +245,7 @@ ${intlMedian ? `<section class="rs-section">
 
 <section class="rs-section prose" style="margin-top:36px">
   <h2>Как ссылаться</h2>
-  <p>Данные OpenRadar открыты по лицензии ${LICENSE}: их можно использовать в публикациях и исследованиях со ссылкой на источник.</p>
+  <p>Данные openradar открыты по лицензии ${LICENSE}: их можно использовать в публикациях и исследованиях со ссылкой на источник.</p>
   <p class="rs-cite"><code>${escapeHtml(citeLine(report, baseUrl))}</code> ${quoteButton(citeLine(report, baseUrl))}</p>
   <ul>
     <li><a href="/research/methodology">Методика</a>: откуда публикации, как считается зарплата, что не входит в выборку.</li>
@@ -264,7 +264,7 @@ ${intlMedian ? `<section class="rs-section">
     description: `Зарплаты и бюджеты в вакансиях и заказах: ${report.period.label}. Медианы и квартили по направлениям, уровням, языкам, городам и навыкам.`,
     url: `${baseUrl}${reportUrl(report)}`,
     license: 'https://creativecommons.org/licenses/by/4.0/',
-    creator: { '@type': 'Organization', name: 'OpenRadar', url: `${baseUrl}/` },
+    creator: { '@type': 'Organization', name: 'openradar', url: `${baseUrl}/` },
     temporalCoverage: `${report.period.from.slice(0, 10)}/${report.period.to.slice(0, 10)}`,
     distribution: [
       { '@type': 'DataDownload', encodingFormat: 'text/csv', contentUrl: `${baseUrl}/research/dataset.csv` },
@@ -272,7 +272,7 @@ ${intlMedian ? `<section class="rs-section">
   };
   const description = jobs.pay.median
     ? `Медианная зарплата в вакансиях — ${formatRub(jobs.pay.median)}, зарплату указывают в ${formatShare(jobs.payShare)} вакансий. Зарплаты по направлениям, уровням, языкам и городам; бюджеты заказов на фрилансе. ${report.period.label}.`
-    : `Зарплаты в вакансиях и бюджеты заказов по данным OpenRadar: ${report.period.label}.`;
+    : `Зарплаты в вакансиях и бюджеты заказов по данным openradar: ${report.period.label}.`;
 
   return layout({
     title,
@@ -300,10 +300,10 @@ export function renderRolePage(options: { detail: RoleDetail; report: Report; ba
   const title = `Зарплаты: ${detail.label}`;
   const path = `/research/roles/${detail.slug}`;
   const quote = detail.pay.median
-    ? `По данным OpenRadar, медианная зарплата в вакансиях направления «${detail.label}» ${report.period.phrase} составила ${formatRub(detail.pay.median)} в месяц (выборка: ${detail.pay.n} вакансий).`
+    ? `По данным openradar, медианная зарплата в вакансиях направления «${detail.label}» ${report.period.phrase} составила ${formatRub(detail.pay.median)} в месяц (выборка: ${detail.pay.n} вакансий).`
     : '';
   const body = `
-<nav class="crumbs" aria-label="Навигация"><a href="/">OpenRadar</a> / <a href="/research">Исследования</a> / ${escapeHtml(detail.label)}</nav>
+<nav class="crumbs" aria-label="Навигация"><a href="/">openradar</a> / <a href="/research">Исследования</a> / ${escapeHtml(detail.label)}</nav>
 <div class="page-head"><div>
   <h1>${escapeHtml(title)}</h1>
   <p class="muted small">${num(detail.n)} вакансий за ${escapeHtml(report.period.label)}, зарплата указана в ${num(detail.withPay)}. Удалённую работу допускают ${formatShare(detail.remoteShare)}.</p>
@@ -326,7 +326,7 @@ ${detail.companies.length ? `<section class="rs-section"><h2>Кто нанима
 </section>`;
   const description = detail.pay.median
     ? `${detail.label}: медианная зарплата в вакансиях ${formatRub(detail.pay.median)} в месяц. Зарплаты по уровням, городам и навыкам, ${report.period.label}.`
-    : `${detail.label}: зарплаты в вакансиях по данным OpenRadar.`;
+    : `${detail.label}: зарплаты в вакансиях по данным openradar.`;
   return layout({
     title,
     version,
@@ -346,14 +346,14 @@ export function renderMethodologyPage(options: { baseUrl: string; version: strin
     .join(', ');
   const roles = ROLES.filter((r) => r.types.includes('job')).map((r) => r.label).join(', ');
   const body = `
-<nav class="crumbs" aria-label="Навигация"><a href="/">OpenRadar</a> / <a href="/research">Исследования</a> / Методика</nav>
-<div class="page-head"><div><h1>Методика</h1><p class="muted small">Как OpenRadar считает зарплаты и бюджеты.</p></div></div>
+<nav class="crumbs" aria-label="Навигация"><a href="/">openradar</a> / <a href="/research">Исследования</a> / Методика</nav>
+<div class="page-head"><div><h1>Методика</h1><p class="muted small">Как openradar считает зарплаты и бюджеты.</p></div></div>
 <section class="prose" style="margin-top:0">
   <h2>Что считается</h2>
-  <p>Исследования OpenRadar показывают предложение работодателей и заказчиков: какую оплату указывают в опубликованных вакансиях и заказах. Это не зарплаты, которые люди получают на руки, и не результаты опроса. Такие данные хорошо показывают рынок найма прямо сейчас и его изменения от месяца к месяцу.</p>
+  <p>Исследования openradar показывают предложение работодателей и заказчиков: какую оплату указывают в опубликованных вакансиях и заказах. Это не зарплаты, которые люди получают на руки, и не результаты опроса. Такие данные хорошо показывают рынок найма прямо сейчас и его изменения от месяца к месяцу.</p>
 
   <h2>Откуда данные</h2>
-  <p>Вакансии и заказы, опубликованные за период на hh.ru, Хабр Карьере, портале «Работа России», FL.ru, Kwork, Freelancehunt, We Work Remotely, Jobicy, RemoteOK, в Telegram-каналах, на карьерных страницах компаний (публичные API систем найма Greenhouse, Lever и Ashby), а также добавленные участниками. Одна и та же публикация на разных площадках считается один раз: OpenRadar склеивает дубликаты по ссылке, тексту и близости содержания. Публикации, которые участники отметили как мусор или мошенничество, в выборку не входят. Закрытые позже вакансии входят: они были опубликованы в этот период.</p>
+  <p>Вакансии и заказы, опубликованные за период на hh.ru, Хабр Карьере, портале «Работа России», FL.ru, Kwork, Freelancehunt, We Work Remotely, Jobicy, RemoteOK, в Telegram-каналах, на карьерных страницах компаний (публичные API систем найма Greenhouse, Lever и Ashby), а также добавленные участниками. Одна и та же публикация на разных площадках считается один раз: openradar склеивает дубликаты по ссылке, тексту и близости содержания. Публикации, которые участники отметили как мусор или мошенничество, в выборку не входят. Закрытые позже вакансии входят: они были опубликованы в этот период.</p>
 
   <h2>Русскоязычный и зарубежный рынок</h2>
   <p>Основные цифры отчёта описывают русскоязычный рынок: публикации, написанные в основном кириллицей. Англоязычные вакансии зарубежных досок и карьерных страниц компаний показаны отдельным разделом и в доли, медианы и списки компаний основной части не входят. Иначе тысячи вакансий крупных зарубежных компаний изменили бы долю удалёнки или список работодателей, не говоря ничего о рынке в России.</p>
@@ -403,7 +403,7 @@ export function renderMethodologyPage(options: { baseUrl: string; version: strin
     version,
     active: 'research',
     body,
-    head: `<meta name="description" content="Как OpenRadar считает зарплаты и бюджеты: источники, разбор вилок, направления и уровни, медианы и пороги выборки.">
+    head: `<meta name="description" content="Как openradar считает зарплаты и бюджеты: источники, разбор вилок, направления и уровни, медианы и пороги выборки.">
 <link rel="canonical" href="${escapeHtml(baseUrl)}/research/methodology">`,
   });
 }
