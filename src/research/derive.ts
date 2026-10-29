@@ -67,6 +67,8 @@ export interface ResearchRecord {
   currency?: string;
   /** The model is sure this is an ad, a resume or chatter: left out of every figure. */
   excluded?: boolean;
+  /** Russian-language posts make the main report; the rest are the international section. */
+  scope: 'ru' | 'intl';
 }
 
 // ---------- Roles ----------
@@ -408,6 +410,14 @@ export function modelFactsOf(lead: Pick<Lead, 'metadata'>): ModelFacts | undefin
   return facts && typeof facts === 'object' && facts.confidence >= MIN_CONFIDENCE ? facts : undefined;
 }
 
+/** A post written mostly in Cyrillic belongs to the Russian-language market. */
+export function scopeOf(title: string, text: string): 'ru' | 'intl' {
+  const sample = `${title} ${text.slice(0, 600)}`;
+  const cyrillic = sample.match(/[а-яё]/gi)?.length ?? 0;
+  const latin = sample.match(/[a-z]/gi)?.length ?? 0;
+  return cyrillic > 0 && cyrillic >= 0.25 * (cyrillic + latin) ? 'ru' : 'intl';
+}
+
 export interface DeriveOptions {
   /** Use the model's answers; off while their quality is being checked. */
   useModel?: boolean;
@@ -458,6 +468,7 @@ export function deriveRecord(lead: Lead, options: DeriveOptions = {}): ResearchR
     payPeriod: normalized?.period,
     payOrigin: normalized ? pay!.origin : undefined,
     currency: normalized ? currency : undefined,
+    scope: scopeOf(lead.title, head),
     ...(model?.isPost === false ? { excluded: true } : {}),
   };
 }

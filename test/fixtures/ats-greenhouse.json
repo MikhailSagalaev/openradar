@@ -1,0 +1,63 @@
+{
+ "jobs": [
+  {
+   "absolute_url": "https://job-boards.greenhouse.io/gitlab/jobs/8638232002",
+   "internal_job_id": 6449994002,
+   "location": {
+    "name": "Remote, United States"
+   },
+   "id": 8638232002,
+   "updated_at": "2026-10-28T12:23:39-04:00",
+   "requisition_id": "6682",
+   "title": "AI Transformation Owner, CRO",
+   "company_name": "GitLab",
+   "first_published": "2026-07-22T13:38:40-04:00",
+   "language": "en",
+   "application_deadline": null,
+   "content": "&lt;div class=&quot;content-intro&quot;&gt;&lt;p&gt;GitLab is the intelligent orchestration platform for DevSecOps. GitLab enables organizations to increase developer productivity, improve operational efficiency, reduce security and compliance risk, and accelerate digital transformation. More than 50 million registered users and more than 50% of the Fortune 100* trust GitLab to ship better, more secure software faster.&lt;/p&gt;\n&lt;p&gt;The same principles built into our products are reflected in how our team works: we embrace AI as a core productivity multiplier, with all team members expect",
+   "departments": [
+    {
+     "id": 4114891002,
+     "name": "Enablement",
+     "child_ids": [],
+     "parent_id": 4011049002
+    }
+   ],
+   "offices": [],
+   "ai_disclaimer": null,
+   "include_ai_disclaimer": null,
+   "ai_opt_out_request_url": null
+  },
+  {
+   "absolute_url": "https://job-boards.greenhouse.io/gitlab/jobs/8716179002",
+   "internal_job_id": 6483862002,
+   "location": {
+    "name": "Remote, Canada; Remote, United Kingdom; Remote, United States"
+   },
+   "id": 8716179002,
+   "updated_at": "2026-10-28T12:23:39-04:00",
+   "requisition_id": "6821",
+   "title": "AI Transformation Owner, Product & Design",
+   "company_name": "GitLab",
+   "first_published": "2026-08-19T16:52:27-04:00",
+   "language": "en",
+   "application_deadline": null,
+   "content": "&lt;div class=&quot;content-intro&quot;&gt;&lt;p&gt;GitLab is the intelligent orchestration platform for DevSecOps. GitLab enables organizations to increase developer productivity, improve operational efficiency, reduce security and compliance risk, and accelerate digital transformation. More than 50 million registered users and more than 50% of the Fortune 100* trust GitLab to ship better, more secure software faster.&lt;/p&gt;\n&lt;p&gt;The same principles built into our products are reflected in how our team works: we embrace AI as a core productivity multiplier, with all team members expect",
+   "departments": [
+    {
+     "id": 4115236002,
+     "name": "AI",
+     "child_ids": [],
+     "parent_id": 4043190002
+    }
+   ],
+   "offices": [],
+   "ai_disclaimer": null,
+   "include_ai_disclaimer": null,
+   "ai_opt_out_request_url": null
+  }
+ ],
+ "meta": {
+  "total": 2
+ }
+}

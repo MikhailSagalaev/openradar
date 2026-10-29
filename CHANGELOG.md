@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.20.0
+
+- Company career pages: a new `ats` source reads the public job-board APIs of Greenhouse,
+  Lever and Ashby (no key). One source holds a list of companies of one system and reads a
+  few of them per poll in turn; only postings of the last `maxAgeDays` (30) enter. Ashby and
+  Lever salary ranges come along. Three presets with 111 verified company boards.
+- Research: the main figures describe the Russian-language market (posts written mostly in
+  Cyrillic). English-language vacancies are counted apart in the international section, so
+  thousands of foreign company jobs do not shift the shares, roles or employer lists. The
+  dataset gains a `scope` column; the methodology explains the split and the model check.
+
 ## 0.19.0
 
 - Sources can go through a proxy one by one: `config.proxy: true` sends every fetch of the

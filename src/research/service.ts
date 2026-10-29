@@ -80,7 +80,7 @@ export async function monthSnapshot(store: Store, slug: string): Promise<Report 
 
 const CSV_COLUMNS = [
   'id', 'date', 'type', 'platform', 'role', 'grade', 'language', 'region', 'remote', 'company',
-  'pay_min_rub', 'pay_max_rub', 'pay_rub', 'pay_period', 'currency', 'pay_origin', 'ai_mention', 'skills',
+  'pay_min_rub', 'pay_max_rub', 'pay_rub', 'pay_period', 'currency', 'pay_origin', 'ai_mention', 'skills', 'scope',
 ] as const;
 
 function csvCell(value: unknown): string {
@@ -99,7 +99,7 @@ export function datasetCsv(records: ResearchRecord[], now: Date = new Date()): s
     .filter((r) => r.date < cutoff)
     .map((r) => [
       r.id, r.date, r.type, r.platform, r.role, r.grade, r.language, r.region, r.remote ? 1 : 0, r.company,
-      r.payMin, r.payMax, r.pay, r.payPeriod, r.currency, r.payOrigin, r.ai ? 1 : 0, r.skills,
+      r.payMin, r.payMax, r.pay, r.payPeriod, r.currency, r.payOrigin, r.ai ? 1 : 0, r.skills, r.scope,
     ].map(csvCell).join(','));
   return `${CSV_COLUMNS.join(',')}\n${rows.join('\n')}\n`;
 }
