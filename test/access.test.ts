@@ -143,6 +143,29 @@ describe('radar/2 access tiers (hub mode)', () => {
   });
 });
 
+describe('the feed day counter', () => {
+  const foundToday = async (res: Response): Promise<number> => {
+    expect(res.status).toBe(200);
+    const match = (await res.text()).match(/За сутки найдено <strong>(\d+)<\/strong>/);
+    expect(match).not.toBeNull();
+    return Number(match![1]);
+  };
+
+  it('counts only the leads the viewer can see: guest <= member <= admin', async () => {
+    const runtime = await seedHub();
+    const app = createApp(runtime);
+    const session = await makeUserSession(runtime);
+
+    const guest = await foundToday(await app.request('/'));
+    const member = await foundToday(await app.request('/', { headers: { cookie: `radar_session=${session}` } }));
+    const admin = await foundToday(await app.request('/', { headers: { authorization: 'Bearer secret' } }));
+    expect(guest).toBe(1);
+    expect(member).toBe(2);
+    expect(admin).toBe(4);
+    expect(guest).toBeLessThanOrEqual(admin);
+  });
+});
+
 describe('source config hardening', () => {
   it('masks every non-public config key for guests, including proxyUrl', async () => {
     const runtime = makeTestRuntime({ RADAR_ADMIN_TOKEN: 'secret', RADAR_PUBLIC_READ: 'true' } as never);
