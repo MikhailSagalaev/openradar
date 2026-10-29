@@ -313,6 +313,23 @@ describe('model extraction', () => {
     expect((await runModelExtraction({ ...makeTestRuntime(), fetchImpl }, { limit: 10 })).asked).toBe(0);
   });
 
+  it('uses its own TLS client for GigaChat when handed the global fetch', async () => {
+    resetGigachatToken();
+    const runtime = makeTestRuntime({ RADAR_EXTRACT_ENABLED: true, RADAR_EXTRACT_PROVIDER: 'gigachat', GIGACHAT_AUTH_KEY: 'k', GIGACHAT_OAUTH_URL: 'https://127.0.0.1:1/oauth' });
+    const source = await runtime.store.createSource({ kind: 'telegram', title: 'tg', config: { channel: 'jobs' } });
+    await runtime.store.insertLead(lead('n1', { sourceId: source.id, type: 'gig', title: 'Нужен бот' }));
+    const global = globalThis.fetch;
+    let called = false;
+    globalThis.fetch = (async () => { called = true; return new Response('{}'); }) as typeof fetch;
+    try {
+      const summary = await runModelExtraction({ ...runtime, fetchImpl: globalThis.fetch }, { limit: 1 });
+      expect(summary.failed).toBe(1); // the unreachable host, through node:https
+      expect(called).toBe(false);
+    } finally {
+      globalThis.fetch = global;
+    }
+  });
+
   it('stays out of the figures in shadow mode', () => {
     const metadata = { model: { v: 1, model: 'test', at: '2026-10-28T00:00:00Z', facts: { isPost: true, confidence: 0.9, role: 'bots', payMin: 50000, payMax: 50000, currency: 'RUB', period: 'project' } } };
     const order = lead('shadow', { type: 'gig', title: 'Нужна помощь', metadata });
