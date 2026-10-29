@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.26.0
+
+- A pill beside every score says what it means: strong (80+), good (60-79), weak (40-59),
+  noise (below 40), on the feed and the lead page, in light and dark themes.
+- «Прямой заказчик» is shown only for boards where the employer or client posts the lead
+  (hh.ru, Работа России, company career pages, Kwork, FL.ru, Хабр Карьера, Freelancehunt),
+  never for agencies or recruiters and never for aggregator feeds; `config.direct` overrides
+  it per source. It used to be shown for every author without «агентство» in the name.
+- Keyboard focus is visible everywhere, and a «К содержимому» link opens every page.
+- The feed's «за сутки» counts a full day of what the visitor's tier can see, cached for ten
+  minutes per tier; it used to count leads the visitor could not open yet.
+- Limits per IP on public feeds, configurable: `RADAR_FEED_RATE_PER_MIN` (120, the feed and
+  `/api/leads`), `RADAR_RSS_RATE_PER_MIN` (60, every RSS route), `RADAR_DELTA_RATE_PER_MIN`
+  (30, `/api/delta`), `RADAR_SITEMAP_RATE_PER_MIN` (10, `/sitemap.xml`).
+- Whoever brought a lead opens it at once, before the tier delay lets others see it; the
+  profile's links used to lead to «not found». The not-found page shows the signed-in account.
+- CI fails when package.json, src/version.ts and server.json disagree on the version.
+
 ## 0.25.4
 
 - `radar telegram folder` gives a new folder an id above every existing folder, shared ones
