@@ -70,17 +70,18 @@ describe('Telegram account source', () => {
   it('reads the channels and groups of a folder, never private dialogs, and caches them', async () => {
     let calls = 0;
     const client = {
-      async findFolder(params: { title?: string }) {
+      async getFolders() {
         calls++;
-        expect(params.title).toBe('openradar');
-        return {
+        return { filters: [{ _: 'dialogFilterDefault' }, { _: 'dialogFilter', title: { _: 'textWithEntities', text: 'other' }, includePeers: [] }, {
+          _: 'dialogFilterChatlist',
+          title: { _: 'textWithEntities', text: 'openradar', entities: [] },
           pinnedPeers: [],
           includePeers: [
             { _: 'inputPeerChannel', channelId: 1234567890, accessHash: 1n },
             { _: 'inputPeerUser', userId: 42, accessHash: 2n },
             { _: 'inputPeerChat', chatId: 777 },
           ],
-        };
+        }] };
       },
     } as never;
     expect(await folderChats(client, 'k', 'openradar', 1000)).toEqual(['-1001234567890', '-777']);

@@ -90,18 +90,33 @@ const FOLDER_TTL_MS = 30 * 60_000;
  * sources. The folder's own peer list is read: listing dialogs by folder fails with
  * INPUT_PEERS_EMPTY when the folder has no pinned chats.
  */
+type FolderPeers = { _: string; title?: unknown; includePeers?: Array<{ _: string; channelId?: number; chatId?: number }>; pinnedPeers?: Array<{ _: string; channelId?: number; chatId?: number }> };
+
+/**
+ * A folder of the account by its title. Telegram returns a folder as dialogFilter or, once it
+ * is shareable, dialogFilterChatlist; mtcute's findFolder sees only the first.
+ */
+export async function findFolderByTitle(client: Pick<TelegramClient, 'getFolders'>, title: string): Promise<FolderPeers | undefined> {
+  const { filters } = await client.getFolders();
+  return (filters as FolderPeers[]).find((filter) => {
+    if (filter._ !== 'dialogFilter' && filter._ !== 'dialogFilterChatlist') return false;
+    const name = typeof filter.title === 'string' ? filter.title : (filter.title as { text?: string } | undefined)?.text;
+    return name === title;
+  });
+}
+
 export async function folderChats(
-  client: Pick<TelegramClient, 'findFolder'>,
+  client: Pick<TelegramClient, 'getFolders'>,
   key: string,
   folder: string,
   now = Date.now(),
 ): Promise<string[]> {
   const cached = folderCache.get(key);
   if (cached && now - cached.at < FOLDER_TTL_MS) return cached.chats;
-  const found = await client.findFolder({ title: folder });
+  const found = await findFolderByTitle(client, folder);
   if (!found) throw new Error(`Telegram folder not found: ${folder}`);
   const chats: string[] = [];
-  for (const peer of [...found.pinnedPeers, ...found.includePeers]) {
+  for (const peer of [...(found.pinnedPeers ?? []), ...(found.includePeers ?? [])]) {
     if (peer._ === 'inputPeerChannel') chats.push(`-100${peer.channelId}`);
     else if (peer._ === 'inputPeerChat') chats.push(`-${peer.chatId}`);
   }

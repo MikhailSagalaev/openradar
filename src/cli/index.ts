@@ -788,7 +788,8 @@ function buildProgram(): Command {
       const chats = options.add.split(',').map((chat) => chat.trim()).filter(Boolean);
       const peers = [];
       for (const chat of chats) peers.push(await client.resolvePeer(/^-?\d+$/.test(chat) ? Number(chat) : chat));
-      const existing = await client.findFolder({ title });
+      const { findFolderByTitle } = await import('../sources/telegram-account.ts');
+      const existing = (await findFolderByTitle(client, title)) as import('@mtcute/node').tl.RawDialogFilter | undefined;
       if (existing) {
         const have = new Set(existing.includePeers.map((peer) => JSON.stringify(peer)));
         const added = peers.filter((peer) => !have.has(JSON.stringify(peer)));
