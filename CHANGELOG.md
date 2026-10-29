@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.25.3
+
+- A Telegram folder is found by its title whether Telegram returns it as a plain folder or a
+  shareable chat list; mtcute's lookup saw only plain folders, so a new folder was not found.
+
 ## 0.25.2
 
 - The Telegram account source reads a folder from the folder's own chat list: listing dialogs
