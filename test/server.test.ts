@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import { createApp } from '../src/server/app.ts';
+import { webPubkey } from '../src/hub/web-key.ts';
 import type { Runtime } from '../src/runtime.ts';
 import type { Env } from '../src/core/types.ts';
 import { loadEnv } from '../src/config.ts';
@@ -1435,6 +1436,35 @@ describe('http server', () => {
     expect(stored?.author).toBe('octocat');
 
     await runtime.store.close();
+  });
+
+  it('credits what a person adds on a hub to their web participant key', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true, RADAR_MODE: 'hub', RADAR_WEB_KEY_SECRET: 'web-secret' });
+    const app = createApp(runtime);
+    const userSession = await makeUserSession(runtime);
+    const submit = async (title: string) =>
+      (await (await app.request('/api/submit', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: `radar_session=${userSession}` },
+        body: JSON.stringify({ url: 'https://example.com/jobs/1', title, text: `${title}: Go, Kubernetes, удалённо`, type: 'job' }),
+      })).json()) as { leadId: string };
+
+    const { leadId } = await submit('Go developer');
+    const user = await runtime.store.upsertGitHubUser!({ githubId: 583231, handle: 'octocat' });
+    const pubkey = webPubkey('web-secret', user.id);
+    expect(await runtime.store.listObservations(leadId)).toEqual([expect.objectContaining({ pubkey, isFirst: true, platform: 'web', channel: 'example.com' })]);
+    expect((await runtime.store.getParticipantByGithubUser(user.id))?.pubkey).toBe(pubkey);
+
+    // Sending the same post again adds nothing.
+    await submit('Go developer');
+    expect(await runtime.store.listObservations(leadId)).toHaveLength(1);
+
+    // The profile lists the post and how far the next tier is.
+    const profile = await (await app.request('/me', { headers: { cookie: `radar_session=${userSession}` } })).text();
+    expect(profile).toContain('Ваши публикации');
+    expect(profile).toContain('Go developer');
+    expect(profile).toContain('ждёт подтверждения');
+    expect(profile).toContain('ещё 100 до уровня');
   });
 
   it('performs the GitHub OAuth round trip and binds the session to a user', async () => {

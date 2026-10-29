@@ -202,6 +202,8 @@ export interface HubStore {
   insertEvent(event: StoredEvent): Promise<boolean>;
   addObservation(record: ObservationRecord): Promise<void>;
   listObservations(leadId: string): Promise<ObservationRecord[]>;
+  /** Latest observations of one participant, newest first. */
+  listObservationsByPubkey(pubkey: string, limit: number): Promise<ObservationRecord[]>;
   /** Observations of one post (platform + channel + message id). */
   findObservationsByPost(platform: string, channel: string, messageId: string): Promise<ObservationRecord[]>;
   /** One signal per participant and lead; a new one replaces the old. */

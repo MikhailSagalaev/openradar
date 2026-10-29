@@ -875,6 +875,14 @@ export class MemoryStore implements Store {
       .map((o) => ({ ...o }));
   }
 
+  async listObservationsByPubkey(pubkey: string, limit: number): Promise<ObservationRecord[]> {
+    return this.observations
+      .filter((o) => o.pubkey === pubkey && this.leads.has(o.leadId))
+      .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))
+      .slice(0, limit)
+      .map((o) => ({ ...o }));
+  }
+
   async findObservationsByPost(platform: string, channel: string, messageId: string): Promise<ObservationRecord[]> {
     return this.observations
       .filter((o) => o.platform === platform && o.channel === channel && o.messageId === messageId && this.leads.has(o.leadId))

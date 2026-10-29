@@ -205,6 +205,10 @@ hub.observe([{"source": {"platform": "telegram", "channel": "-1001234567890", "v
 
 Узел умеет работать как MCP-сервер (Model Context Protocol): любая программа с поддержкой MCP может искать заказы (`search_leads`), открывать их (`get_lead_details`) и смотреть статистику рынка (`get_market_analytics`). Правила доступа те же, что в ленте.
 
+`search_leads` отдаёт по 10 лучших результатов в коротком виде и `next_offset` для следующей страницы, чтобы агент не читал всю базу. Фильтры: `query`, `type` (job, gig), `market` (ru — русскоязычные площадки, intl — остальные), `remote`, `skills`, `min_budget_rub`, `since` («24h», «7d» или дата), `sort` (new, score, budget). Полный текст и контакты — `get_lead_details`.
+
+Хаб openradar.fun подключается напрямую: адрес MCP-сервера `https://openradar.fun/mcp`.
+
 Локально, через stdio (сначала `pnpm build`). Пример конфигурации MCP-клиента:
 
 ```json

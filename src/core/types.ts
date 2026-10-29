@@ -65,6 +65,8 @@ export interface Env {
   RADAR_TIER_DELAYS?: string;
   /** Comma-separated hex pubkeys of hub moderators. */
   RADAR_MODERATORS?: string;
+  /** Secret the hub derives web participant keys from; the admin token when unset. */
+  RADAR_WEB_KEY_SECRET?: string;
   /** Node: hub to send shared sources to, e.g. https://openradar.fun. */
   RADAR_HUB_URL?: string;
   /** Node: participant key (hex or nsec) that signs observations sent to the hub. */

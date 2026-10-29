@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.25.0
+
+- What a signed-in person adds on a hub, by link or with the extension, earns rating: every
+  GitHub account gets a participant key the hub derives from `RADAR_WEB_KEY_SECRET` (the admin
+  token when unset), and the post is recorded as that key's observation, first when it is new.
+  The account's tier counts its own key and its web key together.
+- The profile shows points (the rating ×10) over 30 days, how many are left to the next tier
+  and what it gives, what each point was for, and the account's posts with their state:
+  credited, awaiting confirmation or hidden.
+- MCP `search_leads` filters in the database instead of over the latest 200 leads and takes
+  `market` (ru, intl), `remote`, `since` ("24h", "7d" or a date), `sort`, `min_budget_rub`
+  and `offset`; it answers with ten compact results and `next_offset`.
+
 ## 0.24.0
 
 - The language follows the visitor across the site: a browser that prefers any language other

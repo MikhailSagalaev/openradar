@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { handleMcpRequest, MCP_TOOLS, type McpBackend } from '../src/mcp/server.ts';
+import { handleMcpRequest, MCP_TOOLS, sinceInstant, type McpBackend } from '../src/mcp/server.ts';
+import type { ListLeadsOptions } from '../src/core/store.ts';
 import type { Lead } from '../src/core/types.ts';
 
 function lead(overrides: Partial<Lead>): Lead {
@@ -85,9 +86,36 @@ describe('MCP server', () => {
   });
 
   it('searches by query, skills and minimum budget', async () => {
-    expect(parsed(await call('search_leads', { query: 'golang' })).map((l: Lead) => l.id)).toEqual(['lead-go']);
-    expect(parsed(await call('search_leads', { skills: ['react'] })).map((l: Lead) => l.id)).toEqual(['lead-landing']);
-    expect(parsed(await call('search_leads', { min_budget: 100000 })).map((l: Lead) => l.id)).toEqual(['lead-go']);
+    const ids = async (args: Record<string, unknown>) => parsed(await call('search_leads', args)).results.map((l: Lead) => l.id);
+    expect(await ids({ query: 'golang' })).toEqual(['lead-go']);
+    expect(await ids({ skills: ['react', 'vue'] })).toEqual(['lead-landing']);
+    expect(await ids({ min_budget: 100000 })).toEqual(['lead-go']);
+  });
+
+  it('hands the filters to the database and pages with next_offset', async () => {
+    const seen: ListLeadsOptions[] = [];
+    const many = Array.from({ length: 12 }, (_, i) => lead({ id: `l${i}`, title: `Разработчик ${i}`, isRemote: true }));
+    const paging: McpBackend = {
+      async listLeads(options) {
+        seen.push(options);
+        return many.slice(options.offset ?? 0, (options.offset ?? 0) + (options.limit ?? 50));
+      },
+      async getLead() {
+        return null;
+      },
+    };
+    const first = JSON.parse((await handleMcpRequest(
+      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'search_leads', arguments: { market: 'ru', remote: true, skills: ['Python'], min_budget_rub: 100000, since: '24h' } } },
+      paging,
+    ) as Content).result!.content![0]!.text);
+    expect(first.results).toHaveLength(10);
+    expect(first.results[0]).toMatchObject({ id: 'l0', market: 'ru', where: 'remote' });
+    expect(first.next_offset).toBe(10);
+    expect(seen[0]).toMatchObject({ language: 'ru', remote: true, skill: 'Python', limit: 11, offset: 0 });
+    expect(seen[0]!.minBudgetUsd).toBeGreaterThan(0);
+    expect(Date.now() - Date.parse(seen[0]!.createdAfter!)).toBeLessThan(24 * 3_600_000 + 60_000);
+    expect(sinceInstant('7d', new Date('2026-10-29T00:00:00Z'))).toBe('2026-10-22T00:00:00.000Z');
+    expect(sinceInstant('nonsense')).toBeUndefined();
   });
 
   it('returns details with contacts as the backend provides them, and -32602 for unknown ids', async () => {
