@@ -5,7 +5,8 @@
  */
 
 import { createInterface } from 'node:readline';
-import type { ListLeadsOptions } from '../core/store.ts';
+import type { LeadSort, ListLeadsOptions } from '../core/store.ts';
+import { rubToUsd } from '../core/salary.ts';
 import type { Lead, LeadType } from '../core/types.ts';
 
 export interface McpBackend {
@@ -28,15 +29,23 @@ export interface McpTool {
 export const MCP_TOOLS: McpTool[] = [
   {
     name: 'search_leads',
-    description: 'Search job vacancies and freelance orders by keywords, type, skills and minimum budget.',
+    description:
+      'Find job vacancies and freelance orders. Returns the best few in a compact form, newest or best first, with a next_offset to page on; ' +
+      'call get_lead_details for the full text and contacts of the ones that fit. Narrow with market, remote, since and skills instead of reading many pages.',
     inputSchema: {
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Keywords or tech stack, e.g. "Golang Kafka"' },
         type: { type: 'string', enum: ['job', 'gig'], description: 'job = employment, gig = freelance order' },
-        skills: { type: 'array', items: { type: 'string' }, description: 'At least one of these skills' },
-        min_budget: { type: 'number', description: 'Minimum budget or salary in the lead currency' },
-        limit: { type: 'number', description: 'Maximum results, 1-100 (default 20)' },
+        market: { type: 'string', enum: ['ru', 'intl'], description: 'ru = Russian-language boards and channels, intl = the rest' },
+        remote: { type: 'boolean', description: 'Only work that can be done remotely' },
+        skills: { type: 'array', items: { type: 'string' }, description: 'At least one of these skills, e.g. ["Python", "Django"]' },
+        min_budget_rub: { type: 'number', description: 'Minimum budget or monthly pay, in roubles (other currencies are converted)' },
+        min_budget: { type: 'number', description: 'Minimum budget in the lead\'s own currency (prefer min_budget_rub)' },
+        since: { type: 'string', description: 'Only posts newer than this: "24h", "7d" or an ISO date' },
+        sort: { type: 'string', enum: ['new', 'score', 'budget'], description: 'new (default), score = best described first, budget = highest pay first; score and budget look at the last 7 days' },
+        limit: { type: 'number', description: 'Results per call, 1-50 (default 10)' },
+        offset: { type: 'number', description: 'next_offset from the previous call, to read the next page' },
       },
     },
   },
@@ -81,6 +90,40 @@ function text(id: McpResponse['id'], value: unknown): McpResponse {
 
 function fail(id: McpResponse['id'], code: number, message: string): McpResponse {
   return { jsonrpc: '2.0', id, error: { code, message } };
+}
+
+/** Russian-language boards write titles in Cyrillic; the same rule as the feed's language filter. */
+function marketOf(lead: Lead): 'ru' | 'intl' {
+  return /[А-Яа-яЁё]/.test(lead.title) ? 'ru' : 'intl';
+}
+
+/** What an agent needs to pick a lead, a few lines each; the text comes with get_lead_details. */
+function leadCompact(lead: Lead): Record<string, unknown> {
+  return {
+    id: lead.id,
+    type: lead.type,
+    title: lead.title,
+    budget: lead.budget,
+    currency: lead.budget !== undefined ? lead.currency : undefined,
+    market: marketOf(lead),
+    where: lead.isRemote ? 'remote' : lead.city,
+    skills: lead.skills?.slice(0, 6),
+    score: lead.score,
+    url: lead.canonicalUrl || lead.url,
+    published_at: lead.publishedAt || lead.createdAt,
+  };
+}
+
+/** "24h", "7d" or an ISO date, as an ISO instant; undefined when it is none of these. */
+export function sinceInstant(value: unknown, now: Date = new Date()): string | undefined {
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+  const relative = value.trim().match(/^(\d{1,4})\s*([hd])$/i);
+  if (relative) {
+    const hours = Number(relative[1]) * (relative[2]!.toLowerCase() === 'd' ? 24 : 1);
+    return new Date(now.getTime() - hours * 3_600_000).toISOString();
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined;
 }
 
 function leadSummary(lead: Lead): Record<string, unknown> {
@@ -147,21 +190,44 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend): Pr
   const args = (req.params?.arguments ?? {}) as Record<string, unknown>;
   try {
     if (name === 'search_leads') {
-      const limit = Math.max(1, Math.min(Number(args.limit) || 20, 100));
-      let leads = await backend.listLeads({
-        query: typeof args.query === 'string' ? args.query : undefined,
-        type: asType(args.type),
-        limit: 200,
-      });
+      const limit = Math.max(1, Math.min(Number(args.limit) || 10, 50));
+      const offset = Math.max(0, Math.min(Math.floor(Number(args.offset) || 0), 1000));
+      const skills = Array.isArray(args.skills)
+        ? args.skills.filter((s): s is string => typeof s === 'string' && s.trim().length > 0).map((s) => s.trim())
+        : [];
       const minBudget = Number(args.min_budget);
+      const minRub = Number(args.min_budget_rub);
+      const sort: LeadSort = args.sort === 'score' || args.sort === 'budget' ? args.sort : 'new';
+      const since = sinceInstant(args.since);
+      // One skill and the rouble floor go to the database; several skills and a floor in the
+      // lead's own currency are checked here, so a wider page is read for them.
+      const filteredHere = skills.length > 1 || (Number.isFinite(minBudget) && minBudget > 0);
+      const options: ListLeadsOptions = {
+        query: typeof args.query === 'string' && args.query.trim() ? args.query.trim() : undefined,
+        type: asType(args.type),
+        language: args.market === 'ru' ? 'ru' : args.market === 'intl' ? 'en' : undefined,
+        remote: args.remote === true || undefined,
+        skill: skills.length === 1 ? skills[0] : undefined,
+        minBudgetUsd: Number.isFinite(minRub) && minRub > 0 ? rubToUsd(minRub) : undefined,
+        sort,
+        createdAfter: since ?? (sort === 'new' ? undefined : new Date(Date.now() - 7 * 86_400_000).toISOString()),
+        offset: filteredHere ? 0 : offset,
+        limit: filteredHere ? 500 : limit + 1,
+      };
+      let leads = await backend.listLeads(options);
       if (Number.isFinite(minBudget) && minBudget > 0) {
         leads = leads.filter((lead) => (lead.budget ?? 0) >= minBudget);
       }
-      if (Array.isArray(args.skills) && args.skills.length > 0) {
-        const wanted = new Set(args.skills.filter((s): s is string => typeof s === 'string').map((s) => s.toLowerCase()));
+      if (skills.length > 1) {
+        const wanted = new Set(skills.map((s) => s.toLowerCase()));
         leads = leads.filter((lead) => (lead.skills ?? []).some((skill) => wanted.has(skill.toLowerCase())));
       }
-      return text(id, leads.slice(0, limit).map(leadSummary));
+      const page = filteredHere ? leads.slice(offset, offset + limit + 1) : leads;
+      const more = page.length > limit;
+      return text(id, {
+        results: page.slice(0, limit).map(leadCompact),
+        next_offset: more ? offset + limit : undefined,
+      });
     }
 
     if (name === 'get_lead_details') {

@@ -54,7 +54,8 @@ import { redactLead } from '../core/contacts.ts';
 import { observationToRawLead, parseObservation } from '../core/observation.ts';
 import { isNostrAuthHeader, verifyHttpAuth } from '../net/protocol.ts';
 import { parseModerators } from '../hub/service.ts';
-import { evaluateLeadState, tierFor, WeightResolver, WEB_SIGNAL_PREFIX } from '../hub/rating.ts';
+import { evaluateLeadState, RATING_WINDOW_MS, tierFor, WeightResolver, WEB_SIGNAL_PREFIX } from '../hub/rating.ts';
+import { recordWebObservation, webPubkey } from '../hub/web-key.ts';
 import { registerV2Routes } from './v2.ts';
 import {
   SEO_CATALOG,
@@ -276,12 +277,26 @@ async function viewerFromRequest(c: Context, runtime: Runtime): Promise<Viewer> 
     // A web user linked to a participant key gets that key's tier (never below member).
     const linked = runtime.access.mode === 'hub' ? await runtime.store.getParticipantByGithubUser(user.id) : null;
     if (linked && !linked.bannedAt) {
-      const tier = tierFor({ rating: linked.rating, moderator: moderators.has(linked.pubkey), githubLinked: true });
+      const tier = tierFor({ rating: await accountRating(runtime, user.id, linked), moderator: moderators.has(linked.pubkey), githubLinked: true });
       return { tier, userId: user.id, pubkey: linked.pubkey };
     }
     return { tier: 'member', userId: user.id };
   }
   return { tier: 'guest' };
+}
+
+/** Secret for web participant keys; the admin token when no dedicated one is set. */
+export function webKeySecret(runtime: Runtime): string | undefined {
+  return runtime.env.RADAR_WEB_KEY_SECRET || runtime.env.RADAR_ADMIN_TOKEN || undefined;
+}
+
+/** Rating of an account: its linked key plus its web key, when they differ. */
+export async function accountRating(runtime: Runtime, userId: number, linked: ParticipantRecord | null): Promise<number> {
+  const secret = webKeySecret(runtime);
+  const web = secret ? webPubkey(secret, userId) : undefined;
+  let rating = linked?.rating ?? 0;
+  if (web && web !== linked?.pubkey) rating += (await runtime.store.getParticipant(web))?.rating ?? 0;
+  return rating;
 }
 
 interface NostrAuthState {
@@ -1085,6 +1100,20 @@ export function createApp(runtime: Runtime): Hono {
     if (viewer.tier === 'guest') return c.redirect('/login?returnTo=/me');
     const participant = viewer.pubkey ? await runtime.store.getParticipant(viewer.pubkey) : null;
     const { admin: _admin, ...delays } = runtime.access.delays;
+    // The account's keys: the linked one and its web key, when they differ.
+    const secret = webKeySecret(runtime);
+    const pubkeys = [...new Set([viewer.pubkey, viewer.userId && secret ? webPubkey(secret, viewer.userId) : undefined].filter((k): k is string => Boolean(k)))];
+    const since = new Date(Date.now() - RATING_WINDOW_MS).toISOString();
+    const ledger = (await Promise.all(pubkeys.map((k) => runtime.store.listLedger(k, since, 50)))).flat();
+    const observations = (await Promise.all(pubkeys.map((k) => runtime.store.listObservationsByPubkey(k, 20)))).flat()
+      .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))
+      .slice(0, 20);
+    const titles = new Map<string, Lead>();
+    for (const id of new Set([...ledger.map((e) => e.leadId), ...observations.map((o) => o.leadId)])) {
+      const lead = await runtime.store.getLead(id);
+      if (lead) titles.set(id, lead);
+    }
+    const rating = viewer.userId ? await accountRating(runtime, viewer.userId, participant) : participant?.rating;
     return c.html(
       renderProfilePage({
         version: VERSION,
@@ -1094,7 +1123,23 @@ export function createApp(runtime: Runtime): Hono {
         delays,
         hubMode: runtime.access.mode === 'hub',
         pubkey: viewer.pubkey,
-        rating: participant?.rating,
+        rating,
+        ledger: ledger
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+          .slice(0, 30)
+          .map((entry) => ({ ...entry, title: titles.get(entry.leadId)?.title })),
+        posts: observations.map((o) => {
+          const lead = titles.get(o.leadId);
+          const credited = ledger.some((e) => e.leadId === o.leadId && e.points > 0);
+          const hidden = lead?.state && lead.state !== 'active' && lead.state !== 'closed';
+          return {
+            leadId: o.leadId,
+            title: lead?.title ?? o.leadId,
+            receivedAt: o.receivedAt,
+            first: o.isFirst,
+            status: hidden ? 'hidden' as const : credited ? 'credited' as const : 'waiting' as const,
+          };
+        }),
       }),
     );
   });
@@ -1161,6 +1206,17 @@ export function createApp(runtime: Runtime): Hono {
     );
   });
 
+  /** On a hub, what a signed-in person adds counts to their rating through their web key. */
+  const creditWebUser = async (userId: number, outcome: { status: string; lead?: Lead }): Promise<void> => {
+    const secret = webKeySecret(runtime);
+    if (runtime.access.mode !== 'hub' || !secret || !outcome.lead || outcome.status === 'rejected') return;
+    try {
+      await recordWebObservation(runtime.store, secret, userId, outcome.lead, outcome.status !== 'duplicate');
+    } catch (error) {
+      runtime.logger.warn('web observation failed', { leadId: outcome.lead.id, error: String(error) });
+    }
+  };
+
   app.post('/submit', rateLimit({ windowMs: 10 * 60_000, max: 30 }), async (c) => {
     const user = await currentUser(c, runtime);
     if (!user) return c.redirect('/login');
@@ -1212,6 +1268,7 @@ export function createApp(runtime: Runtime): Hono {
     };
 
     const outcome = await ingestRawLead(rawLead, source, deps(runtime));
+    await creditWebUser(user.id, outcome);
     if (outcome.lead?.id) {
       return c.redirect(`/leads/${outcome.lead.id}`);
     }
@@ -1955,6 +2012,7 @@ export function createApp(runtime: Runtime): Hono {
     };
 
     const outcome = await ingestRawLead(rawLead, source, deps(runtime));
+    await creditWebUser(user.id, outcome);
     return {
       status: 200,
       json: {

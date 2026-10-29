@@ -1355,6 +1355,16 @@ legend {
 }
 .hint { color: var(--muted); font-size: 12px; }
 .kind-picker { display: grid; gap: 14px; }
+.profile-progress { border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 16px; background: var(--surface); }
+.profile-progress-head { margin-bottom: 8px; }
+.profile-bar { height: 6px; border-radius: 3px; background: var(--soft); overflow: hidden; }
+.profile-bar span { display: block; height: 100%; background: var(--ink); }
+.profile-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+.profile-table td { padding: 8px 6px; border-top: 1px solid var(--line); vertical-align: top; }
+.profile-points { font-weight: 600; white-space: nowrap; width: 48px; }
+.profile-points.neg { color: var(--danger, #b42318); }
+.profile-status.credited { color: var(--ok, #127a3a); }
+.profile-status.hidden { color: var(--danger, #b42318); }
 .catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
 .catalog-card { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .catalog-card-body { min-width: 0; }
@@ -3108,7 +3118,18 @@ export interface ProfilePageData {
   hubMode: boolean;
   pubkey?: string;
   rating?: number;
+  /** Points of the last 30 days, newest first. */
+  ledger?: Array<{ leadId: string; kind: string; points: number; createdAt: string; title?: string }>;
+  /** What the account brought, newest first. */
+  posts?: Array<{ leadId: string; title: string; receivedAt: string; first: boolean; status: 'credited' | 'waiting' | 'hidden' }>;
 }
+
+/** People see points: the rating ×10, whole numbers. */
+const POINTS_SCALE = 10;
+const LEDGER_LABELS: Record<SupportedLang, Record<string, string>> = {
+  ru: { first: 'найдено первым', confirm: 'подтверждение', signal_match: 'верный голос', hidden_first: 'скрыто как мусор', hidden_confirm: 'подтвердили мусор' },
+  en: { first: 'found first', confirm: 'confirmation', signal_match: 'vote matched', hidden_first: 'hidden as junk', hidden_confirm: 'confirmed junk' },
+};
 
 const TIER_NAMES: Record<SupportedLang, Record<ProfilePageData['tier'], string>> = {
   ru: { guest: 'Гость', member: 'Участник', active: 'Активный', core: 'Ядро', admin: 'Администратор' },
@@ -3139,20 +3160,49 @@ export function renderProfilePage(data: ProfilePageData): string {
     : `<p class="muted">${ru
         ? 'Ключ участника к аккаунту не привязан: рейтинг копится на ключе, которым подписаны ваши наблюдения.'
         : 'No participant key is linked to this account: rating accrues to the key that signs your observations.'}</p>`;
+  const rating = data.rating ?? 0;
+  const points = Math.round(rating * POINTS_SCALE);
+  const next = data.tier === 'core' || data.tier === 'admin' ? undefined
+    : data.tier === 'active' ? { name: names.core, at: 50, delay: data.delays.core }
+    : { name: names.active, at: 10, delay: data.delays.active };
+  const progress = data.hubMode && next ? `<div class="profile-progress">
+    <div class="profile-progress-head"><strong>${points} ${ru ? plural(points, ['очко', 'очка', 'очков']) : 'points'}</strong> ${ru ? 'за 30 дней' : 'over 30 days'}
+      <span class="muted">· ${ru ? `ещё ${Math.max(0, next.at * POINTS_SCALE - points)} до уровня «${escapeHtml(next.name)}»` : `${Math.max(0, next.at * POINTS_SCALE - points)} more to ${escapeHtml(next.name)}`}${next.delay !== undefined ? ` (${ru ? 'задержка' : 'delay'} ${escapeHtml(delay(next.delay))})` : ''}</span></div>
+    <div class="profile-bar"><span style="width:${Math.min(100, Math.round((rating / next.at) * 100))}%"></span></div>
+  </div>` : '';
+  const ledgerRows = (data.ledger ?? []).map((entry) => `<tr>
+      <td class="profile-points ${entry.points < 0 ? 'neg' : ''}">${entry.points > 0 ? '+' : ''}${Math.round(entry.points * POINTS_SCALE)}</td>
+      <td><a href="/leads/${escapeHtml(entry.leadId)}">${escapeHtml(entry.title ?? entry.leadId)}</a><div class="muted small">${escapeHtml(LEDGER_LABELS[lang][entry.kind] ?? entry.kind)}</div></td>
+      <td class="muted small">${formatRelative(entry.createdAt, lang)}</td>
+    </tr>`).join('');
+  const statusLabel = (status: 'credited' | 'waiting' | 'hidden'): string =>
+    status === 'credited' ? (ru ? 'очки начислены' : 'credited') : status === 'hidden' ? (ru ? 'скрыт' : 'hidden') : (ru ? 'ждёт подтверждения' : 'awaiting confirmation');
+  const postRows = (data.posts ?? []).map((post) => `<tr>
+      <td><a href="/leads/${escapeHtml(post.leadId)}">${escapeHtml(post.title)}</a>${post.first ? '' : `<div class="muted small">${ru ? 'уже был в базе' : 'already in the base'}</div>`}</td>
+      <td class="small"><span class="profile-status ${post.status}">${statusLabel(post.status)}</span></td>
+      <td class="muted small">${formatRelative(post.receivedAt, lang)}</td>
+    </tr>`).join('');
+  const activity = data.hubMode ? `
+  <h2>${ru ? 'Начисления' : 'Points'}</h2>
+  ${ledgerRows ? `<table class="profile-table">${ledgerRows}</table>` : `<p class="muted">${ru ? 'Пока пусто. Очки приходят, когда добавленный вами заказ подтверждают другие участники или он сутки висит без жалоб.' : 'Nothing yet. Points come when others confirm a lead you added, or it stays a day without complaints.'}</p>`}
+  <h2>${ru ? 'Ваши публикации' : 'Your posts'}</h2>
+  ${postRows ? `<table class="profile-table">${postRows}</table>` : `<p class="muted">${ru ? 'Добавьте заказ <a href="/submit">по ссылке</a> или через <a href="/extension">расширение</a> — он появится здесь.' : 'Add a lead <a href="/submit">by link</a> or with the <a href="/extension">extension</a> and it shows up here.'}</p>`}` : '';
   const body = `
 <div class="page-head"><div><h1>${escapeHtml(t.profileTitle)}</h1>
   <p class="muted small">${escapeHtml(data.auth?.handle ? '@' + data.auth.handle : names[data.tier])}</p></div></div>
 <section class="profile">
+  ${progress}
   <p class="profile-tier">${ru ? 'Уровень' : 'Tier'}: <strong>${escapeHtml(names[data.tier])}</strong>${data.hubMode && data.tier !== 'admin' ? ` · ${ru ? 'задержка ленты' : 'feed delay'}: <strong>${escapeHtml(delay(data.delays[data.tier]))}</strong>` : ''}</p>
-  ${keyBlock}
+  ${activity}
   ${table}
-  <h2>${ru ? 'Как поднять уровень' : 'How to move up'}</h2>
+  <h2>${ru ? 'Как получить очки' : 'How to earn points'}</h2>
   <ol class="profile-steps">
-    <li>${ru ? 'Создайте ключ участника: <code>radar key</code> на своём узле или <code>Key.generate()</code> в Python SDK.' : 'Create a participant key: <code>radar key</code> on your node or <code>Key.generate()</code> in the Python SDK.'}</li>
-    <li>${ru ? 'Присылайте заказы в сеть: со своего узла (источник с галочкой «делиться») или из своего парсера через SDK.' : 'Send leads to the network: from your node (a source marked "share") or from your own parser through the SDK.'}</li>
-    <li>${ru ? 'Очки дают подтверждённые заказы, которые вы увидели первым: ×1.5 за закрытые каналы. Мусор и скам отнимают очки.' : 'Points come from confirmed leads you saw first, ×1.5 for private channels. Junk and scam cost points.'}</li>
-    <li>${ru ? 'Привяжите ключ к GitHub (<code>POST /v2/link/github</code>), чтобы рейтинг и аккаунт на сайте были одним участником.' : 'Link the key to GitHub (<code>POST /v2/link/github</code>) so the rating and this account are one participant.'}</li>
+    <li>${ru ? 'Добавляйте заказы и вакансии <a href="/submit">по ссылке</a> или через <a href="/extension">расширение</a>: +10 очков за подтверждённый заказ, который вы принесли первым.' : 'Add leads <a href="/submit">by link</a> or with the <a href="/extension">extension</a>: +10 points for a confirmed lead you brought first.'}</li>
+    <li>${ru ? 'Из закрытых каналов очков в полтора раза больше: подключите свой узел с Telegram и включите «делиться».' : 'Private channels earn half as much again: run your node with Telegram and turn on sharing.'}</li>
+    <li>${ru ? 'Голосуйте «полезно», «мусор», «закрыто»: голос, совпавший с итогом, даёт +1. Мусор и скам отнимают очки.' : 'Vote useful, junk, closed: a vote that matches the outcome gives +1. Junk and scam cost points.'}</li>
+    <li>${ru ? 'Очки считаются за 30 дней: уровень держится, пока вы приносите заказы.' : 'Points count over 30 days: the tier holds while you keep bringing leads.'}</li>
   </ol>
+  ${keyBlock}
   <p><a href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md#5-делиться-с-хабом-и-получать-рейтинг" target="_blank" rel="noopener noreferrer">${ru ? 'Подробно — в руководстве' : 'Step by step in the guide'}</a></p>
 </section>`;
   return layout({ title: t.profileTitle, version: data.version, body, auth: data.auth, lang });

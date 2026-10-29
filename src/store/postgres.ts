@@ -1217,6 +1217,14 @@ export class PostgresStore implements Store {
     return res.rows.map(rowToObservation);
   }
 
+  async listObservationsByPubkey(pubkey: string, limit: number): Promise<ObservationRecord[]> {
+    const res = await this.pool.query(
+      `SELECT * FROM observations WHERE pubkey = $1 ORDER BY received_at DESC LIMIT $2`,
+      [pubkey, limit],
+    );
+    return res.rows.map(rowToObservation);
+  }
+
   async findObservationsByPost(platform: string, channel: string, messageId: string): Promise<ObservationRecord[]> {
     const res = await this.pool.query(
       `SELECT * FROM observations WHERE platform = $1 AND channel = $2 AND message_id = $3 ORDER BY received_at ASC`,
