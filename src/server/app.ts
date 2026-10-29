@@ -726,6 +726,9 @@ export function createApp(runtime: Runtime): Hono {
       version: VERSION,
       uptimeSec: Math.round(process.uptime()),
       sources: stats.sources,
+      // Disabled sources stay in the count above; this is what is actually polled.
+      enabledSources: stats.enabledSources,
+      last24h: stats.last24h,
     });
   });
 
@@ -886,7 +889,9 @@ export function createApp(runtime: Runtime): Hono {
     return items;
   };
 
-  app.get('/', async (c) => {
+  // Public feeds: generous per-IP limits, so a scraper loop cannot pin the database.
+  const feedLimit = rateLimit({ windowMs: 60_000, max: 120 });
+  app.get('/', feedLimit, async (c) => {
     if (!await canRead(c, runtime)) return c.redirect('/login');
     const lang = resolveLang(c);
     const rawStatus = c.req.query('status') ?? '';
@@ -1614,7 +1619,7 @@ export function createApp(runtime: Runtime): Hono {
     return c.json(estimateMarket({ title, type, skills }, leads));
   });
 
-  app.get('/api/leads', async (c) => {
+  app.get('/api/leads', feedLimit, async (c) => {
     if (!await canRead(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
     const limit = Math.max(1, Math.min(Number(c.req.query('limit') ?? 50) || 50, 500));
     const status = c.req.query('status') as LeadStatus | undefined;
@@ -1979,7 +1984,7 @@ export function createApp(runtime: Runtime): Hono {
     });
   };
 
-  app.get('/feed.rss', serveFeed);
+  app.get('/feed.rss', feedLimit, serveFeed);
   app.get('/feed.xml', serveFeed);
   app.get('/api/feed.rss', serveFeed);
 
@@ -2085,7 +2090,7 @@ export function createApp(runtime: Runtime): Hono {
     );
   });
 
-  app.get('/api/delta', async (c) => {
+  app.get('/api/delta', feedLimit, async (c) => {
     if (!await canRead(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
     const sinceParam = c.req.query('since');
     const since = sinceParam && Number.isFinite(Date.parse(sinceParam))
