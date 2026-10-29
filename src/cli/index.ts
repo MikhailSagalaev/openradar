@@ -796,8 +796,12 @@ function buildProgram(): Command {
         await client.editFolder({ folder: existing, modification: { includePeers: [...existing.includePeers, ...added] } });
         console.log(`Папка «${title}»: добавлено ${added.length}, всего ${existing.includePeers.length + added.length}.`);
       } else {
+        // mtcute picks the id over plain folders only, and an id taken by a shared folder makes
+        // Telegram replace that folder: the id is chosen over every folder here.
+        const ids = (await client.getFolders()).filters.map((filter) => ('id' in filter ? filter.id : 0));
+        const id = Math.max(1, ...ids) + 1;
         // Telegram keeps up to 100 chats in a folder.
-        await client.createFolder({ title: { _: 'textWithEntities', text: title, entities: [] }, includePeers: peers.slice(0, 100) });
+        await client.createFolder({ id, title: { _: 'textWithEntities', text: title, entities: [] }, includePeers: peers.slice(0, 100) });
         console.log(`Папка «${title}» создана: ${Math.min(peers.length, 100)} чатов.`);
       }
       await client.destroy();
