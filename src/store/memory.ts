@@ -21,7 +21,7 @@ import type {
   UserVoteResult,
   AdminStats,
 } from '../core/store.ts';
-import type { LeadFactsFill } from '../core/store.ts';
+import type { LeadFactsFill, ResearchDailyRow } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
 import { lastDays } from '../core/store.ts';
 import type {
@@ -284,6 +284,23 @@ export class MemoryStore implements Store {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, options.limit)
       .map((l) => ({ ...l, text: l.text.slice(0, 3000) }));
+  }
+
+  private researchDaily = new Map<string, ResearchDailyRow[]>();
+
+  async saveResearchDaily(day: string, rows: ResearchDailyRow[]): Promise<void> {
+    this.researchDaily.set(day, rows.map((r) => ({ ...r, day })));
+  }
+
+  async listResearchDaily(from: string, to: string): Promise<ResearchDailyRow[]> {
+    return [...this.researchDaily.entries()]
+      .filter(([day]) => day >= from.slice(0, 10) && day < to.slice(0, 10))
+      .sort(([a], [b]) => a.localeCompare(b))
+      .flatMap(([, rows]) => rows);
+  }
+
+  async lastResearchDay(): Promise<string | undefined> {
+    return [...this.researchDaily.keys()].sort().at(-1);
   }
 
   async listLeadsForModel(options: { limit: number; since: string; version: number; withPayFirst?: boolean }): Promise<Array<Pick<Lead, 'id' | 'title' | 'text' | 'type'>>> {

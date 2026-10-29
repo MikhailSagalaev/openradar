@@ -6,6 +6,7 @@ import { checkLeadsLiveness } from './liveness.ts';
 import { recomputeRatings } from '../hub/rating.ts';
 import { parseModerators } from '../hub/service.ts';
 import { ensureMonthlySnapshot } from '../research/service.ts';
+import { ensureDailyCounts } from '../research/index.ts';
 import { extractionEnabled, runModelExtraction } from '../research/model.ts';
 
 const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000;
@@ -164,6 +165,9 @@ export class PollRunner {
       // Last month's market report is frozen once, early in the next month.
       const snapshot = await ensureMonthlySnapshot(store, new Date(), { useModel: this.deps.env.RADAR_EXTRACT_APPLY });
       if (snapshot) this.logger.info('research snapshot saved', { period: snapshot });
+      // The days that are over join the openradar index.
+      const days = await ensureDailyCounts(store, new Date(), { useModel: this.deps.env.RADAR_EXTRACT_APPLY });
+      if (days.length) this.logger.info('research daily counts saved', { from: days[0], to: days.at(-1) });
       if (leads || runs || sessions) {
         this.logger.info('maintenance cleanup finished', {
           leads,
