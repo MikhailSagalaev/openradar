@@ -327,4 +327,17 @@ export const SOURCE_PRESETS: SourcePreset[] = [
       ],
     },
   },
+  {
+    id: 'getmatch',
+    kind: 'sitemap',
+    title: 'getmatch — IT-вакансии',
+    description: 'IT-вакансии getmatch.ru из карты сайта: разметка JobPosting и зарплата из описания страницы (API закрыт в robots.txt и не используется)',
+    config: {
+      url: 'https://getmatch.ru/sitemap.xml',
+      pattern: '/vacancies/(\d+)-',
+      perPoll: 15,
+      delayMs: 1500,
+      maxAgeDays: 30,
+    },
+  },
 ];

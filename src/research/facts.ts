@@ -39,7 +39,7 @@ function asNumber(value: unknown): number | undefined {
   return Number.isFinite(n) && n > 0 ? Math.round(n) : undefined;
 }
 
-function asText(value: unknown, max = 160): string | undefined {
+export function asText(value: unknown, max = 160): string | undefined {
   if (typeof value === 'string') {
     const text = stripHtml(decodeHtmlEntities(value)).replace(/\s+/g, ' ').trim();
     return text ? text.slice(0, max) : undefined;
@@ -49,7 +49,7 @@ function asText(value: unknown, max = 160): string | undefined {
 }
 
 /** Every JSON-LD object on the page, @graph members included. */
-function jsonLdObjects(html: string): Array<Record<string, unknown>> {
+export function jsonLdObjects(html: string): Array<Record<string, unknown>> {
   const out: Array<Record<string, unknown>> = [];
   const visit = (node: unknown): void => {
     if (Array.isArray(node)) node.forEach(visit);
@@ -69,12 +69,12 @@ function jsonLdObjects(html: string): Array<Record<string, unknown>> {
   return out;
 }
 
-function isType(node: Record<string, unknown>, type: string): boolean {
+export function isType(node: Record<string, unknown>, type: string): boolean {
   const t = node['@type'];
   return t === type || (Array.isArray(t) && t.includes(type));
 }
 
-function salaryOf(posting: Record<string, unknown>): PageSalary | undefined {
+export function salaryOf(posting: Record<string, unknown>): PageSalary | undefined {
   const base = (posting.baseSalary ?? posting.estimatedSalary) as Record<string, unknown> | undefined;
   if (!base || typeof base !== 'object') return undefined;
   const value = (base.value ?? {}) as Record<string, unknown>;
@@ -87,7 +87,7 @@ function salaryOf(posting: Record<string, unknown>): PageSalary | undefined {
   return { min, max, currency, period: UNIT_PERIOD[unit] ?? 'month' };
 }
 
-function companyOf(posting: Record<string, unknown>): string | undefined {
+export function companyOf(posting: Record<string, unknown>): string | undefined {
   const org = posting.hiringOrganization;
   if (typeof org === 'string') return asText(org, 120);
   if (org && typeof org === 'object') return asText((org as Record<string, unknown>).name, 120);
