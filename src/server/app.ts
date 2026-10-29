@@ -1004,16 +1004,18 @@ export function createApp(runtime: Runtime): Hono {
   const sitemapLimit = rateLimit({ windowMs: 60_000, max: runtime.env.RADAR_SITEMAP_RATE_PER_MIN });
 
   // «За сутки найдено N»: leads of the last 24 h this viewer can see, refreshed every 10 minutes per tier.
-  const foundTodayCache = new Map<string, { at: number; count: number }>();
+  // A full day of what this tier can see: the 24 hours before its delay ends, so a guest's
+  // number is not half a day long. Up to 5000; one count per tier runs at a time.
+  const foundTodayCache = new Map<string, { at: number; count: Promise<number> }>();
   const foundToday = async (viewer: Viewer): Promise<number> => {
     const cached = foundTodayCache.get(viewer.tier);
     if (cached && Date.now() - cached.at < 10 * 60_000) return cached.count;
-    const recent = await leadsFor(runtime, viewer, {
-      limit: 5000,
-      createdAfter: new Date(Date.now() - 24 * 3600_000).toISOString(),
-    });
-    foundTodayCache.set(viewer.tier, { at: Date.now(), count: recent.length });
-    return recent.length;
+    const until = Date.parse(visibleBefore(viewer, runtime.access) ?? new Date().toISOString());
+    const count = leadsFor(runtime, viewer, { limit: 5000, createdAfter: new Date(until - 24 * 3600_000).toISOString() })
+      .then((recent) => recent.length);
+    foundTodayCache.set(viewer.tier, { at: Date.now(), count });
+    count.catch(() => foundTodayCache.delete(viewer.tier));
+    return count;
   };
   app.get('/', feedLimit, async (c) => {
     if (!await canRead(c, runtime)) return c.redirect('/login');

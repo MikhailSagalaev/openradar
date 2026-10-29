@@ -200,12 +200,29 @@ const DIRECT_WEBHOOK_TRUST = 8;
  * webhook takes whatever is sent to it unless the operator marked it trusted.
  * No source (similar-lead lists) means no claim.
  */
-export function isDirectEmployerSource(source?: Pick<SourceRecord, 'kind' | 'config'>): boolean {
+export function isDirectEmployerSource(source?: Pick<SourceRecord, 'kind' | 'config'>, author?: string): boolean {
   if (!source) return false;
+  // An agency or recruiter is never the direct client, whatever the board.
+  if (author && AGENCY_RE.test(author)) return false;
+  if (typeof source.config?.direct === 'boolean') return source.config.direct;
   if (source.kind === 'webhook') return Number(source.config?.trust ?? 0) >= DIRECT_WEBHOOK_TRUST;
-  const access = KIND_ACCESS[source.kind];
-  return access === 'official' || access === 'user-provided';
+  if (DIRECT_KINDS.has(source.kind)) return true;
+  // Feeds of boards where the employer or client posts the lead themself; aggregator feeds
+  // repost other sites and are not direct.
+  if (source.kind === 'rss' && typeof source.config?.url === 'string') {
+    try {
+      return DIRECT_RSS_HOSTS.has(new URL(source.config.url).hostname.replace(/^www\./, ''));
+    } catch {
+      return false;
+    }
+  }
+  return false;
 }
+
+/** Boards where the employer or client posts the lead itself. */
+const DIRECT_KINDS = new Set(['hh', 'trudvsem', 'ats', 'kwork']);
+const DIRECT_RSS_HOSTS = new Set(['fl.ru', 'career.habr.com', 'hh.ru', 'freelancehunt.com']);
+const AGENCY_RE = /агентств|кадров|рекрут|hr-?агент|recruit|staffing|talent agency/i;
 
 export type ScoreBand = 'strong' | 'good' | 'weak' | 'noise';
 
@@ -270,7 +287,7 @@ const STYLE = `
   --emerald: #10b981;
   --rose: #ef4444;
   --amber: #f59e0b;
-  /* Score band pills: a pale fill with dark text, at least 7:1 */
+  /* Score band pills: a pale fill with dark text, at least 6:1 */
   --emerald-soft: #d1fae5;
   --emerald-ink: #065f46;
   --blue-soft: #dbeafe;
@@ -2113,7 +2130,7 @@ function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru', 
   if (lead.normalizedUsdMin || lead.budget || lead.rawSalary) {
     signals.push(t.signalMarketBudget);
   }
-  if (isDirectEmployerSource(source)) {
+  if (isDirectEmployerSource(source, lead.author)) {
     signals.push(t.signalDirectEmployer);
   }
   if ((lead.votes_scam ?? 0) >= 1 && lead.status !== 'rejected') {
