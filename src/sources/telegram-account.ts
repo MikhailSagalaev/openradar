@@ -21,12 +21,17 @@ export function telegramApiCredentials(): { apiId: number; apiHash: string } {
   return { apiId, apiHash };
 }
 
-/** Loaded on first use: nodes without a Telegram account never load the MTProto client. */
+/**
+ * Loaded on first use: nodes without a Telegram account never load the MTProto client.
+ * RADAR_TELEGRAM_PROXY (socks5://, http://, or a t.me/proxy MTProxy link) is for hosts
+ * where Telegram is blocked.
+ */
 export async function newTelegramClient(): Promise<TelegramClient> {
   const { apiId, apiHash } = telegramApiCredentials();
-  const { MemoryStorage, TelegramClient: Client } = await import('@mtcute/node');
+  const { MemoryStorage, TelegramClient: Client, proxyTransportFromUrl } = await import('@mtcute/node');
+  const proxy = process.env.RADAR_TELEGRAM_PROXY?.trim();
   // Sessions come from the environment, so nothing needs to persist between runs.
-  return new Client({ apiId, apiHash, storage: new MemoryStorage() });
+  return new Client({ apiId, apiHash, storage: new MemoryStorage(), ...(proxy ? { transport: proxyTransportFromUrl(proxy) } : {}) });
 }
 
 /** One connected client per session for the whole process, shared by all its sources. */

@@ -203,6 +203,8 @@ export interface PollContext {
   timeoutMs: number;
   logger: Logger;
   now: () => Date;
+  /** Set for sources with config.proxy: every fetchText of the poll goes through it. */
+  proxyUrl?: string;
 }
 
 export interface SourceAdapter {

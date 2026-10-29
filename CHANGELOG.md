@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.19.0
+
+- Sources can go through a proxy one by one: `config.proxy: true` sends every fetch of the
+  poll through `RADAR_PROXY_URL` (an HTTP CONNECT proxy; Tor's HTTPTunnelPort works), or
+  `config.proxyUrl` names a proxy of its own. Boards reachable directly stay direct.
+- The Telegram account source connects through `RADAR_TELEGRAM_PROXY` (SOCKS5, HTTP, or an
+  MTProxy link) on hosts where Telegram is blocked.
+
 ## 0.18.0
 
 - Public feeds (`/`, `/api/leads`, `/feed.rss`, `/api/delta`) are limited to 120 requests a
