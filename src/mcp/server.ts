@@ -7,6 +7,7 @@
 import { createInterface } from 'node:readline';
 import type { LeadSort, ListLeadsOptions } from '../core/store.ts';
 import { rubToUsd } from '../core/salary.ts';
+import { VERSION } from '../version.ts';
 import type { Lead, LeadType } from '../core/types.ts';
 
 export interface McpBackend {
@@ -178,7 +179,10 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend): Pr
       result: {
         protocolVersion: SUPPORTED_PROTOCOLS.includes(requested) ? requested : SUPPORTED_PROTOCOLS[0],
         capabilities: { tools: {} },
-        serverInfo: { name: 'openradar-mcp', version: '2.0.0' },
+        serverInfo: { name: 'openradar', title: 'openradar', version: VERSION },
+        instructions:
+          'openradar is an open base of job vacancies and freelance orders from Russian-language and international boards and Telegram channels. ' +
+          'Search with search_leads, narrowing by market, remote, skills, since and min_budget_rub, then open the few that fit with get_lead_details.',
       },
     };
   }

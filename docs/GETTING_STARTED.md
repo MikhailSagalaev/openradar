@@ -207,7 +207,7 @@ hub.observe([{"source": {"platform": "telegram", "channel": "-1001234567890", "v
 
 `search_leads` отдаёт по 10 лучших результатов в коротком виде и `next_offset` для следующей страницы, чтобы агент не читал всю базу. Фильтры: `query`, `type` (job, gig), `market` (ru — русскоязычные площадки, intl — остальные), `remote`, `skills`, `min_budget_rub`, `since` («24h», «7d» или дата), `sort` (new, score, budget). Полный текст и контакты — `get_lead_details`.
 
-Хаб openradar.fun подключается напрямую: адрес MCP-сервера `https://openradar.fun/mcp`.
+Хаб openradar.fun подключается напрямую: адрес MCP-сервера `https://openradar.fun/mcp`. В Claude: **Настройки → Коннекторы → Добавить свой коннектор**, адрес `https://openradar.fun/mcp`, без входа. В Claude Code: `claude mcp add --transport http openradar https://openradar.fun/mcp`. Описание сервера для реестра MCP — [server.json](../server.json).
 
 Локально, через stdio (сначала `pnpm build`). Пример конфигурации MCP-клиента:
 

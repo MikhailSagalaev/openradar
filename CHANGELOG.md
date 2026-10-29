@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.25.1
+
+- `/mcp` answers GET and DELETE with 405, as Streamable HTTP asks of a server without a
+  server-sent stream; the server reports its real version and a short instruction for agents.
+- `server.json` describes the hub's MCP server for the MCP Registry; the guide says how to add
+  `https://openradar.fun/mcp` as a connector in Claude and Claude Code.
+
 ## 0.25.0
 
 - What a signed-in person adds on a hub, by link or with the extension, earns rating: every

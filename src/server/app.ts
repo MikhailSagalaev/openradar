@@ -1801,6 +1801,9 @@ export function createApp(runtime: Runtime): Hono {
     return c.json(leads.map((lead) => toPublicLead(projectContacts(lead, viewer))));
   });
 
+  // Streamable HTTP without a server-sent stream: GET and DELETE answer 405, as the spec asks.
+  app.on(['GET', 'DELETE'], '/mcp', (c) => c.body(null, 405, { allow: 'POST' }));
+
   app.post('/mcp', rateLimit({ windowMs: 60_000, max: 60 }), async (c) => {
     // MCP is a free machine interface over the same feed: same tier, same delay,
     // same contact rules as the HTTP API.
