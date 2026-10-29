@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.21.2
+
+- The getmatch preset lost the backslash of its URL pattern and matched nothing; it is a raw
+  string now, with a test. Sources added from the old preset need the pattern fixed.
+
 ## 0.21.1
 
 - The name is written openradar, in lowercase, across the site, the reports, the extension
