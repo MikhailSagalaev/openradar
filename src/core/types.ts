@@ -78,6 +78,10 @@ export interface Env {
   RADAR_CHECK_CLOSED: boolean;
   RADAR_GIG_TTL_DAYS: number;
   RADAR_JOB_TTL_DAYS: number;
+  RADAR_FEED_RATE_PER_MIN: number;
+  RADAR_RSS_RATE_PER_MIN: number;
+  RADAR_DELTA_RATE_PER_MIN: number;
+  RADAR_SITEMAP_RATE_PER_MIN: number;
   RADAR_LOG_LEVEL: LogLevel;
   PORT: number;
   RADAR_BIND: string;
