@@ -74,10 +74,15 @@ export interface Translations {
   scoreReasons: string;
   cautionFlag: string;
   // Signals
-  signalHighScore: string;
   signalMarketBudget: string;
   signalDirectEmployer: string;
   signalPossibleScam: string;
+  // Score bands: the label beside the score
+  bandStrong: string;
+  bandGood: string;
+  bandWeak: string;
+  bandNoise: string;
+  skipToFeed: string;
   // Voting
   useful: string;
   junk: string;
@@ -244,10 +249,14 @@ export const RU: Translations = {
   stack: 'Стек',
   scoreReasons: 'Почему так',
   cautionFlag: 'Внимание: участники сообщества отметили этот заказ как подозрительный. Тщательно проверяйте заказчика перед началом работы.',
-  signalHighScore: 'сильный заказ',
   signalMarketBudget: 'указан бюджет',
   signalDirectEmployer: 'прямой заказчик',
   signalPossibleScam: 'возможен скам',
+  bandStrong: 'сильный',
+  bandGood: 'хороший',
+  bandWeak: 'слабый',
+  bandNoise: 'шум',
+  skipToFeed: 'К ленте',
   useful: 'Полезно',
   junk: 'Мусор',
   scam: 'Скам',
@@ -408,10 +417,14 @@ export const EN: Translations = {
   stack: 'Stack',
   scoreReasons: 'Score breakdown',
   cautionFlag: 'Caution: community members flagged this lead as suspicious. Verify the client carefully before proceeding.',
-  signalHighScore: 'strong lead',
   signalMarketBudget: 'budget stated',
   signalDirectEmployer: 'direct employer',
   signalPossibleScam: 'possible scam',
+  bandStrong: 'strong',
+  bandGood: 'good',
+  bandWeak: 'weak',
+  bandNoise: 'noise',
+  skipToFeed: 'Skip to feed',
   useful: 'Useful',
   junk: 'Junk',
   scam: 'Scam',
