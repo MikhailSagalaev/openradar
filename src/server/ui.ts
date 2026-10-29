@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { Contact, Lead, LeadVoteSignal, RunRecord, SourceHealth, SourceRecord, Stats } from '../core/types.ts';
+import type { AccessKind, Contact, Lead, LeadVoteSignal, RunRecord, SourceHealth, SourceRecord, Stats } from '../core/types.ts';
 import { escapeHtml, firstLine, jsonForScript } from '../core/text.ts';
 import { type SupportedLang, getTranslations } from './i18n.ts';
 import { renderLogo } from './logo.ts';
@@ -169,6 +169,61 @@ const KIND_LABELS: Record<string, string> = {
   sitemap: 'Карта сайта (JobPosting)',
 };
 
+/**
+ * How each source type reaches its posts, as its adapter declares `access` in src/sources.
+ * A static copy so the page renderer does not pull in every adapter; a test keeps it in step.
+ */
+export const KIND_ACCESS: Record<string, AccessKind> = {
+  rss: 'official',
+  telegram: 'public',
+  'telegram-account': 'user-provided',
+  kwork: 'public',
+  imap: 'user-provided',
+  webhook: 'user-provided',
+  trudvsem: 'official',
+  hh: 'official',
+  remoteok: 'official',
+  remotive: 'official',
+  arbeitnow: 'official',
+  hn: 'official',
+  ats: 'official',
+  sitemap: 'public',
+};
+
+/** A webhook counts as a direct channel only when the operator trusts it this much. */
+const DIRECT_WEBHOOK_TRUST = 8;
+
+/**
+ * «Прямой заказчик»: the post comes from the one who hires, not from a reposter.
+ * Boards and APIs publish what the employer filed there; the operator's own mailbox and
+ * Telegram account are channels they picked. Scraped public pages repost anyone, and a
+ * webhook takes whatever is sent to it unless the operator marked it trusted.
+ * No source (similar-lead lists) means no claim.
+ */
+export function isDirectEmployerSource(source?: Pick<SourceRecord, 'kind' | 'config'>): boolean {
+  if (!source) return false;
+  if (source.kind === 'webhook') return Number(source.config?.trust ?? 0) >= DIRECT_WEBHOOK_TRUST;
+  const access = KIND_ACCESS[source.kind];
+  return access === 'official' || access === 'user-provided';
+}
+
+export type ScoreBand = 'strong' | 'good' | 'weak' | 'noise';
+
+/** The word beside a score: 80+ strong, 60–79 good, 40–59 weak, below 40 noise. */
+export function scoreBand(score: number): ScoreBand {
+  if (score >= 80) return 'strong';
+  if (score >= 60) return 'good';
+  if (score >= 40) return 'weak';
+  return 'noise';
+}
+
+function scoreWithBand(score: number, lang: SupportedLang): string {
+  const t = getTranslations(lang);
+  const band = scoreBand(score);
+  const label = { strong: t.bandStrong, good: t.bandGood, weak: t.bandWeak, noise: t.bandNoise }[band];
+  return `<span class="score-wrap"><span class="score" title="${escapeHtml(t.scoreHint)}">${score}</span><span class="band band-${band}">${escapeHtml(label)}</span></span>`;
+}
+
 /** What each source type is for, one line on its card in the type picker. */
 const KIND_HINTS: Record<string, string> = {
   rss: 'Лента RSS или Atom: биржа, блог, поиск hh.ru или Хабр Карьеры',
@@ -215,6 +270,15 @@ const STYLE = `
   --emerald: #10b981;
   --rose: #ef4444;
   --amber: #f59e0b;
+  /* Score band pills: a pale fill with dark text, at least 7:1 */
+  --emerald-soft: #d1fae5;
+  --emerald-ink: #065f46;
+  --blue-soft: #dbeafe;
+  --blue-ink: #1e40af;
+  --amber-soft: #fef3c7;
+  --amber-ink: #92400e;
+  --neutral-soft: #f4f4f5;
+  --neutral-ink: #52525b;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -229,6 +293,14 @@ const STYLE = `
     --emerald: #34d399;
     --rose: #f87171;
     --amber: #fbbf24;
+    --emerald-soft: #052e22;
+    --emerald-ink: #6ee7b7;
+    --blue-soft: #172554;
+    --blue-ink: #93c5fd;
+    --amber-soft: #451a03;
+    --amber-ink: #fcd34d;
+    --neutral-soft: #27272a;
+    --neutral-ink: #d4d4d8;
   }
 }
 * { box-sizing: border-box; }
@@ -624,6 +696,21 @@ dialog::backdrop {
   font-size: 13.5px;
   font-variant-numeric: tabular-nums;
 }
+.score-wrap { display: inline-flex; align-items: center; gap: 6px; }
+.band {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.band-strong { background: var(--emerald-soft); color: var(--emerald-ink); }
+.band-good { background: var(--blue-soft); color: var(--blue-ink); }
+.band-weak { background: var(--amber-soft); color: var(--amber-ink); }
+.band-noise { background: var(--neutral-soft); color: var(--neutral-ink); }
 .dot {
   display: inline-block;
   width: 6.5px;
@@ -1069,7 +1156,7 @@ dialog::backdrop {
   appearance: none;
   cursor: pointer;
 }
-.filter-bar select:hover, .filter-bar select:focus { border-color: var(--line-strong); outline: none; }
+.filter-bar select:hover, .filter-bar select:focus { border-color: var(--line-strong); }
 .filter-check { display: inline-flex; align-items: center; gap: 6px; height: 34px; font-size: 13px; color: var(--ink); cursor: pointer; }
 .filter-check input { margin: 0; accent-color: var(--ink); }
 .filter-reset { font-size: 13px; color: var(--muted); }
@@ -1078,6 +1165,27 @@ dialog::backdrop {
   .filter-check { height: 40px; }
 }
 .score[title] { cursor: help; }
+/* Keyboard focus is always visible; the search pill shows it on the whole bar instead. */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.search-input-wrap input:focus-visible { outline: none; }
+.skip-link {
+  position: absolute;
+  left: 16px;
+  top: -48px;
+  z-index: 1000;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 600;
+  text-decoration: none;
+}
+.skip-link:focus { top: 12px; }
+.main-content { display: flex; flex-direction: column; }
+.main-content:focus { outline: none; }
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1695,6 +1803,7 @@ ${input.head ?? ''}
 ${analyticsHeadHtml}
 </head>
 <body>
+<a class="skip-link" href="#main">${escapeHtml(t.skipToFeed)}</a>
 ${analyticsBodyHtml}
 <main>
 <header class="top">
@@ -1708,7 +1817,9 @@ ${analyticsBodyHtml}
   </nav>
   <div class="actions">${input.actions ?? ''}${authWidget}</div>
 </header>
+<div class="main-content" id="main" tabindex="-1">
 ${input.body}
+</div>
 <footer>
   <div class="footer-wrap">
     <div class="footer-col footer-col-brand">
@@ -1999,13 +2110,10 @@ function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru', 
     .join(' · ');
 
   const signals: string[] = [];
-  if (lead.score >= 80) {
-    signals.push(t.signalHighScore);
-  }
   if (lead.normalizedUsdMin || lead.budget || lead.rawSalary) {
     signals.push(t.signalMarketBudget);
   }
-  if (lead.reasons?.some((r) => r.includes('direct') || r.includes('employer')) || (lead.author && !lead.author.toLowerCase().includes('агентство'))) {
+  if (isDirectEmployerSource(source)) {
     signals.push(t.signalDirectEmployer);
   }
   if ((lead.votes_scam ?? 0) >= 1 && lead.status !== 'rejected') {
@@ -2031,7 +2139,7 @@ function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru', 
       ${subLine}
     </div>
     <div class="row-side">
-      <span class="score" title="${escapeHtml(t.scoreHint)}">${lead.score}</span>
+      ${scoreWithBand(lead.score, lang)}
       ${admin ? `<span>${statusDot(lead.status, lang)}</span>` : ''}
     </div>
   </a>`;
@@ -2546,7 +2654,7 @@ ${cautionBanner}
       <div><dt>${escapeHtml(t.location)}</dt><dd>${escapeHtml(lead.city ?? (lead.isRemote !== false ? t.remote : '—'))}</dd></div>
       <div><dt>${escapeHtml(t.format)}</dt><dd>${lead.isRemote !== false ? escapeHtml(t.remoteFormat) : escapeHtml(t.onsiteFormat)}</dd></div>
       <div><dt>${escapeHtml(t.budget)}</dt><dd>${salaryDisplay}${usdEstimate}</dd></div>
-      <div><dt>${escapeHtml(t.score)}</dt><dd><span class="score" title="${escapeHtml(t.scoreHint)}">${lead.score}</span></dd></div>
+      <div><dt>${escapeHtml(t.score)}</dt><dd>${scoreWithBand(lead.score, lang)}</dd></div>
       <div><dt>${escapeHtml(t.published)}</dt><dd>${formatDate(lead.publishedAt, lang)}</dd></div>
       ${Math.abs(Date.parse(lead.createdAt) - Date.parse(lead.publishedAt ?? lead.createdAt)) > 30 * 60_000 ? `<div><dt>${escapeHtml(t.added)}</dt><dd>${formatDate(lead.createdAt, lang)}</dd></div>` : ''}
       ${lead.author ? `<div><dt>${escapeHtml(t.author)}</dt><dd>${escapeHtml(lead.author)}</dd></div>` : ''}
