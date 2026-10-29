@@ -26,21 +26,31 @@ describe('isDirectEmployerSource', () => {
   it.each([
     ['hh', {}, true],
     ['trudvsem', {}, true],
-    ['remoteok', {}, true],
     ['ats', {}, true],
-    ['rss', {}, true],
-    ['imap', {}, true],
-    ['telegram-account', {}, true],
+    ['kwork', {}, true],
+    ['rss', { url: 'https://www.fl.ru/rss/all.xml' }, true],
+    ['rss', { url: 'https://career.habr.com/vacancies/rss' }, true],
+    ['rss', { url: 'https://himalayas.app/jobs/rss' }, false],
+    ['rss', {}, false],
+    ['remoteok', {}, false],
+    ['imap', {}, false],
+    ['telegram-account', {}, false],
     ['telegram', {}, false],
-    ['kwork', {}, false],
     ['sitemap', {}, false],
     ['webhook', {}, false],
     ['webhook', { trust: 7 }, false],
     ['webhook', { trust: 8 }, true],
-    ['webhook', { trust: '10' }, true],
+    ['telegram', { direct: true }, true],
+    ['hh', { direct: false }, false],
     ['unknown-kind', {}, false],
   ])('%s %j → %s', (kind, config, expected) => {
     expect(isDirectEmployerSource(source(kind, config))).toBe(expected);
+  });
+
+  it('never marks an agency as the direct client', () => {
+    expect(isDirectEmployerSource(source('hh'), 'Кадровое агентство «Старт»')).toBe(false);
+    expect(isDirectEmployerSource(source('hh'), 'Acme Recruiting')).toBe(false);
+    expect(isDirectEmployerSource(source('hh'), 'Яндекс')).toBe(true);
   });
 
   it('makes no claim without a source', () => {
@@ -57,7 +67,7 @@ describe('layout accessibility', () => {
   it('opens the body with a skip link to the main content', () => {
     const html = layout({ title: 'x', version: 'test', body: '<p>feed</p>', lang: 'en' });
     const body = html.slice(html.indexOf('<body>') + '<body>'.length).trimStart();
-    expect(body.startsWith('<a class="skip-link" href="#main">Skip to feed</a>')).toBe(true);
+    expect(body.startsWith('<a class="skip-link" href="#main">Skip to content</a>')).toBe(true);
     expect(html).toContain('id="main"');
   });
 });
