@@ -794,11 +794,11 @@ export function createApp(runtime: Runtime): Hono {
     await next();
   });
 
-  app.notFound((c) => {
+  app.notFound(async (c) => {
     const p = c.req.path;
     const wantsJson = p.startsWith('/api') || p.startsWith('/v2') || p === '/mcp' || !c.req.header('accept')?.includes('text/html');
     if (wantsJson) return c.json({ error: 'not_found' }, 404);
-    return c.html(renderNotFound(VERSION, resolveLang(c)), 404);
+    return c.html(renderNotFound(VERSION, resolveLang(c), await getAuthDisplay(c, runtime)), 404);
   });
 
   app.onError((error, c) => {
@@ -1223,6 +1223,14 @@ export function createApp(runtime: Runtime): Hono {
     );
   });
 
+  /** True when the signed-in viewer brought this lead through their web key. */
+  const broughtBy = async (viewer: Viewer, leadId: string): Promise<boolean> => {
+    const secret = webKeySecret(runtime);
+    if (!viewer.userId || !secret) return false;
+    const pubkey = webPubkey(secret, viewer.userId);
+    return (await runtime.store.listObservations(leadId)).some((o) => o.pubkey === pubkey);
+  };
+
   /** On a hub, what a signed-in person adds counts to their rating through their web key. */
   const creditWebUser = async (userId: number, outcome: { status: string; lead?: Lead }): Promise<void> => {
     const secret = webKeySecret(runtime);
@@ -1529,7 +1537,10 @@ export function createApp(runtime: Runtime): Hono {
     const lang = resolveLang(c);
     const viewer = await viewerFromRequest(c, runtime);
     const stored = await runtime.store.getLead(c.req.param('id'));
-    if (!stored || !viewerCanSeeLead(viewer, stored, runtime.access)) return c.html(renderNotFound(VERSION, lang), 404);
+    // Whoever brought a lead sees it at once, before the tier delay lets others see it.
+    if (!stored || !(viewerCanSeeLead(viewer, stored, runtime.access) || await broughtBy(viewer, stored.id))) {
+      return c.html(renderNotFound(VERSION, lang, await getAuthDisplay(c, runtime)), 404);
+    }
     const lead = projectContacts(stored, viewer);
     const source = await runtime.store.getSource(lead.sourceId);
     const user = await currentUser(c, runtime);

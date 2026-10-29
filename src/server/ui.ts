@@ -3341,11 +3341,12 @@ export function renderExtensionConnectPage(data: {
   return layout({ title: ru ? 'Подключить расширение' : 'Connect the extension', version: data.version, body, auth: data.auth, lang });
 }
 
-export function renderNotFound(version: string, lang: SupportedLang = 'ru'): string {
+export function renderNotFound(version: string, lang: SupportedLang = 'ru', auth?: AuthDisplay): string {
   const t = getTranslations(lang);
   return layout({
     title: t.notFoundTitle,
     version,
+    auth,
     body: `<div class="page-head"><div><h1>${escapeHtml(t.notFoundTitle)}</h1><p class="muted small">${escapeHtml(t.notFoundDesc)}</p></div></div><div><a class="btn" href="/">${escapeHtml(t.backToLeads)}</a></div>`,
     lang,
   });
