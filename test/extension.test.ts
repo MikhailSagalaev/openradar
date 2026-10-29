@@ -36,7 +36,7 @@ describe('extension content script JobPosting extractor', () => {
       '@context': 'https://schema.org',
       '@type': 'JobPosting',
       title: 'Senior Frontend Engineer',
-      description: '<p>Join our team to build <b>OpenRadar</b>.</p>',
+      description: '<p>Join our team to build <b>openradar</b>.</p>',
       hiringOrganization: {
         '@type': 'Organization',
         name: 'Acme Corp',
@@ -83,7 +83,7 @@ describe('extension content script JobPosting extractor', () => {
     expect(extracted.salaryMax).toBe(350000);
     expect(extracted.currency).toBe('RUB');
     expect(extracted.skills).toEqual(['TypeScript', 'React', 'CSS']);
-    expect(extracted.description).toContain('Join our team to build OpenRadar.');
+    expect(extracted.description).toContain('Join our team to build openradar.');
   });
 
   it('extracts OpenGraph metadata and selection when no JobPosting is present', () => {

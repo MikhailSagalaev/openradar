@@ -448,7 +448,7 @@ describe('http server', () => {
       headers: { cookie: `radar_session=${sessionId}` },
     });
     expect(leads.status).toBe(200);
-    expect(await leads.text()).toContain('Radar');
+    expect(await leads.text()).toContain('openradar');
 
     const sources = await app.request('/sources', {
       headers: { cookie: `radar_session=${sessionId}` },

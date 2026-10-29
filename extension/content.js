@@ -1,5 +1,5 @@
 /**
- * OpenRadar extension: reads the open page, including schema.org/JobPosting markup.
+ * openradar extension: reads the open page, including schema.org/JobPosting markup.
  */
 
 function cleanText(htmlOrText) {

@@ -75,7 +75,7 @@ import { fetchText } from './http.ts';
 export const ${camelName}Source: SourceAdapter = {
   kind: '${cleanName}',
   access: 'public',
-  description: '${pascalName} connector for OpenRadar',
+  description: '${pascalName} connector for openradar',
   risks: [
     'Markup or API structure may change without notice',
     'Rate limiting may apply to automated requests',
@@ -189,7 +189,7 @@ import { fetchText } from './http.ts';
 export const ${camelName}Source: SourceAdapter = {
   kind: '${cleanName}',
   access: 'public',
-  description: '${pascalName} connector for OpenRadar',
+  description: '${pascalName} connector for openradar',
   risks: [
     'HTML markup may change without notice',
     'Rate limiting may apply to automated requests',

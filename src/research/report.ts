@@ -284,7 +284,7 @@ export function buildReport(
 export function findingsOf(report: Report): Finding[] {
   const out: Finding[] = [];
   const when = report.period.phrase;
-  const cite = (text: string, n: number): string => `По данным OpenRadar, ${text} ${when} (выборка: ${n} вакансий).`;
+  const cite = (text: string, n: number): string => `По данным openradar, ${text} ${when} (выборка: ${n} вакансий).`;
   const { jobs, gigs } = report;
 
   if (jobs.pay.median !== undefined) {
@@ -296,7 +296,7 @@ export function findingsOf(report: Report): Finding[] {
   if (report.totals.jobs >= RELIABLE) {
     out.push({
       text: `Зарплату указывают в ${formatShare(jobs.payShare)} вакансий.`,
-      quote: `По данным OpenRadar, зарплату указывают в ${formatShare(jobs.payShare)} вакансий ${when} (выборка: ${report.totals.jobs} вакансий).`,
+      quote: `По данным openradar, зарплату указывают в ${formatShare(jobs.payShare)} вакансий ${when} (выборка: ${report.totals.jobs} вакансий).`,
     });
   }
   const ranked = jobs.roles.filter((r) => r.pay.n >= MIN_MEDIAN);
@@ -341,7 +341,7 @@ export function findingsOf(report: Report): Finding[] {
   if (gigs.budget.median !== undefined) {
     out.push({
       text: `Медианный бюджет заказа на фрилансе — ${formatRub(gigs.budget.median)}; бюджет указан в ${formatShare(gigs.budgetShare)} заказов.`,
-      quote: `По данным OpenRadar, медианный бюджет заказа на фриланс-биржах и в Telegram-каналах ${when} составил ${formatRub(gigs.budget.median)} (выборка: ${gigs.budget.n} заказов).`,
+      quote: `По данным openradar, медианный бюджет заказа на фриланс-биржах и в Telegram-каналах ${when} составил ${formatRub(gigs.budget.median)} (выборка: ${gigs.budget.n} заказов).`,
     });
   }
   return out;

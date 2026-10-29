@@ -1,15 +1,15 @@
 {
   "extName": {
-    "message": "OpenRadar — захват вакансий и заказов"
+    "message": "openradar — захват вакансий и заказов"
   },
   "extDescription": {
-    "message": "Вакансии и заказы в открытую базу OpenRadar в один клик и оценка оплаты по рынку. Только по вашей команде."
+    "message": "Вакансии и заказы в открытую базу openradar в один клик и оценка оплаты по рынку. Только по вашей команде."
   },
   "actionTitle": {
-    "message": "Отправить в OpenRadar"
+    "message": "Отправить в openradar"
   },
   "cmdSendPage": {
-    "message": "Отправить текущую страницу в OpenRadar"
+    "message": "Отправить текущую страницу в openradar"
   },
   "tagline": {
     "message": "захват заказов и вакансий"
@@ -42,7 +42,7 @@
     "message": "Вакансия"
   },
   "send": {
-    "message": "Отправить в OpenRadar"
+    "message": "Отправить в openradar"
   },
   "estimate": {
     "message": "Оценить оплату на рынке"
@@ -51,13 +51,13 @@
     "message": "Свой узел (необязательно)"
   },
   "ownNodeNote": {
-    "message": "Если у вас свой сервер OpenRadar: заказы пойдут на него в webhook-источник, а не в общую базу."
+    "message": "Если у вас свой сервер openradar: заказы пойдут на него в webhook-источник, а не в общую базу."
   },
   "contributorLabel": {
     "message": "Подпись (необязательно)"
   },
   "serverLabel": {
-    "message": "Адрес сервера OpenRadar"
+    "message": "Адрес сервера openradar"
   },
   "check": {
     "message": "Проверить"
@@ -261,13 +261,13 @@
     "message": "Браузер скачивает обновление, оно установится в течение нескольких минут."
   },
   "menuSendGig": {
-    "message": "Отправить заказ в OpenRadar"
+    "message": "Отправить заказ в openradar"
   },
   "menuSendJob": {
-    "message": "Отправить вакансию в OpenRadar"
+    "message": "Отправить вакансию в openradar"
   },
   "menuSendPage": {
-    "message": "Отправить текущую страницу в OpenRadar"
+    "message": "Отправить текущую страницу в openradar"
   },
   "notifySignIn": {
     "message": "Откройте расширение и войдите через GitHub."
@@ -287,7 +287,7 @@
     }
   },
   "notifySavedTitle": {
-    "message": "OpenRadar — сохранено"
+    "message": "openradar — сохранено"
   },
   "notifySavedOpen": {
     "message": "«$P1$» добавлен. Нажмите, чтобы открыть карточку.",
@@ -298,16 +298,16 @@
     }
   },
   "notifySaved": {
-    "message": "Сохранено в OpenRadar."
+    "message": "Сохранено в openradar."
   },
   "leadFallback": {
     "message": "Заказ"
   },
   "notifyErrorTitle": {
-    "message": "OpenRadar — ошибка"
+    "message": "openradar — ошибка"
   },
   "errSend": {
-    "message": "Не удалось отправить в OpenRadar."
+    "message": "Не удалось отправить в openradar."
   },
   "jobFromBrowser": {
     "message": "Вакансия из браузера"

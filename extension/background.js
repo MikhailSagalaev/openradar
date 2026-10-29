@@ -1,5 +1,5 @@
 /**
- * OpenRadar extension: background service worker (context menu, shortcut, notifications).
+ * openradar extension: background service worker (context menu, shortcut, notifications).
  */
 
 const notificationUrls = new Map();
@@ -36,7 +36,7 @@ async function sendToRadar(payload) {
       chrome.notifications.create({
         type: 'basic',
         iconUrl: 'icon48.png',
-        title: 'OpenRadar',
+        title: 'openradar',
         message: t('notifySignIn'),
       });
     }

@@ -76,7 +76,7 @@ describe('SEO catalog pages', () => {
     expect(index).toContain('rel="canonical" href="https://openradar.fun/catalog"');
 
     const about = renderAboutPage({ baseUrl: 'https://openradar.fun', version: 'test' });
-    expect(about).toContain('<h1>О проекте OpenRadar</h1>');
+    expect(about).toContain('<h1>О проекте openradar</h1>');
     expect(about).toContain('"@type": "SearchAction"');
 
     const faq = renderFaqPage({ baseUrl: 'https://openradar.fun', version: 'test' });
@@ -84,7 +84,7 @@ describe('SEO catalog pages', () => {
     expect(faq).toContain('Это бесплатно?');
 
     const llms = renderLlmsTxt('https://openradar.fun');
-    expect(llms).toMatch(/^# OpenRadar/);
+    expect(llms).toMatch(/^# openradar/);
     expect(llms).toContain('https://openradar.fun/catalog/vakansii-python');
   });
 

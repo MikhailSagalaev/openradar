@@ -1,5 +1,5 @@
 /**
- * OpenRadar extension: UI strings from _locales/ in the browser's language (Russian or English).
+ * openradar extension: UI strings from _locales/ in the browser's language (Russian or English).
  * Elements carry data-i18n (text) or data-i18n-placeholder (placeholder) with a message key.
  */
 

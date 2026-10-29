@@ -1609,9 +1609,9 @@ export function layout(input: {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(input.title)} · OpenRadar</title>
-<meta property="og:site_name" content="OpenRadar">
-<meta property="og:title" content="${escapeHtml(input.title)} · OpenRadar">
+<title>${escapeHtml(input.title)} · openradar</title>
+<meta property="og:site_name" content="openradar">
+<meta property="og:title" content="${escapeHtml(input.title)} · openradar">
 <meta property="og:type" content="website">
 ${publicBaseUrl ? `<meta property="og:image" content="${escapeHtml(publicBaseUrl)}/og.png">
 <meta property="og:image:width" content="1200">
@@ -1628,7 +1628,7 @@ ${analyticsBodyHtml}
 <main>
 <header class="top">
   <div class="top-brand-group">
-    <a class="brand" href="/" aria-label="OpenRadar">${renderLogo({ height: 24 })}</a>
+    <a class="brand" href="/" aria-label="openradar">${renderLogo({ height: 24 })}</a>
   </div>
   <nav class="nav">
     ${nav('leads', t.navLeads, '/')}
@@ -1641,7 +1641,7 @@ ${input.body}
 <footer>
   <div class="footer-wrap">
     <div class="footer-col footer-col-brand">
-      <p class="footer-brand"><a href="/" aria-label="OpenRadar">${renderLogo({ height: 16 })}</a></p>
+      <p class="footer-brand"><a href="/" aria-label="openradar">${renderLogo({ height: 16 })}</a></p>
       <p style="margin:8px 0 0">${escapeHtml(t.footerDesc)}</p>
     </div>
     <div class="footer-col">
@@ -2312,7 +2312,7 @@ ${POLL_SCRIPT}
     auth: data.auth,
     lang,
     head: `<link rel="canonical" href="${escapeHtml(publicBaseUrl ?? 'https://openradar.fun')}/${typeParam}">
-<meta name="description" content="OpenRadar — открытая база заказов и вакансий: свежие проекты с бирж и Telegram-каналов, вилки зарплат, фильтры по стеку и RSS на любой запрос.">`,
+<meta name="description" content="openradar — открытая база заказов и вакансий: свежие проекты с бирж и Telegram-каналов, вилки зарплат, фильтры по стеку и RSS на любой запрос.">`,
   });
 }
 
@@ -2507,7 +2507,7 @@ ${data.similar?.length ? `<section class="similar">
 <meta name="description" content="${escapeHtml(cleanText)}">
 ${publicBaseUrl ? `<link rel="canonical" href="${escapeHtml(publicBaseUrl)}/leads/${escapeHtml(lead.id)}">` : ''}
 ${gone ? '<meta name="robots" content="noindex">' : ''}
-<meta property="og:title" content="${escapeHtml(leadTitle(lead))} · OpenRadar">
+<meta property="og:title" content="${escapeHtml(leadTitle(lead))} · openradar">
 <meta property="og:description" content="${escapeHtml(cleanText)}">
 <meta property="og:type" content="article">
 ${publicBaseUrl ? `<meta property="og:url" content="${escapeHtml(publicBaseUrl)}/leads/${escapeHtml(lead.id)}">` : ''}
@@ -3030,8 +3030,8 @@ export function renderExtensionConnectPage(data: {
 <div class="connect-card">
   <h1>${ru ? 'Подключить расширение' : 'Connect the extension'}</h1>
   <p>${ru
-    ? `Расширение OpenRadar сможет добавлять заказы от имени <strong>@${escapeHtml(data.handle)}</strong>. Других прав у него не будет: ни голосования, ни настроек, ни доступа к аккаунту GitHub.`
-    : `The OpenRadar extension will add leads as <strong>@${escapeHtml(data.handle)}</strong>. Nothing else: no voting, no settings, no access to your GitHub account.`}</p>
+    ? `Расширение openradar сможет добавлять заказы от имени <strong>@${escapeHtml(data.handle)}</strong>. Других прав у него не будет: ни голосования, ни настроек, ни доступа к аккаунту GitHub.`
+    : `The openradar extension will add leads as <strong>@${escapeHtml(data.handle)}</strong>. Nothing else: no voting, no settings, no access to your GitHub account.`}</p>
   <p class="muted small">${ru ? 'Отключить можно в самом расширении кнопкой «Выйти».' : 'Disconnect it in the extension with «Выйти».'}</p>
   <form method="post" action="/extension/connect">
     <input type="hidden" name="redirect_uri" value="${escapeHtml(data.redirectUri)}">
@@ -3058,7 +3058,7 @@ export function renderExtensionPage(data: ExtensionPageData): string {
   const texts = isEn
     ? {
         title: 'Browser extension',
-        subtitle: 'Send a vacancy or an order from any site to OpenRadar in one click, and see what similar work pays.',
+        subtitle: 'Send a vacancy or an order from any site to openradar in one click, and see what similar work pays.',
         downloadZip: 'Download extension.zip',
         current: 'Current version',
         updateNote: 'When a newer version is out, the extension says so at the top of its window.',
@@ -3066,21 +3066,21 @@ export function renderExtensionPage(data: ExtensionPageData): string {
         steps: [
           ['Download and unpack', 'Press <b>Download extension.zip</b> and unpack the archive into a folder you will keep.'],
           ['Turn on developer mode', 'Open <code>chrome://extensions</code> (Yandex Browser: <code>browser://extensions</code>) and switch on <b>Developer mode</b> in the corner.'],
-          ['Load the folder', 'Press <b>Load unpacked</b> and pick the unpacked folder. Pin the OpenRadar icon to the toolbar.'],
+          ['Load the folder', 'Press <b>Load unpacked</b> and pick the unpacked folder. Pin the openradar icon to the toolbar.'],
           ['Sign in with GitHub', 'Click the icon, press <b>Sign in with GitHub</b> and allow the extension. Nothing to type: leads go to the shared base under your GitHub name.'],
         ],
         storeSoon: 'Coming to the Chrome Web Store: one-click install and automatic updates.',
         usageTitle: 'What it does',
         features: [
           ['Send the page', 'On a vacancy or an order press <b>Alt+Shift+R</b> or the toolbar icon. Title, link and text are read from the page; with <code>schema.org/JobPosting</code> markup also salary, company, city and skills.'],
-          ['Send a selection', 'Select text in a chat or on a board, right-click and choose <b>Send order to OpenRadar</b> or <b>Send vacancy to OpenRadar</b>. A notification links to the new lead.'],
+          ['Send a selection', 'Select text in a chat or on a board, right-click and choose <b>Send order to openradar</b> or <b>Send vacancy to openradar</b>. A notification links to the new lead.'],
           ['Market pay', '<b>Estimate market pay</b> shows the median and the middle half of pay for similar leads over 90 days, and whether the pay on the page is below, within or above it.'],
           ['Updates', 'A newer version shows a bar at the top of the extension window: <b>Update</b> for a store install, <b>Download</b> for an unpacked one.'],
         ],
         privacyTitle: 'Privacy',
         privacyDesc: 'Nothing is read or sent while you browse: only the open tab and only on your click or shortcut. The market estimate sends only the title, the type and the skills. No analytics. <a href="https://github.com/MikhailSagalaev/openradar/blob/main/extension/PRIVACY.md" target="_blank" rel="noopener">Privacy policy</a>.',
         nodeTitle: 'Your own node (optional)',
-        nodeDesc: 'Leads go to the shared hub by default. To send them to your own OpenRadar server, open <b>Your own node</b> in the extension and enter the address and a webhook source.',
+        nodeDesc: 'Leads go to the shared hub by default. To send them to your own openradar server, open <b>Your own node</b> in the extension and enter the address and a webhook source.',
         pingChecking: 'Checking the server...',
         serverUrl: 'Server address',
         copyUrl: 'Copy address',
@@ -3097,7 +3097,7 @@ export function renderExtensionPage(data: ExtensionPageData): string {
       }
     : {
         title: 'Расширение для браузера',
-        subtitle: 'Отправляет вакансию или заказ с любого сайта в OpenRadar в один клик и показывает, сколько платят за такую работу.',
+        subtitle: 'Отправляет вакансию или заказ с любого сайта в openradar в один клик и показывает, сколько платят за такую работу.',
         downloadZip: 'Скачать extension.zip',
         current: 'Актуальная версия',
         updateNote: 'Когда выйдет новая версия, расширение само скажет об этом вверху своего окна.',
@@ -3105,21 +3105,21 @@ export function renderExtensionPage(data: ExtensionPageData): string {
         steps: [
           ['Скачайте и распакуйте', 'Нажмите <b>«Скачать extension.zip»</b> и распакуйте архив в папку, которую не будете удалять.'],
           ['Включите режим разработчика', 'Откройте <code>chrome://extensions</code> (в Яндекс Браузере — <code>browser://extensions</code>) и включите <b>«Режим разработчика»</b> в углу страницы.'],
-          ['Загрузите папку', 'Нажмите <b>«Загрузить распакованное расширение»</b> и выберите распакованную папку. Закрепите значок OpenRadar на панели.'],
+          ['Загрузите папку', 'Нажмите <b>«Загрузить распакованное расширение»</b> и выберите распакованную папку. Закрепите значок openradar на панели.'],
           ['Войдите через GitHub', 'Нажмите на значок, затем <b>«Войти через GitHub»</b> и разрешите расширение. Ничего вводить не нужно: заказы добавляются в общую базу от вашего имени на GitHub.'],
         ],
         storeSoon: 'Скоро в Chrome Web Store: установка в один клик и обновления без переустановки.',
         usageTitle: 'Что умеет',
         features: [
           ['Отправить страницу', 'На странице вакансии или заказа нажмите <b>Alt+Shift+R</b> или значок на панели. Заголовок, ссылка и текст берутся со страницы, а при разметке <code>schema.org/JobPosting</code> — ещё зарплата, компания, город и навыки.'],
-          ['Отправить фрагмент', 'Выделите текст в чате или на бирже, нажмите правой кнопкой и выберите <b>«Отправить заказ в OpenRadar»</b> или <b>«Отправить вакансию в OpenRadar»</b>. Уведомление откроет новую карточку.'],
+          ['Отправить фрагмент', 'Выделите текст в чате или на бирже, нажмите правой кнопкой и выберите <b>«Отправить заказ в openradar»</b> или <b>«Отправить вакансию в openradar»</b>. Уведомление откроет новую карточку.'],
           ['Оплата на рынке', '<b>«Оценить оплату на рынке»</b> показывает медиану и середину разброса оплаты по похожим заказам за 90 дней и где оплата на странице: ниже рынка, в рынке или выше.'],
           ['Обновления', 'Если вышла новая версия, вверху окна расширения появится плашка: <b>«Обновить»</b> для версии из магазина, <b>«Скачать»</b> для распакованной.'],
         ],
         privacyTitle: 'Приватность',
         privacyDesc: 'Пока вы просто листаете сайты, расширение ничего не читает и не отправляет: только открытую вкладку и только по вашему клику или сочетанию клавиш. Для оценки оплаты уходят лишь заголовок, тип и навыки. Без аналитики. <a href="https://github.com/MikhailSagalaev/openradar/blob/main/extension/PRIVACY.md" target="_blank" rel="noopener">Политика конфиденциальности</a>.',
         nodeTitle: 'Свой узел (необязательно)',
-        nodeDesc: 'По умолчанию заказы уходят в общий хаб. Чтобы отправлять их на свой сервер OpenRadar, откройте в расширении <b>«Свой узел»</b> и укажите адрес и webhook-источник.',
+        nodeDesc: 'По умолчанию заказы уходят в общий хаб. Чтобы отправлять их на свой сервер openradar, откройте в расширении <b>«Свой узел»</b> и укажите адрес и webhook-источник.',
         pingChecking: 'Проверяем сервер...',
         serverUrl: 'Адрес сервера',
         copyUrl: 'Скопировать адрес',

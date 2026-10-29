@@ -21,14 +21,14 @@ describe('RSS Feed generator', () => {
 
     const xml = renderRssFeed({
       leads,
-      title: 'OpenRadar — Поиск C++',
+      title: 'openradar — Поиск C++',
       baseUrl: 'https://radar.example.com',
       feedUrl: 'https://radar.example.com/feed.rss?q=C%2B%2B',
     });
 
     expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
     expect(xml).toContain('<rss version="2.0"');
-    expect(xml).toContain('<title>OpenRadar — Поиск C++</title>');
+    expect(xml).toContain('<title>openradar — Поиск C++</title>');
     expect(xml).toContain('<item>');
     expect(xml).toContain('<title>Разработка на C++</title>');
     expect(xml).toContain('<![CDATA[Требуется опытный разработчик C++ для Highload системы]]>');

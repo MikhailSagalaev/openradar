@@ -1,15 +1,15 @@
 {
   "extName": {
-    "message": "OpenRadar — save jobs and orders"
+    "message": "openradar — save jobs and orders"
   },
   "extDescription": {
-    "message": "Send jobs and freelance orders to the open OpenRadar base in one click and check market pay. Only on your command."
+    "message": "Send jobs and freelance orders to the open openradar base in one click and check market pay. Only on your command."
   },
   "actionTitle": {
-    "message": "Send to OpenRadar"
+    "message": "Send to openradar"
   },
   "cmdSendPage": {
-    "message": "Send the current page to OpenRadar"
+    "message": "Send the current page to openradar"
   },
   "tagline": {
     "message": "save orders and jobs"
@@ -42,7 +42,7 @@
     "message": "Vacancy"
   },
   "send": {
-    "message": "Send to OpenRadar"
+    "message": "Send to openradar"
   },
   "estimate": {
     "message": "Estimate market pay"
@@ -51,13 +51,13 @@
     "message": "Your own node (optional)"
   },
   "ownNodeNote": {
-    "message": "If you run your own OpenRadar server, leads go to its webhook source instead of the shared base."
+    "message": "If you run your own openradar server, leads go to its webhook source instead of the shared base."
   },
   "contributorLabel": {
     "message": "Signature (optional)"
   },
   "serverLabel": {
-    "message": "OpenRadar server address"
+    "message": "openradar server address"
   },
   "check": {
     "message": "Check"
@@ -261,13 +261,13 @@
     "message": "The browser is downloading the update; it installs within a few minutes."
   },
   "menuSendGig": {
-    "message": "Send order to OpenRadar"
+    "message": "Send order to openradar"
   },
   "menuSendJob": {
-    "message": "Send vacancy to OpenRadar"
+    "message": "Send vacancy to openradar"
   },
   "menuSendPage": {
-    "message": "Send the current page to OpenRadar"
+    "message": "Send the current page to openradar"
   },
   "notifySignIn": {
     "message": "Open the extension and sign in with GitHub."
@@ -287,7 +287,7 @@
     }
   },
   "notifySavedTitle": {
-    "message": "OpenRadar — saved"
+    "message": "openradar — saved"
   },
   "notifySavedOpen": {
     "message": "“$P1$” added. Click to open it.",
@@ -298,16 +298,16 @@
     }
   },
   "notifySaved": {
-    "message": "Saved to OpenRadar."
+    "message": "Saved to openradar."
   },
   "leadFallback": {
     "message": "Lead"
   },
   "notifyErrorTitle": {
-    "message": "OpenRadar — error"
+    "message": "openradar — error"
   },
   "errSend": {
-    "message": "Could not send to OpenRadar."
+    "message": "Could not send to openradar."
   },
   "jobFromBrowser": {
     "message": "Vacancy from the browser"
