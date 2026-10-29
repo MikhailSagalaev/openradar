@@ -1561,6 +1561,59 @@ describe('http server', () => {
     await runtime.store.close();
   });
 
+  it('follows the visitor language across the site, research included', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true });
+    const app = createApp(runtime);
+
+    // A German browser reads English; a Russian page has no «English» button any more.
+    expect((await app.request('/research', { headers: { 'accept-language': 'de-DE,de;q=0.9' } })).headers.get('location')).toBe('/en/research');
+    const ru = await (await app.request('/research', { headers: { cookie: 'openradar_lang=ru' } })).text();
+    expect(ru).not.toContain('>English</a>');
+    expect(await (await app.request('/about', { headers: { cookie: 'openradar_lang=en' } })).text()).toContain('About openradar');
+    expect(await (await app.request('/faq', { headers: { cookie: 'openradar_lang=en' } })).text()).toContain('Is it free?');
+
+    // The footer switch lands on the twin of the page.
+    expect((await app.request('/lang/ru?return=/en/research/index')).headers.get('location')).toBe('/research/index');
+    expect((await app.request('/lang/en?return=/research/methodology')).headers.get('location')).toBe('/en/research/methodology');
+    expect((await app.request('/lang/en', { headers: { referer: 'https://evil.example/x' } })).headers.get('location')).toBe('/');
+  });
+
+  it('lists the platform catalog and connects one platform', async () => {
+    const fetchImpl = (async () => new Response('', { status: 503 })) as unknown as typeof fetch;
+    const runtime = makeRuntime({}, fetchImpl);
+    const sessionId = await makeAdminSession(runtime);
+    const app = createApp(runtime);
+    const headers = { cookie: `radar_session=${sessionId}`, origin: 'http://localhost' };
+
+    const page = await (await app.request('/sources/catalog', { headers })).text();
+    expect(page).toContain('Российские биржи и вакансии');
+    expect(page).toContain('action="/sources/catalog/fl-all"');
+
+    await app.request('/sources/catalog/fl-all', { method: 'POST', headers });
+    await app.request('/sources/catalog/fl-all', { method: 'POST', headers });
+    expect((await runtime.store.listSources()).filter((s) => s.title.startsWith('FL.ru'))).toHaveLength(1);
+    expect(await (await app.request('/sources/catalog', { headers })).text()).toContain('Подключено');
+  });
+
+  it('creates company-board sources from the form and keeps hidden settings on edit', async () => {
+    const runtime = makeRuntime();
+    const sessionId = await makeAdminSession(runtime);
+    const app = createApp(runtime);
+    const headers = { cookie: `radar_session=${sessionId}`, origin: 'http://localhost', 'content-type': 'application/x-www-form-urlencoded' };
+
+    const form = await (await app.request('/sources/new', { headers })).text();
+    expect(form).toContain('value="ats"');
+    expect(form).toContain('value="hh"');
+
+    await app.request('/sources', { method: 'POST', headers, body: formBody({ kind: 'ats', title: 'Boards', provider: 'lever', companies: 'spotify=Spotify, plaid' }) });
+    const source = (await runtime.store.listSources()).find((s) => s.kind === 'ats')!;
+    expect(source.config).toMatchObject({ provider: 'lever', companies: ['spotify=Spotify', 'plaid'] });
+
+    await runtime.store.updateSource(source.id, { config: { ...source.config, perPoll: 3, proxy: true } });
+    await app.request(`/sources/${source.id}`, { method: 'POST', headers, body: formBody({ kind: 'ats', title: 'Boards', provider: 'lever', companies: 'plaid' }) });
+    expect((await runtime.store.getSource(source.id))!.config).toMatchObject({ companies: ['plaid'], perPoll: 3, proxy: true });
+  });
+
   it('handles unauthenticated community votes with auth modal and reject redirect', async () => {
     const runtime = makeRuntime({ RADAR_PUBLIC_READ: true });
     const app = createApp(runtime);

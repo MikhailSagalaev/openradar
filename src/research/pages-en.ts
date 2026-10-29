@@ -194,7 +194,7 @@ export function renderReportPageEn(options: { report: Report; baseUrl: string; v
 <div class="page-head"><div>
   <h1>${escapeHtml(title)}</h1>
   <p class="muted small">${isLive ? `A live report on ${num(totals.posts)} posts, ${escapeHtml(label)}, recalculated every 15 minutes.` : `The report for ${escapeHtml(label)}: ${num(totals.posts)} posts. The figures are frozen.`}
-  Pay offered in published Russian-language vacancies and freelance orders: hh.ru, Habr Career, the state portal «Работа России», freelance boards and Telegram channels. <a href="${ruPath}">Русская версия</a>.</p>
+  Pay offered in published Russian-language vacancies and freelance orders: hh.ru, Habr Career, the state portal «Работа России», freelance boards and Telegram channels.</p>
 </div><div class="actions"><a class="btn ghost" href="/en/research/index">Index</a><a class="btn ghost" href="/en/research/methodology">Methodology</a><a class="btn ghost" href="/research/dataset.csv">CSV data</a></div></div>
 
 <div class="rs-kpis">
@@ -289,7 +289,7 @@ export function renderIndexPageEn(options: { index: OpenradarIndex; baseUrl: str
     ? `The base is provisional for now: the mean of every day since 27 October (${index.base.days} days). The final base is 2–29 November 2026; it is fixed on 30 November and the values are recalculated.`
     : `The base is the mean number of posts a day over 2–29 November 2026 (${index.base.days} days) = 100.`;
   const body = `<nav class="crumbs" aria-label="Breadcrumbs"><a href="/">openradar</a> / <a href="/en/research">Research</a> / Index</nav>
-<div class="page-head"><div><h1>The openradar index</h1><p class="muted small">How many new vacancies and freelance orders appear in Russian-language IT and freelance each day, against a base of 100. <a href="/research/index">Русская версия</a>.</p></div>
+<div class="page-head"><div><h1>The openradar index</h1><p class="muted small">How many new vacancies and freelance orders appear in Russian-language IT and freelance each day, against a base of 100.</p></div>
 <div class="actions"><a class="btn ghost" href="/research/index.csv">CSV</a><a class="btn ghost" href="/research/index.json">JSON</a></div></div>
 <div class="rs-kpis">${headlineEn(index.jobs, 'Vacancies')}${headlineEn(index.gigs, 'Orders')}</div>
 <p class="small muted">${escapeHtml(baseNote)}</p>
@@ -318,7 +318,7 @@ export function renderMethodologyPageEn(options: { baseUrl: string; version: str
   const { baseUrl, version } = options;
   const rates = Object.entries(RUB_PER).map(([code, v]) => `${code} ${v}`).join(', ');
   const body = `<nav class="crumbs" aria-label="Breadcrumbs"><a href="/">openradar</a> / <a href="/en/research">Research</a> / Methodology</nav>
-<div class="page-head"><div><h1>Methodology</h1><p class="muted small">How openradar counts pay and budgets. <a href="/research/methodology">Русская версия</a>.</p></div></div>
+<div class="page-head"><div><h1>Methodology</h1><p class="muted small">How openradar counts pay and budgets.</p></div></div>
 <section class="prose" style="margin-top:0">
   <h2>What is measured</h2>
   <p>openradar research shows what employers and clients offer: the pay stated in published vacancies and orders. It is neither what people take home nor a survey. Such data shows the hiring market as it is now and how it changes month to month.</p>

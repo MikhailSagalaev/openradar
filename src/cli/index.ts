@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { randomBytes } from 'node:crypto';
-import { writeFileSync } from 'node:fs';
+import { appendFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Lead, LeadStatus, SourceConfig, SourceKind, SourceRecord } from '../core/types.ts';
@@ -687,7 +687,8 @@ function buildProgram(): Command {
   telegram
     .command('login')
     .description('Sign in once and print the session for RADAR_TELEGRAM_SESSION')
-    .action(async () => {
+    .option('--save <file>', 'append the session line to this .env file instead of printing it')
+    .action(async (options: { save?: string }) => {
       const { newTelegramClient } = await import('../sources/telegram-account.ts');
       const client = await newTelegramClient();
       const self = await client.start({
@@ -697,6 +698,13 @@ function buildProgram(): Command {
       });
       const session = await client.exportSession();
       console.log(`\nSigned in as ${self.displayName}${self.username ? ` (@${self.username})` : ''}.`);
+      if (options.save) {
+        // The session never reaches the screen: it grants full access to the account.
+        appendFileSync(options.save, `\nRADAR_TELEGRAM_SESSION=${session}\n`, { mode: 0o600 });
+        console.log(`The session is saved to ${options.save}. Recreate the container to pick it up.`);
+        await client.destroy();
+        return;
+      }
       console.log('Put this line into .env (it grants full access to the account, keep it secret):\n');
       console.log(`RADAR_TELEGRAM_SESSION=${session}\n`);
       console.log('A second account: RADAR_TELEGRAM_SESSION_<NAME>, and that name in the source settings.');
@@ -729,6 +737,65 @@ function buildProgram(): Command {
         .filter(Boolean);
       if (folders.length) console.log(`
 Папки: ${folders.join(', ')}`);
+      await client.destroy();
+    });
+
+  /** A client signed in with the session from the given variable. */
+  const signedInClient = async (sessionEnv: string) => {
+    const { newTelegramClient, TELEGRAM_SESSION_ENV_RE } = await import('../sources/telegram-account.ts');
+    if (!TELEGRAM_SESSION_ENV_RE.test(sessionEnv)) throw new Error('--session-env must be RADAR_TELEGRAM_SESSION[_NAME]');
+    const session = process.env[sessionEnv]?.trim();
+    if (!session) throw new Error(`${sessionEnv} is empty: run "radar telegram login" first`);
+    const client = await newTelegramClient();
+    await client.importSession(session);
+    await client.connect();
+    return client;
+  };
+
+  telegram
+    .command('scan')
+    .description('Every channel and group of the account with its last post, one JSON line each, to pick the job ones')
+    .option('--session-env <name>', 'variable with the session', 'RADAR_TELEGRAM_SESSION')
+    .action(async (options: { sessionEnv: string }) => {
+      const client = await signedInClient(options.sessionEnv);
+      // Dialogs with people are skipped: only channels and groups can become sources.
+      for await (const dialog of client.iterDialogs({ limit: 2000, archived: 'keep' })) {
+        const peer = dialog.peer;
+        if (peer.type === 'user') continue;
+        console.log(JSON.stringify({
+          id: String(peer.id),
+          username: peer.username ?? undefined,
+          title: peer.displayName,
+          kind: peer.chatType,
+          members: peer.membersCount ?? undefined,
+          last: dialog.lastMessage?.date.toISOString().slice(0, 10),
+          text: dialog.lastMessage?.text.replace(/\s+/g, ' ').slice(0, 200),
+        }));
+      }
+      await client.destroy();
+    });
+
+  telegram
+    .command('folder <title>')
+    .description('Create a Telegram folder with these chats, or add them to the folder that exists')
+    .requiredOption('--add <chats>', 'comma-separated chat ids or @names')
+    .option('--session-env <name>', 'variable with the session', 'RADAR_TELEGRAM_SESSION')
+    .action(async (title: string, options: { add: string; sessionEnv: string }) => {
+      const client = await signedInClient(options.sessionEnv);
+      const chats = options.add.split(',').map((chat) => chat.trim()).filter(Boolean);
+      const peers = [];
+      for (const chat of chats) peers.push(await client.resolvePeer(/^-?\d+$/.test(chat) ? Number(chat) : chat));
+      const existing = await client.findFolder({ title });
+      if (existing) {
+        const have = new Set(existing.includePeers.map((peer) => JSON.stringify(peer)));
+        const added = peers.filter((peer) => !have.has(JSON.stringify(peer)));
+        await client.editFolder({ folder: existing, modification: { includePeers: [...existing.includePeers, ...added] } });
+        console.log(`Папка «${title}»: добавлено ${added.length}, всего ${existing.includePeers.length + added.length}.`);
+      } else {
+        // Telegram keeps up to 100 chats in a folder.
+        await client.createFolder({ title: { _: 'textWithEntities', text: title, entities: [] }, includePeers: peers.slice(0, 100) });
+        console.log(`Папка «${title}» создана: ${Math.min(peers.length, 100)} чатов.`);
+      }
       await client.destroy();
     });
 

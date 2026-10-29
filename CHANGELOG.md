@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.24.0
+
+- The language follows the visitor across the site: a browser that prefers any language other
+  than Russian, Belarusian, Ukrainian or Kazakh gets English, and the footer switch sticks.
+  Research pages send English readers to their `/en/research` twins, and the switch lands on
+  the twin of the page; About and FAQ have English versions. The «English» button and the
+  «Русская версия» links are gone.
+- The platform catalog (`/sources/catalog`) replaces «Загрузить биржи»: every ready-made
+  platform with what it is, grouped into Russian boards, foreign boards and company career
+  pages, connected one by one or all at once. The silent @freelance_orders preset is dropped.
+- The new-source form shows every type again, as cards with a line on what each is for, and
+  fills hh.ru, Работа России, RemoteOK, Remotive, company career pages and sitemaps too.
+  Editing a source keeps the settings the form does not show (proxy, perPoll, maxAgeDays).
+- The source page and the sources list put their buttons beside the title, not in the header.
+- The extension page draws its install steps with a thin line and light numbers.
+- `radar telegram scan` lists every channel and group of the account with its last post;
+  `radar telegram folder <title> --add <chats>` creates a Telegram folder or adds chats to it;
+  `radar telegram login --save <file>` writes the session to the file instead of the screen.
+
 ## 0.23.0
 
 - Research in English: `/en/research` (live and monthly reports, findings written from the

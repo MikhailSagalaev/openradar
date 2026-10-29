@@ -15,7 +15,7 @@ import { ingestRawLead, type IngestDeps } from '../pipeline/ingest.ts';
 import { fetchSafeHttp } from '../pipeline/preview.ts';
 import { feedMaxAge } from '../pipeline/liveness.ts';
 import type { Runtime } from '../runtime.ts';
-import { SOURCE_PRESETS } from '../sources/presets.ts';
+import { SOURCE_PRESETS, presetSource } from '../sources/presets.ts';
 import { IMAP_PASSWORD_ENV_RE } from '../sources/imap.ts';
 import { DEFAULT_SESSION_ENV, TELEGRAM_SESSION_ENV_RE } from '../sources/telegram-account.ts';
 import { VERSION } from '../version.ts';
@@ -41,6 +41,7 @@ import {
   renderSourceCreatedPage,
   renderSourcePage,
   renderSourcesPage,
+  renderSourceCatalogPage,
   renderSubmitPage,
   STYLE,
   type AuthDisplay,
@@ -461,6 +462,12 @@ function formValues(body: Record<string, unknown>): SourceFormValues {
     chats: formString(body, 'chats'),
     folder: formString(body, 'folder'),
     sessionEnv: formString(body, 'sessionEnv'),
+    query: formString(body, 'query'),
+    area: formString(body, 'area'),
+    remotiveCategory: formString(body, 'remotiveCategory'),
+    provider: formString(body, 'provider'),
+    companies: formString(body, 'companies'),
+    pattern: formString(body, 'pattern'),
     share: formString(body, 'share') === 'on',
   };
 }
@@ -494,16 +501,33 @@ function formValuesFromSource(source: SourceRecord): SourceFormValues {
     chats: text(config.chats),
     folder: text(config.folder),
     sessionEnv: text(config.sessionEnv),
+    query: text(config.query ?? config.text ?? config.tag),
+    area: text(config.area),
+    remotiveCategory: source.kind === 'remotive' ? text(config.category) : '',
+    provider: text(config.provider),
+    companies: text(config.companies),
+    pattern: text(config.pattern),
     share: config.share === true,
   };
 }
+
+/** Config keys the source form sets; everything else is kept as it was. */
+const FORM_CONFIG_KEYS = new Set([
+  'share', 'city', 'includeKeywords', 'excludeKeywords', 'minBudget', 'limit', 'url', 'channel', 'chats', 'folder',
+  'sessionEnv', 'categoryId', 'token', 'host', 'user', 'passwordEnv', 'port', 'mailbox', 'sinceDays', 'subjectIncludes',
+  'query', 'text', 'tag', 'area', 'category', 'provider', 'companies', 'pattern',
+]);
 
 function buildSourceConfig(
   kind: SourceKind,
   body: Record<string, unknown>,
   existing?: SourceRecord,
 ): { config: SourceConfig; error?: string } {
+  // Settings the form does not show (proxy, perPoll, maxAgeDays...) survive an edit.
   const config: SourceConfig = {};
+  for (const [key, value] of Object.entries(existing?.config ?? {})) {
+    if (!FORM_CONFIG_KEYS.has(key)) config[key] = value;
+  }
   if (formString(body, 'share') === 'on') config.share = true;
   const city = formString(body, 'city');
   if (city) config.city = city;
@@ -578,6 +602,55 @@ function buildSourceConfig(
     const existingToken =
       typeof existing?.config.token === 'string' ? existing.config.token : undefined;
     config.token = existingToken ?? randomBytes(16).toString('hex');
+  }
+
+  if (kind === 'hh' || kind === 'trudvsem' || kind === 'remoteok') {
+    const query = formString(body, 'query').trim();
+    if (query.length > 200) return { config, error: 'Поисковый запрос — не длиннее 200 символов.' };
+    if (query) config.query = query;
+  }
+
+  if (kind === 'hh') {
+    const area = formString(body, 'area').trim();
+    if (area && !/^\d{1,6}$/.test(area)) return { config, error: 'Регион hh.ru — числовой ID, например 113.' };
+    if (area) config.area = area;
+  }
+
+  if (kind === 'remotive') {
+    const category = formString(body, 'remotiveCategory').trim();
+    if (category && !/^[a-z0-9-]{2,40}$/.test(category)) return { config, error: 'Категория Remotive — латиница и дефисы, например software-dev.' };
+    if (category) config.category = category;
+  }
+
+  if (kind === 'ats') {
+    const provider = formString(body, 'provider');
+    if (!['greenhouse', 'lever', 'ashby'].includes(provider)) return { config, error: 'Выберите систему найма: Greenhouse, Lever или Ashby.' };
+    const companies = parseList(formString(body, 'companies'));
+    if (!companies.length) return { config, error: 'Укажите хотя бы одну компанию.' };
+    if (companies.length > 300) return { config, error: 'Не больше 300 компаний в одном источнике.' };
+    const bad = companies.find((company) => !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,80}(=.{1,80})?$/.test(company));
+    if (bad) return { config, error: `Не похоже на компанию доски: ${bad}` };
+    config.provider = provider;
+    config.companies = companies;
+  }
+
+  if (kind === 'sitemap') {
+    const url = formString(body, 'url');
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return { config, error: 'Разрешены только http:// и https:// ссылки.' };
+    } catch {
+      return { config, error: 'Укажите адрес карты сайта.' };
+    }
+    const pattern = formString(body, 'pattern');
+    if (!pattern) return { config, error: 'Укажите шаблон адресов вакансий.' };
+    try {
+      new RegExp(pattern);
+    } catch {
+      return { config, error: 'Шаблон страниц — некорректное регулярное выражение.' };
+    }
+    config.url = url;
+    config.pattern = pattern;
   }
 
   if (kind === 'imap') {
@@ -679,6 +752,8 @@ export function createApp(runtime: Runtime): Hono {
     // frame-ancestors governs framing; X-Frame-Options only when nothing may frame us.
     if (!analytics.yandexMetrikaId) c.header('X-Frame-Options', 'DENY');
     c.header('X-Content-Type-Options', 'nosniff');
+    // Pages follow the visitor's language: a cookie or the browser's Accept-Language.
+    c.header('Vary', 'Accept-Language, Cookie');
     c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
     c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     // The dashboard uses inline scripts and styles, hence 'unsafe-inline'.
@@ -876,7 +951,16 @@ export function createApp(runtime: Runtime): Hono {
       sameSite: 'Lax',
     });
     const returnUrl = c.req.query('return') || c.req.header('referer') || '/';
-    const safeReturn = returnUrl.startsWith('/') && !returnUrl.startsWith('//') ? returnUrl : '/';
+    let safeReturn = '/';
+    try {
+      // The referer is a full URL; only its path on this site is followed.
+      const parsed = new URL(returnUrl, 'http://local');
+      if (parsed.host === 'local' || parsed.host === new URL(c.req.url).host) safeReturn = `${parsed.pathname}${parsed.search}`;
+    } catch {}
+    if (safeReturn.startsWith('//')) safeReturn = '/';
+    // English research pages live under /en; Russian ones under the bare path.
+    if (target === 'ru' && /^\/en\/research(\/|$|\?)/.test(safeReturn)) safeReturn = safeReturn.slice(3);
+    if (target === 'en' && /^\/research(\/index|\/methodology|\/\d{4}-\d{2})?(\?|$)/.test(safeReturn)) safeReturn = `/en${safeReturn}`;
     return c.redirect(safeReturn);
   });
 
@@ -1149,19 +1233,37 @@ export function createApp(runtime: Runtime): Hono {
     );
   });
 
+  app.get('/sources/catalog', async (c) => {
+    if (!await isAdmin(c, runtime)) return c.redirect('/login');
+    const existing = await runtime.store.listSources();
+    const items = SOURCE_PRESETS.map((preset) => {
+      const source = presetSource(preset, existing);
+      return { preset, sourceId: source?.id, enabled: source?.enabled };
+    });
+    return c.html(renderSourceCatalogPage({ items, version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c) }));
+  });
+
+  app.post('/sources/catalog/:id', async (c) => {
+    if (!await isAdmin(c, runtime)) return c.redirect('/login');
+    if (!sameOrigin(c)) return c.text('Forbidden', 403);
+    const preset = SOURCE_PRESETS.find((item) => item.id === c.req.param('id'));
+    if (!preset) return c.redirect('/sources/catalog');
+    const existing = presetSource(preset, await runtime.store.listSources());
+    if (existing) return c.redirect(`/sources/${existing.id}`);
+    const source = await runtime.store.createSource({ kind: preset.kind, title: preset.title, config: preset.config, enabled: true });
+    void pollSource(source, { ...deps(runtime), sources: runtime.sources }).catch((error: unknown) =>
+      runtime.logger.warn('first poll of a preset failed', { sourceId: source.id, error: String(error) }),
+    );
+    return c.redirect('/sources/catalog');
+  });
+
   app.post('/sources/presets', async (c) => {
     if (!await isAdmin(c, runtime)) return c.redirect('/login');
     if (!sameOrigin(c)) return c.text('Forbidden', 403);
     const existing = await runtime.store.listSources();
     const created: SourceRecord[] = [];
     for (const preset of SOURCE_PRESETS) {
-      const already = existing.some(
-        (s) =>
-          s.title === preset.title ||
-          (preset.config.url && s.config.url === preset.config.url) ||
-          (preset.config.channel && s.config.channel === preset.config.channel),
-      );
-      if (already) continue;
+      if (presetSource(preset, existing)) continue;
       created.push(await runtime.store.createSource({
         kind: preset.kind,
         title: preset.title,
@@ -2040,11 +2142,18 @@ export function createApp(runtime: Runtime): Hono {
   app.use('/en/research', researchGate);
   app.use('/en/research/*', researchGate);
   const researchSnapshots = async (): Promise<Array<{ period: string }>> => (await runtime.store.listResearchSnapshots?.()) ?? [];
+  // Research pages with an English twin send English readers there.
+  const toEnglish = (c: Context, path: string): Response | undefined =>
+    resolveLang(c) === 'en' ? c.redirect(`/en${path}`) : undefined;
   app.get('/research', async (c) => {
+    const english = toEnglish(c, '/research');
+    if (english) return english;
     const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
     return c.html(renderReportPage({ report, baseUrl: seoBaseUrl(c), version: VERSION, snapshots: await researchSnapshots(), auth: await getAuthDisplay(c, runtime) }));
   });
   app.get('/research/index', async (c) => {
+    const english = toEnglish(c, '/research/index');
+    if (english) return english;
     const index = await openradarIndex(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
     return c.html(renderIndexPage({ index, baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime) }));
   });
@@ -2074,7 +2183,7 @@ export function createApp(runtime: Runtime): Hono {
     if (!report) return c.html(renderNotFound(VERSION), 404);
     return c.html(renderReportPageEn({ report, baseUrl: seoBaseUrl(c), version: VERSION, snapshots: await researchSnapshots(), auth: await getAuthDisplay(c, runtime) }));
   });
-  app.get('/research/methodology', async (c) => c.html(renderMethodologyPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime) })));
+  app.get('/research/methodology', async (c) => toEnglish(c, '/research/methodology') ?? c.html(renderMethodologyPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime) })));
   app.get('/research/report.json', async (c) => {
     const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
     return c.json(report, 200, { 'access-control-allow-origin': '*' });
@@ -2099,15 +2208,17 @@ export function createApp(runtime: Runtime): Hono {
     const report = await monthSnapshot(runtime.store, slug);
     if (!report) return c.html(renderNotFound(VERSION), 404);
     if (param.endsWith('.json')) return c.json(report, 200, { 'access-control-allow-origin': '*' });
+    const english = toEnglish(c, `/research/${slug}`);
+    if (english) return english;
     return c.html(renderReportPage({ report, baseUrl: seoBaseUrl(c), version: VERSION, snapshots: await researchSnapshots(), auth: await getAuthDisplay(c, runtime) }));
   });
 
   app.get('/llms.txt', (c) =>
     c.text(renderLlmsTxt(seoBaseUrl(c)), 200, { 'content-type': 'text/plain; charset=utf-8' }),
   );
-  app.get('/about', async (c) => c.html(renderAboutPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime) })));
-  app.get('/faq', async (c) => c.html(renderFaqPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime) })));
-  app.get('/catalog', async (c) => c.html(renderCatalogIndex({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime) })));
+  app.get('/about', async (c) => c.html(renderAboutPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c) })));
+  app.get('/faq', async (c) => c.html(renderFaqPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c) })));
+  app.get('/catalog', async (c) => c.html(renderCatalogIndex({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c) })));
 
   // Search-driven landing pages: indexable, each one doubles as an RSS subscription.
   app.get('/catalog/:slug', async (c) => {
@@ -2127,6 +2238,7 @@ export function createApp(runtime: Runtime): Hono {
         baseUrl: seoBaseUrl(c),
         version: VERSION,
         auth: await getAuthDisplay(c, runtime),
+        lang: resolveLang(c),
       }),
     );
   });
