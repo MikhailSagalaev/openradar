@@ -74,6 +74,37 @@ export function chatsOf(source: SourceRecord): string[] {
   return list.map((c) => String(c).trim()).filter(Boolean);
 }
 
+/** The Telegram folder whose channels and groups the source reads, if it names one. */
+export function folderOf(source: SourceRecord): string | undefined {
+  const folder = typeof source.config.folder === 'string' ? source.config.folder.trim() : '';
+  return folder || undefined;
+}
+
+/** Folder contents, refreshed every half hour: moving a chat in or out takes effect soon. */
+const folderCache = new Map<string, { at: number; chats: string[] }>();
+const FOLDER_TTL_MS = 30 * 60_000;
+
+/**
+ * The channels and groups in a folder of the account. Private dialogs with people are never
+ * read, even when they sit in the folder: only chats meant for posts become sources.
+ */
+export async function folderChats(
+  client: Pick<TelegramClient, 'iterDialogs'>,
+  key: string,
+  folder: string,
+  now = Date.now(),
+): Promise<string[]> {
+  const cached = folderCache.get(key);
+  if (cached && now - cached.at < FOLDER_TTL_MS) return cached.chats;
+  const chats: string[] = [];
+  for await (const dialog of client.iterDialogs({ folder, limit: 200 })) {
+    if (dialog.peer.type === 'user') continue;
+    chats.push(String(dialog.peer.id));
+  }
+  folderCache.set(key, { at: now, chats });
+  return chats;
+}
+
 export function sessionEnvOf(source: SourceRecord): string {
   const value = typeof source.config.sessionEnv === 'string' && source.config.sessionEnv.trim()
     ? source.config.sessionEnv.trim()
@@ -150,17 +181,19 @@ export const telegramAccountSource: SourceAdapter = {
   kind: 'telegram-account',
   access: 'user-provided',
   description:
-    'Telegram channels and chats read through your own account (MTProto), private ones included. The session lives in an environment variable.',
+    'Telegram channels and chats read through your own account (MTProto), private ones included: a list of chats, or every channel and group in a Telegram folder. The session lives in an environment variable.',
   risks: [
     'reads with your account: keep the chat list short and the interval calm, or Telegram may limit the account',
     'posts from private chats become visible on the feed of this node; add only chats meant for job posts',
     'the session string grants full access to the account: keep it only in .env',
   ],
   async poll(source: SourceRecord, ctx: PollContext): Promise<RawLead[]> {
-    const chats = chatsOf(source);
-    if (!chats.length) throw new Error('Telegram account source requires config.chats');
+    const folder = folderOf(source);
+    if (!chatsOf(source).length && !folder) throw new Error('Telegram account source requires config.chats or config.folder');
     const sessionEnv = sessionEnvOf(source);
     const client = await clientFor(sessionEnv);
+    const fromFolder = folder ? await folderChats(client, `${sessionEnv}:${source.id}`, folder) : [];
+    const chats = [...new Set([...chatsOf(source), ...fromFolder])];
     const limit = Math.max(1, Math.min(Number(source.config.limit ?? 30), 100));
 
     const leads: RawLead[] = [];

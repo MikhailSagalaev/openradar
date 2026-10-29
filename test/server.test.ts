@@ -733,6 +733,21 @@ describe('http server', () => {
     expect((await createApp(byLogin).request('/admin', { headers: { cookie: `radar_session=${loginSession}` } })).status).toBe(200);
   });
 
+  it('shows the signed-in account on research and catalog pages, in both languages', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true });
+    const app = createApp(runtime);
+    const cookie = { cookie: `radar_session=${await makeUserSession(runtime, 'octocat')}` };
+    for (const path of ['/research', '/research/index', '/research/methodology', '/about', '/faq', '/catalog', '/en/research', '/en/research/index', '/en/research/methodology']) {
+      const response = await app.request(path, { headers: cookie });
+      expect(response.status, path).toBe(200);
+      expect(await response.text(), path).toContain('@octocat');
+    }
+    const en = await (await app.request('/en/research')).text();
+    expect(en).toContain('<html lang="en">');
+    expect(en).toContain('hreflang="ru"');
+    expect(await (await app.request('/research')).text()).toContain('hreflang="en"');
+  });
+
   it('connects the browser extension through GitHub sign-in and a consent page', async () => {
     const runtime = makeRuntime({ RADAR_PUBLIC_READ: true, GITHUB_CLIENT_ID: 'id', GITHUB_CLIENT_SECRET: 'secret', RADAR_PUBLIC_URL: 'https://hub.example' });
     const app = createApp(runtime);

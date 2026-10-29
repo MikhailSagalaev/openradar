@@ -3,7 +3,7 @@
  * methodology. Charts are plain HTML bars, so they read on a phone and in both themes.
  */
 import { escapeHtml, jsonForScript } from '../core/text.ts';
-import { layout } from '../server/ui.ts';
+import { layout, type AuthDisplay } from '../server/ui.ts';
 import { GRADE_LABELS, MIN_CONFIDENCE, RUB_PER, ROLES } from './derive.ts';
 
 const MIN_CONFIDENCE_PCT = Math.round(MIN_CONFIDENCE * 100);
@@ -138,6 +138,7 @@ export function renderReportPage(options: {
   baseUrl: string;
   version: string;
   snapshots: Array<{ period: string }>;
+  auth?: AuthDisplay;
 }): string {
   const { report, baseUrl, version, snapshots } = options;
   const { jobs, gigs, totals } = report;
@@ -155,7 +156,7 @@ export function renderReportPage(options: {
     ? `Живой отчёт по ${num(totals.posts)} публикациям за ${escapeHtml(report.period.label)}. Пересчитывается каждые 15 минут.`
     : `Отчёт за ${escapeHtml(report.period.label.toLowerCase())}: ${num(totals.posts)} публикаций. Цифры зафиксированы и не меняются.`}
   Источники: биржи фриланса, hh.ru, Хабр Карьера, «Работа России», Telegram-каналы и участники openradar.</p>
-</div><div class="actions"><a class="btn ghost" href="/research/index">Индекс</a><a class="btn ghost" href="/research/methodology">Методика</a><a class="btn ghost" href="/research/dataset.csv">Данные CSV</a></div></div>
+</div><div class="actions"><a class="btn ghost" href="/en/research" hreflang="en">English</a><a class="btn ghost" href="/research/index">Индекс</a><a class="btn ghost" href="/research/methodology">Методика</a><a class="btn ghost" href="/research/dataset.csv">Данные CSV</a></div></div>
 
 <div class="rs-kpis">
   ${kpi(num(totals.jobs), 'вакансий')}
@@ -275,6 +276,7 @@ ${intlMedian ? `<section class="rs-section">
     : `Зарплаты в вакансиях и бюджеты заказов по данным openradar: ${report.period.label}.`;
 
   return layout({
+    auth: options.auth,
     title,
     version,
     active: 'research',
@@ -283,6 +285,8 @@ ${intlMedian ? `<section class="rs-section">
     head: `<meta name="description" content="${escapeHtml(description)}">
 <meta property="og:description" content="${escapeHtml(description)}">
 <link rel="canonical" href="${escapeHtml(`${baseUrl}${reportUrl(report)}`)}">
+<link rel="alternate" hreflang="ru" href="${escapeHtml(`${baseUrl}${reportUrl(report)}`)}">
+<link rel="alternate" hreflang="en" href="${escapeHtml(`${baseUrl}/en${reportUrl(report)}`)}">
 <script type="application/ld+json">
 ${jsonForScript(dataset)}
 </script>`,
@@ -295,7 +299,7 @@ export function monthLabel(slug: string): string {
   return `${name[0]!.toUpperCase()}${name.slice(1)} ${y}`;
 }
 
-export function renderRolePage(options: { detail: RoleDetail; report: Report; baseUrl: string; version: string }): string {
+export function renderRolePage(options: { detail: RoleDetail; report: Report; baseUrl: string; version: string; auth?: AuthDisplay }): string {
   const { detail, report, baseUrl, version } = options;
   const title = `Зарплаты: ${detail.label}`;
   const path = `/research/roles/${detail.slug}`;
@@ -328,6 +332,7 @@ ${detail.companies.length ? `<section class="rs-section"><h2>Кто нанима
     ? `${detail.label}: медианная зарплата в вакансиях ${formatRub(detail.pay.median)} в месяц. Зарплаты по уровням, городам и навыкам, ${report.period.label}.`
     : `${detail.label}: зарплаты в вакансиях по данным openradar.`;
   return layout({
+    auth: options.auth,
     title,
     version,
     active: 'research',
@@ -338,7 +343,7 @@ ${detail.companies.length ? `<section class="rs-section"><h2>Кто нанима
   });
 }
 
-export function renderMethodologyPage(options: { baseUrl: string; version: string }): string {
+export function renderMethodologyPage(options: { baseUrl: string; version: string; auth?: AuthDisplay }): string {
   const { baseUrl, version } = options;
   const rates = Object.entries(RUB_PER)
     .filter(([code]) => !['RUB', 'RUR', 'USDT'].includes(code))
@@ -402,12 +407,14 @@ export function renderMethodologyPage(options: { baseUrl: string; version: strin
   <p>Данные открыты по лицензии ${LICENSE}. <a href="/research/dataset.csv">CSV</a> содержит по строке на публикацию: дату, площадку, направление, уровень, язык, город, компанию, вилку в рублях и навыки. Тексты и контакты в него не входят. Последние сутки в выгрузку не попадают.</p>
 </section>`;
   return layout({
+    auth: options.auth,
     title: 'Методика исследований',
     version,
     active: 'research',
     body,
     head: `<meta name="description" content="Как openradar считает зарплаты и бюджеты: источники, разбор вилок, направления и уровни, медианы и пороги выборки.">
-<link rel="canonical" href="${escapeHtml(baseUrl)}/research/methodology">`,
+<link rel="canonical" href="${escapeHtml(baseUrl)}/research/methodology">
+<link rel="alternate" hreflang="en" href="${escapeHtml(baseUrl)}/en/research/methodology">`,
   });
 }
 

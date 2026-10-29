@@ -707,7 +707,8 @@ function buildProgram(): Command {
     .command('chats')
     .description('List the channels and chats of the account, to pick sources from')
     .option('--session-env <name>', 'variable with the session', 'RADAR_TELEGRAM_SESSION')
-    .action(async (options: { sessionEnv: string }) => {
+    .option('--folder <title>', 'only the chats of this Telegram folder')
+    .action(async (options: { sessionEnv: string; folder?: string }) => {
       const { newTelegramClient, TELEGRAM_SESSION_ENV_RE } = await import('../sources/telegram-account.ts');
       if (!TELEGRAM_SESSION_ENV_RE.test(options.sessionEnv)) throw new Error('--session-env must be RADAR_TELEGRAM_SESSION[_NAME]');
       const session = process.env[options.sessionEnv]?.trim();
@@ -715,12 +716,19 @@ function buildProgram(): Command {
       const client = await newTelegramClient();
       await client.importSession(session);
       await client.connect();
-      for await (const dialog of client.iterDialogs({ limit: 500 })) {
+      for await (const dialog of client.iterDialogs({ limit: 500, ...(options.folder ? { folder: options.folder } : {}) })) {
         const peer = dialog.peer;
         if (peer.type === 'user') continue;
         const name = peer.username ? `@${peer.username}` : String(peer.id);
         console.log(`${name.padEnd(36)} ${peer.displayName}`);
       }
+      // Folder names, for the source's «Папка Telegram» field.
+      const folders = (await client.getFolders()).filters
+        .map((f) => ('title' in f ? f.title : undefined))
+        .map((title) => (typeof title === 'string' ? title : title?.text))
+        .filter(Boolean);
+      if (folders.length) console.log(`
+Папки: ${folders.join(', ')}`);
       await client.destroy();
     });
 

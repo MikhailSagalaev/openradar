@@ -94,6 +94,7 @@ export interface SourceFormValues {
   sinceDays: string;
   subjectIncludes: string;
   chats: string;
+  folder: string;
   sessionEnv: string;
   /** Send leads of this source to the hub. */
   share?: boolean;
@@ -141,7 +142,32 @@ const KIND_LABELS: Record<string, string> = {
   trudvsem: 'Работа России',
   hh: 'HeadHunter',
   remoteok: 'RemoteOK',
+  remotive: 'Remotive',
+  arbeitnow: 'Arbeitnow',
+  hn: 'Hacker News — Who is hiring',
+  ats: 'Карьерные страницы компаний',
+  sitemap: 'Карта сайта (JobPosting)',
 };
+
+/** What each source type is for, shown under the type picker. */
+const KIND_HINTS: Record<string, string> = {
+  rss: 'Лента RSS или Atom: биржа, блог, рассылка, поиск hh.ru или Хабр Карьеры. Самый надёжный тип.',
+  telegram: 'Публичный Telegram-канал: читается веб-превью t.me/s/, без аккаунта.',
+  'telegram-account': 'Ваш Telegram-аккаунт: закрытые чаты и группы, где вы состоите. Нужен вход на сервере (radar telegram login).',
+  kwork: 'Заказы Kwork, все или одной рубрики.',
+  imap: 'Почтовый ящик: письма-рассылки с заказами и вакансиями.',
+  webhook: 'Приём публикаций извне: расширение браузера, скрипт или другой узел шлёт их по токену.',
+  trudvsem: 'Официальный открытый API портала «Работа России».',
+  hh: 'Вакансии hh.ru.',
+  remoteok: 'Удалённые вакансии RemoteOK.',
+  remotive: 'Удалённые вакансии Remotive (официальный API).',
+  arbeitnow: 'Вакансии Германии и ЕС (официальный API Arbeitnow).',
+  hn: 'Ежемесячный тред «Ask HN: Who is hiring?».',
+  ats: 'Вакансии компаний через публичные API Greenhouse, Lever и Ashby. Удобнее добавлять из готовых наборов: кнопка «Загрузить биржи».',
+  sitemap: 'Страницы вакансий из карты сайта с разметкой JobPosting — для площадок без ленты. Удобнее добавлять из готовых наборов.',
+};
+/** Types whose settings this form can fill; the rest come from presets. */
+const FORM_KINDS = new Set(['rss', 'telegram', 'telegram-account', 'kwork', 'imap', 'webhook']);
 
 const STATUS_LABELS: Record<string, string> = {
   new: 'новый',
@@ -2824,6 +2850,7 @@ export function renderNewSourcePage(data: NewSourcePageData): string {
   const { kinds, values, error, version, mode, action, submitLabel, sourceId } = data;
   const editing = mode === 'edit';
   const options = kinds
+    .filter((kind) => FORM_KINDS.has(kind) || kind === values.kind)
     .map(
       (kind) =>
         `<option value="${escapeHtml(kind)}"${kind === values.kind ? ' selected' : ''}>${escapeHtml(KIND_LABELS[kind] ?? kind)}</option>`,
@@ -2835,7 +2862,7 @@ export function renderNewSourcePage(data: NewSourcePageData): string {
 <div class="page-head">
   <div>
     <h1>${editing ? 'Редактировать источник' : 'Новый источник'}</h1>
-    <p class="muted small">${editing ? 'Название и фильтры можно менять. Тип источника фиксирован.' : 'RSS и IMAP — самые устойчивые. Telegram и Kwork зависят от публичной вёрстки. Webhook принимает данные от расширения или другого сервиса.'}</p>
+    <p class="muted small">${editing ? 'Название и фильтры можно менять. Тип источника фиксирован.' : 'Источник опрашивается этим узлом, и найденное попадает в его ленту. Готовые наборы площадок (биржи, карьерные страницы компаний, зарубежные доски) добавляет кнопка «Загрузить биржи» на странице источников.'}</p>
   </div>
 </div>
 ${error ? `<div class="error-box" style="margin-bottom:16px">${escapeHtml(error)}</div>` : ''}
@@ -2845,6 +2872,7 @@ ${error ? `<div class="error-box" style="margin-bottom:16px">${escapeHtml(error)
     <label class="field">Тип
       <select name="${editing ? 'kind-disabled' : 'kind'}" id="kind"${editing ? ' disabled' : ''}>${options}</select>
       ${editing ? `<input type="hidden" name="kind" value="${escapeHtml(values.kind)}">` : ''}
+      ${kinds.map((kind) => (KIND_HINTS[kind] ? `<span class="hint" data-kind="${escapeHtml(kind)}">${escapeHtml(KIND_HINTS[kind]!)}</span>` : '')).join('')}
     </label>
     <label class="field">Название
       <input name="title" value="${escapeHtml(values.title)}" placeholder="Например, Городские чаты" required>
@@ -2863,7 +2891,8 @@ ${error ? `<div class="error-box" style="margin-bottom:16px">${escapeHtml(error)
     <fieldset>
       <legend>Telegram через свой аккаунт</legend>
       <p class="hint">Читает каналы и чаты, где состоит аккаунт, в том числе закрытые. Один раз выполните на сервере <code>radar telegram login</code> и положите сессию в <code>.env</code>; список чатов покажет <code>radar telegram chats</code>. Посты из закрытых чатов станут видны в ленте этого узла: добавляйте только чаты для заказов и вакансий.</p>
-      ${textField('chats', 'Каналы и чаты', values.chats, '@freelance_jobs, -1001234567890', 'text', 'Через запятую: @имя, ссылка t.me или числовой ID.')}
+      ${textField('folder', 'Папка Telegram', values.folder, 'openradar', 'text', 'Удобнее всего: создайте в Telegram папку и перетаскивайте в неё рабочие каналы и группы — источник сам подхватит их в течение получаса. Личные переписки не читаются, даже если лежат в папке.')}
+      ${textField('chats', 'Каналы и чаты', values.chats, '@freelance_jobs, -1001234567890', 'text', 'Необязательно, если указана папка. Через запятую: @имя, ссылка t.me или числовой ID.')}
       ${textField('sessionEnv', 'Переменная с сессией', values.sessionEnv || 'RADAR_TELEGRAM_SESSION', 'RADAR_TELEGRAM_SESSION', 'text', 'Для второго аккаунта — RADAR_TELEGRAM_SESSION_ИМЯ латиницей.')}
     </fieldset>
   </div>

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createSourceRegistry } from '../../src/sources/index.ts';
 import {
+  folderChats,
+  folderOf,
   chatsOf,
   messageToRawLead,
   normalizeChat,
@@ -63,5 +65,23 @@ describe('Telegram account source', () => {
     await expect(telegramAccountSource.poll!(source, pollContext(''))).rejects.toThrow(/radar telegram login/);
     delete process.env.RADAR_TELEGRAM_API_ID;
     delete process.env.RADAR_TELEGRAM_API_HASH;
+  });
+
+  it('reads the channels and groups of a folder, never private dialogs, and caches them', async () => {
+    let calls = 0;
+    const client = {
+      async *iterDialogs(options: { folder?: string }) {
+        calls++;
+        expect(options.folder).toBe('openradar');
+        yield { peer: { type: 'chat', id: -1001234567890 } };
+        yield { peer: { type: 'user', id: 42 } };
+        yield { peer: { type: 'chat', id: -100777 } };
+      },
+    } as never;
+    expect(await folderChats(client, 'k', 'openradar', 1000)).toEqual(['-1001234567890', '-100777']);
+    expect(await folderChats(client, 'k', 'openradar', 2000)).toEqual(['-1001234567890', '-100777']);
+    expect(calls).toBe(1);
+    expect(folderOf(makeSource({ kind: 'telegram-account', config: { folder: ' openradar ' } }))).toBe('openradar');
+    expect(folderOf(makeSource({ kind: 'telegram-account', config: {} }))).toBeUndefined();
   });
 });

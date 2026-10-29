@@ -3,7 +3,7 @@
  * per series in plain SVG, the roles with an index of their own, and how to cite it.
  */
 import { escapeHtml, jsonForScript } from '../core/text.ts';
-import { layout } from '../server/ui.ts';
+import { layout, type AuthDisplay } from '../server/ui.ts';
 import type { IndexPoint, IndexSeries, OpenradarIndex } from './index.ts';
 
 const num = (value: number): string => new Intl.NumberFormat('ru-RU').format(value).replace(/ /g, ' ');
@@ -11,11 +11,12 @@ const dm = (date: string): string => `${date.slice(8, 10)}.${date.slice(5, 7)}`;
 const signed = (v: number): string => `${v > 0 ? '+' : v < 0 ? '−' : ''}${num(Math.abs(v))}%`;
 
 /** A line of the index if there is one, else of the daily counts. */
-function lineChart(points: IndexPoint[], label: string): string {
+export function lineChart(points: IndexPoint[], label: string, lang: 'ru' | 'en' = 'ru'): string {
+  const en = lang === 'en';
   const useIndex = points.some((p) => p.index !== undefined);
   const values = points.map((p) => (useIndex ? p.index : p.count)).map((v) => v ?? NaN);
   const real = values.filter((v) => Number.isFinite(v));
-  if (real.length < 2) return '<p class="muted small">График появится, когда наберётся хотя бы два дня данных.</p>';
+  if (real.length < 2) return `<p class="muted small">${en ? 'The chart appears once there are two days of data.' : 'График появится, когда наберётся хотя бы два дня данных.'}</p>`;
   const w = 640;
   const h = 180;
   const pad = 24;
@@ -35,7 +36,9 @@ function lineChart(points: IndexPoint[], label: string): string {
 <svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="${escapeHtml(label)}" style="color:var(--ink);max-width:100%">
 ${baseLine}<polyline fill="none" stroke="var(--emerald)" stroke-width="2.5" stroke-linejoin="round" points="${path}"/>${ticks}
 </svg>
-<figcaption class="rs-legend">${useIndex ? 'Индекс по среднему за 7 дней; пунктир — база, 100.' : 'Число публикаций в день; индекс появится, когда наберётся 7 дней.'}</figcaption>
+<figcaption class="rs-legend">${useIndex
+    ? (en ? 'Index of the seven-day mean; the dashed line is the base, 100.' : 'Индекс по среднему за 7 дней; пунктир — база, 100.')
+    : (en ? 'Posts a day; the index appears after 7 days.' : 'Число публикаций в день; индекс появится, когда наберётся 7 дней.')}</figcaption>
 </figure>`;
 }
 
@@ -47,7 +50,7 @@ function headline(s: IndexSeries, what: string): string {
   return `<div class="rs-kpi"><b>${num(latest?.count ?? 0)}</b><span>${escapeHtml(what)} за ${latest ? dm(latest.date) : '—'}; индекс — через 7 дней данных</span></div>`;
 }
 
-export function renderIndexPage(options: { index: OpenradarIndex; baseUrl: string; version: string }): string {
+export function renderIndexPage(options: { index: OpenradarIndex; baseUrl: string; version: string; auth?: AuthDisplay }): string {
   const { index, baseUrl, version } = options;
   const { jobs, gigs, base } = index;
   const baseNote = base.provisional
@@ -119,11 +122,13 @@ document.addEventListener('click', (event) => {
 });
 </script>`;
   return layout({
+    auth: options.auth,
     title: 'Индекс openradar: вакансии и заказы в IT и фрилансе',
     version,
     active: 'research',
     body,
     head: `<meta name="description" content="Ежедневный индекс openradar: сколько новых вакансий и заказов появляется в русскоязычном IT и фрилансе относительно базы 100. Открытые данные CC BY 4.0.">
-<link rel="canonical" href="${escapeHtml(baseUrl)}/research/index">`,
+<link rel="canonical" href="${escapeHtml(baseUrl)}/research/index">
+<link rel="alternate" hreflang="en" href="${escapeHtml(baseUrl)}/en/research/index">`,
   });
 }
