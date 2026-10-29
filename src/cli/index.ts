@@ -772,6 +772,25 @@ function buildProgram(): Command {
     });
 
   research
+    .command('daily')
+    .description('Save the daily counts of the openradar index; --from redoes the days from a date')
+    .option('--from <day>', 'Redo from this day, e.g. 2026-10-27')
+    .action(async (options: { from?: string }) => {
+      if (options.from && !/^\d{4}-\d{2}-\d{2}$/.test(options.from)) throw new Error('Day must look like 2026-10-27');
+      const { ensureDailyCounts, PANEL_START, addDays } = await import('../research/index.ts');
+      await withRuntime(async (runtime) => {
+        const from = options.from && options.from > PANEL_START ? options.from : PANEL_START;
+        if (options.from) {
+          // Wipe the days from the date so the next run counts them again.
+          const today = new Date().toISOString().slice(0, 10);
+          for (let d = from; d < today; d = addDays(d, 1)) await runtime.store.saveResearchDaily?.(d, []);
+        }
+        const days = await ensureDailyCounts(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+        console.log(days.length ? `Сохранены дни: ${days[0]} — ${days.at(-1)} (${days.length})` : 'Новых дней нет');
+      });
+    });
+
+  research
     .command('snapshot <month>')
     .description('Build and freeze the report for a month, e.g. 2026-10 (replaces a saved one)')
     .action(async (month: string) => {

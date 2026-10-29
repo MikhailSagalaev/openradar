@@ -231,6 +231,13 @@ describe('research pages', () => {
     const csv = await app.request('/research/dataset.csv');
     expect(csv.headers.get('content-type')).toContain('text/csv');
     expect(await csv.text()).not.toContain('Предполагаемый');
+
+    const index = await (await app.request('/research/index')).text();
+    expect(index).toContain('<h1>Индекс openradar</h1>');
+    expect(index).toContain('hh.ru, career.habr.com');
+    const indexJson = await (await app.request('/research/index.json')).json() as { version: number; base: { provisional: boolean } };
+    expect(indexJson.version).toBe(1);
+    expect((await app.request('/research/index.csv')).headers.get('content-type')).toContain('text/csv');
   });
 
   it('freezes a month and serves it by its slug', async () => {

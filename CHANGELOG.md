@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.22.0
+
+- The openradar index (`/research/index`, `.json`, `.csv`): new Russian-language
+  vacancies and orders a day on a fixed panel of boards (vacancies: hh.ru, Хабр Карьера,
+  getmatch, Работа России; orders: Kwork, FL.ru, Freelancehunt), as a seven-day mean against
+  a base of 100. The base is 2-29 November 2026; until it is over it is provisional, every
+  day since 27 October. Roles with three vacancies a day in the base get an index of their
+  own. Sources added later never enter it.
+- Daily counts by type, platform, role and scope are saved in `research_daily` once a day is
+  over (the last two days are redone); `radar research daily --from <day>` redoes them.
+- The live report reads only the head of company career-page posts and up to 200 000 posts,
+  so a month of the wider flow fits.
+
 ## 0.21.2
 
 - The getmatch preset lost the backslash of its URL pattern and matched nothing; it is a raw

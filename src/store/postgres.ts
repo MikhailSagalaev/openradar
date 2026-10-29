@@ -36,7 +36,7 @@ import type {
   UserVoteResult,
   AdminStats,
 } from '../core/store.ts';
-import type { LeadFactsFill } from '../core/store.ts';
+import type { LeadFactsFill, ResearchDailyRow } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
 import { lastDays } from '../core/store.ts';
 
@@ -1502,7 +1502,9 @@ export class PostgresStore implements Store {
 
   async listLeadsForResearch(options: { from: string; to: string; limit: number }): Promise<Lead[]> {
     const result = await this.pool.query(
-      `SELECT id, source_id, external_id, url, canonical_url, title, left(text, 3000) AS text, author, city,
+      // Company career pages are many and long, and only their head matters to the report.
+      `SELECT id, source_id, external_id, url, canonical_url, title,
+              left(text, CASE WHEN source_id IN (SELECT id FROM sources WHERE kind = 'ats') THEN 600 ELSE 3000 END) AS text, author, city,
               budget, currency, category, skills_json, is_remote, metadata_json, published_at, fingerprint,
               title_key, status, score, reasons_json, created_at, delivered_at, type, raw_salary, payment_period,
               normalized_usd_min, normalized_usd_max, state, contacts_json, source_platform, source_channel,
@@ -1550,6 +1552,42 @@ export class PostgresStore implements Store {
        ON CONFLICT (period) DO UPDATE SET report = EXCLUDED.report, created_at = now()`,
       [period, JSON.stringify(report)],
     );
+  }
+
+  async saveResearchDaily(day: string, rows: ResearchDailyRow[]): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM research_daily WHERE day = $1::date', [day]);
+      if (rows.length) {
+        await client.query(
+          `INSERT INTO research_daily (day, type, platform, role, scope, n)
+           SELECT $1::date, r.type, r.platform, r.role, r.scope, r.n
+             FROM jsonb_to_recordset($2::jsonb) AS r(type text, platform text, role text, scope text, n int)`,
+          [day, JSON.stringify(rows)],
+        );
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listResearchDaily(from: string, to: string): Promise<ResearchDailyRow[]> {
+    const result = await this.pool.query(
+      `SELECT to_char(day, 'YYYY-MM-DD') AS day, type, platform, role, scope, n FROM research_daily
+        WHERE day >= $1::date AND day < $2::date ORDER BY day`,
+      [from, to],
+    );
+    return result.rows.map((r) => ({ day: r.day, type: r.type, platform: r.platform, role: r.role, scope: r.scope, n: Number(r.n) }));
+  }
+
+  async lastResearchDay(): Promise<string | undefined> {
+    const result = await this.pool.query(`SELECT to_char(max(day), 'YYYY-MM-DD') AS day FROM research_daily`);
+    return result.rows[0]?.day ?? undefined;
   }
 
   async listResearchSnapshots(): Promise<Array<{ period: string; createdAt: string }>> {

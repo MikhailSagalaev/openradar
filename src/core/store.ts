@@ -235,6 +235,16 @@ export interface HubStore {
 }
 
 /** Pay and employer taken from the page when the post itself had none. */
+/** Posts of one day by type, platform, role and market scope (the index's raw material). */
+export interface ResearchDailyRow {
+  day: string;
+  type: string;
+  platform: string;
+  role: string;
+  scope: string;
+  n: number;
+}
+
 export interface LeadFactsFill {
   budget?: number;
   currency?: string;
@@ -280,6 +290,11 @@ export interface Store extends HubStore {
   saveLeadFacts?(id: string, facts: PageFacts, fill: LeadFactsFill): Promise<void>;
   /** Leads published in [from, to) for the market report: text cut to its head, junk and scam left out. */
   listLeadsForResearch?(options: { from: string; to: string; limit: number }): Promise<Lead[]>;
+  /** Replaces the daily counts of one day (YYYY-MM-DD). */
+  saveResearchDaily?(day: string, rows: ResearchDailyRow[]): Promise<void>;
+  listResearchDaily?(from: string, to: string): Promise<ResearchDailyRow[]>;
+  /** The last day with saved counts, if any. */
+  lastResearchDay?(): Promise<string | undefined>;
   /** Newest posts with no model answer of this version yet, those without pay first (or with pay first, to calibrate). */
   listLeadsForModel?(options: { limit: number; since: string; version: number; withPayFirst?: boolean }): Promise<Array<Pick<Lead, 'id' | 'title' | 'text' | 'type'>>>;
   /** Stores the model's answer as metadata.model. */

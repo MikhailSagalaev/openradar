@@ -25,6 +25,8 @@ import { analyticsFromEnv, contentSecurityPolicy } from './analytics.ts';
 import { filterOptions, parseFeedFilters } from './filters.ts';
 import { estimateMarket } from '../core/market.ts';
 import { rateLimit } from './ratelimit.ts';
+import { indexCsv, openradarIndex } from '../research/index.ts';
+import { renderIndexPage } from '../research/index-page.ts';
 import {
   renderExtensionPage,
   renderLeadPage,
@@ -2014,7 +2016,7 @@ export function createApp(runtime: Runtime): Hono {
     // Only what a guest may open: delayed, active, not rejected.
     const leads = runtime.env.RADAR_PUBLIC_READ ? await feedFor(runtime, { tier: 'guest' }, { limit: 1000 }) : [];
     const roles = runtime.env.RADAR_PUBLIC_READ
-      ? (await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY })).report.jobs.roles.map((r) => `/research/roles/${r.slug}`)
+      ? ['/research/index', ...(await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY })).report.jobs.roles.map((r) => `/research/roles/${r.slug}`)]
       : [];
     return c.text(renderSitemapXml(seoBaseUrl(c), leads, new Date(), roles), 200, {
       'content-type': 'application/xml; charset=utf-8',
@@ -2033,6 +2035,22 @@ export function createApp(runtime: Runtime): Hono {
   app.get('/research', async (c) => {
     const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
     return c.html(renderReportPage({ report, baseUrl: seoBaseUrl(c), version: VERSION, snapshots: await researchSnapshots() }));
+  });
+  app.get('/research/index', async (c) => {
+    const index = await openradarIndex(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+    return c.html(renderIndexPage({ index, baseUrl: seoBaseUrl(c), version: VERSION }));
+  });
+  app.get('/research/index.json', async (c) => {
+    const index = await openradarIndex(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+    return c.json(index, 200, { 'access-control-allow-origin': '*' });
+  });
+  app.get('/research/index.csv', async (c) => {
+    const index = await openradarIndex(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+    return c.body(indexCsv(index), 200, {
+      'content-type': 'text/csv; charset=utf-8',
+      'content-disposition': 'attachment; filename="openradar-index.csv"',
+      'access-control-allow-origin': '*',
+    });
   });
   app.get('/research/methodology', (c) => c.html(renderMethodologyPage({ baseUrl: seoBaseUrl(c), version: VERSION })));
   app.get('/research/report.json', async (c) => {

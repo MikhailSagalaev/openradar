@@ -6,7 +6,7 @@ import type { Store } from '../core/store.ts';
 import { deriveRecord, type DeriveOptions, type ResearchRecord } from './derive.ts';
 import { MONTHS_GEN, buildReport, livePeriod, monthPeriod, REPORT_VERSION, type Report } from './report.ts';
 
-const MAX_LEADS = 100_000;
+const MAX_LEADS = 200_000;
 const LIVE_DAYS = 30;
 const CACHE_MS = 15 * 60_000;
 /** A month with fewer vacancies than this gets no report of its own. */
