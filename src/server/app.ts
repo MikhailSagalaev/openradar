@@ -997,7 +997,24 @@ export function createApp(runtime: Runtime): Hono {
   };
 
   // Public feeds: generous per-IP limits, so a scraper loop cannot pin the database.
-  const feedLimit = rateLimit({ windowMs: 60_000, max: 120 });
+  // Limiters count in process memory, so each process (and each app instance) keeps its own buckets.
+  const feedLimit = rateLimit({ windowMs: 60_000, max: runtime.env.RADAR_FEED_RATE_PER_MIN });
+  const rssLimit = rateLimit({ windowMs: 60_000, max: runtime.env.RADAR_RSS_RATE_PER_MIN });
+  const deltaLimit = rateLimit({ windowMs: 60_000, max: runtime.env.RADAR_DELTA_RATE_PER_MIN });
+  const sitemapLimit = rateLimit({ windowMs: 60_000, max: runtime.env.RADAR_SITEMAP_RATE_PER_MIN });
+
+  // «За сутки найдено N»: leads of the last 24 h this viewer can see, refreshed every 10 minutes per tier.
+  const foundTodayCache = new Map<string, { at: number; count: number }>();
+  const foundToday = async (viewer: Viewer): Promise<number> => {
+    const cached = foundTodayCache.get(viewer.tier);
+    if (cached && Date.now() - cached.at < 10 * 60_000) return cached.count;
+    const recent = await leadsFor(runtime, viewer, {
+      limit: 5000,
+      createdAfter: new Date(Date.now() - 24 * 3600_000).toISOString(),
+    });
+    foundTodayCache.set(viewer.tier, { at: Date.now(), count: recent.length });
+    return recent.length;
+  };
   app.get('/', feedLimit, async (c) => {
     if (!await canRead(c, runtime)) return c.redirect('/login');
     const lang = resolveLang(c);
@@ -1053,7 +1070,7 @@ export function createApp(runtime: Runtime): Hono {
 
     return c.html(
       renderLeadsPage({
-        stats,
+        stats: { ...stats, last24h: await foundToday(viewer) },
         health,
         leads: leads.map((lead) => projectContacts(lead, viewer)),
         page,
@@ -2155,9 +2172,9 @@ export function createApp(runtime: Runtime): Hono {
     });
   };
 
-  app.get('/feed.rss', feedLimit, serveFeed);
-  app.get('/feed.xml', serveFeed);
-  app.get('/api/feed.rss', serveFeed);
+  app.get('/feed.rss', rssLimit, serveFeed);
+  app.get('/feed.xml', rssLimit, serveFeed);
+  app.get('/api/feed.rss', rssLimit, serveFeed);
 
   const seoBaseUrl = (c: Context): string => publicBaseUrl(c, runtime);
 
@@ -2181,7 +2198,7 @@ export function createApp(runtime: Runtime): Hono {
     });
   });
 
-  app.get('/sitemap.xml', async (c) => {
+  app.get('/sitemap.xml', sitemapLimit, async (c) => {
     // Only what a guest may open: delayed, active, not rejected.
     const leads = runtime.env.RADAR_PUBLIC_READ ? await feedFor(runtime, { tier: 'guest' }, { limit: 1000 }) : [];
     const roles = runtime.env.RADAR_PUBLIC_READ
@@ -2304,7 +2321,7 @@ export function createApp(runtime: Runtime): Hono {
     );
   });
 
-  app.get('/api/delta', feedLimit, async (c) => {
+  app.get('/api/delta', deltaLimit, async (c) => {
     if (!await canRead(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
     const sinceParam = c.req.query('since');
     const since = sinceParam && Number.isFinite(Date.parse(sinceParam))
