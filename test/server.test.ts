@@ -1484,6 +1484,11 @@ describe('http server', () => {
     expect(profile).toContain('Go developer');
     expect(profile).toContain('ждёт подтверждения');
     expect(profile).toContain('ещё 100 до уровня');
+
+    // The tier delay hides the lead from others, not from the person who brought it.
+    const own = await app.request(`/leads/${leadId}`, { headers: { cookie: `radar_session=${userSession}` } });
+    expect(own.status).toBe(200);
+    expect((await app.request(`/leads/${leadId}`)).status).toBe(404);
   });
 
   it('performs the GitHub OAuth round trip and binds the session to a user', async () => {
