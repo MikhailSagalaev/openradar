@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.21.0
+
+- A `sitemap` source: vacancy pages listed in a site's sitemap, read through their
+  schema.org JobPosting markup, the newest first and a few per poll with a pause between
+  pages. When the markup holds only a line, the page description (often with the pay) joins
+  the text. For boards with no feed whose API is closed to robots.
+- getmatch.ru preset on top of it.
+
 ## 0.20.0
 
 - Company career pages: a new `ats` source reads the public job-board APIs of Greenhouse,

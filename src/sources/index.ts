@@ -1,5 +1,6 @@
 import type { SourceAdapter, SourceKind } from '../core/types.ts';
 import { atsSource } from './ats.ts';
+import { sitemapSource } from './sitemap.ts';
 import { hhSource } from './hh.ts';
 import { hnSource } from './hn.ts';
 import { imapSource } from './imap.ts';
@@ -44,6 +45,7 @@ export function createSourceRegistry(): SourceRegistry {
     .register(remotiveSource)
     .register(arbeitnowSource)
     .register(hnSource)
-    .register(atsSource);
+    .register(atsSource)
+    .register(sitemapSource);
 }
 
