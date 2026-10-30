@@ -23,7 +23,7 @@ Job seekers should not have to pay for subscriptions to parsers or for respondin
 **Live hub:** [openradar.fun](https://openradar.fun) · **Want to help?** Start with [CONTRIBUTING.md](CONTRIBUTING.md): one board, one adapter, one pull request.
 
 <p align="center">
-  <a href="https://openradar.fun"><img alt="The openradar.fun feed" src="docs/screenshots/hub.jpg" width="800"></a>
+  <a href="https://openradar.fun"><img alt="The openradar.fun feed" src="docs/screenshots/hub-en.png" width="800"></a>
 </p>
 
 ## What it does

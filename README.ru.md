@@ -23,7 +23,7 @@ openradar — открытая база вакансий и заказов дл�
 **Хаб:** [openradar.fun](https://openradar.fun) · **Хотите помочь?** Начните с [CONTRIBUTING.md](CONTRIBUTING.md): одна биржа — один адаптер — один pull request.
 
 <p align="center">
-  <a href="https://openradar.fun"><img alt="Лента openradar.fun" src="docs/screenshots/hub.jpg" width="800"></a>
+  <a href="https://openradar.fun"><img alt="Лента openradar.fun" src="docs/screenshots/hub-ru.png" width="800"></a>
 </p>
 
 ## Что умеет
