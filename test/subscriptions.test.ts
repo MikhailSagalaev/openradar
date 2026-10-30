@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
   feedQuery,
@@ -12,7 +12,8 @@ import {
 import type { Lead } from '../src/core/types.ts';
 import { deliverDueSubscriptions, handleTelegramUpdate, telegramWebhookSecret, type SubscriptionDeps } from '../src/pipeline/subscriptions.ts';
 import { createApp, subscriptionDeps } from '../src/server/app.ts';
-import { makeTestRuntime, makeUserSession } from './helpers.ts';
+import { MemoryStore } from '../src/store/memory.ts';
+import { createTestStore, makeTestRuntime, makeUserSession } from './helpers.ts';
 
 const T0 = new Date('2026-10-30T12:00:00.000Z');
 const minutes = (n: number) => new Date(T0.getTime() + n * 60_000);
@@ -32,9 +33,19 @@ function subscription(overrides: Partial<SubscriptionRecord> = {}): Subscription
   };
 }
 
+/** Creates the owner first: PostgreSQL holds subscriptions to existing users. */
+async function addSubscription(store: ReturnType<typeof makeTestRuntime>['store'], overrides: Partial<SubscriptionRecord> = {}): Promise<SubscriptionRecord> {
+  const owner = await store.upsertGitHubUser!({ githubId: 700, handle: 'subscriber' });
+  const created = subscription({ userId: owner.id, ...overrides });
+  await store.createSubscription!(created);
+  return created;
+}
+
 /** A fake world: leads visible to the user up to `until`, a recording fetch. */
 function world(options: { leads?: Lead[]; until?: Date; status?: number; telegramStatus?: number } = {}) {
-  const runtime = makeTestRuntime({ TELEGRAM_BOT_TOKEN: 'bot-token', RADAR_SUBSCRIPTION_BOT: true, RADAR_PUBLIC_URL: 'https://hub.example' });
+  // Delivery logic runs on its own in-memory store: a shared test database would hand it every
+  // other test's subscriptions. The SQL is covered by the store test below.
+  const runtime = { ...makeTestRuntime({ TELEGRAM_BOT_TOKEN: 'bot-token', RADAR_SUBSCRIPTION_BOT: true, RADAR_PUBLIC_URL: 'https://hub.example' }), store: new MemoryStore() };
   const calls: Array<{ url: string; headers: Record<string, string>; body: string }> = [];
   const fetchImpl = (async (url: string, init: RequestInit) => {
     calls.push({ url: String(url), headers: init.headers as Record<string, string>, body: String(init.body) });
@@ -90,7 +101,7 @@ describe('subscription delivery', () => {
   it('sends new visible leads once, signed, and moves the cursor', async () => {
     const leads = [lead('old', minutes(-5)), lead('a', minutes(5)), lead('b', minutes(10))];
     const { runtime, deps, calls, setNow } = world({ leads });
-    await runtime.store.createSubscription!(subscription());
+    await addSubscription(runtime.store);
 
     expect(await deliverDueSubscriptions(deps)).toEqual({ checked: 1, sent: 1, failed: 0 });
     expect(calls).toHaveLength(1);
@@ -109,7 +120,7 @@ describe('subscription delivery', () => {
   it('never sends a lead before the tier delay lets the user see it', async () => {
     const leads = [lead('seen', minutes(5)), lead('delayed', minutes(15))];
     const { runtime, deps, calls } = world({ leads, until: minutes(10) });
-    await runtime.store.createSubscription!(subscription());
+    await addSubscription(runtime.store);
     await deliverDueSubscriptions(deps);
     expect(JSON.parse(calls[0]!.body).leads.map((l: { id: string }) => l.id)).toEqual(['seen']);
     expect((await runtime.store.getSubscription!('sub1'))!.cursorAt).toBe(minutes(10).toISOString());
@@ -117,7 +128,7 @@ describe('subscription delivery', () => {
 
   it('keeps the cursor on a failed send and pauses after repeated failures', async () => {
     const { runtime, deps, setNow } = world({ leads: [lead('a', minutes(5))], status: 500 });
-    await runtime.store.createSubscription!(subscription({ failures: MAX_DELIVERY_FAILURES - 2 }));
+    await addSubscription(runtime.store, { failures: MAX_DELIVERY_FAILURES - 2 });
     expect((await deliverDueSubscriptions(deps)).failed).toBe(1);
     let stored = (await runtime.store.getSubscription!('sub1'))!;
     expect(stored.cursorAt).toBe(T0.toISOString());
@@ -131,7 +142,7 @@ describe('subscription delivery', () => {
 
   it('refuses a webhook into the internal network', async () => {
     const { runtime, deps, calls } = world({ leads: [lead('a', minutes(5))] });
-    await runtime.store.createSubscription!(subscription({ target: 'https://169.254.169.254/latest' }));
+    await addSubscription(runtime.store, { target: 'https://169.254.169.254/latest' });
     expect((await deliverDueSubscriptions(deps)).failed).toBe(1);
     expect(calls).toHaveLength(0);
   });
@@ -149,6 +160,42 @@ describe('subscription delivery', () => {
     expect((await deliverDueSubscriptions(deps)).failed).toBe(1);
     expect(calls[0]!.url).toContain('/sendMessage');
     expect(await runtime.store.getTelegramChat!(user.id)).toBeNull();
+  });
+});
+
+describe('subscription store', () => {
+  it('saves, finds due, updates and deletes subscriptions; links a chat once', async () => {
+    const store = createTestStore();
+    await store.init?.();
+    const owner = await store.upsertGitHubUser!({ githubId: 900_000 + Math.floor(Math.random() * 99_999), handle: `owner-${randomUUID().slice(0, 6)}` });
+    const id = randomUUID();
+    const created = subscription({ id, userId: owner.id, filters: { skill: 'Python', it: true }, checkedAt: undefined });
+    await store.createSubscription!(created);
+
+    expect(await store.getSubscription!(id)).toMatchObject({ id, userId: owner.id, filters: { skill: 'Python', it: true }, channel: 'webhook', paused: false, failures: 0 });
+    expect((await store.listSubscriptions!(owner.id)).map((s) => s.id)).toEqual([id]);
+    expect((await store.listDueSubscriptions!(minutes(0).toISOString(), 1000)).map((s) => s.id)).toContain(id);
+
+    await store.updateSubscription!(id, { checkedAt: minutes(5).toISOString(), cursorAt: minutes(5).toISOString(), lastError: 'x', failures: 2, filters: { skill: 'Go' } });
+    const updated = (await store.getSubscription!(id))!;
+    expect(updated).toMatchObject({ checkedAt: minutes(5).toISOString(), cursorAt: minutes(5).toISOString(), lastError: 'x', failures: 2, filters: { skill: 'Go' } });
+    expect((await store.listDueSubscriptions!(minutes(1).toISOString(), 1000)).map((s) => s.id)).not.toContain(id);
+    await store.updateSubscription!(id, { lastError: undefined });
+    expect((await store.getSubscription!(id))!.lastError).toBeUndefined();
+
+    const code = `code-${randomUUID()}`;
+    await store.setTelegramLinkCode!(owner.id, code, minutes(60).toISOString());
+    expect(await store.linkTelegramChat!(code, '4242', minutes(70).toISOString())).toBeNull();
+    expect(await store.linkTelegramChat!(code, '4242', minutes(10).toISOString())).toBe(owner.id);
+    expect(await store.linkTelegramChat!(code, '4243', minutes(11).toISOString())).toBeNull();
+    expect(await store.getTelegramChat!(owner.id)).toBe('4242');
+    expect(await store.unlinkTelegramChat!('4242')).toBe(owner.id);
+    expect(await store.getTelegramChat!(owner.id)).toBeNull();
+
+    expect(await store.deleteSubscription!(id, owner.id + 1)).toBe(false);
+    expect(await store.deleteSubscription!(id, owner.id)).toBe(true);
+    expect(await store.getSubscription!(id)).toBeNull();
+    await store.close();
   });
 });
 
