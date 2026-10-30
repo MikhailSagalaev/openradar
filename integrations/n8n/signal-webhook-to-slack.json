@@ -1,0 +1,33 @@
+{
+  "name": "openradar: Signal webhook to Slack",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "openradar-signal",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "name": "openradar webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "openradar-signal"
+    },
+    {
+      "parameters": {
+        "channel": "#openradar",
+        "text": "=New leads from openradar ({{ $json.body.event }}):\n{{ JSON.stringify($json.body.items || $json.body.lead || $json.body, null, 2).slice(0, 2800) }}",
+        "otherOptions": {}
+      },
+      "name": "Post to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [520, 300]
+    }
+  ],
+  "connections": {
+    "openradar webhook": { "main": [[{ "node": "Post to Slack", "type": "main", "index": 0 }]] }
+  },
+  "settings": {}
+}

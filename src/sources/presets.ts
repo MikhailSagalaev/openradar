@@ -342,4 +342,14 @@ export const SOURCE_PRESETS: SourcePreset[] = [
       maxAgeDays: 30,
     },
   },
+  {
+    id: 'adzuna-us',
+    kind: 'adzuna',
+    title: 'Adzuna — Вакансии США',
+    description: 'Официальный API Adzuna: вакансии США всех отраслей. Требует ключи RADAR_ADZUNA_APP_ID и RADAR_ADZUNA_APP_KEY в переменных окружения.',
+    config: {
+      country: 'us',
+      limit: 50,
+    },
+  },
 ];

@@ -9,6 +9,7 @@ import type { Lead, LeadStatus, SourceConfig, SourceKind, SourceRecord } from '.
 import { pollAll, pollSource, type PollDeps, type PollSummary } from '../pipeline/poll.ts';
 import { rescoreLeads } from '../pipeline/rescore.ts';
 import { PollRunner } from '../pipeline/runner.ts';
+import { jobspyCsv, siteSlugFor } from '../core/jobspy.ts';
 import { createRuntime, type Runtime } from '../runtime.ts';
 import { createApp, startSubscriptionBot, subscriptionDeps } from '../server/app.ts';
 import { deliverDueSubscriptions } from '../pipeline/subscriptions.ts';
@@ -596,17 +597,25 @@ function buildProgram(): Command {
 
   program
     .command('export')
-    .description('Export leads to JSON or CSV')
+    .description('Export leads to JSON or CSV (--jobspy for the JobSpy-compatible columns)')
     .option('--format <format>', 'json or csv', 'json')
+    .option('--jobspy', 'JobSpy-compatible CSV: the columns pandas pipelines of JobSpy expect')
     .option('--out <path>', 'Output file')
     .option('--limit <n>', 'Max leads', '5000')
-    .action(async (options: { format: string; out?: string; limit: string }) => {
+    .action(async (options: { format: string; jobspy?: boolean; out?: string; limit: string }) => {
       const format = options.format.toLowerCase();
       if (format !== 'json' && format !== 'csv') fail('format must be json or csv');
-      const out = options.out ?? (format === 'csv' ? 'radar-export.csv' : 'radar-export.json');
+      const out = options.out ?? (format === 'csv' ? (options.jobspy ? 'openradar-jobspy.csv' : 'radar-export.csv') : 'radar-export.json');
 
       await withRuntime(async (runtime) => {
         const leads = await runtime.store.listLeads({ limit: Number(options.limit) || 5000 });
+        if (options.jobspy) {
+          if (format !== 'csv') fail('--jobspy exports CSV only');
+          const kinds = new Map((await runtime.store.listSources()).map((s) => [s.id, s.kind]));
+          writeFileSync(resolve(out), jobspyCsv(leads, (lead) => siteSlugFor(lead, kinds)), 'utf8');
+          console.log(`Экспортировано ${leads.length} лидов в ${resolve(out)} (колонки JobSpy)`);
+          return;
+        }
         if (format === 'json') {
           writeFileSync(resolve(out), JSON.stringify(leads, null, 2), 'utf8');
         } else {

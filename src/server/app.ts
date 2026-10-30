@@ -69,13 +69,17 @@ import {
   SEO_CATALOG,
   findCatalogEntry,
   renderAboutPage,
+  renderNetworkPage,
   renderCatalogIndex,
+  renderContributePage,
+  renderTrustPage,
   renderCatalogPage,
   renderFaqPage,
   renderLlmsTxt,
   renderRobotsTxt,
   renderSitemapXml,
 } from './seo.ts';
+import { renderApiCatalog, renderOpenApi } from './openapi.ts';
 import { datasetCsv, liveReport, monthSnapshot } from '../research/service.ts';
 import { renderMethodologyPage, renderReportPage, renderRolePage } from '../research/pages.ts';
 import { extractPreviewFromHtml, validateSubmissionUrl } from './preview.ts';
@@ -634,6 +638,15 @@ function buildSourceConfig(
     const existingToken =
       typeof existing?.config.token === 'string' ? existing.config.token : undefined;
     config.token = existingToken ?? randomBytes(16).toString('hex');
+  }
+
+  if (kind === 'adzuna') {
+    const country = formString(body, 'country').trim().toLowerCase();
+    if (country && !/^[a-z]{2}$/.test(country)) return { config, error: 'Код страны Adzuna — две буквы, например us или gb.' };
+    if (country) config.country = country;
+    const what = formString(body, 'query').trim();
+    if (what.length > 200) return { config, error: 'Поисковый запрос — не длиннее 200 символов.' };
+    if (what) config.what = what;
   }
 
   if (kind === 'hh' || kind === 'trudvsem' || kind === 'remoteok') {
@@ -2494,7 +2507,74 @@ export function createApp(runtime: Runtime): Hono {
   app.get('/llms.txt', (c) =>
     c.text(renderLlmsTxt(seoBaseUrl(c)), 200, { 'content-type': 'text/plain; charset=utf-8' }),
   );
+  // Machine-readable API description: OpenAPI 3.1 plus the RFC 9727 catalog pointing at it.
+  app.get('/openapi.json', (c) =>
+    c.json(renderOpenApi(seoBaseUrl(c)), 200, { 'cache-control': 'public, max-age=3600' }),
+  );
+  app.get('/.well-known/api-catalog', (c) =>
+    c.json(renderApiCatalog(seoBaseUrl(c)), 200, { 'cache-control': 'public, max-age=86400' }),
+  );
   app.get('/about', async (c) => c.html(renderAboutPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c) })));
+  app.get('/contribute', async (c) =>
+    c.html(renderContributePage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c) })));
+  app.get('/trust', async (c) =>
+    c.html(renderTrustPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c) })));
+
+  // The network made visible: the 30-day leaderboard and the sources of the week.
+  let networkCache: { at: number; body: string } | undefined;
+  app.get('/network', rateLimit({ windowMs: 60_000, max: 60 }), async (c) => {
+    if (networkCache && Date.now() - networkCache.at < 10 * 60_000) return c.html(networkCache.body);
+    const lang = resolveLang(c);
+    const since = new Date(Date.now() - RATING_WINDOW_MS).toISOString();
+    const sums = [...(await runtime.store.sumLedger(since)).entries()]
+      .filter(([pubkey, points]) => /^[0-9a-f]{64}$/.test(pubkey) && points > 0)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 30);
+    const moderators = parseModerators(runtime.env.RADAR_MODERATORS);
+    const participants = [];
+    for (const [pubkey, points] of sums) {
+      const participant = await runtime.store.getParticipant(pubkey);
+      const profileName = participant?.profile?.name;
+      const profileAbout = participant?.profile?.about;
+      participants.push({
+        shortPubkey: `${pubkey.slice(0, 8)}…${pubkey.slice(-4)}`,
+        name: typeof profileName === 'string' && profileName.trim() ? profileName.trim() : undefined,
+        about: typeof profileAbout === 'string' && profileAbout.trim() ? profileAbout.trim() : undefined,
+        points,
+        tier: tierFor({ rating: points, moderator: moderators.has(pubkey), githubLinked: Boolean(participant?.githubUserId) }),
+      });
+    }
+    const weekLeads = await feedFor(runtime, { tier: 'guest' }, { limit: 3000, createdAfter: new Date(Date.now() - 7 * 24 * 3600_000).toISOString() });
+    const bySource = new Map<string, number>();
+    for (const lead of weekLeads) {
+      const id = lead.sourceRef ? `${lead.sourceRef.platform}:${lead.sourceRef.channel}` : lead.sourceId;
+      bySource.set(id, (bySource.get(id) ?? 0) + 1);
+    }
+    const sources = await runtime.store.listSources();
+    const titleById = new Map(sources.map((s) => [s.id, s]));
+    const topSources = [...bySource.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 7)
+      .map(([key, leads]) => {
+        const source = titleById.get(key) ?? sources.find((s) => `${s.kind}:${s.id}` === key);
+        return {
+          title: source?.title ?? sources.find((s) => s.id === key)?.title ?? key,
+          leads,
+          href: source ? `/sources/${source.id}` : undefined,
+        };
+      });
+    const body = renderNetworkPage({
+      baseUrl: seoBaseUrl(c),
+      version: VERSION,
+      auth: await getAuthDisplay(c, runtime),
+      lang,
+      participants,
+      sources: topSources,
+      windowDays: RATING_WINDOW_MS / 86_400_000,
+    });
+    networkCache = { at: Date.now(), body };
+    return c.html(body);
+  });
   app.get('/faq', async (c) => c.html(renderFaqPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c) })));
   app.get('/catalog', async (c) => c.html(renderCatalogIndex({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c) })));
 

@@ -1,0 +1,48 @@
+{
+  "count": 3,
+  "mean": 75000,
+  "results": [
+    {
+      "id": "4419291727",
+      "title": "Senior Backend Engineer",
+      "description": "<p>Build <b>payments</b> infrastructure for a fintech scale-up.</p>",
+      "redirect_url": "https://www.adzuna.com/land/4419291727",
+      "created": "2026-10-29T09:12:44Z",
+      "company": { "display_name": "Payflow Inc" },
+      "location": { "display_name": "New York, NY" },
+      "salary_min": 150000.0,
+      "salary_max": 190000.0,
+      "salary_is_predicted": "0",
+      "contract_time": "full_time",
+      "category": { "label": "IT Jobs" }
+    },
+    {
+      "id": "4419292000",
+      "title": "Customer Support Agent",
+      "description": "Answer tickets in English and German.",
+      "redirect_url": "https://www.adzuna.com/land/4419292000",
+      "created": "2026-10-28T18:00:00Z",
+      "company": { "display_name": "Helpline US" },
+      "location": { "display_name": "Chicago, IL" },
+      "salary_min": 30000.0,
+      "salary_max": null,
+      "salary_is_predicted": "0",
+      "contract_time": "part_time",
+      "category": { "label": "Customer Services" }
+    },
+    {
+      "id": "4419293000",
+      "title": "Delivery Driver",
+      "description": "A salary is guessed by the board.",
+      "redirect_url": "https://www.adzuna.com/land/4419293000",
+      "created": "2026-10-28T10:00:00Z",
+      "company": { "display_name": "Courier Co" },
+      "location": { "display_name": "Remote" },
+      "salary_min": 25000.0,
+      "salary_max": 26000.0,
+      "salary_is_predicted": "1",
+      "contract_time": null,
+      "category": { "label": "Logistics" }
+    }
+  ]
+}
