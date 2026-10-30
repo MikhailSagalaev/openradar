@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.28.2
+
+- Channel vacancies with «Зарплата:» glued to the title («Fullstack-разработчикЗарплата: 120 000 руб.
+  Без опыта») are vacancies; «без опыта» counts as a vacancy sign in channel posts.
+- Promo posts with «акция действует», «возвращаем до 25%», «скидка 30%» are `channel_ad`.
+
+## 0.28.1
+
+- `radar rescore` and `radar requality` read long windows page by page: the store returns at most
+  5000 leads a call, and `requality --days 60` stopped at the newest 5000.
+
 ## 0.28.0
 
 - The quality stage (`src/core/quality.ts`): the feed no longer ranks channel promos, roundups and

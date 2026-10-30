@@ -22,6 +22,11 @@ describe('quality stage', () => {
     expect(detectPostType({ type: 'gig', title, text: 'Офис (Минск).' }, telegram)).toBe('job');
   });
 
+  it('reads «Зарплата:» glued to the title', () => {
+    const title = 'Fullstack-разработчикЗарплата: 120 000 руб. Без опыта УдаленноТребования- Опыт с Next.js';
+    expect(detectPostType({ type: 'gig', title, text: '' }, telegram)).toBe('job');
+  });
+
   it('keeps a one-off order a gig', () => {
     const title = 'Нужно сделать лендинг на Tilda';
     const text = 'Бюджет: 30 000 ₽. ТЗ пришлю. Senior не нужен, срок выполнения неделя.';
@@ -38,6 +43,8 @@ describe('quality stage', () => {
     expect(assess('Идёт набор в XI поток Hello New Job!', 'За 7 недель обучения ты разберёшься в найме.').flags).toEqual(['channel_ad']);
     expect(assess('Уже сегодня встречаемся на практическом вебинаре', 'Начало в 19:00 мск, регистрация по ссылке.').flags).toEqual(['channel_ad']);
     expect(assess('Как перестать бояться говорить на английском?', 'Именно с этим запросом приходят IT-специалисты.').flags).toEqual(['channel_ad']);
+    const promo = 'До конца октября возвращаем до 25% за первое пополнение рекламы. Акция действует до 31 октября!';
+    expect(assess('Реклама не должна останавливаться из-за одного канала трафика', promo).flags).toEqual(['channel_ad']);
   });
 
   it('does not flag a vacancy with a promo footer or ad marking', () => {
