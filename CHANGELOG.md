@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.31.0
+
+- Source health says what a source is doing (`src/core/source-health.ts`): works, empty (answers
+  with nothing new), unstable (the last poll failed), broken (3 failed polls in a row), blocked
+  (401, 403, 429, a captcha or a Telegram flood wait). «Broken» and «empty» are no longer one red
+  dot, and one night outage of a foreign board no longer reads as a dead source. `/sources` and
+  `/api/sources/health` (`state`) show it.
+- The salary median behind «зарплату проверить» is computed by the database over every vacancy of
+  the last 30 days. It was taken from the newest 5000 leads, about one day of the hub.
+- «Только IT» in the feed filters (`it=1`, also for RSS and the API): development, data, DevOps,
+  1C, site builders, bots and the engineering categories of company boards.
+
 ## 0.30.0
 
 - Shorthand amounts are read: «от 150к», «25-30к», «от 70 до 150 тыс рублей», «$170k-$300k»,

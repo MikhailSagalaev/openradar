@@ -293,4 +293,6 @@ export interface SourceHealth {
     runs: number;
   };
   successRate: number;
+  /** Failed polls in a row at the head of the run history, up to 3 (see source-health.ts). */
+  failedInRow?: number;
 }

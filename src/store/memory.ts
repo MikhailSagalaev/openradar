@@ -24,6 +24,8 @@ import type {
 import type { LeadFactsFill, ResearchDailyRow } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
 import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
+import { computeSalaryMedians } from '../core/salary-sanity.ts';
+import { countFailedInRow } from '../core/source-health.ts';
 import type {
   Contact,
   Lead,
@@ -460,6 +462,10 @@ export class MemoryStore implements Store {
       const skill = options.skill.trim().toLowerCase();
       result = result.filter((l) => (l.skills ?? []).some((s) => s.toLowerCase() === skill));
     }
+    if (options.skillsAny?.length) {
+      const wanted = new Set(options.skillsAny.map((skill) => skill.toLowerCase()));
+      result = result.filter((l) => (l.skills ?? []).some((s) => wanted.has(s.toLowerCase())));
+    }
     if (options.language) {
       const russian = options.language === 'ru';
       result = result.filter((l) => /[А-Яа-яЁё]/.test(l.title) === russian);
@@ -574,8 +580,15 @@ export class MemoryStore implements Store {
           runs: recentRuns.length,
         },
         successRate: recentRuns.length > 0 ? Math.round(((recentRuns.length - errors) / recentRuns.length) * 100) : 0,
+        failedInRow: countFailedInRow(sourceRuns),
       };
     });
+  }
+
+  async salaryMedians(createdAfter: string, _floorUsd: number, _minSample: number): Promise<Map<string, number>> {
+    // computeSalaryMedians applies the same floor and sample size.
+    const recent = [...this.leads.values()].filter((lead) => lead.status !== 'rejected' && (lead.state ?? 'active') === 'active' && lead.createdAt >= createdAfter);
+    return new Map(computeSalaryMedians(recent));
   }
 
   async recordRun(run: RunRecord): Promise<void> {

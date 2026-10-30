@@ -216,7 +216,7 @@ sessions(id, user_id, created_at, expires_at)
 
 - `GET /health` — публичный.
 - `GET /auth/github` и `GET /auth/github/callback` — OAuth-вход через GitHub; сессия в HttpOnly-cookie.
-- `GET /` — лента с поиском и фильтрами: тип, `sort=new|score|budget` (лучшие и дорогие — за последние 7 дней), `budget` (от суммы в рублях), `skill`, `language=ru|en` (язык заголовка), `remote=1`, `page` (по 50 лидов). Те же параметры принимают `/api/leads`, `/feed.rss` и `/v2/feed` (в `/v2/feed` курсор работает только с `sort=new`). Фильтр по статусу воронки и отклонённые лиды видит только админ.
+- `GET /` — лента с поиском и фильтрами: тип, `sort=new|score|budget` (лучшие и дорогие — за последние 7 дней), `budget` (от суммы в рублях), `skill`, `language=ru|en` (язык заголовка), `remote=1`, `it=1` (только IT-работа, список навыков — `IT_SKILLS` в `src/server/filters.ts`), `page` (по 50 лидов). Те же параметры принимают `/api/leads`, `/feed.rss` и `/v2/feed` (в `/v2/feed` курсор работает только с `sort=new`). Фильтр по статусу воронки и отклонённые лиды видит только админ.
 - `GET /leads/:id` — карточка лида: полный текст, источник, рейтинг, причины.
 - `POST /leads/:id/vote` и `POST /api/leads/:id/vote` — голосование; только пользователь с GitHub-входом, один голос на сигнал.
 - `POST /leads/:id/status`, `POST /leads/:id/feedback`, `PATCH /api/leads/:id/status` — воронка; только админ.

@@ -40,6 +40,7 @@ import type {
 import type { LeadFactsFill, ResearchDailyRow } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
 import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
+import { BROKEN_AFTER, countFailedInRow } from '../core/source-health.ts';
 
 import { checkMigrations } from './migrator.ts';
 
@@ -517,6 +518,12 @@ export class PostgresStore implements Store {
       );
       params.push(options.skill.trim());
     }
+    if (options.skillsAny?.length) {
+      conditions.push(
+        `EXISTS (SELECT 1 FROM jsonb_array_elements_text(skills_json) AS s(skill) WHERE lower(s.skill) = ANY($${idx++}::text[]))`,
+      );
+      params.push(options.skillsAny.map((skill) => skill.toLowerCase()));
+    }
     if (options.language) {
       conditions.push(options.language === 'ru' ? `title ~ '[А-Яа-яЁё]'` : `title !~ '[А-Яа-яЁё]'`);
     }
@@ -683,6 +690,22 @@ export class PostgresStore implements Store {
 
     const lastBySource = new Map(lastRunsRes.rows.map(r => [r.source_id, this.rowToRun(r)]));
 
+    // The newest BROKEN_AFTER runs of each source, to tell one failed poll from a broken source.
+    const recentRes = await this.pool.query(
+      `SELECT source_id, error FROM (
+         SELECT source_id, error, started_at,
+                ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY started_at DESC) AS n
+         FROM runs WHERE started_at >= $1::timestamptz
+       ) recent WHERE n <= $2 ORDER BY source_id, started_at DESC`,
+      [new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString(), BROKEN_AFTER],
+    );
+    const recentBySource = new Map<string, Array<{ error?: string }>>();
+    for (const r of recentRes.rows) {
+      const list = recentBySource.get(r.source_id) ?? [];
+      list.push({ error: r.error ?? undefined });
+      recentBySource.set(r.source_id, list);
+    }
+
     return sources.map((source) => {
       const row = aggregate.get(source.id);
       const runs = parseInt(row?.runs, 10) || 0;
@@ -700,8 +723,33 @@ export class PostgresStore implements Store {
           runs,
         },
         successRate: runs === 0 ? 0 : Math.round(((runs - errors) / runs) * 100),
+        failedInRow: countFailedInRow(recentBySource.get(source.id) ?? []),
       };
     });
+  }
+
+  async salaryMedians(createdAfter: string, floorUsd: number, minSample: number): Promise<Map<string, number>> {
+    // The role key is salaryRoleKey(): the category, else the first skill, lower-cased.
+    const res = await this.pool.query(
+      `WITH pay AS (
+         SELECT lower(trim(COALESCE(NULLIF(trim(category), ''), skills_json->>0))) AS role,
+                COALESCE(normalized_usd_max, normalized_usd_min)::float8 AS usd
+         FROM leads
+         WHERE type = 'job' AND status <> 'rejected' AND state = 'active' AND created_at >= $1::timestamptz
+           AND COALESCE(payment_period, 'monthly') = 'monthly'
+           AND COALESCE(normalized_usd_max, normalized_usd_min) >= $2::float8
+       )
+       SELECT '*' AS role, percentile_cont(0.5) WITHIN GROUP (ORDER BY usd) AS median, COUNT(*) AS n FROM pay
+       UNION ALL
+       SELECT role, percentile_cont(0.5) WITHIN GROUP (ORDER BY usd), COUNT(*) FROM pay
+       WHERE role IS NOT NULL AND role <> '' GROUP BY role`,
+      [createdAfter, floorUsd],
+    );
+    const medians = new Map<string, number>();
+    for (const row of res.rows) {
+      if (Number(row.n) >= minSample && row.median !== null) medians.set(String(row.role), Number(row.median));
+    }
+    return medians;
   }
 
   async recordDelivery(leadId: string, sink: string, status: 'sent' | 'failed', error?: string): Promise<void> {

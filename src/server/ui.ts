@@ -8,6 +8,7 @@ import { formatLeadText } from './format.ts';
 import { activeFilterCount, BUDGET_STEPS_RUB, type FeedFilters, hasActiveFilters, rankedWindowApplies } from './filters.ts';
 import { SEO_CATALOG } from './seo.ts';
 import { qualityFlagsOf } from '../core/quality.ts';
+import { BROKEN_AFTER, sourceState, type SourceState } from '../core/source-health.ts';
 import { salaryLooksWrong } from '../core/salary-sanity.ts';
 import type { SourcePreset } from '../sources/presets.ts';
 
@@ -2063,24 +2064,28 @@ function statusDot(status: string, lang: SupportedLang = 'ru'): string {
   return `<span class="dot ${cls}"></span>${escapeHtml(statusLabel(status, lang))}`;
 }
 
+/** Dot and words for each source state (src/core/source-health.ts): the operator's and the reader's. */
+const SOURCE_STATE_VIEW: Record<SourceState, { dot: string; admin: string; reader: string }> = {
+  ok: { dot: 'ok', admin: 'работает', reader: 'работает' },
+  empty: { dot: '', admin: 'пусто за сутки', reader: 'нет новых данных' },
+  unstable: { dot: 'warn', admin: 'сбой опроса', reader: 'временно недоступен' },
+  error: { dot: 'err', admin: `сломан: ${BROKEN_AFTER} сбоя подряд`, reader: 'не работает' },
+  blocked: { dot: 'err', admin: 'блокирует нас', reader: 'закрыл доступ' },
+  disabled: { dot: '', admin: 'выключен', reader: 'выключен' },
+  waiting: { dot: '', admin: 'нет запусков', reader: 'ожидает первого опроса' },
+};
+
 function healthStatus(health: SourceHealth): { dot: string; label: string } {
-  if (!health.source.enabled) return { dot: '', label: 'выключен' };
-  if (health.lastRun?.error) return { dot: 'err', label: 'ошибка' };
-  if (health.lastRun) return { dot: 'ok', label: 'работает' };
-  if (health.source.kind === 'webhook') return { dot: '', label: 'ожидает данных' };
-  return { dot: '', label: 'нет запусков' };
+  const state = sourceState(health);
+  if (state === 'waiting' && health.source.kind === 'webhook') return { dot: '', label: 'ожидает данных' };
+  return { dot: SOURCE_STATE_VIEW[state].dot, label: SOURCE_STATE_VIEW[state].admin };
 }
 
-/**
- * Source state for readers who are not the operator: no raw errors, and a source that
- * runs but brings nothing (a blocked API, an empty feed) is not reported as working.
- */
+/** Source state for readers who are not the operator: no raw errors. */
 function publicHealthStatus(health: SourceHealth): { dot: string; label: string } {
-  if (health.lastRun?.error) return { dot: 'warn', label: 'временно недоступен' };
-  if (health.last24h.runs > 0 && health.last24h.found === 0) return { dot: '', label: 'нет новых данных' };
-  if (health.lastRun) return { dot: 'ok', label: 'работает' };
-  if (health.source.kind === 'webhook') return { dot: '', label: 'принимает данные' };
-  return { dot: '', label: 'ожидает первого опроса' };
+  const state = sourceState(health);
+  if (state === 'waiting' && health.source.kind === 'webhook') return { dot: '', label: 'принимает данные' };
+  return { dot: SOURCE_STATE_VIEW[state].dot, label: SOURCE_STATE_VIEW[state].reader };
 }
 
 function newLeadsLabel(count: number): string {
@@ -2249,6 +2254,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
       skill: filters.skill,
       language: filters.language === filters.defaultLanguage ? undefined : (filters.language ?? 'all'),
       remote: filters.remote ? '1' : undefined,
+      it: filters.it ? '1' : undefined,
       ...overrides,
     };
     const params = new URLSearchParams();
@@ -2294,8 +2300,9 @@ export function renderLeadsPage(data: LeadsPageData): string {
   const activeCount = activeFilterCount(filters);
   const filterBar = `<details class="filters" id="feed-filters" open><summary class="filters-toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>${escapeHtml(t.filtersTitle)}${activeCount ? `<span class="filters-count">${activeCount}</span>` : ''}<svg class="filters-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div class="filter-bar">
     ${sortSelect}${budgetSelect}${skillSelect}${languageSelect}
+    <label class="filter-check"><input type="checkbox" name="it" value="1"${filters.it ? ' checked' : ''} onchange="this.form.submit()">${escapeHtml(t.itOnly)}</label>
     <label class="filter-check"><input type="checkbox" name="remote" value="1"${filters.remote ? ' checked' : ''} onchange="this.form.submit()">${escapeHtml(t.remoteOnly)}</label>
-    ${hasActiveFilters(filters) ? `<a class="filter-reset" href="${escapeHtml(hrefWith({ sort: undefined, budget: undefined, skill: undefined, language: undefined, remote: undefined }))}">${escapeHtml(t.resetFilters)}</a>` : ''}
+    ${hasActiveFilters(filters) ? `<a class="filter-reset" href="${escapeHtml(hrefWith({ sort: undefined, budget: undefined, skill: undefined, language: undefined, remote: undefined, it: undefined }))}">${escapeHtml(t.resetFilters)}</a>` : ''}
     <a class="filter-rss" href="${escapeHtml(rssHref)}" target="_blank" rel="noopener">RSS</a>
   </div></details>
   ${rankedWindowApplies(filters) ? `<p class="score-legend">${escapeHtml(t.rankedWindow)}</p>` : ''}
