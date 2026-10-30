@@ -21,6 +21,18 @@ describe('salary & currency normalization', () => {
     expect(detectCurrency('Оплата 2500 EUR')).toBe('EUR');
     expect(detectCurrency('Вилка 800 000 тенге')).toBe('KZT');
     expect(detectCurrency('5000 BYN')).toBe('BYN');
+    // Words that only contain a currency name are not money.
+    expect(detectCurrency('Таргетолог: продвижение медицинских вебинаров в Европе, бюджет 35 000')).toBe('RUB');
+    expect(detectCurrency('Курс в IT Academy, оплата 108 000')).toBe('RUB');
+    expect(detectCurrency('Аудит рекламного кабинета, audience research, 20 000')).toBe('RUB');
+    expect(detectCurrency('Офис во Франкфурте, 90 000 руб.')).toBe('RUB');
+    expect(detectCurrency('Зарплата 120 000 руб. Без опыта')).toBe('RUB');
+    expect(detectCurrency('Оплата 1500 евро в месяц')).toBe('EUR');
+    expect(detectCurrency('2000 бел. руб.')).toBe('BYN');
+    expect(detectCurrency('C$ 90,000 per year')).toBe('CAD');
+    expect(detectCurrency('Salary 120000 CAD')).toBe('CAD');
+    expect(detectCurrency('CA$120,000')).toBe('CAD');
+    expect(detectCurrency('Оплата $500')).toBe('USD');
     expect(detectCurrency('150 000 рублей')).toBe('RUB');
   });
 
