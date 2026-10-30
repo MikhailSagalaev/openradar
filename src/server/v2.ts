@@ -1,3 +1,4 @@
+import { webPubkey } from '../hub/web-key.ts';
 import type { Context, Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { canSeeContacts, delayMinutes, viewerCanSeeLead, visibleBefore } from '../core/access.ts';
@@ -330,6 +331,7 @@ export function registerV2Routes(app: Hono, runtime: Runtime, h: V2Helpers): voi
   app.post('/v2/moderation/recompute', async (c) => {
     const moderator = await moderatorOr403(c);
     if (moderator instanceof Response) return moderator;
-    return c.json({ ok: true, ...(await recomputeRatings(runtime.store, parseModerators(runtime.env.RADAR_MODERATORS))) });
+    const secret = runtime.env.RADAR_WEB_KEY_SECRET || runtime.env.RADAR_ADMIN_TOKEN;
+    return c.json({ ok: true, ...(await recomputeRatings(runtime.store, parseModerators(runtime.env.RADAR_MODERATORS), new Date(), secret ? (id) => webPubkey(secret, id) : undefined)) });
   });
 }

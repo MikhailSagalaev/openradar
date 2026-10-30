@@ -77,11 +77,6 @@ export interface Translations {
   signalMarketBudget: string;
   signalDirectEmployer: string;
   signalPossibleScam: string;
-  // Score bands: the label beside the score
-  bandStrong: string;
-  bandGood: string;
-  bandWeak: string;
-  bandNoise: string;
   skipToFeed: string;
   // Voting
   useful: string;
@@ -234,7 +229,7 @@ export const RU: Translations = {
   remoteFormat: 'Удалённая работа',
   onsiteFormat: 'На объекте / Офлайн',
   budget: 'Бюджет',
-  score: 'Скор',
+  score: 'Рейтинг',
   published: 'Опубликован',
   added: 'Добавлен',
   author: 'Автор',
@@ -252,10 +247,6 @@ export const RU: Translations = {
   signalMarketBudget: 'указан бюджет',
   signalDirectEmployer: 'прямой заказчик',
   signalPossibleScam: 'возможен скам',
-  bandStrong: 'сильный',
-  bandGood: 'хороший',
-  bandWeak: 'слабый',
-  bandNoise: 'шум',
   skipToFeed: 'К содержимому',
   useful: 'Полезно',
   junk: 'Мусор',
@@ -285,7 +276,7 @@ export const RU: Translations = {
   heroDismiss: 'Скрыть',
   notFoundTitle: 'Страница не найдена',
   notFoundDesc: 'Такой страницы нет: ссылка устарела, или заказ уже скрыт.',
-  scoreHint: 'Скор от 0 до 100 — насколько заказ стоит внимания: бюджет или зарплата, навыки, насколько подробно описана задача, прямой контакт и голоса участников. Медиана около 60, от 80 — сильный заказ.',
+  scoreHint: 'Рейтинг от 0 до 100 — насколько заказ стоит внимания: бюджет или зарплата, навыки, насколько подробно описана задача, прямой контакт и голоса участников. Медиана около 60, от 80 — сильный заказ.',
   sortNew: 'Сначала новые',
   sortScore: 'Сначала лучшие',
   sortBudget: 'Сначала дорогие',
@@ -300,7 +291,7 @@ export const RU: Translations = {
   feedDelayNote: 'лента с задержкой {d}',
   contactsHiddenShort: 'контакты скрыты',
   removeDelay: 'Как смотреть без задержки',
-  scoreWhat: 'Что такое скор?',
+  scoreWhat: 'Что такое рейтинг?',
   loadMore: 'Показать ещё',
   suggestionsTitle: 'Быстрый поиск',
   foundCount: 'Найдено',
@@ -420,10 +411,6 @@ export const EN: Translations = {
   signalMarketBudget: 'budget stated',
   signalDirectEmployer: 'direct employer',
   signalPossibleScam: 'possible scam',
-  bandStrong: 'strong',
-  bandGood: 'good',
-  bandWeak: 'weak',
-  bandNoise: 'noise',
   skipToFeed: 'Skip to content',
   useful: 'Useful',
   junk: 'Junk',

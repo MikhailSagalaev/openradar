@@ -166,20 +166,46 @@ export async function evaluateLeadState(
 }
 
 /** Ledger entries for one lead, from its observations, signals and current state. */
+/** The keys of a GitHub account: its web key, which is paid, and every key of the account. */
+export interface WebAccount {
+  payTo: string;
+  keys: string[];
+}
+
 export async function ledgerForLead(
   lead: Lead,
   observations: ObservationRecord[],
   signals: SignalRecord[],
   weights: WeightResolver,
   now: Date,
+  webAccountOf?: (userId: number) => WebAccount | undefined,
 ): Promise<LedgerEntry[]> {
   const entries: LedgerEntry[] = [];
   const ordered = [...observations].sort((a, b) => a.receivedAt.localeCompare(b.receivedAt));
   const first = ordered.find((o) => o.isFirst) ?? ordered[0];
   if (!first) return entries;
   const createdAt = lead.createdAt;
-  const add = (pubkey: string, kind: LedgerEntry['kind'], points: number) => {
-    if (pubkey.startsWith(WEB_SIGNAL_PREFIX)) return;
+  // A vote on the site is signed `web:<user id>`; its points go to that account's web key.
+  // It is dropped when the account brought the lead itself, and when one of the account's
+  // keys already signed a signal on the lead: one person, one vote.
+  const accountOf = (signer: string): WebAccount | undefined => {
+    if (!signer.startsWith(WEB_SIGNAL_PREFIX)) return undefined;
+    const userId = Number(signer.slice(WEB_SIGNAL_PREFIX.length));
+    return webAccountOf && Number.isInteger(userId) ? webAccountOf(userId) : undefined;
+  };
+  const keySigners = new Set(signals.filter((s) => !s.pubkey.startsWith(WEB_SIGNAL_PREFIX)).map((s) => s.pubkey));
+  signals = signals.filter((s) => {
+    if (!s.pubkey.startsWith(WEB_SIGNAL_PREFIX)) return true;
+    const account = accountOf(s.pubkey);
+    return !account || !account.keys.some((key) => key === first.pubkey || keySigners.has(key));
+  });
+  const add = (signer: string, kind: LedgerEntry['kind'], points: number) => {
+    let pubkey = signer;
+    if (signer.startsWith(WEB_SIGNAL_PREFIX)) {
+      const account = accountOf(signer);
+      if (!account) return;
+      pubkey = account.payTo;
+    }
     entries.push({ pubkey, leadId: lead.id, kind, points: Math.round(points * 1000) / 1000, createdAt });
   };
 
@@ -245,7 +271,25 @@ export interface RecomputeSummary {
  * The hourly job: re-evaluates every lead observed in the last 30 days, rewrites its
  * ledger entries and refreshes cached ratings. Weights come from the previous ratings.
  */
-export async function recomputeRatings(store: Store, moderators: Set<string>, now: Date = new Date()): Promise<RecomputeSummary> {
+export async function recomputeRatings(
+  store: Store,
+  moderators: Set<string>,
+  now: Date = new Date(),
+  webPubkeyOf?: (userId: number) => string,
+): Promise<RecomputeSummary> {
+  // Web voters' accounts: the web key and the key linked to the same GitHub account.
+  const accounts = new Map<number, WebAccount>();
+  const loadAccounts = async (signals: SignalRecord[]): Promise<void> => {
+    if (!webPubkeyOf) return;
+    for (const s of signals) {
+      if (!s.pubkey.startsWith(WEB_SIGNAL_PREFIX)) continue;
+      const userId = Number(s.pubkey.slice(WEB_SIGNAL_PREFIX.length));
+      if (!Number.isInteger(userId) || accounts.has(userId)) continue;
+      const payTo = webPubkeyOf(userId);
+      const linked = await store.getParticipantByGithubUser(userId);
+      accounts.set(userId, { payTo, keys: [...new Set([payTo, ...(linked ? [linked.pubkey] : [])])] });
+    }
+  };
   const since = new Date(now.getTime() - RATING_WINDOW_MS).toISOString();
   const weights = new WeightResolver(store, moderators, now);
   const byLead = new Map<string, ObservationRecord[]>();
@@ -266,7 +310,8 @@ export async function recomputeRatings(store: Store, moderators: Set<string>, no
     const signals = await store.listSignals(leadId);
     leadIds.push(leadId);
     const wasConfirmed = Boolean(lead.confirmedAt);
-    entries.push(...(await ledgerForLead(lead, observations, signals, weights, now)));
+    await loadAccounts(signals);
+    entries.push(...(await ledgerForLead(lead, observations, signals, weights, now, (id) => accounts.get(id))));
     if (!wasConfirmed && lead.confirmedAt) await store.markLeadConfirmed?.(leadId, lead.confirmedAt);
   }
   await store.replaceLedger(leadIds, entries);

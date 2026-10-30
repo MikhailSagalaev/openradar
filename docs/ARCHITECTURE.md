@@ -7,7 +7,7 @@
 Radar — самостоятельный сервис, который превращает разрозненные публичные заказы в один нормализованный поток лидов:
 
 ```
-источник → нормализация → дедуп → правила → (опционально LLM) → скор → доставка
+источник → нормализация → дедуп → правила → (опционально LLM) → рейтинг → доставка
 ```
 
 Он не является ни парсером «всего интернета», ни SaaS. Ценность — в трубе и контрактах, а не в количестве площадок. Общая лента (хаб) — тот же код в режиме `RADAR_MODE=hub`, куда узлы и парсеры присылают наблюдения сами.
@@ -52,7 +52,7 @@ Radar — самостоятельный сервис, который превр
 
 | Каталог | Ответственность |
 |---|---|
-| `src/core/` | типы, текст, URL, fingerprint, извлечение полей, правила, скор |
+| `src/core/` | типы, текст, URL, fingerprint, извлечение полей, правила, рейтинг |
 | `src/sources/` | адаптеры источников и реестр |
 | `src/sinks/` | адаптеры доставки и реестр |
 | `src/store/` | PostgreSQL-репозиторий, миграции и In-Memory store |
@@ -162,7 +162,7 @@ sessions(id, user_id, created_at, expires_at)
 
 Синк не имеет права ронять пайплайн: ошибка ловится, пишется в `deliveries` и `lastError` лида.
 
-## 8a. Скор
+## 8a. Рейтинг заказа
 
 `scoreLead()` в `src/core/rules.ts` считает статичную ценность лида от 0 до 100 один раз, при приёме. Свежесть в него не входит: при приёме свежий каждый лид, а порядок по времени даёт сама лента.
 
@@ -191,14 +191,14 @@ sessions(id, user_id, created_at, expires_at)
 
 ### CLI
 
-`init`, `migrate`, `source add/list/share/enable/disable/remove`, `poll`, `run`, `serve`, `leads`, `runs`, `stats`, `export`, `push` (NDJSON-наблюдения из stdin), `key` (ключ участника), `rescore` (пересчёт скора), `mcp`.
+`init`, `migrate`, `source add/list/share/enable/disable/remove`, `poll`, `run`, `serve`, `leads`, `runs`, `stats`, `export`, `push` (NDJSON-наблюдения из stdin), `key` (ключ участника), `rescore` (пересчёт рейтинга заказов), `mcp`.
 
 ### HTTP
 
 - `GET /health` — публичный.
 - `GET /auth/github` и `GET /auth/github/callback` — OAuth-вход через GitHub; сессия в HttpOnly-cookie.
 - `GET /` — лента с поиском и фильтрами: тип, `sort=new|score|budget` (лучшие и дорогие — за последние 7 дней), `budget` (от суммы в рублях), `skill`, `language=ru|en` (язык заголовка), `remote=1`, `page` (по 50 лидов). Те же параметры принимают `/api/leads`, `/feed.rss` и `/v2/feed` (в `/v2/feed` курсор работает только с `sort=new`). Фильтр по статусу воронки и отклонённые лиды видит только админ.
-- `GET /leads/:id` — карточка лида: полный текст, источник, скор, причины.
+- `GET /leads/:id` — карточка лида: полный текст, источник, рейтинг, причины.
 - `POST /leads/:id/vote` и `POST /api/leads/:id/vote` — голосование; только пользователь с GitHub-входом, один голос на сигнал.
 - `POST /leads/:id/status`, `POST /leads/:id/feedback`, `PATCH /api/leads/:id/status` — воронка; только админ.
 - `GET /submit`, `POST /submit`, `POST /api/submit`, `POST /api/preview` — добавление по ссылке; запись — только после GitHub-входа, превью ходит через SSRF-guarded fetch.
@@ -272,7 +272,7 @@ Radar — инструмент, а не разрешение. Ответстве
 ### v0.1 (сделано)
 
 - RSS, Telegram public, Kwork, webhook.
-- Дедуп, правила, скор, три синка.
+- Дедуп, правила, рейтинг, три синка.
 - CLI, HTTP API, dashboard, тесты, Docker.
 
 ### v0.2 (сделано)
