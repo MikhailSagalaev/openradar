@@ -278,6 +278,10 @@ const STYLE = `
   --emerald: #10b981;
   --rose: #ef4444;
   --amber: #f59e0b;
+  /* Form controls: one height, pill corners like the buttons, a soft grey ring on focus. */
+  --control-h: 36px;
+  --control-radius: 9999px;
+  --focus-ring: 0 0 0 3px rgba(113, 113, 122, 0.22);
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -296,6 +300,23 @@ const STYLE = `
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; color-scheme: light dark; }
+/* Every text field, select and textarea looks the same unless a component says otherwise:
+   :where() keeps these rules at zero specificity, so a class rule always wins. */
+:where(input:not([type=checkbox], [type=radio], [type=hidden], [type=range], [type=file], [type=submit], [type=button], [type=color]), select, textarea) {
+  min-height: var(--control-h);
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+:where(textarea) { padding: 10px 14px; border-radius: 14px; line-height: 1.5; }
+:where(input, select, textarea):hover { border-color: var(--line-strong); }
+:where(input, select, textarea):focus { outline: none; border-color: var(--muted); box-shadow: var(--focus-ring); }
+:where(input, select, textarea):disabled { background: var(--soft); color: var(--muted); }
 body {
   margin: 0;
   background: var(--bg);
@@ -575,23 +596,7 @@ a:hover { text-decoration: underline; }
   box-shadow: none;
 }
 .search { display: flex; gap: 6px; margin-left: auto; }
-.search input {
-  width: 200px;
-  min-width: 0;
-  padding: 6px 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  font: inherit;
-  font-size: 12.5px;
-  background: var(--bg);
-  color: var(--ink);
-  transition: all 0.15s ease;
-}
-.search input:focus {
-  outline: 0;
-  border-color: var(--ink);
-  box-shadow: 0 0 0 1px var(--ink), 0 1px 2px rgba(0, 0, 0, 0.04);
-}
+.search input { width: 200px; min-width: 0; min-height: 32px; font-size: 12.5px; }
 .search button { flex: 0 0 auto; }
 @keyframes rowEntrance {
   from {
@@ -727,8 +732,8 @@ dialog::backdrop {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .search-bar:focus-within {
-  border-color: var(--ink);
-  box-shadow: 0 0 0 1px var(--ink), 0 2px 6px rgba(0, 0, 0, 0.05);
+  border-color: var(--muted);
+  box-shadow: var(--focus-ring);
 }
 .search-input-wrap {
   position: relative;
@@ -746,6 +751,9 @@ dialog::backdrop {
   background: transparent;
   color: var(--ink);
   outline: none;
+  /* The pill around it shows focus; the field itself stays bare. */
+  box-shadow: none;
+  min-height: 0;
 }
 .search-icon-svg {
   position: absolute;
@@ -1123,9 +1131,10 @@ dialog::backdrop {
 .filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
 .filter-bar select {
   height: 34px;
-  padding: 0 28px 0 10px;
+  min-height: 34px;
+  padding: 0 30px 0 14px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--control-radius);
   background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2371717a' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center;
   color: var(--ink);
   font: inherit;
@@ -1133,7 +1142,7 @@ dialog::backdrop {
   appearance: none;
   cursor: pointer;
 }
-.filter-bar select:hover, .filter-bar select:focus { border-color: var(--line-strong); }
+.filter-bar select:hover { border-color: var(--line-strong); }
 .filter-check { display: inline-flex; align-items: center; gap: 6px; height: 34px; font-size: 13px; color: var(--ink); cursor: pointer; }
 .filter-check input { margin: 0; accent-color: var(--ink); }
 .filter-reset { font-size: 13px; color: var(--muted); }
@@ -1143,8 +1152,9 @@ dialog::backdrop {
 }
 .score[title] { cursor: help; }
 /* Keyboard focus is always visible; the search pill shows it on the whole bar instead. */
-a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
-  outline: 2px solid var(--ink);
+/* Keyboard focus on links, buttons and boxes; text fields show the soft ring instead (above). */
+a:focus-visible, button:focus-visible, summary:focus-visible, input[type=checkbox]:focus-visible, input[type=radio]:focus-visible {
+  outline: 2px solid var(--muted);
   outline-offset: 2px;
 }
 .search-input-wrap input:focus-visible { outline: none; }
@@ -1404,23 +1414,7 @@ table a:hover { text-decoration: underline; }
 .form { display: grid; gap: 14px; max-width: 720px; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .field { display: grid; gap: 5px; color: var(--muted); font-size: 12px; }
-.field input, .field select {
-  width: 100%;
-  padding: 7px 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--bg);
-  color: var(--ink);
-  font: inherit;
-  font-size: 13px;
-  transition: all 0.15s ease;
-}
-.field input:focus, .field select:focus {
-  outline: 0;
-  border-color: var(--ink);
-  box-shadow: 0 0 0 1px var(--ink), 0 1px 2px rgba(0, 0, 0, 0.04);
-}
-.field input:disabled, .field select:disabled { background: var(--soft); color: var(--muted); }
+.field input, .field select, .field textarea { width: 100%; }
 fieldset {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1547,7 +1541,7 @@ legend {
 .subscription code { overflow-wrap: anywhere; }
 .subscription-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .subscription-actions .inline-form { display: flex; gap: 6px; margin: 0; }
-.subscription-actions input[type=url] { width: 200px; max-width: 100%; font-size: 12px; padding: 4px 8px; }
+.subscription-actions input[type=url] { width: 220px; max-width: 100%; min-height: 30px; font-size: 12px; padding: 0 12px; }
 .btn.small { font-size: 12px; padding: 4px 10px; }
 .follow-form { display: inline; margin: 0; }
 .ai-box {
@@ -1895,7 +1889,7 @@ ${input.body}
   <details style="margin-top:16px">
     <summary class="muted" style="cursor:pointer;font-size:12px;user-select:none">${escapeHtml(lang === 'ru' ? 'Вход для администратора по токену' : 'Admin token sign-in')}</summary>
     <form method="post" action="/login" style="margin-top:10px;display:grid;gap:8px">
-      <input type="password" name="token" placeholder="${escapeHtml(lang === 'ru' ? 'Токен администратора' : 'Admin token')}" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit;font-size:13px">
+      <input type="password" name="token" placeholder="${escapeHtml(lang === 'ru' ? 'Токен администратора' : 'Admin token')}">
       <button class="btn" type="submit">${escapeHtml(lang === 'ru' ? 'Войти по токену' : 'Sign in with token')}</button>
     </form>
   </details>
@@ -1949,7 +1943,7 @@ document.addEventListener('click', function(e) {
   <form method="post" action="/sources" style="display:grid;gap:14px">
     <div style="display:grid;gap:5px">
       <label style="font-size:12px;color:var(--muted)">${escapeHtml(t.protocol)}</label>
-      <select name="kind" id="dlg-kind" style="padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit" onchange="
+      <select name="kind" id="dlg-kind" onchange="
         const val = this.value;
         document.getElementById('dlg-url-grp').style.display = val === 'rss' ? 'grid' : 'none';
         document.getElementById('dlg-tg-grp').style.display = val === 'telegram' ? 'grid' : 'none';
@@ -1962,15 +1956,15 @@ document.addEventListener('click', function(e) {
     </div>
     <div style="display:grid;gap:5px">
       <label style="font-size:12px;color:var(--muted)">${escapeHtml(t.sourceName)}</label>
-      <input name="title" required placeholder="Например: Мой блог или Закрытая рассылка" style="padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit">
+      <input name="title" required placeholder="Например: Мой блог или Закрытая рассылка">
     </div>
     <div id="dlg-url-grp" style="display:grid;gap:5px">
       <label style="font-size:12px;color:var(--muted)">${escapeHtml(t.urlFeed)}</label>
-      <input name="url" placeholder="https://example.com/feed.xml" style="padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit">
+      <input name="url" placeholder="https://example.com/feed.xml">
     </div>
     <div id="dlg-tg-grp" style="display:none;gap:5px">
       <label style="font-size:12px;color:var(--muted)">${escapeHtml(t.channelTelegram)}</label>
-      <input name="channel" placeholder="freelance_orders" style="padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit">
+      <input name="channel" placeholder="freelance_orders">
     </div>
     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
       <button class="btn ghost" type="button" onclick="document.getElementById('add-source-dialog').close()">${escapeHtml(t.cancel)}</button>
@@ -3823,7 +3817,7 @@ export function renderSubmitPage(data: SubmitPageData): string {
 
     <div class="field">
       <label for="text-input">${escapeHtml(t.descLabel)}</label>
-      <textarea id="text-input" name="text" rows="8" required placeholder="Описание вакансии или проекта..." style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit;font-size:13px;line-height:1.5;resize:vertical"></textarea>
+      <textarea id="text-input" name="text" rows="8" required placeholder="Описание вакансии или проекта..." style="width:100%;resize:vertical"></textarea>
     </div>
 
     <div style="display:flex;align-items:center;justify-content:space-between;padding-top:16px;margin-top:12px">
