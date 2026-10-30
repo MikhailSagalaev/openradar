@@ -23,7 +23,7 @@ import type {
 } from '../core/store.ts';
 import type { LeadFactsFill, ResearchDailyRow } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
-import { lastDays } from '../core/store.ts';
+import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
 import type {
   Contact,
   Lead,
@@ -469,10 +469,14 @@ export class MemoryStore implements Store {
 
     const ascending = feedOnly && Boolean(options.after);
     const usd = (l: Lead): number => l.normalizedUsdMax ?? l.normalizedUsdMin ?? -1;
+    const now = Date.now();
     result.sort((a, b) => {
       const order = a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
       if (ascending) return order;
-      if (options.sort === 'score' && a.score !== b.score) return b.score - a.score;
+      if (options.sort === 'score') {
+        const ranked = (l: Lead) => l.score - ((now - Date.parse(l.createdAt)) / 3_600_000) * SCORE_DECAY_PER_HOUR;
+        if (ranked(a) !== ranked(b)) return ranked(b) - ranked(a);
+      }
       if (options.sort === 'budget' && usd(a) !== usd(b)) return usd(b) - usd(a);
       return -order;
     });

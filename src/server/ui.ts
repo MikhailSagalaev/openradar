@@ -7,6 +7,7 @@ import { type AnalyticsConfig, analyticsBody, analyticsHead } from './analytics.
 import { formatLeadText } from './format.ts';
 import { activeFilterCount, BUDGET_STEPS_RUB, type FeedFilters, hasActiveFilters } from './filters.ts';
 import { SEO_CATALOG } from './seo.ts';
+import { salaryLooksWrong } from '../core/salary-sanity.ts';
 import type { SourcePreset } from '../sources/presets.ts';
 
 export interface AuthDisplay {
@@ -2099,19 +2100,24 @@ function leadTitle(lead: Lead): string {
 
 function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru', admin = true): string {
   const t = getTranslations(lang);
+  // An absurd salary stays off the feed: the row says «проверить» instead of the number.
+  const salarySuspect = salaryLooksWrong(lead);
+  const money = typeof lead.budget === 'number' ? formatBudget(lead.budget, lead.currency) : lead.rawSalary;
   const meta = [
     lead.type === 'job' ? t.jobType : t.gigType,
     source?.title,
     lead.category,
     lead.city ?? (lead.isRemote !== false ? t.remote : undefined),
-    typeof lead.budget === 'number' ? formatBudget(lead.budget, lead.currency) : lead.rawSalary,
+    salarySuspect ? undefined : money,
     formatRelative(lead.createdAt, lang),
   ]
     .filter(Boolean)
     .join(' · ');
 
   const signals: string[] = [];
-  if (lead.normalizedUsdMin || lead.budget || lead.rawSalary) {
+  if (salarySuspect) {
+    signals.push(`<span class="text-warn" title="${escapeHtml(t.salaryCheckHint)}">${escapeHtml(t.salaryCheck)}</span>`);
+  } else if (lead.normalizedUsdMin || lead.budget || lead.rawSalary) {
     signals.push(t.signalMarketBudget);
   }
   if (isDirectEmployerSource(source, lead.author)) {
@@ -2231,7 +2237,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
       type,
       status,
       q: query,
-      sort: filters.sort === 'new' ? undefined : filters.sort,
+      sort: filters.sort === (filters.defaultSort ?? 'new') ? undefined : filters.sort,
       budget: filters.budgetRub ? String(filters.budgetRub) : undefined,
       skill: filters.skill,
       language: filters.language,
@@ -2251,9 +2257,9 @@ export function renderLeadsPage(data: LeadsPageData): string {
   const option = (value: string, label: string, selected: boolean): string =>
     `<option value="${escapeHtml(value)}"${selected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
   const sortSelect = `<select name="sort" aria-label="${escapeHtml(t.sortNew)}" onchange="this.form.submit()">
-      ${option('', t.sortNew, filters.sort === 'new')}
-      ${option('score', t.sortScore, filters.sort === 'score')}
-      ${option('budget', t.sortBudget, filters.sort === 'budget')}
+      ${(['score', 'new', 'budget'] as const)
+        .map((sort) => option(sort === (filters.defaultSort ?? 'new') ? '' : sort, { new: t.sortNew, score: t.sortScore, budget: t.sortBudget }[sort], filters.sort === sort))
+        .join('')}
     </select>`;
   const budgetSelect = `<select name="budget" aria-label="${escapeHtml(t.budgetAny)}" onchange="this.form.submit()">
       ${option('', t.budgetAny, !filters.budgetRub)}
@@ -2316,7 +2322,8 @@ export function renderLeadsPage(data: LeadsPageData): string {
   const delayLabel = delay >= 60 ? `${Math.round(delay / 60)} ${lang === 'ru' ? 'ч' : 'h'}` : `${delay} ${lang === 'ru' ? 'мин' : 'min'}`;
   // One quiet line instead of a banner: today's volume, and the viewer's delay if any.
   const feedMeta = [
-    t.feedFoundToday.replace('{n}', `<strong>${new Intl.NumberFormat('ru-RU').format(stats.last24h)}</strong>`),
+    // The number leads to /sources, where it breaks down by platform.
+    `<a class="found-today" href="/sources" title="${escapeHtml(t.foundTodayHint)}">${t.feedFoundToday.replace('{n}', `<strong>${new Intl.NumberFormat('ru-RU').format(stats.last24h)}</strong>`)}</a>`,
     delay > 0 ? escapeHtml(t.feedDelayNote.replace('{d}', delayLabel)) + (data.auth ? '' : `, ${escapeHtml(t.contactsHiddenShort)}`) : '',
     delay > 0 ? `<a href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md#5-делиться-с-хабом-и-получать-рейтинг" target="_blank" rel="noopener noreferrer">${escapeHtml(t.removeDelay)}</a>` : '',
   ].filter(Boolean).join(' · ');
@@ -2578,9 +2585,9 @@ document.getElementById('share-lead')?.addEventListener('click', async (event) =
   const salaryDisplay = typeof lead.budget === 'number'
     ? formatBudget(lead.budget, lead.currency)
     : lead.rawSalary ? escapeHtml(lead.rawSalary) : '—';
-  const usdEstimate = lead.normalizedUsdMin
+  const usdEstimate = (lead.normalizedUsdMin
     ? ` <span class="muted small">(≈ $${lead.normalizedUsdMin}${lead.normalizedUsdMax && lead.normalizedUsdMax !== lead.normalizedUsdMin ? `–$${lead.normalizedUsdMax}` : ''})</span>`
-    : '';
+    : '') + (salaryLooksWrong(lead) ? `<div class="small text-warn">${escapeHtml(t.salaryCheckHint)}</div>` : '');
 
   const adminControls = isAdminSession
     ? `<form method="post" action="/leads/${escapeHtml(lead.id)}/status" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">

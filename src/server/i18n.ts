@@ -75,6 +75,8 @@ export interface Translations {
   cautionFlag: string;
   // Signals
   signalMarketBudget: string;
+  salaryCheck: string;
+  salaryCheckHint: string;
   signalDirectEmployer: string;
   signalPossibleScam: string;
   skipToFeed: string;
@@ -119,6 +121,7 @@ export interface Translations {
   rankedWindow: string;
   heroTitleDelayed: string;
   feedFoundToday: string;
+  foundTodayHint: string;
   feedDelayNote: string;
   contactsHiddenShort: string;
   removeDelay: string;
@@ -245,6 +248,8 @@ export const RU: Translations = {
   scoreReasons: 'Почему так',
   cautionFlag: 'Внимание: участники сообщества отметили этот заказ как подозрительный. Тщательно проверяйте заказчика перед началом работы.',
   signalMarketBudget: 'указан бюджет',
+  salaryCheck: 'зарплату проверить',
+  salaryCheckHint: 'Сумма намного ниже обычной для такой работы — возможно, это ставка за час или за проект. Проверьте на сайте источника.',
   signalDirectEmployer: 'прямой заказчик',
   signalPossibleScam: 'возможен скам',
   skipToFeed: 'К содержимому',
@@ -288,6 +293,7 @@ export const RU: Translations = {
   rankedWindow: 'Лучшие и дорогие — среди заказов за последние 7 дней.',
   heroTitleDelayed: 'Заказы и вакансии со всех площадок',
   feedFoundToday: 'За сутки найдено {n}',
+  foundTodayHint: 'По площадкам — на странице источников',
   feedDelayNote: 'лента с задержкой {d}',
   contactsHiddenShort: 'контакты скрыты',
   removeDelay: 'Как смотреть без задержки',
@@ -409,6 +415,8 @@ export const EN: Translations = {
   scoreReasons: 'Score breakdown',
   cautionFlag: 'Caution: community members flagged this lead as suspicious. Verify the client carefully before proceeding.',
   signalMarketBudget: 'budget stated',
+  salaryCheck: 'check the salary',
+  salaryCheckHint: 'Far below the usual pay for this kind of job: possibly an hourly or per-task rate. Check it on the source site.',
   signalDirectEmployer: 'direct employer',
   signalPossibleScam: 'possible scam',
   skipToFeed: 'Skip to content',
@@ -452,6 +460,7 @@ export const EN: Translations = {
   rankedWindow: 'Best and highest budget: among leads of the last 7 days.',
   heroTitleDelayed: 'Gigs and jobs from every board',
   feedFoundToday: '{n} found in the last 24 h',
+  foundTodayHint: 'By platform on the sources page',
   feedDelayNote: 'feed delayed by {d}',
   contactsHiddenShort: 'contacts hidden',
   removeDelay: 'How to see it without delay',

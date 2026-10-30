@@ -38,7 +38,7 @@ import type {
 } from '../core/store.ts';
 import type { LeadFactsFill, ResearchDailyRow } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
-import { lastDays } from '../core/store.ts';
+import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
 
 import { checkMigrations } from './migrator.ts';
 
@@ -561,7 +561,7 @@ export class PostgresStore implements Store {
       feedOnly && options.after
         ? 'created_at ASC, id ASC'
         : options.sort === 'score'
-          ? 'score DESC, created_at DESC, id DESC'
+          ? `score - EXTRACT(EPOCH FROM (now() - created_at)) / 3600 * ${SCORE_DECAY_PER_HOUR} DESC, created_at DESC, id DESC`
           : options.sort === 'budget'
             ? 'COALESCE(normalized_usd_max, normalized_usd_min) DESC NULLS LAST, created_at DESC, id DESC'
             : 'created_at DESC, id DESC';
