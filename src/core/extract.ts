@@ -1,3 +1,4 @@
+import { normalizeMoneyText } from './salary.ts';
 import { firstLine, normalizeWhitespace, stripEmoji, toPlainText, truncate } from './text.ts';
 
 const CITY_PATTERNS: Array<{ city: string; pattern: RegExp }> = [
@@ -55,7 +56,7 @@ export interface ExtractedBudget {
  * (RUB, USD, EUR, PLN, KZT, BYN, UAH, GBP, CHF, CAD, AUD).
  */
 export function extractBudgetAndCurrency(text: string): ExtractedBudget {
-  const source = normalizeWhitespace(text);
+  const source = normalizeMoneyText(normalizeWhitespace(text));
   const candidates: Array<{ amount: number; currency: string; priority: number }> = [];
 
   // 1. Symbol before amount, e.g. "$3500", "€ 2,500", "£1000", "zł 1500"

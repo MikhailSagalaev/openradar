@@ -5,7 +5,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { escapeHtml, extractTechSkills } from '../core/text.ts';
+import { escapeHtml, extractTechSkills, stripInvisible } from '../core/text.ts';
 import { renderRssFeed } from './feed.ts';
 import type { ParticipantRecord, UserRecord } from '../core/store.ts';
 import type { Lead, LeadStatus, LeadType, RawLead, SourceConfig, SourceKind, SourceRecord, Viewer, VoteSignal } from '../core/types.ts';
@@ -416,6 +416,9 @@ function toPublicLead(lead: Lead): Record<string, unknown> {
     const value = record[key];
     if (value !== undefined) out[key] = value;
   }
+  // Posts stored before 0.30.0 may still carry hidden characters; agents read this JSON.
+  if (typeof out.title === 'string') out.title = stripInvisible(out.title);
+  if (typeof out.text === 'string') out.text = stripInvisible(out.text);
   const flags = qualityFlagsOf(lead);
   if (flags.length) out.qualityFlags = flags;
   return out;
