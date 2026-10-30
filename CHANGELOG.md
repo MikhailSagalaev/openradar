@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.29.0
+
+- Money in free text is read with its currency: `$3,500`, `€2000`, `1500PLN`, `150 000 ₸`,
+  `500 бел. руб`, `£1,200` (RUB, USD, EUR, PLN, KZT, BYN, UAH, GBP, CHF, CAD, AUD). An amount next
+  to «бюджет», «оплата», «budget», «rate» wins over other numbers in the post. Before, only roubles
+  were read from text.
+- Titles lose board noise: a trailing budget («(Бюджет: 150 000 ₽)», «- 1500PLN», «[$5000]»),
+  «(для всех)», «(срочно)» and leading tags like «[Kwork]». A one-word title («Радуга») gets the
+  first sentence of the description.
+- More vacancy boards and `/jobs/`, `/vacancy/`, `/careers/` links make a post a vacancy.
+- «Data entry» posts titled as data entry with pay in euros or dollars stay rejected after the
+  title cleanup; company vacancies that list data entry among duties are kept.
+- The «Добавить по ссылке» preview strips page navigation and footers and reads city, pay and
+  currency from the text when the page has no JobPosting salary.
+- Near-duplicate search uses 16-band LSH over the MinHash sketch instead of scanning a week of
+  leads.
+- `zł` and the new currency codes are not matched inside words («100 audits» is not Australian
+  dollars).
+
 ## 0.28.2
 
 - Channel vacancies with «Зарплата:» glued to the title («Fullstack-разработчикЗарплата: 120 000 руб.

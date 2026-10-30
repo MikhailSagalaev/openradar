@@ -1,5 +1,6 @@
 import * as cheerio from 'cheerio';
 import type { LeadType } from '../core/types.ts';
+import { cleanTitle, extractBudgetAndCurrency, extractCity as extractCityFromText } from '../core/extract.ts';
 
 export interface LeadPreview {
   type: LeadType;
@@ -158,7 +159,7 @@ export function validateSubmissionUrl(url: string): { valid: boolean; error?: st
 export function extractPreviewFromHtml(html: string, url: string): LeadPreview {
   const $ = cheerio.load(html);
 
-  // 1. Try schema.org/JobPosting
+  // 1. Try schema.org/JobPosting before removing any elements
   const scripts = $('script[type="application/ld+json"]').toArray();
   for (const script of scripts) {
     const content = $(script).text();
@@ -171,17 +172,21 @@ export function extractPreviewFromHtml(html: string, url: string): LeadPreview {
         const category =
           String(posting.occupationalCategory || posting.industry || '').trim() ||
           undefined;
+        const rawTitle = String(posting.title || posting.name || '').trim() || $('title').text().trim() || 'Вакансия';
+        const rawDesc = cleanHtmlText(String(posting.description || ''));
+        const title = cleanTitle(rawTitle, rawDesc);
+        const fallbackMoney = !salary.budget ? extractBudgetAndCurrency(`${rawTitle}\n${rawDesc}`) : undefined;
         return {
           type: 'job',
-          title: String(posting.title || posting.name || '').trim() || $('title').text().trim() || 'Вакансия',
-          text: cleanHtmlText(String(posting.description || '')),
+          title,
+          text: rawDesc,
           author: extractCompany(posting.hiringOrganization) || undefined,
           category,
-          city: extractCity(posting.jobLocation) || undefined,
+          city: extractCity(posting.jobLocation) || extractCityFromText(`${title}\n${rawDesc}`) || undefined,
           isRemote: extractRemote(posting),
-          budget: salary.budget,
-          salaryMax: salary.salaryMax,
-          currency: salary.currency,
+          budget: salary.budget ?? fallbackMoney?.budget,
+          salaryMax: salary.salaryMax ?? fallbackMoney?.budget,
+          currency: salary.budget ? salary.currency : (fallbackMoney?.currency || salary.currency),
           skills: extractSkills(posting),
           url: String(posting.url || url),
         };
@@ -190,6 +195,9 @@ export function extractPreviewFromHtml(html: string, url: string): LeadPreview {
       // Ignore JSON errors in invalid ld+json tags
     }
   }
+
+  // Remove boilerplate DOM elements before extracting fallback text
+  $('script, style, noscript, svg, nav, header, footer, aside, .breadcrumbs, .breadcrumb, [role="navigation"], [role="banner"], [role="contentinfo"], .cookie-notice, .cookie-banner').remove();
 
   // 2. OpenGraph and Meta tags fallback
   const ogTitle =
@@ -212,11 +220,13 @@ export function extractPreviewFromHtml(html: string, url: string): LeadPreview {
     $('main').text().trim() ||
     $('body').text().trim() ||
     '';
-  const text = ogDesc.trim() || bodyText.slice(0, 2000).replace(/\s+/g, ' ').trim();
+  const rawDesc = cleanHtmlText(ogDesc.trim() || bodyText.slice(0, 3000));
+  const rawTitle = cleanHtmlText(ogTitle) || 'Новый лид';
+  const title = cleanTitle(rawTitle, rawDesc);
 
   // Determine type
   const lowerUrl = url.toLowerCase();
-  const lowerTitle = ogTitle.toLowerCase();
+  const lowerTitle = rawTitle.toLowerCase();
   const isJob =
     lowerUrl.includes('/vacancy') ||
     lowerUrl.includes('/job') ||
@@ -234,11 +244,17 @@ export function extractPreviewFromHtml(html: string, url: string): LeadPreview {
     ? metaKeywords.split(/[,;\n]+/).map((s) => s.trim()).filter((s) => s.length > 1 && s.length < 30).slice(0, 8)
     : undefined;
 
+  const extractedMoney = extractBudgetAndCurrency(`${rawTitle}\n${rawDesc}`);
+  const city = extractCityFromText(`${title}\n${rawDesc}`);
+
   return {
     type: isJob ? 'job' : 'gig',
-    title: cleanHtmlText(ogTitle) || 'Новый лид',
-    text: cleanHtmlText(text),
+    title,
+    text: rawDesc,
     author: ogSite.trim() || undefined,
+    city: city || undefined,
+    budget: extractedMoney.budget,
+    currency: extractedMoney.currency,
     skills: fallbackSkills,
     url,
     isRemote: true,

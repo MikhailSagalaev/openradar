@@ -102,7 +102,7 @@ export function detectCurrency(text: string): string {
 
 export function parseSalaryRange(text: string): { min?: number; max?: number } {
   // Strip currency symbols in front of digits, e.g. $3000 -> 3000
-  const clean = text.replace(/[$€₽£₸₴]/g, ' ').replace(/\s+/g, ' ');
+  const clean = text.replace(/zł|[$€₽£₸₴]/gi, ' ').replace(/\s+/g, ' ');
 
   // Match pattern "от X до Y" or "X - Y"
   const rangeMatch = clean.match(/(?:от\s+)?(\d[\d\s.,]*\d|\d+)\s*(?:-|до|—|–)\s*(\d[\d\s.,]*\d|\d+)/i);
@@ -131,7 +131,7 @@ export function parseSalaryRange(text: string): { min?: number; max?: number } {
   }
 
   // Single number with currency sign or marker
-  const singleMatch = clean.match(/(\d[\d\s.,]*\d|\d+)\s*(?:₽|руб|usd|\$|eur|€|kzt|byn|uah)/i);
+  const singleMatch = clean.match(/(\d[\d\s.,]*\d|\d+)\s*(?:₽|руб|usd|\$|eur|€|kzt|byn|uah|pln|zł|gbp|£|chf|cad|aud)(?![a-z])/i);
   if (singleMatch && singleMatch[1]) {
     const val = parseFloat(singleMatch[1].replace(/[\s,]+/g, ''));
     if (!Number.isNaN(val)) return { min: val, max: val };
@@ -140,7 +140,7 @@ export function parseSalaryRange(text: string): { min?: number; max?: number } {
   return {};
 }
 
-const CURRENCY_UNIT = String.raw`₽|руб(?:лей|ля|ль|\.|,)?|р\.|usd|\$|eur|€|kzt|₸|byn|uah|₴|тенге|грн`;
+const CURRENCY_UNIT = String.raw`₽|руб(?:лей|ля|ль|\.|,)?|р\.|usd|\$|eur|€|kzt|₸|byn|uah|₴|тенге|грн|pln|zł|gbp|£|chf|cad|aud`;
 
 function parseAmount(raw: string | undefined): number | undefined {
   if (!raw) return undefined;
@@ -160,7 +160,7 @@ export function extractAnchoredSalary(text: string): { min?: number; max?: numbe
   const source = text.replace(/\u00a0/g, ' ');
 
   // "от 150 000 до 250 000 руб", "150 000 - 250 000 руб"
-  const range = new RegExp(`(\\d[\\d ]{0,11})\\s*(?:-|—|–|до)\\s*(\\d[\\d ]{0,11})\\s*(?:${CURRENCY_UNIT})`, 'i').exec(source);
+  const range = new RegExp(`(\\d[\\d ]{0,11})\\s*(?:-|—|–|до)\\s*(\\d[\\d ]{0,11})\\s*(?:${CURRENCY_UNIT})(?![a-z])`, 'i').exec(source);
   if (range?.[1] && range[2]) {
     const min = parseAmount(range[1]);
     const max = parseAmount(range[2]);
@@ -183,7 +183,7 @@ export function extractAnchoredSalary(text: string): { min?: number; max?: numbe
   }
 
   // Currency unit anchors the amount: "150 000 руб", "от 200 000 руб"
-  const unitAfter = new RegExp(`(\\d[\\d ]{0,11})\\s*(?:${CURRENCY_UNIT})`, 'i').exec(source);
+  const unitAfter = new RegExp(`(\\d[\\d ]{0,11})\\s*(?:${CURRENCY_UNIT})(?![a-z])`, 'i').exec(source);
   if (unitAfter?.[1]) {
     const value = parseAmount(unitAfter[1]);
     if (value !== undefined) return { min: value, max: value };

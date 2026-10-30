@@ -130,3 +130,38 @@ export function estimateJaccardFromSketches(mhA: string, mhB: string): number {
     return 0;
   }
 }
+
+export const MINHASH_BANDS = 16;
+export const MINHASH_ROWS_PER_BAND = 4; // 16 bands * 4 hashes = 64
+
+/**
+ * Computes 16 band bucket keys for Locality-Sensitive Hashing (LSH).
+ * Reduces candidate search for near-duplicates from O(N) linear scans to O(1) indexed lookups.
+ */
+export function computeMinHashBands(sketch: string): string[] {
+  if (!sketch) return [];
+  try {
+    const buf = Buffer.from(sketch, 'base64url');
+    if (buf.length !== MINHASH_K * 2) return [];
+
+    const uint16 = new Uint16Array(buf.buffer, buf.byteOffset, MINHASH_K);
+    const bands: string[] = new Array(MINHASH_BANDS);
+
+    for (let b = 0; b < MINHASH_BANDS; b++) {
+      const offset = b * MINHASH_ROWS_PER_BAND;
+      const v0 = uint16[offset] ?? 0;
+      const v1 = uint16[offset + 1] ?? 0;
+      const v2 = uint16[offset + 2] ?? 0;
+      const v3 = uint16[offset + 3] ?? 0;
+      let h = 0x811c9dc5;
+      h = Math.imul(h ^ v0, 0x01000193) >>> 0;
+      h = Math.imul(h ^ v1, 0x01000193) >>> 0;
+      h = Math.imul(h ^ v2, 0x01000193) >>> 0;
+      h = Math.imul(h ^ v3, 0x01000193) >>> 0;
+      bands[b] = `b${b}:${h.toString(16)}`;
+    }
+    return bands;
+  } catch {
+    return [];
+  }
+}

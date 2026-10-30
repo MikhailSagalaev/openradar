@@ -104,7 +104,15 @@ export function applyRules(
   }
 
   for (const rule of SPAM_RULES) {
-    if (rule.pattern.test(`${lead.title}\n${lead.text}`)) {
+    // cleanTitle() strips «- 2000EUR» from the title, so the pattern no longer sees the pay: the
+    // extracted currency stands in for it. Only a post titled as data entry counts; company
+    // vacancies (an executive assistant, a benefits analyst) list data entry among the duties.
+    const isDataEntryForeignCurrency =
+      rule.reason === 'DATA_ENTRY_SCAM' &&
+      (lead.currency === 'EUR' || lead.currency === 'USD') &&
+      /(?:ввод[а-я]*\s+данных|data\s+entry|набор[а-я]*\s+текст)/iu.test(lead.title);
+
+    if (rule.pattern.test(`${lead.title}\n${lead.text}`) || isDataEntryForeignCurrency) {
       reasons.push(`spam:${rule.reason}`);
       break;
     }
