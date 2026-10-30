@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.32.0
+
+- Saved searches: «Следить» in the feed follows the filters on screen (query, type, IT, remote,
+  budget, skill, language). New matching leads arrive in Telegram or on a webhook, at most every
+  15 minutes and up to 10 a message, never before the user's tier delay would show them in the
+  feed. Up to 20 subscriptions per user, managed in the profile: pause, delete, Telegram or
+  webhook. Migration `022_subscriptions.sql`.
+- Telegram: the hub's bot (`TELEGRAM_BOT_TOKEN`, `RADAR_SUBSCRIPTION_BOT=true`) links a private
+  chat by a one-time code from the profile; `/stop` unlinks it.
+- Webhooks: https only, public addresses only (the SSRF guard checks on save and on every send),
+  signed with HMAC-SHA256 over «timestamp.body» (`X-OpenRadar-Signature`,
+  `X-OpenRadar-Timestamp`). Ten failed sends in a row pause the subscription.
+
 ## 0.31.0
 
 - Source health says what a source is doing (`src/core/source-health.ts`): works, empty (answers

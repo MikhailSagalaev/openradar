@@ -3,6 +3,7 @@ import type { Logger } from '../core/types.ts';
 import { pollAll, type PollDeps } from './poll.ts';
 import { processOutbox } from './outbox.ts';
 import { runDigestIfDue } from './digest.ts';
+import type { SubscriptionRound } from './subscriptions.ts';
 import { checkLeadsLiveness } from './liveness.ts';
 import { recomputeRatings } from '../hub/rating.ts';
 import { parseModerators } from '../hub/service.ts';
@@ -30,6 +31,8 @@ export class PollRunner {
     private readonly deps: PollDeps,
     private readonly intervalSec: number,
     private readonly logger: Logger,
+    /** Saved-search delivery, given by the server (it knows each user's tier). */
+    private readonly deliverSubscriptions?: () => Promise<SubscriptionRound>,
   ) {}
 
   start(): void {
@@ -86,6 +89,15 @@ export class PollRunner {
       await this.runMaintenanceIfDue();
       await this.runLivenessIfDue();
       this.runExtractionIfDue();
+
+      if (this.deliverSubscriptions) {
+        try {
+          const round = await this.deliverSubscriptions();
+          if (round.sent || round.failed) this.logger.info('subscription delivery finished', { ...round });
+        } catch (error) {
+          this.logger.warn('subscription delivery failed', { error: error instanceof Error ? error.message : String(error) });
+        }
+      }
 
       try {
         await runDigestIfDue({

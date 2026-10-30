@@ -10,7 +10,8 @@ import { pollAll, pollSource, type PollDeps, type PollSummary } from '../pipelin
 import { rescoreLeads } from '../pipeline/rescore.ts';
 import { PollRunner } from '../pipeline/runner.ts';
 import { createRuntime, type Runtime } from '../runtime.ts';
-import { createApp } from '../server/app.ts';
+import { createApp, startSubscriptionBot, subscriptionDeps } from '../server/app.ts';
+import { deliverDueSubscriptions } from '../pipeline/subscriptions.ts';
 import { startServer } from '../server/index.ts';
 import { SOURCE_PRESETS } from '../sources/presets.ts';
 import { loadEnv } from '../config.ts';
@@ -571,8 +572,11 @@ function buildProgram(): Command {
       const server = startServer(app, port, runtime.env.RADAR_BIND);
       const runner = options.noScheduler
         ? undefined
-        : new PollRunner(pollDeps(runtime), runtime.env.RADAR_POLL_INTERVAL_SEC, runtime.logger);
+        : new PollRunner(pollDeps(runtime), runtime.env.RADAR_POLL_INTERVAL_SEC, runtime.logger, () =>
+            deliverDueSubscriptions(subscriptionDeps(runtime)),
+          );
       runner?.start();
+      void startSubscriptionBot(runtime);
 
       const shutdown = (): void => {
         runner?.stop();

@@ -1,4 +1,5 @@
 import type { PageFacts } from '../research/facts.ts';
+import type { SubscriptionRecord } from './subscriptions.ts';
 import type {
   Contact,
   SourceVisibility,
@@ -336,6 +337,22 @@ export interface Store extends HubStore {
    * (see salary-sanity.ts): `*` for all vacancies, roles with fewer than `minSample` left out.
    */
   salaryMedians?(createdAfter: string, floorUsd: number, minSample: number): Promise<Map<string, number>>;
+
+  // Saved searches (src/core/subscriptions.ts).
+  createSubscription?(subscription: SubscriptionRecord): Promise<void>;
+  listSubscriptions?(userId: number): Promise<SubscriptionRecord[]>;
+  getSubscription?(id: string): Promise<SubscriptionRecord | null>;
+  updateSubscription?(id: string, patch: Partial<Omit<SubscriptionRecord, 'id' | 'userId' | 'createdAt'>>): Promise<void>;
+  deleteSubscription?(id: string, userId: number): Promise<boolean>;
+  /** Active subscriptions not checked since `checkedBefore`, never checked first. */
+  listDueSubscriptions?(checkedBefore: string, limit: number): Promise<SubscriptionRecord[]>;
+  /** Stores a one-time code that links the user's Telegram chat; replaces an older code. */
+  setTelegramLinkCode?(userId: number, code: string, expiresAt: string): Promise<void>;
+  /** Links the chat that sent a valid code; returns the user, or null for an unknown or expired code. */
+  linkTelegramChat?(code: string, chatId: string, now: string): Promise<number | null>;
+  getTelegramChat?(userId: number): Promise<string | null>;
+  /** Forgets a chat (the user blocked the bot or sent /stop); returns the user it belonged to. */
+  unlinkTelegramChat?(chatId: string): Promise<number | null>;
   getAdminStats?(days?: number): Promise<AdminStats>;
   /** Browser extension tokens, stored as SHA-256 hashes. */
   saveExtensionToken?(tokenHash: string, userId: number): Promise<void>;

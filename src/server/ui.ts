@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { AccessKind, Contact, Lead, LeadVoteSignal, RunRecord, SourceHealth, SourceRecord, Stats } from '../core/types.ts';
-import { escapeHtml, firstLine, jsonForScript } from '../core/text.ts';
+import { escapeHtml, firstLine, jsonForScript, truncate } from '../core/text.ts';
 import { type SupportedLang, getTranslations } from './i18n.ts';
 import { renderLogo } from './logo.ts';
 import { type AnalyticsConfig, analyticsBody, analyticsHead } from './analytics.ts';
@@ -9,6 +9,7 @@ import { activeFilterCount, BUDGET_STEPS_RUB, type FeedFilters, hasActiveFilters
 import { SEO_CATALOG } from './seo.ts';
 import { qualityFlagsOf } from '../core/quality.ts';
 import { BROKEN_AFTER, sourceState, type SourceState } from '../core/source-health.ts';
+import { feedQuery, type SubscriptionRecord } from '../core/subscriptions.ts';
 import { salaryLooksWrong } from '../core/salary-sanity.ts';
 import type { SourcePreset } from '../sources/presets.ts';
 
@@ -1542,6 +1543,13 @@ legend {
   font-size: 13px;
   margin-bottom: 20px;
 }
+.subscription { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.subscription code { overflow-wrap: anywhere; }
+.subscription-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.subscription-actions .inline-form { display: flex; gap: 6px; margin: 0; }
+.subscription-actions input[type=url] { width: 200px; max-width: 100%; font-size: 12px; padding: 4px 8px; }
+.btn.small { font-size: 12px; padding: 4px 10px; }
+.follow-form { display: inline; margin: 0; }
 .ai-box {
   background: transparent;
   border-left: 2px solid var(--ink);
@@ -2296,6 +2304,14 @@ export function renderLeadsPage(data: LeadsPageData): string {
         ))
         .join('')}
     </select>`;
+  // «Следить» submits the same form by POST: the subscription takes exactly the filters on screen.
+  // The default language rides on the button, so a plain search URL stays clean.
+  const following = Boolean(query) || hasActiveFilters(filters) || Boolean(type);
+  const followControl = !following
+    ? ''
+    : data.auth?.handle
+      ? `<button class="btn ghost small filter-follow" type="submit" formmethod="post" formaction="/subscriptions" name="default_language" value="${escapeHtml(filters.defaultLanguage ?? '')}" title="${escapeHtml(t.followHint)}">${escapeHtml(t.follow)}</button>`
+      : `<a class="btn ghost small filter-follow" href="${escapeHtml(`/login?returnTo=${encodeURIComponent(hrefWith({}))}`)}" title="${escapeHtml(t.followHint)}">${escapeHtml(t.follow)}</a>`;
   // On phones the filters fold under one button unless some are set (see the script below).
   const activeCount = activeFilterCount(filters);
   const filterBar = `<details class="filters" id="feed-filters" open><summary class="filters-toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>${escapeHtml(t.filtersTitle)}${activeCount ? `<span class="filters-count">${activeCount}</span>` : ''}<svg class="filters-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div class="filter-bar">
@@ -2303,6 +2319,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
     <label class="filter-check"><input type="checkbox" name="it" value="1"${filters.it ? ' checked' : ''} onchange="this.form.submit()">${escapeHtml(t.itOnly)}</label>
     <label class="filter-check"><input type="checkbox" name="remote" value="1"${filters.remote ? ' checked' : ''} onchange="this.form.submit()">${escapeHtml(t.remoteOnly)}</label>
     ${hasActiveFilters(filters) ? `<a class="filter-reset" href="${escapeHtml(hrefWith({ sort: undefined, budget: undefined, skill: undefined, language: undefined, remote: undefined, it: undefined }))}">${escapeHtml(t.resetFilters)}</a>` : ''}
+    ${followControl}
     <a class="filter-rss" href="${escapeHtml(rssHref)}" target="_blank" rel="noopener">RSS</a>
   </div></details>
   ${rankedWindowApplies(filters) ? `<p class="score-legend">${escapeHtml(t.rankedWindow)}</p>` : ''}
@@ -3259,6 +3276,89 @@ export interface ProfilePageData {
   ledger?: Array<{ leadId: string; kind: string; points: number; createdAt: string; title?: string }>;
   /** What the account brought, newest first. */
   posts?: Array<{ leadId: string; title: string; receivedAt: string; first: boolean; status: 'credited' | 'waiting' | 'hidden' }>;
+  /** Saved searches of a signed-in GitHub user. */
+  subscriptions?: {
+    list: SubscriptionRecord[];
+    telegramLinked: boolean;
+    /** The hub runs a subscription bot (RADAR_SUBSCRIPTION_BOT). */
+    botAvailable: boolean;
+    /** Result of the last action: created, deleted, limit, bad_url… */
+    notice?: string;
+  };
+}
+
+const SUBSCRIPTION_NOTICES: Record<SupportedLang, Record<string, string>> = {
+  ru: {
+    created: 'Подписка создана. Новые заказы по ней придут не раньше, чем появятся в вашей ленте.',
+    deleted: 'Подписка удалена.',
+    paused: 'Подписка на паузе.',
+    resumed: 'Подписка снова работает: придут заказы, которые появятся с этой минуты.',
+    webhook: 'Подписка шлёт на вебхук. Секрет для проверки подписи — ниже.',
+    telegram: 'Подписка шлёт в Telegram.',
+    limit: 'Больше 20 подписок завести нельзя: удалите ненужные.',
+    exists: 'Подписка с такими фильтрами уже есть.',
+    empty: 'Чтобы следить, выберите в ленте хотя бы один фильтр или введите запрос.',
+    bad_url: 'Адрес вебхука не подходит: нужен https-адрес в интернете, не во внутренней сети.',
+    no_bot: 'На этом узле Telegram-бот не настроен.',
+    not_found: 'Такой подписки нет.',
+  },
+  en: {
+    created: 'Subscription created. Its new leads arrive no earlier than they appear in your feed.',
+    deleted: 'Subscription deleted.',
+    paused: 'Subscription paused.',
+    resumed: 'Subscription resumed: leads that appear from now on will arrive.',
+    webhook: 'The subscription posts to a webhook. The signing secret is below.',
+    telegram: 'The subscription posts to Telegram.',
+    limit: 'At most 20 subscriptions: delete some first.',
+    exists: 'You already follow these filters.',
+    empty: 'To follow, set at least one filter or a search in the feed.',
+    bad_url: 'That webhook URL will not do: it must be a public https address.',
+    no_bot: 'This node has no Telegram bot.',
+    not_found: 'No such subscription.',
+  },
+};
+
+function renderSubscriptions(data: NonNullable<ProfilePageData['subscriptions']>, lang: SupportedLang): string {
+  const ru = lang === 'ru';
+  const notice = data.notice ? SUBSCRIPTION_NOTICES[lang][data.notice] : undefined;
+  const telegram = data.telegramLinked
+    ? `<p class="small">${ru ? 'Telegram подключён. Отключить — командой /stop боту.' : 'Telegram is linked. Unlink with /stop to the bot.'}</p>`
+    : data.botAvailable
+      ? `<form method="post" action="/me/telegram"><button class="btn ghost" type="submit">${ru ? 'Подключить Telegram' : 'Link Telegram'}</button> <span class="muted small">${ru ? 'откроется бот, нажмите «Start»' : 'the bot opens, press Start'}</span></form>`
+      : `<p class="muted small">${ru ? 'Telegram-бот на этом узле не настроен: подписки можно получать на вебхук.' : 'This node has no Telegram bot: use a webhook.'}</p>`;
+  const rows = data.list.map((s) => {
+    const feed = `/?${feedQuery(s.filters)}`;
+    const where = s.channel === 'webhook'
+      ? `${ru ? 'вебхук' : 'webhook'} <code>${escapeHtml(truncate(s.target ?? '', 48))}</code>`
+      : 'Telegram';
+    const state = s.paused
+      ? `<span class="text-warn">${ru ? 'на паузе' : 'paused'}</span>`
+      : s.lastError
+        ? `<span class="text-warn" title="${escapeHtml(s.lastError)}">${ru ? `ошибка доставки (${s.failures})` : `delivery failed (${s.failures})`}</span>`
+        : s.lastSentAt
+          ? `${ru ? 'последняя отправка' : 'last sent'} ${formatRelative(s.lastSentAt, lang)}`
+          : (ru ? 'ждёт новых заказов' : 'waiting for new leads');
+    const secret = s.channel === 'webhook' && s.secret
+      ? `<details class="small"><summary>${ru ? 'Секрет подписи' : 'Signing secret'}</summary><code>${escapeHtml(s.secret)}</code><div class="muted">${ru ? 'Заголовок X-OpenRadar-Signature: sha256=HMAC(секрет, «X-OpenRadar-Timestamp.тело»).' : 'X-OpenRadar-Signature: sha256=HMAC(secret, "X-OpenRadar-Timestamp.body").'}</div></details>`
+      : '';
+    return `<div class="subscription">
+      <div><a href="${escapeHtml(feed)}"><strong>${escapeHtml(s.name)}</strong></a>
+        <div class="muted small">${where} · ${state}</div>${secret}</div>
+      <div class="subscription-actions">
+        <form method="post" action="/subscriptions/${escapeHtml(s.id)}/channel" class="inline-form">
+          ${s.channel === 'webhook'
+            ? `<input type="hidden" name="channel" value="telegram"><button class="btn ghost small" type="submit">${ru ? 'В Telegram' : 'To Telegram'}</button>`
+            : `<input type="url" name="target" placeholder="https://…" required aria-label="${ru ? 'Адрес вебхука' : 'Webhook URL'}"><button class="btn ghost small" type="submit">${ru ? 'На вебхук' : 'To webhook'}</button>`}
+        </form>
+        <form method="post" action="/subscriptions/${escapeHtml(s.id)}/pause" class="inline-form"><button class="btn ghost small" type="submit">${s.paused ? (ru ? 'Возобновить' : 'Resume') : (ru ? 'Пауза' : 'Pause')}</button></form>
+        <form method="post" action="/subscriptions/${escapeHtml(s.id)}/delete" class="inline-form"><button class="btn ghost small" type="submit">${ru ? 'Удалить' : 'Delete'}</button></form>
+      </div>
+    </div>`;
+  }).join('');
+  return `<h2 id="subscriptions">${ru ? 'Подписки' : 'Subscriptions'}</h2>
+  ${notice ? `<p class="notice">${escapeHtml(notice)}</p>` : ''}
+  ${telegram}
+  ${rows || `<p class="muted">${ru ? 'Подписок нет. Выберите в ленте фильтры или запрос и нажмите «Следить»: новые заказы будут приходить сюда раз в 15 минут.' : 'No subscriptions. Set filters or a search in the feed and press Follow: new leads arrive every 15 minutes.'}</p>`}`;
 }
 
 /** People see points: the rating ×10, whole numbers. */
@@ -3330,6 +3430,7 @@ export function renderProfilePage(data: ProfilePageData): string {
 <section class="profile">
   ${progress}
   <p class="profile-tier">${ru ? 'Уровень' : 'Tier'}: <strong>${escapeHtml(names[data.tier])}</strong>${data.hubMode && data.tier !== 'admin' ? ` · ${ru ? 'задержка ленты' : 'feed delay'}: <strong>${escapeHtml(delay(data.delays[data.tier]))}</strong>` : ''}</p>
+  ${data.subscriptions ? renderSubscriptions(data.subscriptions, lang) : ''}
   ${activity}
   ${table}
   <h2>${ru ? 'Как получить очки' : 'How to earn points'}</h2>

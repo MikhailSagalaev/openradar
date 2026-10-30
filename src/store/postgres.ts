@@ -41,6 +41,7 @@ import type { LeadFactsFill, ResearchDailyRow } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
 import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
 import { BROKEN_AFTER, countFailedInRow } from '../core/source-health.ts';
+import type { SubscriptionRecord } from '../core/subscriptions.ts';
 
 import { checkMigrations } from './migrator.ts';
 
@@ -66,6 +67,102 @@ export class PostgresStore implements Store {
         `Please run 'radar migrate' before starting the application.`
       );
     }
+  }
+
+  private rowToSubscription(r: Record<string, any>): SubscriptionRecord {
+    const iso = (value: unknown): string | undefined => (value ? new Date(value as string).toISOString() : undefined);
+    return {
+      id: r.id,
+      userId: Number(r.user_id),
+      name: r.name,
+      filters: typeof r.filters === 'object' && r.filters !== null ? r.filters : JSON.parse(r.filters || '{}'),
+      channel: r.channel,
+      target: r.target ?? undefined,
+      secret: r.secret ?? undefined,
+      paused: Boolean(r.paused),
+      cursorAt: new Date(r.cursor_at).toISOString(),
+      checkedAt: iso(r.checked_at),
+      lastSentAt: iso(r.last_sent_at),
+      failures: Number(r.failures) || 0,
+      lastError: r.last_error ?? undefined,
+      createdAt: new Date(r.created_at).toISOString(),
+    };
+  }
+
+  async createSubscription(s: SubscriptionRecord): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO subscriptions (id, user_id, name, filters, channel, target, secret, paused, cursor_at, created_at)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10)`,
+      [s.id, s.userId, s.name, JSON.stringify(s.filters), s.channel, s.target ?? null, s.secret ?? null, s.paused, s.cursorAt, s.createdAt],
+    );
+  }
+
+  async listSubscriptions(userId: number): Promise<SubscriptionRecord[]> {
+    const res = await this.pool.query(`SELECT * FROM subscriptions WHERE user_id = $1 ORDER BY created_at`, [userId]);
+    return res.rows.map((r) => this.rowToSubscription(r));
+  }
+
+  async getSubscription(id: string): Promise<SubscriptionRecord | null> {
+    const res = await this.pool.query(`SELECT * FROM subscriptions WHERE id = $1`, [id]);
+    return res.rows[0] ? this.rowToSubscription(res.rows[0]) : null;
+  }
+
+  async updateSubscription(id: string, patch: Partial<Omit<SubscriptionRecord, 'id' | 'userId' | 'createdAt'>>): Promise<void> {
+    const columns: Record<string, string> = {
+      name: 'name', filters: 'filters', channel: 'channel', target: 'target', secret: 'secret', paused: 'paused',
+      cursorAt: 'cursor_at', checkedAt: 'checked_at', lastSentAt: 'last_sent_at', failures: 'failures', lastError: 'last_error',
+    };
+    const sets: string[] = [];
+    const params: unknown[] = [id];
+    for (const [key, value] of Object.entries(patch)) {
+      const column = columns[key];
+      if (!column) continue;
+      params.push(key === 'filters' ? JSON.stringify(value) : value ?? null);
+      sets.push(`${column} = $${params.length}${key === 'filters' ? '::jsonb' : ''}`);
+    }
+    if (!sets.length) return;
+    await this.pool.query(`UPDATE subscriptions SET ${sets.join(', ')} WHERE id = $1`, params);
+  }
+
+  async deleteSubscription(id: string, userId: number): Promise<boolean> {
+    const res = await this.pool.query(`DELETE FROM subscriptions WHERE id = $1 AND user_id = $2`, [id, userId]);
+    return (res.rowCount ?? 0) > 0;
+  }
+
+  async listDueSubscriptions(checkedBefore: string, limit: number): Promise<SubscriptionRecord[]> {
+    const res = await this.pool.query(
+      `SELECT * FROM subscriptions WHERE NOT paused AND (checked_at IS NULL OR checked_at < $1::timestamptz)
+       ORDER BY checked_at NULLS FIRST LIMIT $2`,
+      [checkedBefore, limit],
+    );
+    return res.rows.map((r) => this.rowToSubscription(r));
+  }
+
+  async setTelegramLinkCode(userId: number, code: string, expiresAt: string): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO telegram_links (user_id, code, code_expires_at) VALUES ($1, $2, $3)
+       ON CONFLICT (user_id) DO UPDATE SET code = EXCLUDED.code, code_expires_at = EXCLUDED.code_expires_at`,
+      [userId, code, expiresAt],
+    );
+  }
+
+  async linkTelegramChat(code: string, chatId: string, now: string): Promise<number | null> {
+    const res = await this.pool.query(
+      `UPDATE telegram_links SET chat_id = $2, linked_at = $3::timestamptz, code = NULL, code_expires_at = NULL
+       WHERE code = $1 AND code_expires_at > $3::timestamptz RETURNING user_id`,
+      [code, chatId, now],
+    );
+    return res.rows[0] ? Number(res.rows[0].user_id) : null;
+  }
+
+  async getTelegramChat(userId: number): Promise<string | null> {
+    const res = await this.pool.query(`SELECT chat_id FROM telegram_links WHERE user_id = $1`, [userId]);
+    return res.rows[0]?.chat_id ?? null;
+  }
+
+  async unlinkTelegramChat(chatId: string): Promise<number | null> {
+    const res = await this.pool.query(`UPDATE telegram_links SET chat_id = NULL WHERE chat_id = $1 RETURNING user_id`, [chatId]);
+    return res.rows[0] ? Number(res.rows[0].user_id) : null;
   }
 
   private closed = false;

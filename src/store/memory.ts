@@ -26,6 +26,7 @@ import type { PageFacts } from '../research/facts.ts';
 import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
 import { computeSalaryMedians } from '../core/salary-sanity.ts';
 import { countFailedInRow } from '../core/source-health.ts';
+import type { SubscriptionRecord } from '../core/subscriptions.ts';
 import type {
   Contact,
   Lead,
@@ -1018,7 +1019,72 @@ export class MemoryStore implements Store {
     return contacts.map((c) => this.contactFlags.get(contactKey(c))).filter((f): f is ContactFlag => Boolean(f)).map((f) => ({ ...f }));
   }
 
+  private subscriptions = new Map<string, SubscriptionRecord>();
+  private telegramLinks = new Map<number, { chatId?: string; code?: string; codeExpiresAt?: string }>();
+
+  async createSubscription(subscription: SubscriptionRecord): Promise<void> {
+    this.subscriptions.set(subscription.id, { ...subscription });
+  }
+
+  async listSubscriptions(userId: number): Promise<SubscriptionRecord[]> {
+    return [...this.subscriptions.values()].filter((s) => s.userId === userId).sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map((s) => ({ ...s }));
+  }
+
+  async getSubscription(id: string): Promise<SubscriptionRecord | null> {
+    const found = this.subscriptions.get(id);
+    return found ? { ...found } : null;
+  }
+
+  async updateSubscription(id: string, patch: Partial<Omit<SubscriptionRecord, 'id' | 'userId' | 'createdAt'>>): Promise<void> {
+    const found = this.subscriptions.get(id);
+    if (found) this.subscriptions.set(id, { ...found, ...patch });
+  }
+
+  async deleteSubscription(id: string, userId: number): Promise<boolean> {
+    const found = this.subscriptions.get(id);
+    if (!found || found.userId !== userId) return false;
+    return this.subscriptions.delete(id);
+  }
+
+  async listDueSubscriptions(checkedBefore: string, limit: number): Promise<SubscriptionRecord[]> {
+    return [...this.subscriptions.values()]
+      .filter((s) => !s.paused && (!s.checkedAt || s.checkedAt < checkedBefore))
+      .sort((a, b) => (a.checkedAt ?? '').localeCompare(b.checkedAt ?? ''))
+      .slice(0, limit)
+      .map((s) => ({ ...s }));
+  }
+
+  async setTelegramLinkCode(userId: number, code: string, expiresAt: string): Promise<void> {
+    this.telegramLinks.set(userId, { ...this.telegramLinks.get(userId), code, codeExpiresAt: expiresAt });
+  }
+
+  async linkTelegramChat(code: string, chatId: string, now: string): Promise<number | null> {
+    for (const [userId, link] of this.telegramLinks) {
+      if (link.code === code && link.codeExpiresAt && link.codeExpiresAt > now) {
+        this.telegramLinks.set(userId, { chatId });
+        return userId;
+      }
+    }
+    return null;
+  }
+
+  async getTelegramChat(userId: number): Promise<string | null> {
+    return this.telegramLinks.get(userId)?.chatId ?? null;
+  }
+
+  async unlinkTelegramChat(chatId: string): Promise<number | null> {
+    for (const [userId, link] of this.telegramLinks) {
+      if (link.chatId === chatId) {
+        this.telegramLinks.set(userId, { ...link, chatId: undefined });
+        return userId;
+      }
+    }
+    return null;
+  }
+
   async close(): Promise<void> {
+    this.subscriptions.clear();
+    this.telegramLinks.clear();
     this.sources.clear();
     this.leads.clear();
     this.leadsByFingerprint.clear();

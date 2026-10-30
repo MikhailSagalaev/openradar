@@ -76,6 +76,8 @@ export interface Env {
   RADAR_DIGEST_INTERVAL_HOURS: number;
   RADAR_RETENTION_DAYS: number;
   RADAR_CHECK_CLOSED: boolean;
+  /** Hub: the TELEGRAM_BOT_TOKEN bot takes /start codes and sends saved-search digests (sets its webhook). */
+  RADAR_SUBSCRIPTION_BOT: boolean;
   RADAR_GIG_TTL_DAYS: number;
   RADAR_JOB_TTL_DAYS: number;
   RADAR_FEED_RATE_PER_MIN: number;
