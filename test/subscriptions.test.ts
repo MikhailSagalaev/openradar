@@ -10,7 +10,7 @@ import {
   type SubscriptionRecord,
 } from '../src/core/subscriptions.ts';
 import type { Lead } from '../src/core/types.ts';
-import { deliverDueSubscriptions, handleTelegramUpdate, telegramWebhookSecret, type SubscriptionDeps } from '../src/pipeline/subscriptions.ts';
+import { deliverDueSubscriptions, handleTelegramUpdate, pollTelegramUpdates, type SubscriptionDeps } from '../src/pipeline/subscriptions.ts';
 import { createApp, subscriptionDeps } from '../src/server/app.ts';
 import { MemoryStore } from '../src/store/memory.ts';
 import { createTestStore, makeTestRuntime, makeUserSession } from './helpers.ts';
@@ -214,6 +214,30 @@ describe('telegram bot', () => {
     await handleTelegramUpdate({ message: { chat: { id: 99, type: 'private' }, text: '/stop' } }, deps);
     expect(await runtime.store.getTelegramChat!(user.id)).toBeNull();
   });
+
+  it('long-polls messages and moves the offset past them', async () => {
+    const runtime = { ...makeTestRuntime({ TELEGRAM_BOT_TOKEN: 'bot-token', RADAR_SUBSCRIPTION_BOT: true }), store: new MemoryStore() };
+    const user = await runtime.store.upsertGitHubUser!({ githubId: 3, handle: 'w' });
+    await runtime.store.setTelegramLinkCode!(user.id, 'poll-code-1', new Date(Date.now() + 3600_000).toISOString());
+    const bodies: Array<{ method: string; body: Record<string, unknown> }> = [];
+    const fetchImpl = (async (url: string, init: RequestInit) => {
+      const method = String(url).split('/').pop()!;
+      bodies.push({ method, body: JSON.parse(String(init.body)) });
+      const result = method === 'getUpdates'
+        ? [{ update_id: 41, message: { chat: { id: 7, type: 'private' }, text: '/start poll-code-1' } }, { update_id: 42, message: { chat: { id: 8, type: 'private' }, text: 'привет' } }]
+        : true;
+      return new Response(JSON.stringify({ ok: true, result }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const deps = { store: runtime.store, env: runtime.env, logger: runtime.logger, fetchImpl };
+
+    const first = await pollTelegramUpdates(deps, undefined);
+    expect(first).toBe(43);
+    expect(await runtime.store.getTelegramChat!(user.id)).toBe('7');
+    expect(bodies[0]).toMatchObject({ method: 'getUpdates', body: { timeout: 25, allowed_updates: ['message'] } });
+    expect(bodies.filter((b) => b.method === 'sendMessage')).toHaveLength(2);
+    await pollTelegramUpdates(deps, 43);
+    expect(bodies.filter((b) => b.method === 'getUpdates').at(-1)?.body.offset).toBe(43);
+  });
 });
 
 describe('subscription routes', () => {
@@ -280,13 +304,4 @@ describe('subscription routes', () => {
     await runtime.store.close();
   });
 
-  it('takes Telegram updates only with the secret header', async () => {
-    const runtime = makeTestRuntime({ RADAR_ADMIN_TOKEN: 'secret', RADAR_SUBSCRIPTION_BOT: true, TELEGRAM_BOT_TOKEN: 't' });
-    const app = createApp(runtime);
-    const update = { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: { chat: { id: 1, type: 'private' }, text: '/stop' } }) };
-    expect((await app.request('/api/telegram/webhook', update)).status).toBe(403);
-    expect(subscriptionDeps(runtime).store).toBe(runtime.store);
-    await runtime.store.close();
-    expect(telegramWebhookSecret('secret')).toHaveLength(48);
-  });
 });

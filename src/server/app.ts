@@ -31,7 +31,7 @@ import { rubToUsd } from '../core/salary.ts';
 import { sourceState } from '../core/source-health.ts';
 import { assertSafeUrl } from '../core/ssrf.ts';
 import { feedQuery, isEmptyFilter, MAX_SUBSCRIPTIONS_PER_USER, newWebhookSecret, savedFiltersFrom, subscriptionName, type SubscriptionRecord } from '../core/subscriptions.ts';
-import { handleTelegramUpdate, setupSubscriptionBot, telegramWebhookSecret, type SubscriptionDeps } from '../pipeline/subscriptions.ts';
+import { runTelegramPolling, setupSubscriptionBot, type SubscriptionDeps } from '../pipeline/subscriptions.ts';
 import { computeSalaryMedians, SALARY_FLOOR_RUB, SALARY_MEDIAN_MIN_SAMPLE, setSalaryMedians } from '../core/salary-sanity.ts';
 import { renderIndexPage } from '../research/index-page.ts';
 import { renderIndexPageEn, renderMethodologyPageEn, renderReportPageEn } from '../research/pages-en.ts';
@@ -785,15 +785,25 @@ export function subscriptionDeps(runtime: Runtime): SubscriptionDeps {
 /** Username of the hub's subscription bot, for t.me links; set when the bot is set up. */
 let subscriptionBotUsername: string | undefined;
 
-/** Points the subscription bot at this hub (RADAR_SUBSCRIPTION_BOT); call once at start. */
-export async function startSubscriptionBot(runtime: Runtime): Promise<void> {
-  const secret = webKeySecret(runtime);
-  if (!secret) return;
-  try {
-    subscriptionBotUsername = await setupSubscriptionBot(subscriptionDeps(runtime), secret);
-    if (subscriptionBotUsername) runtime.logger.info('subscription bot ready', { bot: subscriptionBotUsername });
-  } catch (error) {
-    runtime.logger.warn('subscription bot setup failed', { error: error instanceof Error ? error.message : String(error) });
+/**
+ * Starts the subscription bot (RADAR_SUBSCRIPTION_BOT): learns its name, then long-polls its
+ * messages until `signal` aborts. Telegram over a proxy can be slow to answer, so a failed start
+ * is retried every minute. Call once at start; it runs in the background.
+ */
+export async function startSubscriptionBot(runtime: Runtime, signal: AbortSignal = new AbortController().signal): Promise<void> {
+  const deps = subscriptionDeps(runtime);
+  while (!signal.aborted && runtime.env.RADAR_SUBSCRIPTION_BOT && runtime.env.TELEGRAM_BOT_TOKEN) {
+    try {
+      subscriptionBotUsername = await setupSubscriptionBot(deps);
+      if (subscriptionBotUsername) {
+        runtime.logger.info('subscription bot ready', { bot: subscriptionBotUsername });
+        await runTelegramPolling(deps, signal);
+        return;
+      }
+    } catch (error) {
+      runtime.logger.warn('subscription bot setup failed', { error: error instanceof Error ? error.message : String(error) });
+    }
+    await new Promise((resolve) => setTimeout(resolve, 60_000));
   }
 }
 
@@ -834,9 +844,7 @@ export function createApp(runtime: Runtime): Hono {
         c.req.path.startsWith('/api/v2/ingest') ||
         c.req.path === '/v2/events' ||
         c.req.path === '/api/submit' ||
-        c.req.path === '/mcp' ||
-        // Telegram calls it; the secret token header is checked in the handler.
-        c.req.path === '/api/telegram/webhook';
+        c.req.path === '/mcp';
       const hasBearerAuth = Boolean(c.req.header('authorization') || c.req.header('x-radar-token'));
       if (!isIngest && !hasBearerAuth) {
         if (!sameOrigin(c)) {
@@ -1332,21 +1340,6 @@ export function createApp(runtime: Runtime): Hono {
     const code = randomBytes(18).toString('base64url');
     await runtime.store.setTelegramLinkCode(user.id, code, new Date(Date.now() + 60 * 60_000).toISOString());
     return c.redirect(`https://t.me/${subscriptionBotUsername}?start=${code}`);
-  });
-
-  app.post('/api/telegram/webhook', async (c) => {
-    const secret = webKeySecret(runtime);
-    if (!secret || !runtime.env.RADAR_SUBSCRIPTION_BOT || !safeEqual(c.req.header('x-telegram-bot-api-secret-token'), telegramWebhookSecret(secret))) {
-      return c.json({ error: 'forbidden' }, 403);
-    }
-    const update = await c.req.json().catch(() => null);
-    try {
-      if (update && typeof update === 'object') await handleTelegramUpdate(update as Parameters<typeof handleTelegramUpdate>[0], subscriptionDeps(runtime));
-    } catch (error) {
-      runtime.logger.warn('telegram update failed', { error: error instanceof Error ? error.message : String(error) });
-    }
-    // Telegram retries anything but 200; a failed reply is not worth a retry storm.
-    return c.json({ ok: true });
   });
 
   // The version of the extension this server hands out, shown on /extension.

@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { fetch as undiciFetch } from 'undici';
 import { assertSafeUrl, safeFetchImpl } from '../core/ssrf.ts';
 import type { Store } from '../core/store.ts';
 import {
@@ -12,6 +12,7 @@ import {
   type SubscriptionRecord,
 } from '../core/subscriptions.ts';
 import type { Env, Lead, Logger } from '../core/types.ts';
+import { getProxyAgent } from '../net/proxy.ts';
 
 export interface SubscriptionDeps {
   store: Store;
@@ -39,18 +40,28 @@ export interface SubscriptionRound {
 const BATCH = 200;
 const TELEGRAM_API = 'https://api.telegram.org';
 
+/**
+ * A Bot API call. The hub in Russia cannot reach api.telegram.org directly, so the call goes
+ * through RADAR_PROXY_URL when it is set; the host is fixed, so the proxy adds no SSRF surface.
+ */
 export async function telegramApi(
-  token: string,
+  env: Pick<Env, 'TELEGRAM_BOT_TOKEN' | 'RADAR_PROXY_URL'>,
   method: string,
   body: Record<string, unknown>,
   fetchImpl: typeof fetch = fetch,
+  timeoutMs = 10_000,
 ): Promise<{ ok: boolean; status: number; description?: string; result?: unknown }> {
-  const response = await fetchImpl(`${TELEGRAM_API}/bot${token}/${method}`, {
+  const init = {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(10_000),
-  });
+    signal: AbortSignal.timeout(timeoutMs),
+  };
+  const url = `${TELEGRAM_API}/bot${env.TELEGRAM_BOT_TOKEN}/${method}`;
+  const proxy = env.RADAR_PROXY_URL?.trim();
+  const response = proxy
+    ? ((await undiciFetch(url, { ...init, dispatcher: getProxyAgent(proxy) })) as unknown as Response)
+    : await fetchImpl(url, init);
   const json = (await response.json().catch(() => ({}))) as { ok?: boolean; description?: string; result?: unknown };
   return { ok: Boolean(json.ok), status: response.status, description: json.description, result: json.result };
 }
@@ -66,7 +77,7 @@ async function sendTelegram(deps: SubscriptionDeps, subscription: SubscriptionRe
   const chatId = await deps.store.getTelegramChat?.(subscription.userId);
   if (!token || !deps.env.RADAR_SUBSCRIPTION_BOT || !chatId) return 'skipped';
   const publicUrl = (deps.env.RADAR_PUBLIC_URL ?? 'https://openradar.fun').replace(/\/$/, '');
-  const result = await telegramApi(token, 'sendMessage', {
+  const result = await telegramApi(deps.env, 'sendMessage', {
     chat_id: chatId,
     text: formatSubscriptionDigest(subscription, leads, more, publicUrl),
     parse_mode: 'HTML',
@@ -164,12 +175,8 @@ export async function deliverDueSubscriptions(deps: SubscriptionDeps): Promise<S
   return round;
 }
 
-/** Secret Telegram sends in X-Telegram-Bot-Api-Secret-Token, derived from the hub's own secret. */
-export function telegramWebhookSecret(hubSecret: string): string {
-  return createHmac('sha256', hubSecret).update('telegram-webhook').digest('hex').slice(0, 48);
-}
-
 interface TelegramUpdate {
+  update_id?: number;
   message?: { chat?: { id?: number | string; type?: string }; text?: string };
 }
 
@@ -187,7 +194,7 @@ export async function handleTelegramUpdate(
   if (!token || !chat?.id || chat.type !== 'private') return;
   const chatId = String(chat.id);
   const publicUrl = (deps.env.RADAR_PUBLIC_URL ?? 'https://openradar.fun').replace(/\/$/, '');
-  const reply = (message: string) => telegramApi(token, 'sendMessage', { chat_id: chatId, text: message, disable_web_page_preview: true }, deps.fetchImpl);
+  const reply = (message: string) => telegramApi(deps.env, 'sendMessage', { chat_id: chatId, text: message, disable_web_page_preview: true }, deps.fetchImpl);
 
   const start = /^\/start(?:@\w+)?\s+([A-Za-z0-9_-]{8,64})$/.exec(text);
   if (start) {
@@ -205,20 +212,60 @@ export async function handleTelegramUpdate(
   await reply(`Это бот подписок openradar. Подключите его в профиле: ${publicUrl}/me#subscriptions`);
 }
 
-/** Points the bot's webhook at the hub; returns the bot's username for t.me links. */
-export async function setupSubscriptionBot(
-  deps: Pick<SubscriptionDeps, 'env' | 'fetchImpl' | 'logger'>,
-  hubSecret: string,
-): Promise<string | undefined> {
-  const token = deps.env.TELEGRAM_BOT_TOKEN;
-  const publicUrl = deps.env.RADAR_PUBLIC_URL?.replace(/\/$/, '');
-  if (!deps.env.RADAR_SUBSCRIPTION_BOT || !token || !publicUrl) return undefined;
-  const me = await telegramApi(token, 'getMe', {}, deps.fetchImpl);
-  const hook = await telegramApi(token, 'setWebhook', {
-    url: `${publicUrl}/api/telegram/webhook`,
-    secret_token: telegramWebhookSecret(hubSecret),
-    allowed_updates: ['message'],
-  }, deps.fetchImpl);
-  if (!hook.ok) deps.logger.warn('telegram webhook not set', { status: hook.status, description: hook.description });
+/** Seconds Telegram holds a getUpdates call open while waiting for a message. */
+const LONG_POLL_SECONDS = 25;
+
+/**
+ * The bot's username for t.me links, after removing any webhook: the bot reads its messages by
+ * long polling, an outgoing call. Telegram does not have to reach the hub, which a server in
+ * Russia cannot promise, and the hub has no endpoint for the bot to protect.
+ */
+export async function setupSubscriptionBot(deps: Pick<SubscriptionDeps, 'env' | 'fetchImpl' | 'logger'>): Promise<string | undefined> {
+  if (!deps.env.RADAR_SUBSCRIPTION_BOT || !deps.env.TELEGRAM_BOT_TOKEN) return undefined;
+  const me = await telegramApi(deps.env, 'getMe', {}, deps.fetchImpl, 30_000);
+  if (!me.ok) throw new Error(`getMe: ${me.status} ${me.description ?? ''}`.trim());
+  await telegramApi(deps.env, 'deleteWebhook', {}, deps.fetchImpl, 30_000);
   return (me.result as { username?: string } | undefined)?.username;
+}
+
+/**
+ * One long-poll round: waits up to LONG_POLL_SECONDS for messages, handles them, and returns
+ * the offset of the next round. Telegram drops confirmed updates once the next offset is sent.
+ */
+export async function pollTelegramUpdates(
+  deps: Pick<SubscriptionDeps, 'store' | 'env' | 'fetchImpl' | 'now' | 'logger'>,
+  offset: number | undefined,
+): Promise<number | undefined> {
+  const result = await telegramApi(deps.env, 'getUpdates', {
+    timeout: LONG_POLL_SECONDS,
+    allowed_updates: ['message'],
+    ...(offset === undefined ? {} : { offset }),
+  }, deps.fetchImpl, (LONG_POLL_SECONDS + 15) * 1000);
+  if (!result.ok) throw new Error(`getUpdates: ${result.status} ${result.description ?? ''}`.trim());
+  let next = offset;
+  for (const update of (result.result as TelegramUpdate[] | undefined) ?? []) {
+    if (typeof update.update_id === 'number') next = Math.max(next ?? 0, update.update_id + 1);
+    try {
+      await handleTelegramUpdate(update, deps);
+    } catch (error) {
+      deps.logger.warn('telegram update failed', { error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  return next;
+}
+
+/** Long-polls the bot until `signal` aborts; a failed round waits 30 s before the next. */
+export async function runTelegramPolling(
+  deps: Pick<SubscriptionDeps, 'store' | 'env' | 'fetchImpl' | 'now' | 'logger'>,
+  signal: AbortSignal,
+): Promise<void> {
+  let offset: number | undefined;
+  while (!signal.aborted) {
+    try {
+      offset = await pollTelegramUpdates(deps, offset);
+    } catch (error) {
+      deps.logger.warn('telegram polling failed', { error: error instanceof Error ? error.message : String(error) });
+      await new Promise((resolve) => setTimeout(resolve, 30_000));
+    }
+  }
 }
