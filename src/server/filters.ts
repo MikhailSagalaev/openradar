@@ -20,9 +20,11 @@ export interface FeedFilters {
   language?: 'ru' | 'en';
   /** The order this page shows without ?sort: the home feed ranks, feeds and APIs stay newest first. */
   defaultSort?: LeadSort;
+  /** The language this page shows without ?language: the home feed follows the interface, `language=all` lifts it. */
+  defaultLanguage?: 'ru' | 'en';
 }
 
-export function parseFeedFilters(c: Context, defaultSort: LeadSort = 'new'): FeedFilters {
+export function parseFeedFilters(c: Context, defaultSort: LeadSort = 'new', defaultLanguage?: 'ru' | 'en'): FeedFilters {
   const rawSort = c.req.query('sort');
   const sort: LeadSort = rawSort === 'new' || rawSort === 'score' || rawSort === 'budget' ? rawSort : defaultSort;
   const rawRemote = c.req.query('remote');
@@ -30,12 +32,13 @@ export function parseFeedFilters(c: Context, defaultSort: LeadSort = 'new'): Fee
   const skill = (c.req.query('skill') ?? '').trim().slice(0, 40);
   const language = c.req.query('language');
   return {
-    language: language === 'ru' || language === 'en' ? language : undefined,
+    language: language === 'ru' || language === 'en' ? language : language === 'all' ? undefined : defaultLanguage,
     sort,
     remote: rawRemote === '1' || rawRemote === 'true',
     budgetRub: Number.isFinite(budget) && budget > 0 ? Math.min(Math.round(budget), 100_000_000) : undefined,
     skill: skill || undefined,
     defaultSort,
+    defaultLanguage,
   };
 }
 
@@ -52,7 +55,7 @@ export function filterOptions(filters: FeedFilters, now: Date = new Date()): Lis
 
 /** How many filters differ from the default view. */
 export function activeFilterCount(filters: FeedFilters): number {
-  return [filters.sort !== (filters.defaultSort ?? 'new'), filters.remote, Boolean(filters.budgetRub), Boolean(filters.skill), Boolean(filters.language)]
+  return [filters.sort !== (filters.defaultSort ?? 'new'), filters.remote, Boolean(filters.budgetRub), Boolean(filters.skill), filters.language !== filters.defaultLanguage]
     .filter(Boolean).length;
 }
 

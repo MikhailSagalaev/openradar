@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.27.1
+
+- The home feed opens in the interface's market: a Russian page shows Russian-language leads,
+  «Любой язык» (`language=all`) shows every market. Ranked by rating, the first screen of 0.27.0
+  was all US company boards with yearly dollar salaries. RSS, the API and MCP keep every
+  language by default; the RSS link on the page carries the language it shows.
+
 ## 0.27.0
 
 - The home feed opens with «Сначала лучшие»: the lead rating, losing 4 points a day of age, over
