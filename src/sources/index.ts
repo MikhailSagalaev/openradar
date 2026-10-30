@@ -2,6 +2,7 @@ import type { SourceAdapter, SourceKind } from '../core/types.ts';
 import { atsSource } from './ats.ts';
 import { sitemapSource } from './sitemap.ts';
 import { hhSource } from './hh.ts';
+import { adzunaSource } from './adzuna.ts';
 import { hnSource } from './hn.ts';
 import { imapSource } from './imap.ts';
 import { kworkSource } from './kwork.ts';
@@ -45,6 +46,7 @@ export function createSourceRegistry(): SourceRegistry {
     .register(remotiveSource)
     .register(arbeitnowSource)
     .register(hnSource)
+    .register(adzunaSource)
     .register(atsSource)
     .register(sitemapSource);
 }

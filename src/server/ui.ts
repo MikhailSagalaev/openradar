@@ -179,6 +179,7 @@ const KIND_LABELS: Record<string, string> = {
  */
 export const KIND_ACCESS: Record<string, AccessKind> = {
   rss: 'official',
+  adzuna: 'official',
   telegram: 'public',
   'telegram-account': 'user-provided',
   kwork: 'public',
@@ -1296,6 +1297,17 @@ a:focus-visible, button:focus-visible, summary:focus-visible, input[type=checkbo
 .crumbs { font-size: 12.5px; color: var(--muted); margin-bottom: 10px; }
 .crumbs a { color: var(--muted); }
 .prose { max-width: 720px; margin-top: 36px; }
+/* Contribute page: three connect-a-source cards. */
+.paths { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+@media (max-width: 900px) { .paths { grid-template-columns: 1fr; } }
+.path { border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.path-head { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13.5px; }
+.path-icon { color: var(--emerald); font-weight: 700; }
+.path-time { margin-left: auto; font-size: 11px; color: var(--muted); background: var(--soft); border-radius: 5px; padding: 2px 7px; white-space: nowrap; }
+.path p { margin: 0; font-size: 12.5px; color: var(--muted); }
+.path pre { margin: 0; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font: 12px/1.6 ui-monospace, "SF Mono", Consolas, monospace; overflow-x: auto; }
+.path-get { margin-top: auto; font-size: 12px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 8px; }
+.path-get b { color: var(--ink); font-weight: 500; }
 .prose h2 { font-size: 17px; text-transform: none; letter-spacing: -0.01em; color: var(--ink); margin: 28px 0 8px; }
 .prose p, .prose li { font-size: 14px; line-height: 1.65; color: var(--ink); }
 .prose p { margin: 0 0 12px; }
@@ -1845,6 +1857,7 @@ ${input.body}
         <a href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md" target="_blank" rel="noopener noreferrer">${escapeHtml(t.guideLink)}</a>
         <a href="/research">${escapeHtml(lang === 'ru' ? 'Исследования рынка' : 'Market research')}</a>
         <a href="/about">${escapeHtml(lang === 'ru' ? 'О проекте' : 'About')}</a>
+        <a href="/trust">${escapeHtml(lang === 'ru' ? 'Данные и доверие' : 'Trust & data')}</a>
         <a href="/faq">${escapeHtml(lang === 'ru' ? 'Вопросы и ответы' : 'FAQ')}</a>
         <a href="/extension">${escapeHtml(t.extensionGuide)}</a>
         <a href="/sources">${escapeHtml(t.navSources)}</a>
@@ -1856,8 +1869,8 @@ ${input.body}
       <div class="footer-col-title">${escapeHtml(lang === 'ru' ? 'Участвовать' : 'Contribute')}</div>
       <div class="footer-links-grid">
         <a href="${REPO_URL}" target="_blank" rel="noopener noreferrer">GitHub</a>
-        <a href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md#2-узел-на-своём-компьютере" target="_blank" rel="noopener noreferrer">${escapeHtml(lang === 'ru' ? 'Запустить свой узел' : 'Run your own node')}</a>
-        <a href="${REPO_URL}/issues/new?template=source-request.yml" target="_blank" rel="noopener noreferrer">${escapeHtml(lang === 'ru' ? 'Предложить источник' : 'Suggest a source')}</a>
+        <a href="/contribute">${escapeHtml(lang === 'ru' ? 'Запустить свой узел' : 'Run your own node')}</a>
+        <a href="/contribute">${escapeHtml(lang === 'ru' ? 'Предложить источник' : 'Suggest a source')}</a>
         <a href="${REPO_URL}/issues" target="_blank" rel="noopener noreferrer">${escapeHtml(lang === 'ru' ? 'Сообщить о проблеме' : 'Report a problem')}</a>
       </div>
     </div>
