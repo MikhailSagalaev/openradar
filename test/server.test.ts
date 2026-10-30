@@ -609,6 +609,36 @@ describe('http server', () => {
     expect(home).toContain('<option value="new">');
   });
 
+  it('shows only IT work behind the «Только IT» chip', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true, RADAR_ADMIN_TOKEN: 'secret' });
+    const app = createApp(runtime);
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed' });
+    const base = Date.now() - 3600_000;
+    const leads = [
+      { id: 'bot', title: 'Бот для Telegram', skills: ['python'] },
+      { id: 'translate', title: 'Перевод инструкции', skills: ['Переводы'] },
+      { id: 'devops', title: 'Platform Engineer', skills: ['Engineering'] },
+      { id: 'none', title: 'Помочь с переездом', skills: [] },
+    ];
+    for (const [i, l] of leads.entries()) {
+      await runtime.store.insertLead({
+        id: l.id, sourceId: source.id, externalId: l.id, title: l.title, titleKey: l.id, text: `${l.title}, подробности`,
+        fingerprint: `fp-${l.id}`, status: 'new', score: 60, reasons: [], skills: l.skills, createdAt: new Date(base + i * 60_000).toISOString(),
+      });
+    }
+    const auth = { headers: { authorization: 'Bearer secret' } };
+    const ids = async (path: string): Promise<string[]> =>
+      ((await (await app.request(path, auth)).json()) as Array<{ id: string }>).map((l) => l.id);
+
+    expect(await ids('/api/leads?it=1')).toEqual(['devops', 'bot']);
+    const page = await (await app.request('/?it=1&language=all', auth)).text();
+    expect(page).toContain('name="it" value="1" checked');
+    expect(page).toContain('Бот для Telegram');
+    expect(page).not.toContain('Перевод инструкции');
+    // RSS keeps every language by default, so the link carries only the chip.
+    expect(page).toContain('href="/feed.rss?it=1"');
+  });
+
   it('pages the feed, filters by language and shows similar leads and the profile', async () => {
     const runtime = makeRuntime({ RADAR_PUBLIC_READ: true, RADAR_ADMIN_TOKEN: 'secret', RADAR_PUBLIC_URL: 'https://hub.example' });
     const app = createApp(runtime);

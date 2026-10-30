@@ -119,6 +119,7 @@ export interface Translations {
   budgetFrom: string;
   skillAny: string;
   remoteOnly: string;
+  itOnly: string;
   resetFilters: string;
   rankedWindow: string;
   heroTitleDelayed: string;
@@ -292,6 +293,7 @@ export const RU: Translations = {
   budgetFrom: 'от {n} ₽',
   skillAny: 'Все навыки',
   remoteOnly: 'Только удалённо',
+  itOnly: 'Только IT',
   resetFilters: 'Сбросить фильтры',
   rankedWindow: 'Лучшие и дорогие — среди заказов за последние 7 дней.',
   heroTitleDelayed: 'Заказы и вакансии со всех площадок',
@@ -460,6 +462,7 @@ export const EN: Translations = {
   budgetFrom: 'from {n} ₽',
   skillAny: 'All skills',
   remoteOnly: 'Remote only',
+  itOnly: 'IT only',
   resetFilters: 'Reset filters',
   rankedWindow: 'Best and highest budget: among leads of the last 7 days.',
   heroTitleDelayed: 'Gigs and jobs from every board',

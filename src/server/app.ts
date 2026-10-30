@@ -27,7 +27,9 @@ import { estimateMarket } from '../core/market.ts';
 import { rateLimit } from './ratelimit.ts';
 import { indexCsv, openradarIndex } from '../research/index.ts';
 import { qualityFlagsOf } from '../core/quality.ts';
-import { computeSalaryMedians, setSalaryMedians } from '../core/salary-sanity.ts';
+import { rubToUsd } from '../core/salary.ts';
+import { sourceState } from '../core/source-health.ts';
+import { computeSalaryMedians, SALARY_FLOOR_RUB, SALARY_MEDIAN_MIN_SAMPLE, setSalaryMedians } from '../core/salary-sanity.ts';
 import { renderIndexPage } from '../research/index-page.ts';
 import { renderIndexPageEn, renderMethodologyPageEn, renderReportPageEn } from '../research/pages-en.ts';
 import {
@@ -1030,8 +1032,13 @@ export function createApp(runtime: Runtime): Hono {
     if (Date.now() - salaryMediansAt < 30 * 60_000) return;
     salaryMediansAt = Date.now();
     try {
-      const recent = await runtime.store.listLeads({ type: 'job', limit: 5000, createdAfter: new Date(Date.now() - 30 * 86_400_000).toISOString() });
-      setSalaryMedians(computeSalaryMedians(recent));
+      const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
+      // The database takes every vacancy of the window; a listing stops at 5000, about one day of the hub.
+      if (runtime.store.salaryMedians) {
+        setSalaryMedians(await runtime.store.salaryMedians(since, rubToUsd(SALARY_FLOOR_RUB), SALARY_MEDIAN_MIN_SAMPLE));
+      } else {
+        setSalaryMedians(computeSalaryMedians(await runtime.store.listLeads({ type: 'job', limit: 5000, createdAfter: since })));
+      }
     } catch (error) {
       runtime.logger.warn('salary medians failed', { error: String(error) });
     }
@@ -1741,6 +1748,7 @@ export function createApp(runtime: Runtime): Hono {
     return c.json(
       health.map((item) => ({
         ...item,
+        state: sourceState(item),
         source: redactSource(item.source),
       })),
     );

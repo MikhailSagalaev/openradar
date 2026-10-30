@@ -50,6 +50,8 @@ export interface ListLeadsOptions {
   remote?: boolean;
   /** Only leads tagged with this skill (case-insensitive). */
   skill?: string;
+  /** Only leads tagged with at least one of these skills (case-insensitive): the «IT» chip. */
+  skillsAny?: string[];
   /** Only leads first seen at or after this instant. */
   createdAfter?: string;
   sort?: LeadSort;
@@ -329,6 +331,11 @@ export interface Store extends HubStore {
   listLeads(options?: ListLeadsOptions): Promise<Lead[]>;
   getStats(): Promise<Stats>;
   getSourceHealth(): Promise<SourceHealth[]>;
+  /**
+   * Median monthly vacancy pay in USD by role over every vacancy since `createdAfter`
+   * (see salary-sanity.ts): `*` for all vacancies, roles with fewer than `minSample` left out.
+   */
+  salaryMedians?(createdAfter: string, floorUsd: number, minSample: number): Promise<Map<string, number>>;
   getAdminStats?(days?: number): Promise<AdminStats>;
   /** Browser extension tokens, stored as SHA-256 hashes. */
   saveExtensionToken?(tokenHash: string, userId: number): Promise<void>;
