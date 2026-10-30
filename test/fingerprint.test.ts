@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  computeMinHashBands,
   computeMinHashSketch,
   estimateJaccardFromSketches,
   fingerprintOf,
+  MINHASH_BANDS,
   sha256,
   titleKeyOf,
 } from '../src/core/fingerprint.ts';
@@ -87,5 +89,27 @@ describe('MinHash sketches & fuzzy deduplication (radar/1)', () => {
     });
     expect(fp).toMatch(/^[0-9a-f]{64}$/);
     expect(sha256('test')).toBe('9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08');
+  });
+
+  it('computes 16 LSH bands and collides on near-duplicates', () => {
+    const sketchOriginal = computeMinHashSketch(baseJobText);
+    const sketchRepost = computeMinHashSketch(repostedJobText);
+    const sketchReact = computeMinHashSketch(completelyDifferentJobText);
+
+    const bandsOriginal = computeMinHashBands(sketchOriginal);
+    const bandsRepost = computeMinHashBands(sketchRepost);
+    const bandsReact = computeMinHashBands(sketchReact);
+
+    expect(bandsOriginal).toHaveLength(MINHASH_BANDS);
+    expect(bandsRepost).toHaveLength(MINHASH_BANDS);
+    expect(bandsReact).toHaveLength(MINHASH_BANDS);
+
+    // Near duplicate must collide in at least one band (usually 3-10 bands for 0.75+ similarity)
+    const repostCollisions = bandsOriginal.filter((b, idx) => b === bandsRepost[idx]);
+    expect(repostCollisions.length).toBeGreaterThanOrEqual(1);
+
+    // Completely different text should have 0 collisions
+    const diffCollisions = bandsOriginal.filter((b, idx) => b === bandsReact[idx]);
+    expect(diffCollisions.length).toBe(0);
   });
 });

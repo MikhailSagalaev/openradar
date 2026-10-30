@@ -1,4 +1,4 @@
-import { cleanTitle, extractBudget, extractCity } from './extract.ts';
+import { cleanTitle, extractBudget, extractBudgetAndCurrency, extractCity } from './extract.ts';
 import { computeMinHashSketch, fingerprintOf, sha256, titleKeyOf } from './fingerprint.ts';
 import { extractContacts, mergeContacts, normalizeContact } from './contacts.ts';
 import { postKeyOf } from './observation.ts';
@@ -23,11 +23,12 @@ const MAX_TEXT_LENGTH = 20_000;
 const JOB_HINT = /ваканс|vacanc|career|hiring|в\s+штат|оклад|трудоустр|соискател/i;
 
 /** Boards that publish only vacancies: a post from them is a job whatever its title says. */
-const JOB_BOARD_URL = /^https?:\/\/(?:www\.)?(?:jobicy\.com|weworkremotely\.com|remoteok\.com|hh\.ru\/vacancy|career\.habr\.com\/vacancies|trudvsem\.ru)\b/i;
+const JOB_BOARD_URL = /^https?:\/\/(?:www\.)?(?:jobicy\.com|weworkremotely\.com|remoteok\.com|remotive\.com|arbeitnow\.com|himalayas\.app|getmatch\.ru|hh\.ru\/vacancy|career\.habr\.com\/vacancies|trudvsem\.ru|boards\.greenhouse\.io|jobs\.lever\.co|jobs\.ashbyhq\.com)\b/i;
+const JOB_PATH_RE = /\/(?:jobs?|vacanc(?:y|ies)|careers?|positions?)\b/i;
 
 function detectLeadType(raw: RawLead, title: string, url?: string): LeadType {
   if (raw.type === 'job' || raw.type === 'gig') return raw.type;
-  if (url && JOB_BOARD_URL.test(url)) return 'job';
+  if (url && (JOB_BOARD_URL.test(url) || JOB_PATH_RE.test(url))) return 'job';
   return JOB_HINT.test(`${title} ${url ?? ''}`) ? 'job' : 'gig';
 }
 
@@ -56,7 +57,9 @@ export function prepareRawLead(
     typeof raw.budget === 'number' && Number.isFinite(raw.budget) && raw.budget >= 0
       ? raw.budget
       : undefined;
-  const budget = explicitBudget ?? extractBudget(`${title}\n${normalizedText}`);
+  const extractedMoney = extractBudgetAndCurrency(`${raw.title || ''}\n${normalizedText}`);
+  const budget = explicitBudget ?? extractedMoney.budget;
+  const currency = cleanShortField(raw.currency, 8) || extractedMoney.currency;
 
   const explicitCity = cleanShortField(raw.city, 100);
   const extractedCity = extractCity(`${title}\n${normalizedText}`);
@@ -69,7 +72,7 @@ export function prepareRawLead(
     text: `${title}\n${normalizedText}`,
     rawSalary: raw.rawSalary,
     budget,
-    currency: cleanShortField(raw.currency, 8),
+    currency,
     type,
   });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanTitle, extractBudget, extractCity } from '../src/core/extract.ts';
+import { cleanTitle, extractBudget, extractBudgetAndCurrency, extractCity, stripTitleNoiseAndBudget } from '../src/core/extract.ts';
 import { prepareRawLead } from '../src/core/prepare.ts';
 import { applyRules, scoreLead } from '../src/core/rules.ts';
 import { normalizeTechTokens } from '../src/core/text.ts';
@@ -25,6 +25,42 @@ describe('extraction', () => {
     expect(extractBudget('Позвоните 8 999 123 45 67')).toBeUndefined();
   });
 
+  it('extracts multi-currency budgets and standardizes ISO codes', () => {
+    expect(extractBudgetAndCurrency('Разработка лендинга - 1500PLN')).toEqual({
+      budget: 1500,
+      currency: 'PLN',
+    });
+    expect(extractBudgetAndCurrency('Rate: $3,500 / month')).toEqual({
+      budget: 3500,
+      currency: 'USD',
+    });
+    expect(extractBudgetAndCurrency('Backend Go developer: €2000')).toEqual({
+      budget: 2000,
+      currency: 'EUR',
+    });
+    expect(extractBudgetAndCurrency('Дизайн логотипа, оплата 150 000 ₸')).toEqual({
+      budget: 150000,
+      currency: 'KZT',
+    });
+    expect(extractBudgetAndCurrency('Заказ на 500 бел. руб')).toEqual({
+      budget: 500,
+      currency: 'BYN',
+    });
+    expect(extractBudgetAndCurrency('Budget: £1,200 for full project')).toEqual({
+      budget: 1200,
+      currency: 'GBP',
+    });
+  });
+
+  it('strips title noise, platform budget artifacts and augments single words', () => {
+    expect(stripTitleNoiseAndBudget('Разработка сайта (Бюджет: 150 000 ₽)')).toBe('Разработка сайта');
+    expect(stripTitleNoiseAndBudget('Телеграм-бот - 1500PLN')).toBe('Телеграм-бот');
+    expect(stripTitleNoiseAndBudget('React Developer [$5000]')).toBe('React Developer');
+    expect(cleanTitle('Радуга', 'Разработка детского мобильного приложения для изучения английского языка.')).toBe(
+      'Радуга — Разработка детского мобильного приложения для изучения английского языка',
+    );
+  });
+
   it('extracts a city from inflected forms', () => {
     expect(extractCity('Нужен сантехник в Ставрополе')).toBe('Ставрополь');
     expect(extractCity('Работа в Москве, оплата 5000')).toBe('Москва');
@@ -48,14 +84,42 @@ describe('prepare', () => {
     const lead = prepareRawLead(raw, source, TEST_NOW);
     expect(lead.city).toBe('Ставрополь');
     expect(lead.budget).toBe(5000);
+    expect(lead.currency).toBe('RUB');
     expect(lead.canonicalUrl).toBe('https://example.com/1');
     expect(lead.fingerprint).toBe(
       prepareRawLead({ ...raw, url: 'https://example.com/1' }, source, TEST_NOW).fingerprint,
     );
   });
+
+  it('extracts foreign currency from title and preserves it while cleaning title', () => {
+    const source = makeSource();
+    const raw = {
+      sourceId: source.id,
+      title: 'Senior Node.js Engineer - $6000',
+      text: 'Remote position for European timezone. We need PostgreSQL and Redis experience.',
+    };
+    const lead = prepareRawLead(raw, source, TEST_NOW);
+    expect(lead.title).toBe('Senior Node.js Engineer');
+    expect(lead.budget).toBe(6000);
+    expect(lead.currency).toBe('USD');
+  });
 });
 
 describe('rules', () => {
+  it('keeps a company vacancy whose duties include data entry and whose pay is in euros', () => {
+    const source = makeSource();
+    const raw = {
+      sourceId: source.id,
+      title: 'Executive Assistant & Office Manager',
+      text: 'You will manage calendars, travel and data entry into our HR system.',
+      currency: 'EUR',
+      budget: 48_000,
+    };
+    expect(applyRules(prepareRawLead(raw, source, TEST_NOW), source, TEST_NOW).reasons).not.toContain('spam:DATA_ENTRY_SCAM');
+    const scam = { ...raw, title: 'Специалист по удаленному вводу данных - 2000EUR', text: 'Простая работа на дому' };
+    expect(applyRules(prepareRawLead(scam, source, TEST_NOW), source, TEST_NOW).reasons).toContain('spam:DATA_ENTRY_SCAM');
+  });
+
   const source = makeSource({ config: { includeKeywords: ['сантехник'], minBudget: 1000 } });
 
   it('accepts a relevant lead', () => {

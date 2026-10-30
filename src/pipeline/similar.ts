@@ -1,4 +1,4 @@
-import { estimateJaccardFromSketches } from '../core/fingerprint.ts';
+import { computeMinHashBands, estimateJaccardFromSketches } from '../core/fingerprint.ts';
 import type { Store } from '../core/store.ts';
 
 /** Rule 4 of docs/PROTOCOL.md: texts this similar within this window are one lead. */
@@ -18,15 +18,28 @@ function isEmptySketch(sketch: string): boolean {
 }
 
 /**
- * In-process index of recent MinHash sketches. Loaded lazily from the store once,
- * then kept current by `add` after every insert. A linear scan over a week of leads
- * is a few milliseconds; the hub is a single process.
+ * In-process LSH index of recent MinHash sketches. Uses 16-band Locality-Sensitive Hashing
+ * to prune candidate search from O(N) linear scans down to O(1) indexed lookups.
  */
 export class SimilarIndex {
   private entries: Entry[] = [];
+  private buckets = new Map<string, Set<Entry>>();
   private loading?: Promise<void>;
 
   constructor(private readonly store: Pick<Store, 'listRecentSketches'>, private readonly maxEntries = 50_000) {}
+
+  private addEntry(entry: Entry): void {
+    this.entries.push(entry);
+    const bands = computeMinHashBands(entry.sketch);
+    for (const b of bands) {
+      let set = this.buckets.get(b);
+      if (!set) {
+        set = new Set();
+        this.buckets.set(b, set);
+      }
+      set.add(entry);
+    }
+  }
 
   private async ensureLoaded(now: Date): Promise<void> {
     this.loading ??= (async () => {
@@ -37,7 +50,13 @@ export class SimilarIndex {
         .map((r) => ({ id: r.id, createdAtMs: Date.parse(r.createdAt), sketch: r.minhash }));
       // keep anything added while loading
       const seen = new Set(this.entries.map((e) => e.id));
-      this.entries = [...loaded.filter((e) => !seen.has(e.id)), ...this.entries];
+      for (const item of loaded) {
+        if (!seen.has(item.id)) {
+          this.addEntry(item);
+        }
+      }
+      // prune() takes the first entry as the oldest: entries added while loading came first.
+      this.entries.sort((a, b) => a.createdAtMs - b.createdAtMs);
     })();
     await this.loading;
   }
@@ -45,7 +64,21 @@ export class SimilarIndex {
   private prune(now: Date): void {
     const cutoff = now.getTime() - SIMILAR_WINDOW_MS;
     if (this.entries.length && (this.entries.length > this.maxEntries || this.entries[0]!.createdAtMs < cutoff)) {
-      this.entries = this.entries.filter((e) => e.createdAtMs >= cutoff).slice(-this.maxEntries);
+      const kept = this.entries.filter((e) => e.createdAtMs >= cutoff).slice(-this.maxEntries);
+      const keptSet = new Set(kept);
+      for (const e of this.entries) {
+        if (!keptSet.has(e)) {
+          const bands = computeMinHashBands(e.sketch);
+          for (const b of bands) {
+            const set = this.buckets.get(b);
+            if (set) {
+              set.delete(e);
+              if (set.size === 0) this.buckets.delete(b);
+            }
+          }
+        }
+      }
+      this.entries = kept;
     }
   }
 
@@ -53,23 +86,52 @@ export class SimilarIndex {
     if (isEmptySketch(sketch)) return undefined;
     await this.ensureLoaded(now);
     this.prune(now);
+
     const cutoff = now.getTime() - SIMILAR_WINDOW_MS;
+    const bands = computeMinHashBands(sketch);
+    if (!bands.length) return undefined;
+
+    // Collect candidate entries matching at least 1 LSH band
+    const candidates = new Set<Entry>();
+    for (const b of bands) {
+      const bucket = this.buckets.get(b);
+      if (bucket) {
+        for (const e of bucket) {
+          if (e.createdAtMs >= cutoff) {
+            candidates.add(e);
+          }
+        }
+      }
+    }
+
+    if (candidates.size === 0) return undefined;
+
     let best: { id: string; j: number } | undefined;
-    for (let i = this.entries.length - 1; i >= 0; i--) {
-      const e = this.entries[i]!;
-      if (e.createdAtMs < cutoff) continue;
+    for (const e of candidates) {
       const j = estimateJaccardFromSketches(sketch, e.sketch);
-      if (j >= threshold && (!best || j > best.j)) best = { id: e.id, j };
+      if (j >= threshold && (!best || j > best.j)) {
+        best = { id: e.id, j };
+      }
     }
     return best?.id;
   }
 
   add(id: string, sketch: string | undefined, createdAt: string): void {
     if (!sketch || isEmptySketch(sketch)) return;
-    this.entries.push({ id, createdAtMs: Date.parse(createdAt), sketch });
+    this.addEntry({ id, createdAtMs: Date.parse(createdAt), sketch });
   }
 
   remove(id: string): void {
+    const entry = this.entries.find((e) => e.id === id);
+    if (!entry) return;
     this.entries = this.entries.filter((e) => e.id !== id);
+    const bands = computeMinHashBands(entry.sketch);
+    for (const b of bands) {
+      const set = this.buckets.get(b);
+      if (set) {
+        set.delete(entry);
+        if (set.size === 0) this.buckets.delete(b);
+      }
+    }
   }
 }
