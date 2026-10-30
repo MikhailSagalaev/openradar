@@ -1,5 +1,7 @@
 import type { Context } from 'hono';
 import { rubToUsd } from '../core/salary.ts';
+import type { SavedFilters } from '../core/subscriptions.ts';
+import type { Lead } from '../core/types.ts';
 import type { LeadSort, ListLeadsOptions } from '../core/store.ts';
 
 /**
@@ -87,4 +89,31 @@ export function activeFilterCount(filters: FeedFilters): number {
 /** True when any filter differs from the default view. */
 export function hasActiveFilters(filters: FeedFilters): boolean {
   return activeFilterCount(filters) > 0;
+}
+
+/**
+ * Whether one lead matches a saved-search filter — the client-side twin of the feed's
+ * SQL, used to notify subscribers of closures (the feed itself cannot be re-queried:
+ * a closed lead left the active feed). `it` mirrors skillsAny: any skill of the lead
+ * in IT_SKILLS; `q` requires every word of it in the title or text.
+ */
+export function matchesSavedFilters(lead: Lead, filters: SavedFilters): boolean {
+  if (filters.type && lead.type !== filters.type) return false;
+  if (filters.skill && !(lead.skills ?? []).some((s) => s.toLowerCase() === filters.skill!.toLowerCase())) return false;
+  if (filters.it && !(lead.skills ?? []).some((s) => (IT_SKILLS as readonly string[]).some((it) => it.toLowerCase() === s.toLowerCase()))) return false;
+  if (filters.remote) {
+    const remoteLike = lead.isRemote !== false || /удал[её]нн|remote|онлайн/i.test(`${lead.title} ${lead.city ?? ''}`);
+    if (!remoteLike) return false;
+  }
+  if (filters.budgetRub && (lead.normalizedUsdMax ?? lead.normalizedUsdMin ?? (lead.budget ? rubToUsd(lead.budget) : 0)) < rubToUsd(filters.budgetRub)) return false;
+  if (filters.language) {
+    const cyrillic = /[А-Яа-яЁё]/.test(lead.title);
+    if (cyrillic !== (filters.language === 'ru')) return false;
+  }
+  if (filters.q) {
+    const haystack = `${lead.title} ${lead.text}`.toLowerCase();
+    const words = filters.q.toLowerCase().split(/\s+/).filter((w) => w.length >= 2);
+    if (words.length && !words.every((w) => haystack.includes(w))) return false;
+  }
+  return true;
 }

@@ -13,6 +13,8 @@ import {
 } from '../core/subscriptions.ts';
 import type { Env, Lead, Logger } from '../core/types.ts';
 import { getProxyAgent } from '../net/proxy.ts';
+import { matchesSavedFilters } from '../server/filters.ts';
+import { escapeHtml } from '../core/text.ts';
 
 export interface SubscriptionDeps {
   store: Store;
@@ -118,6 +120,94 @@ async function sendWebhook(deps: SubscriptionDeps, subscription: SubscriptionRec
     signal: AbortSignal.timeout(10_000),
   });
   if (!response.ok) throw new DeliveryError(`webhook: HTTP ${response.status}`);
+  return 'sent';
+}
+
+/**
+ * Pushes a closure to every active subscription whose filter matches: the lead left the
+ * active feed (closed, hidden as junk or scam). Delivery respects the owner's tier delay —
+ * a lead they could not see yet is not announced as gone. A failed send counts toward the
+ * pause threshold, as with digests; closures are never replayed.
+ */
+export async function deliverLeadClosedToSubscriptions(deps: SubscriptionDeps, lead: Lead, reason: string): Promise<SubscriptionRound> {
+  const round: SubscriptionRound = { checked: 0, sent: 0, failed: 0 };
+  if (!deps.store.listActiveSubscriptions || !deps.store.updateSubscription) return round;
+  const now = deps.now?.() ?? new Date();
+  const all = await deps.store.listActiveSubscriptions(1_000);
+  for (const subscription of all) {
+    if (!matchesSavedFilters(lead, subscription.filters)) continue;
+    round.checked += 1;
+    try {
+      // The tier delay: leadsForUser returns the instant this user's view reaches (`until`).
+      const { until } = await deps.leadsForUser(subscription.userId, subscription.filters, lead.createdAt, 1);
+      if (lead.createdAt > until) continue;
+      const outcome = subscription.channel === 'webhook'
+        ? await sendClosedWebhook(deps, subscription, lead, reason, now)
+        : await sendClosedTelegram(deps, subscription, lead, reason);
+      await deps.store.updateSubscription(subscription.id, {
+        ...(outcome === 'sent' ? { lastSentAt: now.toISOString(), failures: 0, lastError: undefined } : {}),
+      });
+      if (outcome === 'sent') round.sent += 1;
+    } catch (error) {
+      round.failed += 1;
+      const message = error instanceof Error ? error.message : String(error);
+      const failures = subscription.failures + 1;
+      await deps.store.updateSubscription(subscription.id, {
+        failures,
+        lastError: message.slice(0, 300),
+        paused: failures >= MAX_DELIVERY_FAILURES ? true : subscription.paused,
+      });
+      deps.logger.warn('closure delivery failed', { id: subscription.id, channel: subscription.channel, error: message });
+    }
+  }
+  return round;
+}
+
+async function sendClosedWebhook(deps: SubscriptionDeps, subscription: SubscriptionRecord, lead: Lead, reason: string, now: Date): Promise<'sent'> {
+  if (!subscription.target || !subscription.secret) throw new DeliveryError('webhook: no URL');
+  await assertSafeUrl(subscription.target);
+  const body = JSON.stringify({
+    event: 'lead.closed',
+    subscription: { id: subscription.id, name: subscription.name },
+    lead: { ...deps.projectLead(lead, subscription.userId), state: reason },
+    closedAt: now.toISOString(),
+    reason,
+  });
+  const timestamp = String(Math.floor(now.getTime() / 1000));
+  const response = await safeFetchImpl(deps.fetchImpl)(subscription.target, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'user-agent': 'openradar-subscriptions',
+      'x-openradar-timestamp': timestamp,
+      'x-openradar-signature': signWebhook(subscription.secret, timestamp, body),
+    },
+    body,
+    redirect: 'manual',
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) throw new DeliveryError(`webhook: HTTP ${response.status}`);
+  return 'sent';
+}
+
+async function sendClosedTelegram(deps: SubscriptionDeps, subscription: SubscriptionRecord, lead: Lead, reason: string): Promise<'sent' | 'skipped'> {
+  const token = deps.env.TELEGRAM_BOT_TOKEN;
+  const chatId = await deps.store.getTelegramChat?.(subscription.userId);
+  if (!token || !deps.env.RADAR_SUBSCRIPTION_BOT || !chatId) return 'skipped';
+  const publicUrl = (deps.env.RADAR_PUBLIC_URL ?? 'https://openradar.fun').replace(/\/$/, '');
+  const reasonText = reason.startsWith('hidden_scam') ? 'мошенники' : reason.startsWith('hidden_junk') ? 'мусор' : 'закрыт участниками';
+  const result = await telegramApi(deps.env, 'sendMessage', {
+    chat_id: chatId,
+    text: `🚫 <b>Закрыт</b>: <a href="${publicUrl}/leads/${lead.id}">${escapeHtml(lead.title.slice(0, 120))}</a>
+${reasonText}`,
+    parse_mode: 'HTML',
+    disable_web_page_preview: true,
+  }, deps.fetchImpl);
+  if (result.status === 403) {
+    await deps.store.unlinkTelegramChat?.(chatId);
+    throw new DeliveryError(`telegram: ${result.description ?? 'blocked'}`, true);
+  }
+  if (!result.ok) throw new DeliveryError(`telegram: ${result.status} ${result.description ?? ''}`.trim());
   return 'sent';
 }
 

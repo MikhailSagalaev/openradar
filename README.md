@@ -12,6 +12,7 @@
 
 <p align="center">
   <a href="https://openradar.fun"><img src="https://img.shields.io/badge/live-openradar.fun-10b981.svg" alt="Live hub: openradar.fun"></a>
+  <a href="docs/stories.json"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FMikhailSagalaev%2Fopenradar%2Fmain%2Fdocs%2Fstories.json&query=%24.count&label=%F0%9F%8E%89%20found%20work%20through%20openradar&suffix=%20on%20the%20record&color=2ea44f" alt="Stories of work found through openradar"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPLv3-blue.svg" alt="License: AGPL v3"></a>
   <a href="docs/PROTOCOL.md"><img src="https://img.shields.io/badge/protocol-radar%2F2-purple.svg" alt="Protocol: radar/2"></a>
 </p>

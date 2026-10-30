@@ -271,7 +271,7 @@ export function registerV2Routes(app: Hono, runtime: Runtime, h: V2Helpers): voi
   const reevaluate = async (leadId: string) => {
     const lead = await runtime.store.getLead(leadId);
     if (!lead) return undefined;
-    return evaluateLeadState(runtime.store, lead, new WeightResolver(runtime.store, parseModerators(runtime.env.RADAR_MODERATORS)));
+    return evaluateLeadState(runtime.store, lead, new WeightResolver(runtime.store, parseModerators(runtime.env.RADAR_MODERATORS)), { live: true });
   };
 
   /** Final decision on a lead: state active|hidden_junk|hidden_scam|closed, or null to return it to signals. */

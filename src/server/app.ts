@@ -370,7 +370,7 @@ async function recordWebSignal(runtime: Runtime, leadId: string, userId: number,
   }
   const lead = await runtime.store.getLead(leadId);
   if (lead) {
-    await evaluateLeadState(runtime.store, lead, new WeightResolver(runtime.store, parseModerators(runtime.env.RADAR_MODERATORS)));
+    await evaluateLeadState(runtime.store, lead, new WeightResolver(runtime.store, parseModerators(runtime.env.RADAR_MODERATORS)), { live: true });
   }
 }
 

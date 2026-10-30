@@ -12,7 +12,8 @@ import { PollRunner } from '../pipeline/runner.ts';
 import { jobspyCsv, siteSlugFor } from '../core/jobspy.ts';
 import { createRuntime, type Runtime } from '../runtime.ts';
 import { createApp, startSubscriptionBot, subscriptionDeps } from '../server/app.ts';
-import { deliverDueSubscriptions } from '../pipeline/subscriptions.ts';
+import { deliverDueSubscriptions, deliverLeadClosedToSubscriptions } from '../pipeline/subscriptions.ts';
+import { leadEvents } from '../core/events.ts';
 import { startServer } from '../server/index.ts';
 import { SOURCE_PRESETS } from '../sources/presets.ts';
 import { loadEnv } from '../config.ts';
@@ -577,6 +578,11 @@ function buildProgram(): Command {
             deliverDueSubscriptions(subscriptionDeps(runtime)),
           );
       runner?.start();
+      // Closure events: a lead leaving the active feed (closed, hidden as junk or scam)
+      // is pushed to matching subscriptions the moment it happens, never replayed.
+      leadEvents.on('lead.closed', (lead, reason) => {
+        void deliverLeadClosedToSubscriptions(subscriptionDeps(runtime), lead, String(reason)).catch(() => undefined);
+      });
       const bot = new AbortController();
       void startSubscriptionBot(runtime, bot.signal);
 

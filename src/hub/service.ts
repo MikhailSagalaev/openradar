@@ -187,7 +187,7 @@ async function handleObservation(event: NostrEvent, deps: HubDeps, now: Date): P
   if (contactsChanged) {
     const current = await deps.store.getLead(lead.id);
     if (current?.contacts?.length && (await deps.store.getContactFlags(current.contacts)).length) {
-      await evaluateLeadState(deps.store, current, new WeightResolver(deps.store, deps.moderators, now));
+      await evaluateLeadState(deps.store, current, new WeightResolver(deps.store, deps.moderators, now), { live: true });
     }
   }
   return { id: event.id, status: 'accepted', leadId: lead.id, merged };
@@ -209,7 +209,7 @@ async function handleSignal(event: NostrEvent, deps: HubDeps, now: Date): Promis
     eventId: event.id,
     createdAt: now.toISOString(),
   });
-  await evaluateLeadState(deps.store, lead, new WeightResolver(deps.store, deps.moderators, now));
+  await evaluateLeadState(deps.store, lead, new WeightResolver(deps.store, deps.moderators, now), { live: true });
   return { id: event.id, status: 'accepted', leadId };
 }
 
@@ -228,7 +228,7 @@ async function handleStatus(event: NostrEvent, deps: HubDeps): Promise<EventOutc
     for (const o of own) {
       await deps.store.setLeadDecision(o.leadId, { state: 'closed', decidedBy: 'author', pubkey: event.pubkey, reason: status });
       const lead = await deps.store.getLead(o.leadId);
-      if (lead) await evaluateLeadState(deps.store, lead, weights);
+      if (lead) await evaluateLeadState(deps.store, lead, weights, { live: true });
     }
   }
   return { id: event.id, status: 'accepted', leadId: own[0]?.leadId };

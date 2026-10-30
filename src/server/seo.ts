@@ -899,6 +899,7 @@ export function renderContributePage(options: {
       <li>${ru ? '<b>Ранний доступ:</b> Active видит лиды через 30 минут, Core — сразу же.' : '<b>Early access:</b> Active sees leads after 30 minutes, Core instantly.'}</li>
       <li>${ru ? '<b>Рейтинг:</b> +1.0 за первого, ×1.5 закрытый канал, ×1.5 эксклюзив за 6 часов.' : '<b>Rating:</b> +1.0 for the first sighting, ×1.5 private channel, ×1.5 for a 6-hour exclusive.'}</li>
       <li>${ru ? '<b>Атрибуция:</b> источники недели — на странице <a href="/network">Сети</a>.' : '<b>Attribution:</b> sources of the week live on the <a href="/network">Network</a> page.'}</li>
+      <li>${ru ? '<b>Стена историй:</b> нашли заказ — <a href="' + REPO_URL + '/issues/new?template=i-found-work.yml" target="_blank" rel="noopener">расскажите</a>, ваша история появится в README.' : '<b>Story wall:</b> found work through openradar? <a href="' + REPO_URL + '/issues/new?template=i-found-work.yml" target="_blank" rel="noopener">Tell the story</a> — it lands in the README.'}</li>
     </ul>
     <p class="muted small">${ru
       ? 'Не готовы делиться? Подпишитесь на RSS любого запроса — это тоже участие. Правила приёма источников: <a href="/sources">что уже подключено</a>.'

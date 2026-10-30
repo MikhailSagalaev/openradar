@@ -15,3 +15,12 @@ export function emitLeadCreated(lead: Lead): void {
     // A failing listener must never break ingestion.
   }
 }
+
+/** A lead left the active feed (closed, hidden as junk or scam). Reason is the new state. */
+export function emitLeadClosed(lead: Lead, reason: string): void {
+  try {
+    leadEvents.emit('lead.closed', lead, reason);
+  } catch {
+    // A failing listener must never break moderation.
+  }
+}

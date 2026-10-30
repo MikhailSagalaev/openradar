@@ -346,6 +346,8 @@ export interface Store extends HubStore {
   deleteSubscription?(id: string, userId: number): Promise<boolean>;
   /** Active subscriptions not checked since `checkedBefore`, never checked first. */
   listDueSubscriptions?(checkedBefore: string, limit: number): Promise<SubscriptionRecord[]>;
+  /** Every not-paused subscription: closure events are pushed the moment they happen. */
+  listActiveSubscriptions?(limit: number): Promise<SubscriptionRecord[]>;
   /** Stores a one-time code that links the user's Telegram chat; replaces an older code. */
   setTelegramLinkCode?(userId: number, code: string, expiresAt: string): Promise<void>;
   /** Links the chat that sent a valid code; returns the user, or null for an unknown or expired code. */

@@ -129,6 +129,14 @@ export class PostgresStore implements Store {
     return (res.rowCount ?? 0) > 0;
   }
 
+  async listActiveSubscriptions(limit: number): Promise<SubscriptionRecord[]> {
+    const res = await this.pool.query(
+      `SELECT * FROM subscriptions WHERE paused = false ORDER BY created_at ASC LIMIT $1`,
+      [limit],
+    );
+    return res.rows.map((r: any) => this.rowToSubscription(r));
+  }
+
   async listDueSubscriptions(checkedBefore: string, limit: number): Promise<SubscriptionRecord[]> {
     const res = await this.pool.query(
       `SELECT * FROM subscriptions WHERE NOT paused AND (checked_at IS NULL OR checked_at < $1::timestamptz)
