@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.29.1
+
+- Job seekers and contractors advertising themselves are rejected on every source, not only where
+  a folder excludes them: «Ищу позицию CMO», posts tagged `#резюме`, `#resume`, `#cv` or `#помогу`.
+  On two weeks of delivered channel posts this caught five CVs and nothing else.
+
 ## 0.29.0
 
 - Money in free text is read with its currency: `$3,500`, `€2000`, `1500PLN`, `150 000 ₸`,

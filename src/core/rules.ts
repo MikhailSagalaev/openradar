@@ -74,9 +74,10 @@ const SPAM_RULES: SpamRule[] = [
   {
     // Posts by people looking for work. Bare «резюме» or «вакансия» are not enough: employers
     // write «присылайте резюме», and orders mention a «сайт-резюме» or scraping vacancies.
+    // Job chats tag a CV «#резюме» / «#resume» and a contractor's offer of services «#помогу».
     reason: 'JOB_SEEKER',
     pattern:
-      /(?:^|[^\p{L}])(?:ищу\s+(?:работу|подработку|заказы|заказчиков|вакансию)|(?:мо[ёе]|прикладываю|прилагаю)\s+резюме|рассмотрю\s+(?:предложения|вакансии))/iu,
+      /(?:^|[^\p{L}])(?:ищу\s+(?:работу|подработку|заказы|заказчиков|вакансию|позици[юи])|(?:мо[ёе]|прикладываю|прилагаю)\s+резюме|рассмотрю\s+(?:предложения|вакансии))|#(?:резюме|resume|cv|помогу)(?![\p{L}\d_])/iu,
   },
 ];
 
