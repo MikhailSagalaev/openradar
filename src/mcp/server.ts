@@ -5,6 +5,7 @@
  */
 
 import { createInterface } from 'node:readline';
+import { qualityFlagsOf } from '../core/quality.ts';
 import type { LeadSort, ListLeadsOptions } from '../core/store.ts';
 import { rubToUsd } from '../core/salary.ts';
 import { VERSION } from '../version.ts';
@@ -32,7 +33,8 @@ export const MCP_TOOLS: McpTool[] = [
     name: 'search_leads',
     description:
       'Find job vacancies and freelance orders. Returns the best few in a compact form, newest or best first, with a next_offset to page on; ' +
-      'call get_lead_details for the full text and contacts of the ones that fit. Narrow with market, remote, since and skills instead of reading many pages.',
+      'call get_lead_details for the full text and contacts of the ones that fit. Narrow with market, remote, since and skills instead of reading many pages. ' +
+      'flags marks what is wrong with a post: channel_ad (a course or event, not work), digest (several vacancies in one post), mlm, outstaff.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -110,6 +112,7 @@ function leadCompact(lead: Lead): Record<string, unknown> {
     where: lead.isRemote ? 'remote' : lead.city,
     skills: lead.skills?.slice(0, 6),
     score: lead.score,
+    flags: qualityFlagsOf(lead).length ? qualityFlagsOf(lead) : undefined,
     url: lead.canonicalUrl || lead.url,
     published_at: lead.publishedAt || lead.createdAt,
   };
@@ -137,6 +140,7 @@ function leadSummary(lead: Lead): Record<string, unknown> {
     city: lead.city,
     remote: lead.isRemote,
     skills: lead.skills,
+    flags: qualityFlagsOf(lead).length ? qualityFlagsOf(lead) : undefined,
     url: lead.canonicalUrl || lead.url,
     published_at: lead.publishedAt || lead.createdAt,
   };

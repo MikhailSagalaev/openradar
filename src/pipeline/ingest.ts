@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { prepareRawLead } from '../core/prepare.ts';
 import { applyRules } from '../core/rules.ts';
+import { assessQuality } from '../core/quality.ts';
 import { extractTechSkills } from '../core/text.ts';
 import { emitLeadCreated } from '../core/events.ts';
 import { estimateJaccardFromSketches } from '../core/fingerprint.ts';
@@ -100,14 +101,21 @@ export async function ingestRawLead(
     if (similar) return { status: 'duplicate', lead: similar, reasons: ['duplicate:similar'] };
   }
 
+  // The quality stage runs before the rules: the corrected type picks the pay ladder of the score.
+  const quality = assessQuality(
+    { type: prepared.type ?? 'gig', title: prepared.title, text: prepared.text, budget: prepared.budget },
+    source,
+  );
+  prepared.type = quality.type;
   const rules = applyRules(prepared, source, now);
   let status: IngestOutcome['status'] = rules.accepted ? 'inserted' : 'rejected';
-  const reasons = [...rules.reasons];
+  const reasons = [...rules.reasons, ...quality.flags.map((flag) => `quality:${flag}`)];
   let city = prepared.city;
-  let score = rules.score;
+  let score = Math.max(0, rules.score - quality.penalty);
   let category = prepared.category;
   let skills = prepared.skills ? [...prepared.skills] : [];
   const metadata: Record<string, unknown> = { ...(prepared.metadata ?? {}) };
+  if (quality.flags.length) metadata.qualityFlags = quality.flags;
 
   if (rules.accepted && deps.classifier) {
     try {
@@ -140,7 +148,7 @@ export async function ingestRawLead(
           if (classification.summary) reasons.push(`llm:summary:${classification.summary}`);
           if (classification.skills?.length) reasons.push(`llm:skills:${classification.skills.join(', ')}`);
           if (classification.urgency) reasons.push(`llm:urgency:${classification.urgency}`);
-          score = Math.max(score, Math.round(classification.confidence * 100));
+          score = Math.max(score, Math.round(classification.confidence * 100) - quality.penalty);
         }
       }
     } catch (error) {

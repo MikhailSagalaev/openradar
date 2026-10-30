@@ -7,6 +7,7 @@ import { type AnalyticsConfig, analyticsBody, analyticsHead } from './analytics.
 import { formatLeadText } from './format.ts';
 import { activeFilterCount, BUDGET_STEPS_RUB, type FeedFilters, hasActiveFilters, rankedWindowApplies } from './filters.ts';
 import { SEO_CATALOG } from './seo.ts';
+import { qualityFlagsOf } from '../core/quality.ts';
 import { salaryLooksWrong } from '../core/salary-sanity.ts';
 import type { SourcePreset } from '../sources/presets.ts';
 
@@ -2128,6 +2129,9 @@ function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru', 
   }
   if ((lead.votes_scam ?? 0) >= 1 && lead.status !== 'rejected') {
     signals.push(`<span class="text-warn">${escapeHtml(t.signalPossibleScam)}</span>`);
+  }
+  for (const flag of qualityFlagsOf(lead)) {
+    signals.push(`<span class="text-warn">${escapeHtml(t.qualityFlag[flag])}</span>`);
   }
 
   const details: string[] = [];
