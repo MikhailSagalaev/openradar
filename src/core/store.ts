@@ -286,6 +286,8 @@ export interface Store extends HubStore {
   updateLeadStatus(id: string, status: LeadStatus, deliveredAt?: string, scoreDelta?: number): Promise<void>;
   /** Sets a recomputed base score; the stored score is the base plus the community vote adjustment. */
   updateLeadScore?(id: string, baseScore: number): Promise<number | undefined>;
+  /** Stores the quality stage's verdict: the corrected type and the flags (metadata.qualityFlags). */
+  updateLeadQuality?(id: string, type: LeadType, flags: string[]): Promise<void>;
   updateLeadState?(id: string, state: LeadState): Promise<void>;
   /** Active leads on these hosts whose page is due for a closed-post check, oldest check first. */
   listLeadsToCheck?(options: { hosts: string[]; limit: number; createdAfter: string; now?: Date }): Promise<Array<Pick<Lead, 'id' | 'url' | 'createdAt' | 'type'>>>;

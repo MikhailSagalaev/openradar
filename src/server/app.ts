@@ -26,6 +26,7 @@ import { filterOptions, parseFeedFilters } from './filters.ts';
 import { estimateMarket } from '../core/market.ts';
 import { rateLimit } from './ratelimit.ts';
 import { indexCsv, openradarIndex } from '../research/index.ts';
+import { qualityFlagsOf } from '../core/quality.ts';
 import { computeSalaryMedians, setSalaryMedians } from '../core/salary-sanity.ts';
 import { renderIndexPage } from '../research/index-page.ts';
 import { renderIndexPageEn, renderMethodologyPageEn, renderReportPageEn } from '../research/pages-en.ts';
@@ -415,6 +416,8 @@ function toPublicLead(lead: Lead): Record<string, unknown> {
     const value = record[key];
     if (value !== undefined) out[key] = value;
   }
+  const flags = qualityFlagsOf(lead);
+  if (flags.length) out.qualityFlags = flags;
   return out;
 }
 

@@ -18,7 +18,7 @@ describe('rescore', () => {
 
     const expected = scoreLead(prepareRawLead(raw, source, createdAt), source, createdAt);
     expect(expected).toBeLessThan(65);
-    expect(await rescoreLeads(store)).toEqual({ checked: 1, changed: 1 });
+    expect(await rescoreLeads(store)).toEqual({ checked: 1, changed: 1, requalified: 0 });
     expect((await store.getLead('old'))?.score).toBe(expected);
 
     // A useful vote on top of the new base is kept by the next rescore.

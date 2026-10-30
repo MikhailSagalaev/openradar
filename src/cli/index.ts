@@ -487,6 +487,21 @@ function buildProgram(): Command {
     });
 
   program
+    .command('requality')
+    .description('Run the quality stage again on stored leads: type, flags and their penalty (votes are kept)')
+    .option('--days <n>', 'Leads created in the last N days', '60')
+    .option('--limit <n>', 'At most this many newest leads', '50000')
+    .action(async (options: { days: string; limit: string }) => {
+      await withRuntime(async (runtime) => {
+        const summary = await rescoreLeads(runtime.store, {
+          days: Number(options.days) || 60,
+          limit: Number(options.limit) || 50000,
+        });
+        console.log(`Проверено: ${summary.checked}, тип или флаги изменились: ${summary.requalified}, рейтинг изменился: ${summary.changed}`);
+      });
+    });
+
+  program
     .command('runs')
     .description('Show recent poll runs')
     .option('--limit <n>', 'Number of runs', '20')

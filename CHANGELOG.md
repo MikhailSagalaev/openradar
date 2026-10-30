@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.28.0
+
+- The quality stage (`src/core/quality.ts`): the feed no longer ranks channel promos, roundups and
+  schemes as work. A post keeps its place in the database, but a flag with a reason sinks it in
+  «Сначала лучшие» and shows on the row: `channel_ad` (a course sale, a new stream, a webinar,
+  an article) −50, `mlm` −40, `digest` (several vacancies in one post) −20, `outstaff` −10.
+  The API returns `qualityFlags`, MCP returns `flags`.
+- Telegram and webhook posts get their real type: a channel vacancy with «Зарплата: … на руки»
+  and «Полная занятость», or «Аналитик в X — IT-компания…», is a vacancy, not an order.
+  On a week of hub posts a third of the channel «orders» were vacancies.
+- `radar requality --days 60` runs the stage and the rating again on stored leads; votes are kept.
+
 ## 0.27.4
 
 - The default ranked feed has no 7-day window: the rating already fades with age, and a node

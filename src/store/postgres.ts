@@ -8,6 +8,7 @@ import type {
   Lead,
   LeadState,
   LeadStatus,
+  LeadType,
   LeadVoteSignal,
   RunRecord,
   SourceConfig,
@@ -1472,6 +1473,16 @@ export class PostgresStore implements Store {
 
   async markLeadChecked(id: string, at: Date = new Date()): Promise<void> {
     await this.pool.query(`UPDATE leads SET checked_at = $1 WHERE id = $2`, [at.toISOString(), id]);
+  }
+
+  async updateLeadQuality(id: string, type: LeadType, flags: string[]): Promise<void> {
+    await this.pool.query(
+      `UPDATE leads SET type = $2,
+         metadata_json = CASE WHEN $3::jsonb = '[]'::jsonb THEN COALESCE(metadata_json, '{}'::jsonb) - 'qualityFlags'
+                              ELSE COALESCE(metadata_json, '{}'::jsonb) || jsonb_build_object('qualityFlags', $3::jsonb) END
+       WHERE id = $1`,
+      [id, type, JSON.stringify(flags)],
+    );
   }
 
   async updateLeadState(id: string, state: LeadState): Promise<void> {

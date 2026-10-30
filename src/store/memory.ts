@@ -29,6 +29,7 @@ import type {
   Lead,
   LeadState,
   LeadStatus,
+  LeadType,
   LeadVoteSignal,
   RunRecord,
   SourceHealth,
@@ -246,6 +247,16 @@ export class MemoryStore implements Store {
 
   async markLeadChecked(id: string, at: Date = new Date()): Promise<void> {
     this.checkedAt.set(id, at.getTime());
+  }
+
+  async updateLeadQuality(id: string, type: LeadType, flags: string[]): Promise<void> {
+    const lead = this.leads.get(id);
+    if (!lead) return;
+    lead.type = type;
+    const metadata = { ...(lead.metadata ?? {}) };
+    if (flags.length) metadata.qualityFlags = flags;
+    else delete metadata.qualityFlags;
+    lead.metadata = metadata;
   }
 
   async updateLeadState(id: string, state: LeadState): Promise<void> {
