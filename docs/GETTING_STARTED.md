@@ -43,7 +43,7 @@ pnpm dev serve
 
 1. В консоли появится строка `токен администратора на этот запуск: …`. Скопируйте токен.
 2. Откройте `http://127.0.0.1:8787`, нажмите «Войти» → «Войти по токену».
-3. Перейдите в «Источники» → **«Загрузить популярные биржи»**. Добавятся FL.ru, Хабр Карьера, Kwork, Freelancehunt, hh.ru (IT и удалённая проектная работа), Работа России, публичный Telegram-канал, We Work Remotely, Jobicy и RemoteOK — заказы и вакансии всех направлений. Они сразу опрашиваются, первые заказы появятся через несколько секунд.
+3. Перейдите в «Источники» → **«Каталог площадок»**. Там FL.ru, Хабр Карьера, Kwork, Freelancehunt, hh.ru, Работа России, публичные Telegram-каналы, We Work Remotely, Jobicy, RemoteOK, ATS-доски компаний и другие. Подключайте по одной кнопкой «Подключить» или все сразу — «Подключить все». Подключённые площадки сразу опрашиваются, первые заказы появятся через несколько секунд.
 4. Дальше узел сам опрашивает источники раз в 5 минут (`RADAR_POLL_INTERVAL_SEC`).
 
 **Фильтры.** Откройте источник: «Обязательные слова» (заказ без них отклоняется), «Стоп-слова», город. Каждому заказу считается рейтинг от 0 до 100, в ленте видно, почему он такой: «прямой заказчик», «вилка в рынке» и так далее.
@@ -62,9 +62,10 @@ TELEGRAM_CHAT_ID=123456789
 **Постоянный токен.** Чтобы токен не менялся при каждом запуске, задайте его в `.env`:
 
 ```bash
-cp .env.example .env
-openssl rand -hex 32    # вставьте результат в RADAR_ADMIN_TOKEN
+pnpm init:env    # создаст .env со случайными токеном, паролем базы и секретом веб-ключей
 ```
+
+Токен для входа — строка `RADAR_ADMIN_TOKEN` в `.env`. Существующий `.env` команда не перезаписывает.
 
 **Командная строка.** Всё, что есть в интерфейсе, доступно и в консоли: `pnpm dev --help`. Например, `pnpm dev leads`, `pnpm dev stats`, `pnpm dev export --format csv`.
 
@@ -75,14 +76,10 @@ openssl rand -hex 32    # вставьте результат в RADAR_ADMIN_TOK
 ```bash
 git clone https://github.com/MikhailSagalaev/openradar.git /opt/radar
 cd /opt/radar
-cp .env.example .env
+node scripts/init-env.mjs    # .env со случайными секретами; pnpm на сервере не нужен
 ```
 
-В `.env` замените:
-
-- `RADAR_ADMIN_TOKEN` — результат `openssl rand -hex 32`;
-- `POSTGRES_PASSWORD` — результат `openssl rand -hex 24`, и тот же пароль в `DATABASE_URL`;
-- `RADAR_PUBLIC_URL` — адрес вашего сайта.
+Команда заполнит `RADAR_ADMIN_TOKEN`, `POSTGRES_PASSWORD` (тот же пароль — в `DATABASE_URL`) и `RADAR_WEB_KEY_SECRET`. Вручную в `.env` остаётся задать `RADAR_PUBLIC_URL` — адрес вашего сайта.
 
 Запуск:
 
@@ -92,7 +89,7 @@ docker compose up -d
 curl http://127.0.0.1:8787/health
 ```
 
-С примерами паролей из `.env.example` Docker Compose не запустится, это сделано намеренно.
+Если копировать `.env.example` вручную, замените в нём секреты: с примерами Docker Compose не запустится, это сделано намеренно.
 
 **Домен и HTTPS.** Приложение слушает только `127.0.0.1:${RADAR_HOST_PORT}`. Наружу его открывает nginx: пример в [nginx.example.conf](nginx.example.conf), сертификат — `certbot --nginx -d ваш-домен`.
 
@@ -242,5 +239,5 @@ pnpm new:connector mysite
 | Источник Telegram с ошибкой «Сбой сети» | `t.me` недоступен с сервера. Задайте прокси в `RADAR_PROXY_URL`. |
 | Источник `hh` (Open API) находит 0 | hh.ru блокирует API с IP дата-центров. Используйте готовый RSS-источник HeadHunter или токен API. |
 | `FATAL: RADAR_ADMIN_TOKEN is missing` | В production токен обязателен и не короче 32 символов. |
-| Docker Compose ругается на `.env` | Пароли и токен всё ещё взяты из `.env.example`, замените их. |
+| Docker Compose ругается на `.env` | Пароли и токен всё ещё взяты из `.env.example`. Создайте `.env` заново: `node scripts/init-env.mjs --force`. |
 | Состояние узла | `GET /health` и вкладка «Источники»: статус, последняя ошибка и счётчики за 24 часа. |

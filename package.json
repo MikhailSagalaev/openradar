@@ -1,6 +1,6 @@
 {
   "name": "radar",
-  "version": "0.26.4",
+  "version": "0.27.0",
   "private": true,
   "description": "Self-hosted lead pipeline for public order sources",
   "license": "AGPL-3.0-only",
@@ -26,6 +26,7 @@
     "test:watch": "vitest",
     "pack:extension": "node scripts/pack-extension.js",
     "new:connector": "tsx src/cli/index.ts new-connector",
+    "init:env": "node scripts/init-env.mjs",
     "start": "node bin/radar.js",
     "rebuild": "pnpm rebuild"
   },

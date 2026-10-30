@@ -26,6 +26,7 @@ import { filterOptions, parseFeedFilters } from './filters.ts';
 import { estimateMarket } from '../core/market.ts';
 import { rateLimit } from './ratelimit.ts';
 import { indexCsv, openradarIndex } from '../research/index.ts';
+import { computeSalaryMedians, setSalaryMedians } from '../core/salary-sanity.ts';
 import { renderIndexPage } from '../research/index-page.ts';
 import { renderIndexPageEn, renderMethodologyPageEn, renderReportPageEn } from '../research/pages-en.ts';
 import {
@@ -1016,8 +1017,21 @@ export function createApp(runtime: Runtime): Hono {
     count.catch(() => foundTodayCache.delete(viewer.tier));
     return count;
   };
+  // Median vacancy pay by role over 30 days: a salary far below it is shown as «проверить».
+  let salaryMediansAt = 0;
+  const refreshSalaryMedians = async (): Promise<void> => {
+    if (Date.now() - salaryMediansAt < 30 * 60_000) return;
+    salaryMediansAt = Date.now();
+    try {
+      const recent = await runtime.store.listLeads({ type: 'job', limit: 5000, createdAfter: new Date(Date.now() - 30 * 86_400_000).toISOString() });
+      setSalaryMedians(computeSalaryMedians(recent));
+    } catch (error) {
+      runtime.logger.warn('salary medians failed', { error: String(error) });
+    }
+  };
   app.get('/', feedLimit, async (c) => {
     if (!await canRead(c, runtime)) return c.redirect('/login');
+    await refreshSalaryMedians();
     const lang = resolveLang(c);
     const rawStatus = c.req.query('status') ?? '';
     const status = [
@@ -1034,7 +1048,8 @@ export function createApp(runtime: Runtime): Hono {
     const rawType = (c.req.query('type') ?? '').trim();
     const type: LeadType | undefined = rawType === 'job' || rawType === 'gig' ? rawType : undefined;
     const query = (c.req.query('q') ?? '').trim();
-    const filters = parseFeedFilters(c);
+    // The first screen ranks by quality; «Сначала новые» is one click away.
+    const filters = parseFeedFilters(c, 'score');
     const page = Math.max(1, Math.min(Math.floor(Number(c.req.query('page')) || 1), 100));
     const pageSize = 50;
 
@@ -1535,6 +1550,7 @@ export function createApp(runtime: Runtime): Hono {
 
   app.get('/leads/:id', async (c) => {
     if (!await canRead(c, runtime)) return c.redirect('/login');
+    await refreshSalaryMedians();
     const lang = resolveLang(c);
     const viewer = await viewerFromRequest(c, runtime);
     const stored = await runtime.store.getLead(c.req.param('id'));

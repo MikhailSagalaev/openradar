@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.27.0
+
+- The home feed opens with «Сначала лучшие»: the lead rating, losing 4 points a day of age, over
+  the last week. «Сначала новые» is one click away; RSS, the API and MCP stay newest first by
+  default, and `sort=score` everywhere uses the same fading rating.
+- A vacancy whose monthly pay is under 15 000 ₽, or under 30% of the median for its role
+  (category, else first skill; 30 days, at least 20 vacancies), shows «зарплату проверить» in the
+  feed instead of the number; the lead page keeps the number with a warning. hh.ru "project
+  work" ads put lesson and task rates into the monthly income field, which made the feed look
+  broken next to real salaries.
+- «За сутки найдено N» links to /sources, where the number breaks down by platform.
+- `pnpm init:env` (or `node scripts/init-env.mjs` on a server) writes `.env` with random secrets.
+- README in Russian (`README.ru.md`), code of conduct, pull request template; the docs point to
+  the platform catalog instead of the removed «Загрузить популярные биржи» button.
+
 ## 0.26.4
 
 - `/api/preview` fetches a URL only for a signed-in person or an admin; it was open to anyone

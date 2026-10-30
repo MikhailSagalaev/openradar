@@ -599,10 +599,14 @@ describe('http server', () => {
     expect(await ids('/api/leads?skill=Python')).toEqual(['mid', 'rich']);
     expect(await ids('/api/leads?remote=1')).toEqual(['mid', 'cheap']);
 
-    const page = await (await app.request('/?sort=score&remote=1', { headers: { authorization: 'Bearer secret' } })).text();
-    expect(page).toContain('<option value="score" selected>');
+    const page = await (await app.request('/?sort=new&remote=1', { headers: { authorization: 'Bearer secret' } })).text();
+    expect(page).toContain('<option value="new" selected>');
     expect(page).toContain('name="remote" value="1" checked');
-    expect(page).toContain('href="/?type=gig&amp;sort=score&amp;remote=1"');
+    expect(page).toContain('href="/?type=gig&amp;sort=new&amp;remote=1"');
+    // The home feed ranks by default: «Сначала лучшие» is the option without a value.
+    const home = await (await app.request('/', { headers: { authorization: 'Bearer secret' } })).text();
+    expect(home).toContain('<option value="" selected>');
+    expect(home).toContain('<option value="new">');
   });
 
   it('pages the feed, filters by language and shows similar leads and the profile', async () => {
@@ -1642,7 +1646,7 @@ describe('http server', () => {
     expect(plain).not.toContain('class="filters-count"');
     expect(plain).toContain('class="filter-rss"');
 
-    const filtered = await (await app.request('/?remote=1&sort=score', { headers: { cookie: 'openradar_lang=ru' } })).text();
+    const filtered = await (await app.request('/?remote=1&sort=budget', { headers: { cookie: 'openradar_lang=ru' } })).text();
     expect(filtered).toContain('<span class="filters-count">2</span>');
   });
 

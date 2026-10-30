@@ -1,5 +1,7 @@
 # openradar
 
+<p align="right"><b>English</b> · <a href="README.ru.md">Русский</a></p>
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/logo-white.png">
@@ -18,7 +20,7 @@ openradar is an open base of job vacancies and freelance orders. Parsers, nodes 
 
 Job seekers should not have to pay for subscriptions to parsers or for responding to a vacancy. openradar has no paid tier: the contacts are in the post, and you write to the client directly. Anyone can run their own copy.
 
-**Live hub:** [openradar.fun](https://openradar.fun)
+**Live hub:** [openradar.fun](https://openradar.fun) · **Want to help?** Start with [CONTRIBUTING.md](CONTRIBUTING.md): one board, one adapter, one pull request.
 
 <p align="center">
   <a href="https://openradar.fun"><img alt="The openradar.fun feed" src="docs/screenshots/hub.jpg" width="800"></a>
@@ -27,7 +29,7 @@ Job seekers should not have to pay for subscriptions to parsers or for respondin
 ## What it does
 
 - **One feed of every trade.** FL.ru, Kwork, Freelancehunt, Habr Career, hh.ru, Работа России, We Work Remotely, Jobicy, RemoteOK and Telegram channels (public ones as they are, private ones and chats through your own account): development, design, video, writing, ads, sales and more. A post seen on two boards is one lead.
-- **Search, filters and a score.** Budget from, skill, remote only, language; newest, best or highest budget first. Each lead gets a 0-100 score from its pay, skills, detail and a direct contact.
+- **Search, filters and a rating.** Budget from, skill, remote only, language. The feed opens with the best recent leads first (rating, fading with age); newest or highest budget are one click away. Each lead gets a 0-100 rating from its pay, skills, detail and a direct contact. A vacancy whose pay is far below the usual for its role shows «check the salary» instead of the number.
 - **Browser extension.** Sign in with GitHub once, then add a vacancy or an order from any site in one click; it also shows what similar work usually pays and whether the pay on the page is below, within or above it.
 - **Votes and submissions.** Signed-in users mark leads as useful, junk, scam or closed, and add posts by link.
 - **Market research.** [openradar.fun/research](https://openradar.fun/research): pay in vacancies and order budgets by role, grade, language, city and skill, with medians, quartiles and sample sizes. Monthly reports are frozen so they can be cited; the data is open under CC BY 4.0 (CSV and JSON). How it is counted: [methodology](https://openradar.fun/research/methodology).
@@ -60,17 +62,17 @@ pnpm install
 pnpm dev serve
 ```
 
-`serve` prints a one-off admin token. Open `http://127.0.0.1:8787`, sign in with it, go to **Источники** and press **Загрузить популярные биржи**: the boards are polled right away and the first leads appear within seconds.
+`serve` prints a one-off admin token. Open `http://127.0.0.1:8787`, sign in with it, go to **Источники** → **Каталог площадок** and connect boards one by one or all at once (**Подключить все**): they are polled right away and the first leads appear within seconds.
 
 Without `DATABASE_URL` the node keeps everything in memory. For a persistent node, use PostgreSQL 17 through Docker:
 
 ```bash
-cp .env.example .env    # set RADAR_ADMIN_TOKEN, POSTGRES_PASSWORD, DATABASE_URL
+pnpm init:env           # writes .env with fresh random secrets
 docker compose run --rm radar migrate
 docker compose up -d
 ```
 
-`docker compose` refuses to start with the example secrets from `.env.example`.
+`pnpm init:env` never overwrites an existing `.env`. If you copy `.env.example` by hand instead, replace its secrets: `docker compose` refuses to start with the example ones.
 
 ## Connecting a parser
 
@@ -113,7 +115,7 @@ hub.observe([{"source": {"platform": "telegram", "channel": "-1001234567890", "v
 
 ## Contributing
 
-New boards are the most useful contribution: one adapter, one fixture, one test. See [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately: [SECURITY.md](SECURITY.md).
+New boards are the most useful contribution: one adapter, one fixture, one test; `pnpm new:connector` writes the skeleton. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [code of conduct](CODE_OF_CONDUCT.md). Report vulnerabilities privately: [SECURITY.md](SECURITY.md).
 
 ## License
 

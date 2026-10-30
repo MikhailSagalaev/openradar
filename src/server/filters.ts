@@ -18,11 +18,13 @@ export interface FeedFilters {
   budgetRub?: number;
   skill?: string;
   language?: 'ru' | 'en';
+  /** The order this page shows without ?sort: the home feed ranks, feeds and APIs stay newest first. */
+  defaultSort?: LeadSort;
 }
 
-export function parseFeedFilters(c: Context): FeedFilters {
+export function parseFeedFilters(c: Context, defaultSort: LeadSort = 'new'): FeedFilters {
   const rawSort = c.req.query('sort');
-  const sort: LeadSort = rawSort === 'score' || rawSort === 'budget' ? rawSort : 'new';
+  const sort: LeadSort = rawSort === 'new' || rawSort === 'score' || rawSort === 'budget' ? rawSort : defaultSort;
   const rawRemote = c.req.query('remote');
   const budget = Number(c.req.query('budget'));
   const skill = (c.req.query('skill') ?? '').trim().slice(0, 40);
@@ -33,6 +35,7 @@ export function parseFeedFilters(c: Context): FeedFilters {
     remote: rawRemote === '1' || rawRemote === 'true',
     budgetRub: Number.isFinite(budget) && budget > 0 ? Math.min(Math.round(budget), 100_000_000) : undefined,
     skill: skill || undefined,
+    defaultSort,
   };
 }
 
@@ -49,7 +52,7 @@ export function filterOptions(filters: FeedFilters, now: Date = new Date()): Lis
 
 /** How many filters differ from the default view. */
 export function activeFilterCount(filters: FeedFilters): number {
-  return [filters.sort !== 'new', filters.remote, Boolean(filters.budgetRub), Boolean(filters.skill), Boolean(filters.language)]
+  return [filters.sort !== (filters.defaultSort ?? 'new'), filters.remote, Boolean(filters.budgetRub), Boolean(filters.skill), Boolean(filters.language)]
     .filter(Boolean).length;
 }
 

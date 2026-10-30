@@ -32,6 +32,12 @@ export interface UpdateSourceInput {
 /** Feed order: newest first, by score, or by budget (USD-normalised). */
 export type LeadSort = 'new' | 'score' | 'budget';
 
+/**
+ * «Сначала лучшие»: a lead's score loses this many points per hour of age, so a strong lead
+ * from today beats an equally strong one from last week and a weak fresh one alike.
+ */
+export const SCORE_DECAY_PER_HOUR = 1 / 6;
+
 export interface ListLeadsOptions {
   limit?: number;
   status?: LeadStatus;
