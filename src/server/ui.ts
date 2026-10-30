@@ -5,7 +5,7 @@ import { type SupportedLang, getTranslations } from './i18n.ts';
 import { renderLogo } from './logo.ts';
 import { type AnalyticsConfig, analyticsBody, analyticsHead } from './analytics.ts';
 import { formatLeadText } from './format.ts';
-import { activeFilterCount, BUDGET_STEPS_RUB, type FeedFilters, hasActiveFilters } from './filters.ts';
+import { activeFilterCount, BUDGET_STEPS_RUB, type FeedFilters, hasActiveFilters, rankedWindowApplies } from './filters.ts';
 import { SEO_CATALOG } from './seo.ts';
 import { salaryLooksWrong } from '../core/salary-sanity.ts';
 import type { SourcePreset } from '../sources/presets.ts';
@@ -2294,7 +2294,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
     ${hasActiveFilters(filters) ? `<a class="filter-reset" href="${escapeHtml(hrefWith({ sort: undefined, budget: undefined, skill: undefined, language: undefined, remote: undefined }))}">${escapeHtml(t.resetFilters)}</a>` : ''}
     <a class="filter-rss" href="${escapeHtml(rssHref)}" target="_blank" rel="noopener">RSS</a>
   </div></details>
-  ${filters.sort !== 'new' ? `<p class="score-legend">${escapeHtml(t.rankedWindow)}</p>` : ''}
+  ${rankedWindowApplies(filters) ? `<p class="score-legend">${escapeHtml(t.rankedWindow)}</p>` : ''}
   ${hasActiveFilters(filters) ? '' : `<script>try{if(matchMedia('(max-width: 700px)').matches){document.getElementById('feed-filters').open=false}}catch(e){}</script>`}`;
 
   const tabs = typeTabs

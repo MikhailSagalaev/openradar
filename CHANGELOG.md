@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.27.4
+
+- The default ranked feed has no 7-day window: the rating already fades with age, and a node
+  whose leads were all older than a week opened on an empty feed. An explicit «Сначала лучшие»
+  or «Сначала дорогие» still looks at the last week.
+
 ## 0.27.3
 
 - «За сутки найдено» says «5 000+» when the count reaches its cap instead of a flat 5 000.
