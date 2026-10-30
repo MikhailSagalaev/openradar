@@ -359,6 +359,16 @@ export interface Store extends HubStore {
   getTelegramChat?(userId: number): Promise<string | null>;
   /** Forgets a chat (the user blocked the bot or sent /stop); returns the user it belonged to. */
   unlinkTelegramChat?(chatId: string): Promise<number | null>;
+  /** Users with a linked Telegram chat, and when they linked it. */
+  listTelegramLinks?(): Promise<Array<{ userId: number; chatId: string; linkedAt: string }>>;
+  /** Keys `leadId:kind` of the rating credits this user was already told about. */
+  listLedgerNotices?(userId: number): Promise<Set<string>>;
+  addLedgerNotices?(userId: number, entries: Array<{ leadId: string; kind: string }>): Promise<void>;
+  /** Stores the user's agent token (its SHA-256), replacing an older one. */
+  setAgentToken?(userId: number, tokenHash: string): Promise<void>;
+  getUserByAgentToken?(tokenHash: string): Promise<UserRecord | null>;
+  hasAgentToken?(userId: number): Promise<boolean>;
+  deleteAgentToken?(userId: number): Promise<void>;
   getAdminStats?(days?: number): Promise<AdminStats>;
   /** Browser extension tokens, stored as SHA-256 hashes. */
   saveExtensionToken?(tokenHash: string, userId: number): Promise<void>;

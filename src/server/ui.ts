@@ -1561,6 +1561,7 @@ legend {
 .subscription-actions .inline-form { display: flex; gap: 6px; margin: 0; }
 .subscription-actions input[type=url] { width: 220px; max-width: 100%; min-height: 30px; font-size: 12px; padding: 0 12px; }
 .btn.small { font-size: 12px; padding: 4px 10px; }
+.code-block { overflow-x: auto; margin: 8px 0 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--soft); font-size: 12px; line-height: 1.5; }
 .follow-form { display: inline; margin: 0; }
 .ai-box {
   background: transparent;
@@ -3308,6 +3309,36 @@ export interface ProfilePageData {
     /** Result of the last action: created, deleted, limit, bad_url… */
     notice?: string;
   };
+  /** The personal token an AI agent uses on /mcp. */
+  agent?: {
+    hasToken: boolean;
+    /** A token issued in this response, shown once. */
+    newToken?: string;
+    mcpUrl: string;
+    revoked?: boolean;
+  };
+}
+
+function renderAgentToken(data: NonNullable<ProfilePageData['agent']>, lang: SupportedLang): string {
+  const ru = lang === 'ru';
+  const config = JSON.stringify({ mcpServers: { openradar: { url: data.mcpUrl, headers: { Authorization: `Bearer ${data.newToken ?? 'mcp_…'}` } } } }, null, 2);
+  const fresh = data.newToken
+    ? `<p class="notice">${ru ? 'Скопируйте токен сейчас: больше он показан не будет. Новый токен отменяет старый.' : 'Copy the token now: it will not be shown again. A new token revokes the old one.'}</p>
+  <pre class="code-block"><code>${escapeHtml(config)}</code></pre>`
+    : '';
+  const state = data.revoked
+    ? `<p class="notice">${ru ? 'Токен отозван: агенты с ним больше не войдут.' : 'Token revoked: agents can no longer use it.'}</p>`
+    : '';
+  return `<h2 id="agent">${ru ? 'Токен для ИИ-агента' : 'Token for an AI agent'}</h2>
+  ${state}
+  <p class="small">${ru
+    ? 'С этим токеном агент (Claude, ChatGPT, Cursor) подключается к MCP-серверу openradar от вашего имени: видит ленту с вашей задержкой и контактами и может подписать вас на поиск инструментом <code>save_search</code>. Больше он ничего не может: ни голосовать, ни менять профиль.'
+    : 'With this token an agent (Claude, ChatGPT, Cursor) connects to the openradar MCP server as you: it sees the feed with your delay and contacts and can subscribe you to a search with <code>save_search</code>. Nothing else: no voting, no profile changes.'}</p>
+  ${fresh}
+  <div class="subscription-actions">
+    <form method="post" action="/me/agent-token" class="inline-form"><button class="btn ghost small" type="submit">${data.hasToken ? (ru ? 'Выпустить новый' : 'Issue a new one') : (ru ? 'Выпустить токен' : 'Issue a token')}</button></form>
+    ${data.hasToken ? `<form method="post" action="/me/agent-token/delete" class="inline-form"><button class="btn ghost small" type="submit">${ru ? 'Отозвать' : 'Revoke'}</button></form>` : ''}
+  </div>`;
 }
 
 const SUBSCRIPTION_NOTICES: Record<SupportedLang, Record<string, string>> = {
@@ -3454,6 +3485,7 @@ export function renderProfilePage(data: ProfilePageData): string {
   ${progress}
   <p class="profile-tier">${ru ? 'Уровень' : 'Tier'}: <strong>${escapeHtml(names[data.tier])}</strong>${data.hubMode && data.tier !== 'admin' ? ` · ${ru ? 'задержка ленты' : 'feed delay'}: <strong>${escapeHtml(delay(data.delays[data.tier]))}</strong>` : ''}</p>
   ${data.subscriptions ? renderSubscriptions(data.subscriptions, lang) : ''}
+  ${data.agent ? renderAgentToken(data.agent, lang) : ''}
   ${activity}
   ${table}
   <h2>${ru ? 'Как получить очки' : 'How to earn points'}</h2>

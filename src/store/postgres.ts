@@ -168,6 +168,58 @@ export class PostgresStore implements Store {
     return res.rows[0]?.chat_id ?? null;
   }
 
+  async listTelegramLinks(): Promise<Array<{ userId: number; chatId: string; linkedAt: string }>> {
+    const res = await this.pool.query(`SELECT user_id, chat_id, linked_at FROM telegram_links WHERE chat_id IS NOT NULL`);
+    return res.rows.map((r) => ({ userId: Number(r.user_id), chatId: String(r.chat_id), linkedAt: new Date(r.linked_at ?? 0).toISOString() }));
+  }
+
+  async listLedgerNotices(userId: number): Promise<Set<string>> {
+    const res = await this.pool.query(`SELECT lead_id, kind FROM ledger_notices WHERE user_id = $1`, [userId]);
+    return new Set(res.rows.map((r) => `${r.lead_id}:${r.kind}`));
+  }
+
+  async addLedgerNotices(userId: number, entries: Array<{ leadId: string; kind: string }>): Promise<void> {
+    if (!entries.length) return;
+    await this.pool.query(
+      `INSERT INTO ledger_notices (user_id, lead_id, kind)
+       SELECT $1, * FROM unnest($2::text[], $3::text[]) ON CONFLICT DO NOTHING`,
+      [userId, entries.map((e) => e.leadId), entries.map((e) => e.kind)],
+    );
+    // Credits count for 30 days; a notice older than 60 can no longer match a ledger entry.
+    await this.pool.query(`DELETE FROM ledger_notices WHERE user_id = $1 AND notified_at < now() - interval '60 days'`, [userId]);
+  }
+
+  async setAgentToken(userId: number, tokenHash: string): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO agent_tokens (user_id, token_hash) VALUES ($1, $2)
+       ON CONFLICT (user_id) DO UPDATE SET token_hash = EXCLUDED.token_hash, created_at = now(), last_used_at = NULL`,
+      [userId, tokenHash],
+    );
+  }
+
+  async getUserByAgentToken(tokenHash: string): Promise<UserRecord | null> {
+    const res = await this.pool.query(
+      `UPDATE agent_tokens SET last_used_at = now() WHERE token_hash = $1 RETURNING user_id`,
+      [tokenHash],
+    );
+    if (!res.rows[0]) return null;
+    // A banned account loses its agent too.
+    const user = await this.pool.query(
+      `SELECT id, github_id, handle, role, created_at, github_created_at FROM app_users WHERE id = $1 AND banned_at IS NULL`,
+      [res.rows[0].user_id],
+    );
+    return user.rows[0] ? rowToUser(user.rows[0]) : null;
+  }
+
+  async hasAgentToken(userId: number): Promise<boolean> {
+    const res = await this.pool.query(`SELECT 1 FROM agent_tokens WHERE user_id = $1`, [userId]);
+    return (res.rowCount ?? 0) > 0;
+  }
+
+  async deleteAgentToken(userId: number): Promise<void> {
+    await this.pool.query(`DELETE FROM agent_tokens WHERE user_id = $1`, [userId]);
+  }
+
   async unlinkTelegramChat(chatId: string): Promise<number | null> {
     const res = await this.pool.query(`UPDATE telegram_links SET chat_id = NULL WHERE chat_id = $1 RETURNING user_id`, [chatId]);
     return res.rows[0] ? Number(res.rows[0].user_id) : null;

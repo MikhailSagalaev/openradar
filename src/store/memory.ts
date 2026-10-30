@@ -1033,7 +1033,8 @@ export class MemoryStore implements Store {
   }
 
   private subscriptions = new Map<string, SubscriptionRecord>();
-  private telegramLinks = new Map<number, { chatId?: string; code?: string; codeExpiresAt?: string }>();
+  private telegramLinks = new Map<number, { chatId?: string; code?: string; codeExpiresAt?: string; linkedAt?: string }>();
+  private ledgerNotices = new Map<number, Set<string>>();
 
   async createSubscription(subscription: SubscriptionRecord): Promise<void> {
     this.subscriptions.set(subscription.id, { ...subscription });
@@ -1078,7 +1079,7 @@ export class MemoryStore implements Store {
   async linkTelegramChat(code: string, chatId: string, now: string): Promise<number | null> {
     for (const [userId, link] of this.telegramLinks) {
       if (link.code === code && link.codeExpiresAt && link.codeExpiresAt > now) {
-        this.telegramLinks.set(userId, { chatId });
+        this.telegramLinks.set(userId, { chatId, linkedAt: now });
         return userId;
       }
     }
@@ -1087,6 +1088,41 @@ export class MemoryStore implements Store {
 
   async getTelegramChat(userId: number): Promise<string | null> {
     return this.telegramLinks.get(userId)?.chatId ?? null;
+  }
+
+  async listTelegramLinks(): Promise<Array<{ userId: number; chatId: string; linkedAt: string }>> {
+    return [...this.telegramLinks].filter(([, link]) => link.chatId).map(([userId, link]) => ({ userId, chatId: link.chatId!, linkedAt: link.linkedAt ?? new Date(0).toISOString() }));
+  }
+
+  async listLedgerNotices(userId: number): Promise<Set<string>> {
+    return new Set(this.ledgerNotices.get(userId));
+  }
+
+  async addLedgerNotices(userId: number, entries: Array<{ leadId: string; kind: string }>): Promise<void> {
+    const seen = this.ledgerNotices.get(userId) ?? new Set<string>();
+    for (const entry of entries) seen.add(`${entry.leadId}:${entry.kind}`);
+    this.ledgerNotices.set(userId, seen);
+  }
+
+  private agentTokens = new Map<number, string>();
+
+  async setAgentToken(userId: number, tokenHash: string): Promise<void> {
+    this.agentTokens.set(userId, tokenHash);
+  }
+
+  async getUserByAgentToken(tokenHash: string): Promise<UserRecord | null> {
+    for (const [userId, hash] of this.agentTokens) {
+      if (hash === tokenHash) return this.users.get(userId) ?? null;
+    }
+    return null;
+  }
+
+  async hasAgentToken(userId: number): Promise<boolean> {
+    return this.agentTokens.has(userId);
+  }
+
+  async deleteAgentToken(userId: number): Promise<void> {
+    this.agentTokens.delete(userId);
   }
 
   async unlinkTelegramChat(chatId: string): Promise<number | null> {
@@ -1102,6 +1138,7 @@ export class MemoryStore implements Store {
   async close(): Promise<void> {
     this.subscriptions.clear();
     this.telegramLinks.clear();
+    this.ledgerNotices.clear();
     this.sources.clear();
     this.leads.clear();
     this.leadsByFingerprint.clear();

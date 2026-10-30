@@ -79,10 +79,10 @@ describe('MCP server', () => {
     expect(await handleMcpRequest({ jsonrpc: '2.0', method: 'notifications/initialized' }, backend)).toBeNull();
   });
 
-  it('lists the three tools', async () => {
+  it('lists the tools', async () => {
     const resp = (await handleMcpRequest({ jsonrpc: '2.0', id: 2, method: 'tools/list' }, backend)) as Content;
     expect((resp.result?.tools as unknown[]).length).toBe(MCP_TOOLS.length);
-    expect(MCP_TOOLS.map((t) => t.name)).toEqual(['search_leads', 'get_lead_details', 'get_market_analytics']);
+    expect(MCP_TOOLS.map((t) => t.name)).toEqual(['search_leads', 'get_lead_details', 'get_market_analytics', 'save_search', 'list_saved_searches']);
   });
 
   it('searches by query, skills and minimum budget', async () => {
