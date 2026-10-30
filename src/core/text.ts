@@ -50,10 +50,23 @@ export function stripEmoji(input: string): string {
   return input.replace(/\p{Extended_Pictographic}/gu, '').replace(/\uFE0F/g, '');
 }
 
-export function normalizeWhitespace(input: string): string {
+/**
+ * Characters a reader does not see but a model does: bidi overrides that make text display
+ * differently from how it reads, Unicode tag characters (U+E0000\u2013E007F) that carry hidden ASCII
+ * instructions for LLMs, invisible joiners and separators, and control characters. Post text
+ * goes to agents through MCP and the API, so none of these survive.
+ */
+export function stripInvisible(input: string): string {
   return input
+    .replace(/[\u202a-\u202e\u2066-\u2069\u200e\u200f\u061c]/g, '')
+    .replace(/[\u{e0000}-\u{e007f}]/gu, '')
+    .replace(/[\u200b-\u200d\u2060-\u2064\ufeff\u00ad]/g, '')
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '');
+}
+
+export function normalizeWhitespace(input: string): string {
+  return stripInvisible(input)
     .replace(/\u00a0/g, ' ')
-    .replace(/[\u200b-\u200d\ufeff]/g, '')
     .replace(/[ \t]+/g, ' ')
     .replace(/\s*\n\s*/g, '\n')
     .replace(/\n{3,}/g, '\n\n')

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.30.0
+
+- Shorthand amounts are read: «от 150к», «25-30к», «от 70 до 150 тыс рублей», «$170k-$300k»,
+  «£100k–£120k», «1,5 млн ₽», «45.000,00 ₽», «З/П: 4.500$» (it was 500 dollars before), kopecks
+  and cents after grouped thousands are dropped. «401k» and «4k display» are not money.
+- Money that is not pay is skipped: turnover, revenue, ARR, average check, deal size, valuation
+  («6.5 млн рублей оборота» in a CV, «средний чек 100–150 тыс»).
+- Bounds by period: «3 000 ₽ за смену» or «$100 per day» is compared with monthly pay as 21
+  working days; an «hourly» rate above $500 is not hourly.
+- Text hygiene for agents: bidi overrides, Unicode tag characters (hidden ASCII instructions),
+  invisible joiners and control characters are removed at intake, and from titles and texts in
+  the API and MCP for posts stored earlier. The MCP tool descriptions say that post text is data,
+  not instructions.
+
+On a week of hub posts from free-text sources the new parser reads pay in 2% more posts and
+fixes several wrong amounts; stored posts keep their amounts.
+
 ## 0.29.1
 
 - Job seekers and contractors advertising themselves are rejected on every source, not only where

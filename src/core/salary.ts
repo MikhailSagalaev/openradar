@@ -31,6 +31,60 @@ const FX_TO_USD: Record<string, number> = {
   USDC: 1.0,
 };
 
+/** «150 000», with thin spaces, so every parser reads it as one amount. */
+function groupThousands(value: number): string {
+  return String(Math.round(value)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+
+function scaled(raw: string, factor: number): number {
+  return Number.parseFloat(raw.replace(',', '.')) * factor;
+}
+
+function multiplierOf(word: string): number {
+  return /^(?:млн|миллион|mln)/i.test(word) ? 1_000_000 : 1000;
+}
+
+const NUM = String.raw`\d+(?:[.,]\d+)?`;
+/** «150к» and «150k» stand glued to the number; «тыс» and «млн» may follow a space. */
+const MULT = String.raw`(?:(?<=\d)[кk]|\s?(?:тыс(?:яч[а-я]*|\.)?|млн\.?|миллион[а-я]*|mln))(?![\p{L}])`;
+const CURRENCY_NEAR = String.raw`\s*(?:[₽$€£₸₴]|руб|р\.|eur|usd|pln|zł|kzt|uah|byn|грн|тенге|евро|долл)`;
+
+const NOT_PAY_WORDS = String.raw`оборот[а-я]*|выручк[а-я]*|капитализац[а-я]*|инвестици[а-я]*|средн[а-я]*\s+чек[а-я]*|revenue|turnover|arr|deal\s+sizes?|valuation|raised|funding`;
+const NOT_PAY_BEFORE = new RegExp(`(?:^|[^\\p{L}])(?:${NOT_PAY_WORDS})(?![\\p{L}])[^.\\n\\d]{0,25}[$€£₽]?\\s?\\d[\\d\\s.,]*(?:[кk]|\\s?(?:тыс|млн|mln))?(?:\\s*(?:[-–—]|до|to)\\s*[$€£₽]?\\s?\\d[\\d\\s.,]*(?:[кk]|\\s?(?:тыс|млн|mln))?)?`, 'giu');
+const NOT_PAY_AFTER = new RegExp(`\\d[\\d\\s.,]*(?:[кk]|\\s?(?:тыс\\.?|млн\\.?|mln))?\\s*(?:[₽$€£]|руб[а-я.]*|usd|eur)?\\s{0,3}(?:${NOT_PAY_WORDS})(?![\\p{L}])`, 'giu');
+
+/**
+ * Rewrites shorthand amounts into plain ones before parsing: «150к» → «150 000»,
+ * «300-500к» → «300 000-500 000», «1,5 млн» → «1 500 000», «45.000,00 ₽» → «45 000 ₽»,
+ * «150 000,50» → «150 000». «401k» is a US retirement plan, not pay.
+ */
+export function normalizeMoneyText(text: string): string {
+  return text
+    .replace(/401\s?\(?k\)?/gi, '401-plan')
+    // Money that is not pay: a CV's «6.5 млн рублей оборота», «средний чек 100–150 тыс», «deal size of $100k».
+    .replace(NOT_PAY_BEFORE, (m) => m.replace(/\d/g, '#'))
+    .replace(NOT_PAY_AFTER, (m) => m.replace(/\d/g, '#'))
+    // A range with one multiplier at the end: «300-500к», «от 70 до 150 тыс».
+    .replace(new RegExp(`(${NUM})(\\s*(?:[-–—]|до)\\s*)(${NUM})(${MULT})`, 'giu'), (_m, a: string, sep: string, b: string, word: string) => {
+      const factor = multiplierOf(word.trim());
+      const first = scaled(a, 1);
+      return `${groupThousands(first < 1000 ? first * factor : first)}${sep}${groupThousands(scaled(b, factor))}`;
+    })
+    .replace(new RegExp(`(${NUM})(${MULT})`, 'giu'), (_m, a: string, word: string) => groupThousands(scaled(a, multiplierOf(word.trim()))))
+    // «45.000,00 ₽», «€ 1.500»: dots group thousands only next to a currency.
+    .replace(new RegExp(`(\\d{1,3}(?:\\.\\d{3})+)(?:,\\d{1,2})?(?=${CURRENCY_NEAR})`, 'giu'), (m) => groupThousands(Number(m.split(',')[0]!.replace(/\./g, ''))))
+    .replace(/([$€£₸₴]\s*)(\d{1,3}(?:\.\d{3})+)(?:,\d{1,2})?(?![\d.,])/gu, (_m, sign: string, n: string) => `${sign}${groupThousands(Number(n.replace(/\./g, '')))}`)
+    // Kopecks and cents after grouped thousands: «150 000,50», «3,500.00».
+    .replace(/(\d{1,3}(?:[  ]\d{3})+),\d{2}(?!\d)/g, '$1')
+    .replace(/(\d{1,3}(?:,\d{3})+)\.\d{2}(?!\d)/g, '$1');
+}
+
+/** Pay per day or per shift: the amount is followed by «в день», «за смену», «/day». */
+const DAILY_RATE = /(?:[₽$€£₸₴]|руб[а-я.]*|р\.|usd|eur|\d)\s*(?:\/|в|за|per|a)\s*(?:день|смену|сутки|day|shift)(?![\p{L}])/iu;
+
+/** Working days in a month, to compare a day rate with monthly pay. */
+const WORKING_DAYS_PER_MONTH = 21;
+
 export function detectPaymentPeriod(text: string, defaultType: 'job' | 'gig' = 'gig'): PaymentPeriod {
   const lower = text.toLowerCase();
 
@@ -102,7 +156,7 @@ export function detectCurrency(text: string): string {
 
 export function parseSalaryRange(text: string): { min?: number; max?: number } {
   // Strip currency symbols in front of digits, e.g. $3000 -> 3000
-  const clean = text.replace(/zł|[$€₽£₸₴]/gi, ' ').replace(/\s+/g, ' ');
+  const clean = normalizeMoneyText(text).replace(/zł|[$€₽£₸₴]/gi, ' ').replace(/\s+/g, ' ');
 
   // Match pattern "от X до Y" or "X - Y"
   const rangeMatch = clean.match(/(?:от\s+)?(\d[\d\s.,]*\d|\d+)\s*(?:-|до|—|–)\s*(\d[\d\s.,]*\d|\d+)/i);
@@ -157,7 +211,7 @@ function parseAmount(raw: string | undefined): number | undefined {
  * опыта" must not become a salary, so nothing is returned.
  */
 export function extractAnchoredSalary(text: string): { min?: number; max?: number } {
-  const source = text.replace(/\u00a0/g, ' ');
+  const source = normalizeMoneyText(text.replace(/\u00a0/g, ' '));
 
   // "от 150 000 до 250 000 руб", "150 000 - 250 000 руб"
   const range = new RegExp(`(\\d[\\d ]{0,11})\\s*(?:-|—|–|до)\\s*(\\d[\\d ]{0,11})\\s*(?:${CURRENCY_UNIT})(?![a-z])`, 'i').exec(source);
@@ -210,7 +264,8 @@ export function normalizeSalary(input: {
   type?: 'job' | 'gig';
 }): SalaryInfo {
   const combinedText = `${input.rawSalary ?? ''} ${input.text ?? ''}`.trim();
-  const period = detectPaymentPeriod(combinedText, input.type ?? 'gig');
+  let period = detectPaymentPeriod(combinedText, input.type ?? 'gig');
+  const daily = period !== 'hourly' && DAILY_RATE.test(combinedText);
   const currency = (input.currency?.toUpperCase() || detectCurrency(combinedText)).trim();
   const rate = FX_TO_USD[currency] ?? (1 / 92.0);
 
@@ -236,8 +291,20 @@ export function normalizeSalary(input: {
     typeof value === 'number' && Number.isFinite(value) && value > 0 ? value * rate : undefined;
   let usdMin = toUsd(min);
   let usdMax = toUsd(max);
+  const top = usdMax ?? usdMin ?? 0;
+  // Bounds by period (the JobSpy rule): an «hourly» rate of $500+ is a monthly or yearly figure
+  // under a wrong label, and a day rate over $1500 is not one.
+  if (period === 'hourly' && top > 500) period = input.type === 'job' ? 'monthly' : 'fixed';
+  const perDay = daily && top > 0 && top <= 1500;
+  if (perDay) {
+    // «3 000 ₽ за смену» is about 63 000 ₽ a month: compared with salaries, not with them as is.
+    usdMin = usdMin === undefined ? undefined : usdMin * WORKING_DAYS_PER_MONTH;
+    usdMax = usdMax === undefined ? undefined : usdMax * WORKING_DAYS_PER_MONTH;
+    period = 'monthly';
+  }
   const yearly =
     period !== 'hourly' &&
+    !perDay &&
     (input.type === 'job' || period === 'monthly') &&
     (yearlyMarker || (usdMax ?? usdMin ?? 0) > YEARLY_SALARY_FLOOR_USD);
   if (yearly) {
