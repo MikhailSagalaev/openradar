@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.36.0
+
+- Adapter-declared poll pacing: a source adapter may set `defaultPollIntervalSec`, and
+  `pollAll` skips it until the interval passes (an explicit `config.intervalSec` still wins).
+  Arbeitnow polls every 30 minutes instead of every tick — it was re-reading the same 50
+  offers around the clock, 82 000 dedup checks a day for 633 inserts; the ATS company
+  rotation, Hacker News and RemoteOK slow down to hourly or two-hourly. A restart polls
+  everything once, then the intervals hold.
 ## 0.35.0
 
 - SEO and discovery: the public sources index and source pages are indexable again

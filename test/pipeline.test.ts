@@ -390,6 +390,34 @@ describe('ingest pipeline', () => {
     await runtime.store.close();
   });
 
+  it('falls back to the adapter default interval when the config sets none', async () => {
+    const { pollAll } = await import('../src/pipeline/poll.ts');
+    const runtime = makeTestRuntime();
+    runtime.sources.register({
+      kind: 'slowboard',
+      access: 'official',
+      description: 'test adapter',
+      risks: [],
+      defaultPollIntervalSec: 3600,
+      poll: async () => [],
+    });
+    await runtime.store.createSource({ kind: 'slowboard', title: 'Slow', config: {} });
+    const deps = {
+      store: runtime.store,
+      sinks: runtime.sinks,
+      logger: runtime.logger,
+      env: runtime.env,
+      sources: runtime.sources,
+      fetchImpl: async () => new Response('{}', { status: 200 }),
+    };
+    // An explicit intervalSec overrides the adapter default upward…
+    const outOfBand = await runtime.store.listSources();
+    await runtime.store.updateSource(outOfBand[0]!.id, { config: { intervalSec: 60 } });
+    expect(await pollAll(deps)).toHaveLength(1);
+    expect(await pollAll(deps)).toHaveLength(0);
+    await runtime.store.close();
+  });
+
   it('respects a source interval and a run deadline', async () => {
     const { pollAll } = await import('../src/pipeline/poll.ts');
     const runtime = makeTestRuntime();

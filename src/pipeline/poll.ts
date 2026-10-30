@@ -180,7 +180,8 @@ export async function pollAll(deps: PollDeps, options: PollAllOptions = {}): Pro
       if (!source.enabled) return false;
       const adapter = deps.sources.get(source.kind);
       if (!adapter?.poll) return false;
-      const intervalSec = Number(source.config.intervalSec);
+      // Explicit config wins; otherwise the adapter's own pacing applies.
+      const intervalSec = Number(source.config.intervalSec) || adapter.defaultPollIntervalSec || 0;
       const last = lastPolledAt.get(source.id);
       return !(intervalSec > 0 && last !== undefined && now - last < intervalSec * 1000);
     })

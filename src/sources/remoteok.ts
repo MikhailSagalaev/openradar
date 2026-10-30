@@ -27,6 +27,7 @@ export const remoteokSource: SourceAdapter = {
   access: 'official',
   description:
     'Официальный публичный JSON API RemoteOK (remoteok.com/api). Международные удаленные вакансии.',
+  defaultPollIntervalSec: 7200,
   risks: [
     'Возвращает полный список вакансий в одном массиве',
     'Ограничение частоты запросов (rate limit) со стороны сервиса',
