@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { escapeHtml, extractTechSkills, stripInvisible } from '../core/text.ts';
@@ -22,13 +22,16 @@ import { VERSION } from '../version.ts';
 import { githubOAuthConfigured, startGitHubOAuth, handleGitHubCallback } from './auth.ts';
 import { renderAdminPage } from './admin.ts';
 import { analyticsFromEnv, contentSecurityPolicy } from './analytics.ts';
-import { filterOptions, parseFeedFilters } from './filters.ts';
+import { filterOptions, parseFeedFilters, type FeedFilters } from './filters.ts';
 import { estimateMarket } from '../core/market.ts';
 import { rateLimit } from './ratelimit.ts';
 import { indexCsv, openradarIndex } from '../research/index.ts';
 import { qualityFlagsOf } from '../core/quality.ts';
 import { rubToUsd } from '../core/salary.ts';
 import { sourceState } from '../core/source-health.ts';
+import { assertSafeUrl } from '../core/ssrf.ts';
+import { feedQuery, isEmptyFilter, MAX_SUBSCRIPTIONS_PER_USER, newWebhookSecret, savedFiltersFrom, subscriptionName, type SubscriptionRecord } from '../core/subscriptions.ts';
+import { handleTelegramUpdate, setupSubscriptionBot, telegramWebhookSecret, type SubscriptionDeps } from '../pipeline/subscriptions.ts';
 import { computeSalaryMedians, SALARY_FLOOR_RUB, SALARY_MEDIAN_MIN_SAMPLE, setSalaryMedians } from '../core/salary-sanity.ts';
 import { renderIndexPage } from '../research/index-page.ts';
 import { renderIndexPageEn, renderMethodologyPageEn, renderReportPageEn } from '../research/pages-en.ts';
@@ -278,16 +281,20 @@ async function viewerFromRequest(c: Context, runtime: Runtime): Promise<Viewer> 
     return { tier, pubkey: nostr.pubkey };
   }
   const user = await currentUser(c, runtime);
-  if (user) {
-    // A web user linked to a participant key gets that key's tier (never below member).
-    const linked = runtime.access.mode === 'hub' ? await runtime.store.getParticipantByGithubUser(user.id) : null;
-    if (linked && !linked.bannedAt) {
-      const tier = tierFor({ rating: await accountRating(runtime, user.id, linked), moderator: moderators.has(linked.pubkey), githubLinked: true });
-      return { tier, userId: user.id, pubkey: linked.pubkey };
-    }
-    return { tier: 'member', userId: user.id };
-  }
+  if (user) return viewerForUser(runtime, user.id);
   return { tier: 'guest' };
+}
+
+/** The viewer a signed-in user is, also outside a request (saved-search delivery). */
+export async function viewerForUser(runtime: Runtime, userId: number): Promise<Viewer> {
+  // A web user linked to a participant key gets that key's tier (never below member).
+  const linked = runtime.access.mode === 'hub' ? await runtime.store.getParticipantByGithubUser(userId) : null;
+  if (linked && !linked.bannedAt) {
+    const moderators = parseModerators(runtime.env.RADAR_MODERATORS);
+    const tier = tierFor({ rating: await accountRating(runtime, userId, linked), moderator: moderators.has(linked.pubkey), githubLinked: true });
+    return { tier, userId, pubkey: linked.pubkey };
+  }
+  return { tier: 'member', userId };
 }
 
 /** Secret for web participant keys; the admin token when no dedicated one is set. */
@@ -754,6 +761,42 @@ function toRawLead(body: Record<string, unknown>, sourceId: string): RawLead | n
   };
 }
 
+/** What saved-search delivery needs from the server: the feed's visibility and projection. */
+export function subscriptionDeps(runtime: Runtime): SubscriptionDeps {
+  return {
+    store: runtime.store,
+    env: runtime.env,
+    logger: runtime.logger.child('subscriptions'),
+    fetchImpl: runtime.fetchImpl,
+    async leadsForUser(userId, filters, createdAfter, limit) {
+      const viewer = await viewerForUser(runtime, userId);
+      const now = new Date();
+      const feed: FeedFilters = { sort: 'new', remote: Boolean(filters.remote), it: filters.it, budgetRub: filters.budgetRub, skill: filters.skill, language: filters.language };
+      const leads = await leadsFor(runtime, viewer, { ...filterOptions(feed, now), query: filters.q, type: filters.type, createdAfter, sort: 'new', limit });
+      return { leads, until: visibleBefore(viewer, runtime.access, now) ?? now.toISOString() };
+    },
+    projectLead(lead, _userId) {
+      // A subscriber is signed in, so contacts are visible as in the feed for members.
+      return toPublicLead(projectContacts(lead, { tier: 'member' }));
+    },
+  };
+}
+
+/** Username of the hub's subscription bot, for t.me links; set when the bot is set up. */
+let subscriptionBotUsername: string | undefined;
+
+/** Points the subscription bot at this hub (RADAR_SUBSCRIPTION_BOT); call once at start. */
+export async function startSubscriptionBot(runtime: Runtime): Promise<void> {
+  const secret = webKeySecret(runtime);
+  if (!secret) return;
+  try {
+    subscriptionBotUsername = await setupSubscriptionBot(subscriptionDeps(runtime), secret);
+    if (subscriptionBotUsername) runtime.logger.info('subscription bot ready', { bot: subscriptionBotUsername });
+  } catch (error) {
+    runtime.logger.warn('subscription bot setup failed', { error: error instanceof Error ? error.message : String(error) });
+  }
+}
+
 export function createApp(runtime: Runtime): Hono {
   const app = new Hono();
   setPublicBaseUrl(runtime.env.RADAR_PUBLIC_URL);
@@ -791,7 +834,9 @@ export function createApp(runtime: Runtime): Hono {
         c.req.path.startsWith('/api/v2/ingest') ||
         c.req.path === '/v2/events' ||
         c.req.path === '/api/submit' ||
-        c.req.path === '/mcp';
+        c.req.path === '/mcp' ||
+        // Telegram calls it; the secret token header is checked in the handler.
+        c.req.path === '/api/telegram/webhook';
       const hasBearerAuth = Boolean(c.req.header('authorization') || c.req.header('x-radar-token'));
       if (!isIngest && !hasBearerAuth) {
         if (!sameOrigin(c)) {
@@ -1188,8 +1233,120 @@ export function createApp(runtime: Runtime): Hono {
             status: hidden ? 'hidden' as const : credited ? 'credited' as const : 'waiting' as const,
           };
         }),
+        subscriptions: viewer.userId && runtime.store.listSubscriptions
+          ? {
+              list: await runtime.store.listSubscriptions(viewer.userId),
+              telegramLinked: Boolean(await runtime.store.getTelegramChat?.(viewer.userId)),
+              botAvailable: Boolean(subscriptionBotUsername),
+              notice: c.req.query('subscriptions') ?? undefined,
+            }
+          : undefined,
       }),
     );
+  });
+
+  // Saved searches: follow a feed filter, get its new leads in Telegram or on a webhook.
+  const subscriptionOwner = async (c: Context): Promise<{ userId: number; subscription?: SubscriptionRecord } | Response> => {
+    const user = await currentUser(c, runtime);
+    if (!user) return c.redirect('/login?returnTo=/me');
+    const id = c.req.param('id');
+    if (!id) return { userId: user.id };
+    const subscription = await runtime.store.getSubscription?.(id);
+    if (!subscription || subscription.userId !== user.id) return c.redirect('/me?subscriptions=not_found#subscriptions');
+    return { userId: user.id, subscription };
+  };
+
+  app.post('/subscriptions', rateLimit({ windowMs: 60_000, max: 10 }), async (c) => {
+    const user = await currentUser(c, runtime);
+    if (!user) return c.redirect('/login?returnTo=/');
+    if (!runtime.store.createSubscription || !runtime.store.listSubscriptions) return c.text('Subscriptions are not supported by this store', 501);
+    const filters = savedFiltersFrom(await c.req.parseBody());
+    if (isEmptyFilter(filters)) return c.redirect('/me?subscriptions=empty#subscriptions');
+    const existing = await runtime.store.listSubscriptions(user.id);
+    if (existing.some((s) => feedQuery(s.filters) === feedQuery(filters))) return c.redirect('/me?subscriptions=exists#subscriptions');
+    if (existing.length >= MAX_SUBSCRIPTIONS_PER_USER) return c.redirect('/me?subscriptions=limit#subscriptions');
+    const now = new Date().toISOString();
+    await runtime.store.createSubscription({
+      id: randomUUID(),
+      userId: user.id,
+      name: subscriptionName(filters),
+      filters,
+      channel: 'telegram',
+      paused: false,
+      // Only leads that appear from now on: a new subscription does not resend the feed.
+      cursorAt: now,
+      failures: 0,
+      createdAt: now,
+    });
+    return c.redirect('/me?subscriptions=created#subscriptions');
+  });
+
+  app.post('/subscriptions/:id/delete', async (c) => {
+    const owner = await subscriptionOwner(c);
+    if (owner instanceof Response) return owner;
+    await runtime.store.deleteSubscription?.(owner.subscription!.id, owner.userId);
+    return c.redirect('/me?subscriptions=deleted#subscriptions');
+  });
+
+  app.post('/subscriptions/:id/pause', async (c) => {
+    const owner = await subscriptionOwner(c);
+    if (owner instanceof Response) return owner;
+    const paused = !owner.subscription!.paused;
+    // Resuming starts from now: a paused week is not sent in one burst.
+    await runtime.store.updateSubscription?.(owner.subscription!.id, paused
+      ? { paused }
+      : { paused, failures: 0, lastError: undefined, cursorAt: new Date().toISOString() });
+    return c.redirect(`/me?subscriptions=${paused ? 'paused' : 'resumed'}#subscriptions`);
+  });
+
+  app.post('/subscriptions/:id/channel', async (c) => {
+    const owner = await subscriptionOwner(c);
+    if (owner instanceof Response) return owner;
+    const body = await c.req.parseBody();
+    if (body.channel === 'telegram') {
+      await runtime.store.updateSubscription?.(owner.subscription!.id, { channel: 'telegram', failures: 0, lastError: undefined });
+      return c.redirect('/me?subscriptions=telegram#subscriptions');
+    }
+    const target = typeof body.target === 'string' ? body.target.trim() : '';
+    try {
+      const url = await assertSafeUrl(target);
+      if (url.protocol !== 'https:') throw new Error('https only');
+    } catch {
+      return c.redirect('/me?subscriptions=bad_url#subscriptions');
+    }
+    await runtime.store.updateSubscription?.(owner.subscription!.id, {
+      channel: 'webhook',
+      target,
+      // A new URL gets a new secret: the old receiver cannot verify the new one's messages.
+      secret: owner.subscription!.target === target && owner.subscription!.secret ? owner.subscription!.secret : newWebhookSecret(),
+      failures: 0,
+      lastError: undefined,
+    });
+    return c.redirect('/me?subscriptions=webhook#subscriptions');
+  });
+
+  app.post('/me/telegram', rateLimit({ windowMs: 60_000, max: 5 }), async (c) => {
+    const user = await currentUser(c, runtime);
+    if (!user) return c.redirect('/login?returnTo=/me');
+    if (!subscriptionBotUsername || !runtime.store.setTelegramLinkCode) return c.redirect('/me?subscriptions=no_bot#subscriptions');
+    const code = randomBytes(18).toString('base64url');
+    await runtime.store.setTelegramLinkCode(user.id, code, new Date(Date.now() + 60 * 60_000).toISOString());
+    return c.redirect(`https://t.me/${subscriptionBotUsername}?start=${code}`);
+  });
+
+  app.post('/api/telegram/webhook', async (c) => {
+    const secret = webKeySecret(runtime);
+    if (!secret || !runtime.env.RADAR_SUBSCRIPTION_BOT || !safeEqual(c.req.header('x-telegram-bot-api-secret-token'), telegramWebhookSecret(secret))) {
+      return c.json({ error: 'forbidden' }, 403);
+    }
+    const update = await c.req.json().catch(() => null);
+    try {
+      if (update && typeof update === 'object') await handleTelegramUpdate(update as Parameters<typeof handleTelegramUpdate>[0], subscriptionDeps(runtime));
+    } catch (error) {
+      runtime.logger.warn('telegram update failed', { error: error instanceof Error ? error.message : String(error) });
+    }
+    // Telegram retries anything but 200; a failed reply is not worth a retry storm.
+    return c.json({ ok: true });
   });
 
   // The version of the extension this server hands out, shown on /extension.

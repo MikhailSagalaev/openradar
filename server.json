@@ -3,7 +3,7 @@
   "name": "io.github.MikhailSagalaev/openradar",
   "title": "openradar",
   "description": "Open base of job vacancies and freelance orders from Russian and international boards and Telegram.",
-  "version": "0.31.0",
+  "version": "0.32.0",
   "websiteUrl": "https://openradar.fun",
   "repository": {
     "url": "https://github.com/MikhailSagalaev/openradar",

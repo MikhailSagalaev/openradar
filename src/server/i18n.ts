@@ -121,6 +121,8 @@ export interface Translations {
   remoteOnly: string;
   itOnly: string;
   resetFilters: string;
+  follow: string;
+  followHint: string;
   rankedWindow: string;
   heroTitleDelayed: string;
   feedFoundToday: string;
@@ -295,6 +297,8 @@ export const RU: Translations = {
   remoteOnly: 'Только удалённо',
   itOnly: 'Только IT',
   resetFilters: 'Сбросить фильтры',
+  follow: 'Следить',
+  followHint: 'Присылать новые заказы с этими фильтрами в Telegram или на вебхук',
   rankedWindow: 'Лучшие и дорогие — среди заказов за последние 7 дней.',
   heroTitleDelayed: 'Заказы и вакансии со всех площадок',
   feedFoundToday: 'За сутки найдено {n}',
@@ -464,6 +468,8 @@ export const EN: Translations = {
   remoteOnly: 'Remote only',
   itOnly: 'IT only',
   resetFilters: 'Reset filters',
+  follow: 'Follow',
+  followHint: 'Send new leads matching these filters to Telegram or a webhook',
   rankedWindow: 'Best and highest budget: among leads of the last 7 days.',
   heroTitleDelayed: 'Gigs and jobs from every board',
   feedFoundToday: '{n} found in the last 24 h',

@@ -73,6 +73,7 @@ const envSchema = z.object({
   RADAR_RETENTION_DAYS: z.coerce.number().int().positive().default(180),
   // Closed-post checks against the boards, and feed age limits (0 turns a limit off).
   RADAR_CHECK_CLOSED: booleanFromEnv(true),
+  RADAR_SUBSCRIPTION_BOT: booleanFromEnv(false),
   RADAR_GIG_TTL_DAYS: z.coerce.number().int().nonnegative().default(14),
   RADAR_JOB_TTL_DAYS: z.coerce.number().int().nonnegative().default(30),
   // Per-IP requests per minute on public GETs. Limiters live in process memory: each process counts on its own.
