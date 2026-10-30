@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.26.2
+
+- Outgoing TLS offers the classic key exchange groups (X25519, P-256, P-384) instead of Node
+  22's post-quantum share, whose two-packet handshake some networks drop: from a Russian
+  server npm, Jobicy, Jobspresso and RemoteOK timed out while connecting. `RADAR_TLS_GROUPS`
+  overrides the groups, `auto` restores Node's default. The Docker build installs packages
+  over TLS 1.2 for the same reason; 0.26.1 never built for it.
+
 ## 0.26.1
 
 - The score pills are gone: a lead shows its number only. In Russian the score is called

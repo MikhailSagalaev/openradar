@@ -1,3 +1,5 @@
+// First: outgoing TLS must use groups every network lets through (see net/tls.ts).
+import '../net/tls.ts';
 import { Command } from 'commander';
 import { randomBytes } from 'node:crypto';
 import { appendFileSync, writeFileSync } from 'node:fs';
