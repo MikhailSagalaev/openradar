@@ -2,6 +2,9 @@
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 RUN corepack enable
+# Corepack and pnpm download over TLS with Node's defaults; TLS 1.2 keeps the handshake in
+# one packet where networks drop the larger post-quantum one (see src/net/tls.ts).
+ENV NODE_OPTIONS=--tls-max-v1.2
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY tsconfig.json tsconfig.build.json ./
@@ -14,7 +17,7 @@ ENV NODE_ENV=production
 ENV RADAR_BIND=0.0.0.0
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN pnpm install --prod --frozen-lockfile
+RUN NODE_OPTIONS=--tls-max-v1.2 pnpm install --prod --frozen-lockfile
 COPY --from=build /app/dist ./dist
 COPY migrations ./migrations
 COPY bin ./bin
