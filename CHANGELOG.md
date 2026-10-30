@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.27.2
+
+- Currency detection matches whole words: «евро» in «Европа», `aud` in «Claude» or «audit»,
+  `cad` in «academy» and «франк» in «Франкфурт» no longer turn roubles into euros, Australian
+  or Canadian dollars. A post that names roubles is in roubles. Kwork leads are always in
+  roubles. Stored leads of the last 60 days were recomputed on the hub.
+
 ## 0.27.1
 
 - The home feed opens in the interface's market: a Russian page shows Russian-language leads,

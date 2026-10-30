@@ -71,39 +71,32 @@ export function detectPaymentPeriod(text: string, defaultType: 'job' | 'gig' = '
   return defaultType === 'job' ? 'monthly' : 'fixed';
 }
 
-export function detectCurrency(text: string): string {
-  const lower = text.toLowerCase();
-  if (lower.includes('$') || lower.includes('usd') || lower.includes('долл') || lower.includes('usdt')) {
-    return 'USD';
-  }
-  if (lower.includes('€') || lower.includes('eur') || lower.includes('евро')) {
-    return 'EUR';
-  }
-  if (lower.includes('£') || lower.includes('gbp')) {
-    return 'GBP';
-  }
-  if (lower.includes('тенге') || lower.includes('kzt') || lower.includes('₸')) {
-    return 'KZT';
-  }
+/**
+ * Currency markers, checked in order. Letters must stand alone: as substrings «евро» is in
+ * «Европа», «cad» in «academy», «aud» in «audit», «франк» in «Франкфурт», and an order for
+ * a target audience in Europe came out in euros. Roubles come first after Belarusian ones: a
+ * post that names roubles pays in roubles whatever else it mentions.
+ */
+const CURRENCY_MARKERS: Array<[string, RegExp]> = [
   // «белый», «Белгород» и пр. не валюты: только явные «бел. руб» / «белорусск» / BYN.
-  if (/(?:бел\.?\s*руб|белорусск)/i.test(lower) || /\bbyn\b/i.test(lower)) {
-    return 'BYN';
-  }
-  if (lower.includes('грн') || lower.includes('uah') || lower.includes('₴')) {
-    return 'UAH';
-  }
-  if (lower.includes('zł') || lower.includes('zlot') || /pln/.test(lower)) {
-    return 'PLN';
-  }
-  if (lower.includes('chf') || lower.includes('франк')) {
-    return 'CHF';
-  }
-  if (lower.includes('a$') || lower.includes('aud') || lower.includes('australian')) {
-    return 'AUD';
-  }
-  if (lower.includes('c$') || lower.includes('cad') || lower.includes('canadian')) {
-    return 'CAD';
-  }
+  ['BYN', /бел\.?\s*руб|белорусск\S*\s+руб|(?<![a-z])byn(?![a-z])/i],
+  ['RUB', /₽|(?<![а-яё])руб(?:л|\.|(?![а-яё]))|(?<![a-z])rub(?![a-z])/i],
+  ['USD', /\$|(?<![a-z])usdt?(?![a-z])|(?<![а-яё])долл/i],
+  ['EUR', /€|(?<![a-z])eur(?![a-z])|(?<![а-яё])евро(?![а-яё])/i],
+  ['GBP', /£|(?<![a-z])gbp(?![a-z])|(?<![а-яё])фунт(?:а|ов)?\s+стерлинг/i],
+  ['KZT', /₸|(?<![a-z])kzt(?![a-z])|(?<![а-яё])тенге(?![а-яё])/i],
+  ['UAH', /₴|(?<![a-z])uah(?![a-z])|(?<![а-яё])(?:грн|гривен|гривн)/i],
+  ['PLN', /zł|(?<![a-z])pln(?![a-z])|(?<![а-яё])злот/i],
+  ['CHF', /(?<![a-z])chf(?![a-z])|швейцарск\S*\s+франк/i],
+  ['AUD', /a\$|(?<![a-z])aud(?![a-z])|australian\s+dollar/i],
+  ['CAD', /c\$|(?<![a-z])cad(?![a-z])|canadian\s+dollar/i],
+];
+
+export function detectCurrency(text: string): string {
+  // A$ and C$ are checked before the bare dollar sign.
+  if (/(?<![a-z])au?\$/i.test(text)) return 'AUD';
+  if (/(?<![a-z])ca?\$/i.test(text)) return 'CAD';
+  for (const [code, marker] of CURRENCY_MARKERS) if (marker.test(text)) return code;
   return 'RUB';
 }
 

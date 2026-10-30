@@ -51,6 +51,8 @@ function wantToRawLead(want: KworkWant, source: SourceRecord): RawLead | null {
     text,
     author: want.user?.username ?? want.username,
     budget: parseMoney(want.kworkPrice ?? want.priceLimit ?? want.possiblePriceLimit ?? want.price),
+    // Kwork prices are always in roubles; the text may mention any other money.
+    currency: 'RUB',
     raw: { categoryId: want.category_id },
   };
 }
