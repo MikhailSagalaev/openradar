@@ -1816,6 +1816,7 @@ ${publicBaseUrl ? `<meta property="og:image" content="${escapeHtml(publicBaseUrl
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="${escapeHtml(publicBaseUrl)}/og.png">` : '<meta name="twitter:card" content="summary">'}
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="alternate" type="application/rss+xml" title="openradar — свежие заказы и вакансии" href="/feed.rss">
 ${input.head ?? ''}
 <link rel="stylesheet" href="${STYLE_PATH}">
 ${analyticsHeadHtml}
