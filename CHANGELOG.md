@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.26.3
+
+- Security: the SSRF guard missed IPv4 addresses written as IPv6. WHATWG URL turns
+  `[::ffff:169.254.169.254]` into `[::ffff:a9fe:a9fe]`, which passed the check, so the link
+  preview could read the cloud metadata service and other internal addresses. The guard now
+  parses addresses to bytes and checks the IPv4 inside mapped, compatible, NAT64 and 6to4
+  addresses; Teredo, site-local and multicast are refused. Requests to user-supplied URLs
+  (preview, sources, liveness) also check the address at connect time, so DNS rebinding
+  cannot swap in a private address after the check.
+
 ## 0.26.2
 
 - Outgoing TLS offers the classic key exchange groups (X25519, P-256, P-384) instead of Node
