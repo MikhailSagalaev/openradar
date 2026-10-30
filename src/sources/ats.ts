@@ -191,6 +191,7 @@ export const atsSource: SourceAdapter = {
   access: 'official',
   description:
     'Карьерные страницы компаний через публичные API систем найма (Greenhouse, Lever, Ashby): компании публикуют их для всех, без ключа.',
+  defaultPollIntervalSec: 3600, // the company rotation re-reads boards that rarely change
   risks: [
     'Список компаний ведётся вручную: компания, сменившая систему найма, перестаёт отдавать вакансии',
     'На доске компании все открытые вакансии, в том числе не IT и давно опубликованные',

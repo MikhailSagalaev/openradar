@@ -22,6 +22,7 @@ export const hnSource: SourceAdapter = {
   access: 'official',
   description:
     'Официальный Algolia API Hacker News: комментарии треда «Ask HN: Who is hiring?» — вакансии стартапов, в основном удалённые.',
+  defaultPollIntervalSec: 7200, // the hiring thread is monthly; two polls an hour apart see the same comments
   risks: [
     'Тред выходит раз в месяц: при первом опросе читаются только последние N комментариев',
     'Ответы-реплаи в треде не читаются: только комментарии верхнего уровня',

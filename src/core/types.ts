@@ -220,6 +220,12 @@ export interface SourceAdapter {
   access: AccessKind;
   description: string;
   risks: string[];
+  /**
+   * Seconds this source wants between polls when its config carries no explicit
+   * `intervalSec`: slow boards re-read the same offers for days, and the dedup
+   * cost of an aggressive poll far outweighs the freshness.
+   */
+  defaultPollIntervalSec?: number;
   /** Webhook sources have no poll function; they are fed by the HTTP API. */
   poll?(source: SourceRecord, ctx: PollContext): Promise<RawLead[]>;
 }

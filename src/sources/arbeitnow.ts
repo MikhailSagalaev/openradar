@@ -27,6 +27,7 @@ export const arbeitnowSource: SourceAdapter = {
   access: 'official',
   description:
     'Официальный открытый API Arbeitnow (arbeitnow.com/api/job-board-api): вакансии Германии и ЕС, в основном на английском.',
+  defaultPollIntervalSec: 1800, // the board barely changes in 5 minutes; dedup on 50 same offers each tick is pure cost
   risks: [
     'Ограничение частоты запросов со стороны сервиса',
     'Описание приходит HTML-блоком: нормализуется в текст',
