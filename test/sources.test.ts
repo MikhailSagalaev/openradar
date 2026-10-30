@@ -146,6 +146,16 @@ describe('source adapters', () => {
     expect(isPrivateOrBlockedIp('fe80::1')).toBe(true);
     expect(isPrivateOrBlockedIp('8.8.8.8')).toBe(false);
     expect(isPrivateOrBlockedIp('1.1.1.1')).toBe(false);
+    // IPv4 written as IPv6: WHATWG URL turns [::ffff:169.254.169.254] into [::ffff:a9fe:a9fe].
+    for (const ip of ['::ffff:a9fe:a9fe', '::ffff:169.254.169.254', '::ffff:7f00:1', '::a9fe:a9fe', '::',
+      '64:ff9b::a9fe:a9fe', '2002:a9fe:a9fe::1', '2001:0:4136:e378::1', 'fec0::1', 'ff02::1', '[::1]', '169.254.169.254.']) {
+      expect(isPrivateOrBlockedIp(ip), ip).toBe(true);
+    }
+    for (const ip of ['::ffff:808:808', '2a00:1450:4010:c05::64', '64:ff9b::808:808', 'example.com']) {
+      expect(isPrivateOrBlockedIp(ip), ip).toBe(false);
+    }
+    await expect(assertSafeUrl('http://[::ffff:169.254.169.254]/latest/user-data')).rejects.toThrow(/private\/internal IP/);
+    await expect(assertSafeUrl('http://[::ffff:127.0.0.1]:3000/')).rejects.toThrow(/private\/internal IP/);
 
     await expect(assertSafeUrl('http://169.254.169.254/latest/meta-data')).rejects.toThrow(
       /private\/internal IP/,

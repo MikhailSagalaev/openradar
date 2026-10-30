@@ -1,4 +1,4 @@
-import { assertSafeUrl } from '../core/ssrf.ts';
+import { assertSafeUrl, safeFetchImpl } from '../core/ssrf.ts';
 import { readTextLimited } from '../net/body.ts';
 import { cleanTitle, extractCity } from '../core/extract.ts';
 import { normalizeSalary, type SalaryInfo } from '../core/salary.ts';
@@ -35,7 +35,7 @@ export async function fetchSafeHttp(
   initialUrl: string,
   options?: FetchSafeOptions,
 ): Promise<string> {
-  const fetchImpl = options?.fetchImpl ?? fetch;
+  const fetchImpl = safeFetchImpl(options?.fetchImpl);
   const timeoutMs = options?.timeoutMs ?? 8000;
   const userAgent = options?.userAgent ?? DEFAULT_USER_AGENT;
 

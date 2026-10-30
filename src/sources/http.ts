@@ -1,4 +1,4 @@
-import { assertSafeUrl } from '../core/ssrf.ts';
+import { assertSafeUrl, safeFetchImpl } from '../core/ssrf.ts';
 import { readTextLimited } from '../net/body.ts';
 import { fetchTextViaProxy } from '../net/proxy.ts';
 import type { PollContext } from '../core/types.ts';
@@ -29,7 +29,7 @@ export async function fetchText(
       // Защита от SSRF: резолв DNS и проверка на запрещенные приватные IP
       await assertSafeUrl(currentUrl);
 
-      const response = await ctx.fetchImpl(currentUrl, {
+      const response = await safeFetchImpl(ctx.fetchImpl)(currentUrl, {
         redirect: 'manual',
         signal: controller.signal,
         headers: {

@@ -6,7 +6,7 @@
  *
  * The markers below were taken from real closed and open pages of each board.
  */
-import { assertSafeUrl } from '../core/ssrf.ts';
+import { assertSafeUrl, safeFetchImpl } from '../core/ssrf.ts';
 import type { Store } from '../core/store.ts';
 import type { Env, Logger } from '../core/types.ts';
 import { readTextLimited } from '../net/body.ts';
@@ -112,7 +112,7 @@ export async function fetchPage(url: string, deps: { fetchImpl: typeof fetch; us
     let current = url;
     for (let hop = 0; hop <= 5; hop++) {
       await assertSafeUrl(current);
-      const response = await deps.fetchImpl(current, {
+      const response = await safeFetchImpl(deps.fetchImpl)(current, {
         redirect: 'manual',
         signal: controller.signal,
         headers: {
