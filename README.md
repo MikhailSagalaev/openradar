@@ -112,11 +112,15 @@ hub.observe([{"source": {"platform": "telegram", "channel": "-1001234567890", "v
 | [PLUGINS.md](docs/PLUGINS.md) | Writing a source or sink adapter |
 | [EXTENSION.md](docs/EXTENSION.md) | The browser extension and the market estimate |
 | [BACKUP_AND_RESTORE.md](docs/BACKUP_AND_RESTORE.md) | Backups |
+| [JOBSPY_EXPORT.md](docs/JOBSPY_EXPORT.md) | JobSpy-compatible CSV export for pandas pipelines |
+| [LOCAL_LLM.md](docs/LOCAL_LLM.md) | Running the classifier on ollama / LM Studio |
+| [ROADMAP.md](docs/ROADMAP.md) | Directions, epics and the v1.0 criteria |
+| [BRAND.md](docs/BRAND.md) | Logo and naming |
 | [sdk/python](sdk/python/README.md) | Python SDK |
 
 ## Contributing
 
-New boards are the most useful contribution: one adapter, one fixture, one test; `pnpm new:connector` writes the skeleton. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [code of conduct](CODE_OF_CONDUCT.md). Report vulnerabilities privately: [SECURITY.md](SECURITY.md).
+New boards are the most useful contribution: one adapter, one fixture, one test; `pnpm new:connector` writes the skeleton. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [code of conduct](CODE_OF_CONDUCT.md). Good first issues: the [`good first issue` label](https://github.com/MikhailSagalaev/openradar/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22). Report vulnerabilities privately: [SECURITY.md](SECURITY.md).
 
 ## License
 

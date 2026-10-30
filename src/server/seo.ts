@@ -1021,9 +1021,13 @@ ${SEO_CATALOG.filter((entry) => entry.type === 'job').map(line).join('\n')}
 }
 
 export function renderRobotsTxt(baseUrl: string): string {
+  // The sources list and source pages are public (the index of boards with daily counts);
+  // operator-only routes stay out of the index.
   return `User-agent: *
 Allow: /
-Disallow: /sources
+Disallow: /sources/new
+Disallow: /sources/catalog
+Disallow: /sources/*/edit
 Disallow: /api
 Disallow: /admin
 Disallow: /me

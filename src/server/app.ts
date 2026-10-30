@@ -2573,6 +2573,7 @@ export function createApp(runtime: Runtime): Hono {
       windowDays: RATING_WINDOW_MS / 86_400_000,
     });
     networkCache = { at: Date.now(), body };
+    c.header('Cache-Control', 'public, max-age=600');
     return c.html(body);
   });
   app.get('/faq', async (c) => c.html(renderFaqPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c) })));

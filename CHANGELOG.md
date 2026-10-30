@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.35.0
+
+- SEO and discovery: the public sources index and source pages are indexable again
+  (robots.txt only keeps operator routes out — /sources/new, /sources/catalog, edits);
+  every page advertises the feed with `<link rel="alternate" type="application/rss+xml">`,
+  so readers and crawlers find the RSS without the footer; /network sends
+  `Cache-Control: public, max-age=600` to match its 10-minute cache.
+- docs/ROADMAP.md — the directions, their epic issues and the v1.0 criteria;
+  the README documentation table lists the newer guides (JobSpy export, local LLM,
+  brand) and links the good first issues.
 ## 0.34.0
 
 - Closure events: when a lead leaves the active feed — closed by participants, hidden as
