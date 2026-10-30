@@ -12,6 +12,10 @@
 - Webhooks: https only, public addresses only (the SSRF guard checks on save and on every send),
   signed with HMAC-SHA256 over «timestamp.body» (`X-OpenRadar-Signature`,
   `X-OpenRadar-Timestamp`). Ten failed sends in a row pause the subscription.
+- One style for form controls: every text field, select and textarea takes the same height,
+  pill corners like the buttons and the search bar, and a soft grey ring on focus instead of the
+  black outline and double black border. Tokens `--control-h`, `--control-radius`, `--focus-ring`;
+  inline field styles removed. Keyboard focus on links and buttons stays visible.
 
 ## 0.31.0
 
