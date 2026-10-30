@@ -42,6 +42,15 @@ export function parseFeedFilters(c: Context, defaultSort: LeadSort = 'new', defa
   };
 }
 
+/**
+ * True when the ranked order looks at the last week only. The default ranked view needs no
+ * window: the rating fades with age, and a node whose leads are all older than a week would
+ * otherwise open on an empty feed.
+ */
+export function rankedWindowApplies(filters: FeedFilters): boolean {
+  return filters.sort !== 'new' && !(filters.sort === 'score' && filters.defaultSort === 'score');
+}
+
 export function filterOptions(filters: FeedFilters, now: Date = new Date()): ListLeadsOptions {
   return {
     sort: filters.sort,
@@ -49,7 +58,7 @@ export function filterOptions(filters: FeedFilters, now: Date = new Date()): Lis
     minBudgetUsd: filters.budgetRub ? rubToUsd(filters.budgetRub) : undefined,
     skill: filters.skill,
     language: filters.language,
-    createdAfter: filters.sort === 'new' ? undefined : new Date(now.getTime() - RANKED_WINDOW_MS).toISOString(),
+    createdAfter: rankedWindowApplies(filters) ? new Date(now.getTime() - RANKED_WINDOW_MS).toISOString() : undefined,
   };
 }
 
