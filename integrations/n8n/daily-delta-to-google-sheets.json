@@ -1,0 +1,42 @@
+{
+  "name": "openradar: daily delta to Google Sheets",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "hours", "hoursInterval": 24 }] } },
+      "name": "Every day",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://openradar.fun/api/delta?since={{ $now.minus({ hours: 24 }).toISO() }}&limit=1000",
+        "options": {}
+      },
+      "name": "Fetch /api/delta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "documentId": { "__rl": true, "mode": "id", "value": "YOUR_SHEET_ID" },
+        "sheetName": { "__rl": true, "mode": "name", "value": "leads" },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": ["id"]
+        },
+        "options": {}
+      },
+      "name": "Append to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [660, 300]
+    }
+  ],
+  "connections": {
+    "Every day": { "main": [[{ "node": "Fetch /api/delta", "type": "main", "index": 0 }]] },
+    "Fetch /api/delta": { "main": [[{ "node": "Append to Sheets", "type": "main", "index": 0 }]] }
+  },
+  "settings": {}
+}

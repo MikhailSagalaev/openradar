@@ -766,6 +766,227 @@ ${ldScripts(faqJsonLd(SITE_FAQ), breadcrumbsJsonLd(baseUrl, [['openradar', '/'],
 }
 
 /** A plain-text map of the site for AI assistants (llmstxt.org). */
+/** Participants and sources of the last 30 days: the network made visible. */
+export function renderNetworkPage(options: {
+  baseUrl: string;
+  version: string;
+  auth?: AuthDisplay;
+  lang?: SupportedLang;
+  participants: Array<{ shortPubkey: string; name?: string; about?: string; points: number; tier: string }>;
+  sources: Array<{ title: string; leads: number; href?: string }>;
+  windowDays: number;
+}): string {
+  const { baseUrl, version } = options;
+  const ru = options.lang !== 'en';
+  const totalPoints = options.participants.reduce((sum, p) => sum + p.points, 0);
+  const totalLeads = options.sources.reduce((sum, s) => sum + s.leads, 0);
+
+  const participantRows = options.participants.map((p, index) => {
+    const label = p.name ? escapeHtml(p.name) : `<code>${escapeHtml(p.shortPubkey)}</code>`;
+    return `<tr><td>${index + 1}</td><td>${label}${p.about ? `<div class="muted small">${escapeHtml(p.about.slice(0, 120))}</div>` : ''}</td><td class="num">${p.points % 1 === 0 ? p.points : p.points.toFixed(1)}</td><td>${escapeHtml(p.tier)}</td></tr>`;
+  }).join('\n');
+
+  const sourceRows = options.sources.map((s) => {
+    const title = s.href ? `<a href="${escapeHtml(s.href)}">${escapeHtml(s.title)}</a>` : escapeHtml(s.title);
+    return `<tr><td>${title}</td><td class="num">${s.leads}</td></tr>`;
+  }).join('\n');
+
+  const body = `
+<nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/">openradar</a> / ${ru ? 'Сеть' : 'Network'}</nav>
+<div class="page-head"><div>
+  <h1>${ru ? 'Сеть openradar' : 'The openradar network'}</h1>
+  <p class="muted small">${ru
+    ? `Участники приносят публикации в общую базу. Очки — рейтинг за ${options.windowDays} дней: кто первый увидел подтверждённый заказ, кто подтвердил, чей сигнал совпал с исходом.`
+    : `Participants bring posts into the shared base. Points are the ${options.windowDays}-day rating: who saw a confirmed lead first, who confirmed it, whose signal matched the outcome.`}</p>
+</div></div>
+
+<div class="detail-grid" style="grid-template-columns: 1.4fr 1fr;">
+  <section>
+    <h2>${ru ? 'Участники' : 'Participants'}</h2>
+    ${options.participants.length ? `
+    <table class="profile-table">
+      <thead><tr><th>#</th><th>${ru ? 'Участник' : 'Participant'}</th><th>${ru ? 'Очки' : 'Points'}</th><th>${ru ? 'Уровень' : 'Tier'}</th></tr></thead>
+      <tbody>${participantRows}</tbody>
+    </table>
+    <p class="muted small">${ru
+      ? 'Ключ участника — hex-подпись; имя появляется, только если участник сам опубликовал профиль (событие kind 30440). Закрытые каналы здесь не раскрываются.'
+      : 'A participant is a signing key; a name appears only when the participant published a profile (kind 30440). Private channels are never listed here.'}</p>`
+    : `<p class="muted">${ru ? 'Пока никто не получал очков — самые первые подтверждения появятся здесь.' : 'Nobody has earned points yet — the first confirmations will show up here.'}</p>`}
+  </section>
+  <section>
+    <h2>${ru ? 'Источники недели' : 'Sources of the week'}</h2>
+    ${options.sources.length ? `
+    <table class="profile-table">
+      <thead><tr><th>${ru ? 'Источник' : 'Source'}</th><th>${ru ? 'Лидов' : 'Leads'}</th></tr></thead>
+      <tbody>${sourceRows}</tbody>
+    </table>
+    <p class="muted small">${ru ? `Всего за неделю: ${totalLeads} публикаций. Полный список с состояниями — на <a href="/sources">странице источников</a>.` : `${totalLeads} posts in total this week. The full list with states lives on the <a href="/sources">sources page</a>.`}</p>`
+    : `<p class="muted">${ru ? 'Пока нет данных за неделю.' : 'No data for the week yet.'}</p>`}
+    <details class="score-help"><summary>${ru ? 'Как попасть в таблицу' : 'How to get on this table'}</summary>
+      <p>${ru
+        ? `Подключите источник: публичный канал, RSS или свой узел с флагом share. Суммарно участники сети набрали ${totalPoints % 1 === 0 ? totalPoints : totalPoints.toFixed(1)} очков за ${options.windowDays} дней.`
+        : `Connect a source: a public channel, an RSS feed or your own node with the share flag. The network has earned ${totalPoints % 1 === 0 ? totalPoints : totalPoints.toFixed(1)} points in ${options.windowDays} days.`}</p>
+    </details>
+  </section>
+</div>`;
+
+  const description = ru
+    ? 'Участники и источники openradar: рейтинг за 30 дней, источники недели, как подключить свой.'
+    : 'openradar participants and sources: the 30-day rating, sources of the week, how to connect yours.';
+
+  return layout({
+    auth: options.auth,
+    lang: options.lang,
+    title: ru ? 'Сеть' : 'Network',
+    version,
+    body,
+    head: `<meta name="description" content="${escapeHtml(description)}">
+<link rel="canonical" href="${escapeHtml(baseUrl)}/network">`,
+  });
+}
+
+/** Three ways to bring posts into the network, on one page. */
+export function renderContributePage(options: {
+  baseUrl: string;
+  version: string;
+  auth?: AuthDisplay;
+  lang?: SupportedLang;
+}): string {
+  const { baseUrl, version } = options;
+  const ru = options.lang !== 'en';
+  const card = (icon: string, title: string, minutes: string, text: string, snippet: string, gain: string): string => `
+  <div class="path">
+    <div class="path-head"><span class="path-icon" aria-hidden="true">${icon}</span>${escapeHtml(title)}<span class="path-time">${escapeHtml(minutes)}</span></div>
+    <p>${text}</p>
+    <pre>${snippet}</pre>
+    <div class="path-get">${gain}</div>
+  </div>`;
+
+  const body = `
+<nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/">openradar</a> / ${ru ? 'Участвовать' : 'Contribute'}</nav>
+<div class="page-head"><div>
+  <h1>${ru ? 'Подключите источник за 10 минут' : 'Connect a source in 10 minutes'}</h1>
+  <p class="muted small">${ru
+    ? 'Приведите заказы, которые видите только вы. Кто делится — тот видит ленту первым: без задержки и с контактами. Рейтинг привязан к вашему ключу, атрибуция — к вашему каналу.'
+    : 'Bring the orders only you can see. Those who share see the feed first: no delay, contacts included. The rating belongs to your key, the attribution to your channel.'}</p>
+</div></div>
+
+<div class="paths">
+  ${card('①', ru ? 'Telegram-канал' : 'A Telegram channel', ru ? '10 минут' : '10 minutes',
+    ru ? 'Публичный или ваш закрытый канал — через ваш аккаунт (MTProto), сессия живёт у вас.'
+       : 'A public or your private channel — through your own account (MTProto); the session stays with you.',
+    ru ? `radar telegram login --save ./session\nradar telegram scan\nradar source add --kind telegram-account --folder "Заказы"`
+       : `radar telegram login --save ./session\nradar telegram scan\nradar source add --kind telegram-account --folder "Orders"`,
+    ru ? '<b>×1.5 к рейтингу</b> за закрытый канал' : '<b>×1.5 rating</b> for a private channel')}
+  ${card('②', ru ? 'Свой парсер' : 'Your own parser', ru ? '5 минут' : '5 minutes',
+    ru ? 'Любой скрипт на любом языке: NDJSON-наблюдения в webhook-источник.'
+       : 'Any script in any language: NDJSON observations into a webhook source.',
+    ru ? `radar source add --kind webhook --title "Мой парсер"\npython parser.py | radar push --source <id>`
+       : `radar source add --kind webhook --title "My parser"\npython parser.py | radar push --source <id>`,
+    ru ? '<b>Скор лида</b> считают правила; LLM опционален' : '<b>The score</b> comes from rules; LLM optional')}
+  ${card('③', ru ? 'Готовый узел' : 'A full node', ru ? '15 минут' : '15 minutes',
+    ru ? 'Своя лента целиком: Docker, PostgreSQL, свои источники и уведомления.'
+       : 'A feed of your own: Docker, PostgreSQL, your sources and notifications.',
+    ru ? `git clone ${REPO_URL}.git && cd openradar\ndocker compose run --rm radar migrate\ndocker compose up -d`
+       : `git clone ${REPO_URL}.git && cd openradar\ndocker compose run --rm radar migrate\ndocker compose up -d`,
+    ru ? '<b>share</b>-флаг отправляет лиды в сеть' : 'the <b>share</b> flag sends leads to the network')}
+</div>
+
+<div class="detail-grid" style="grid-template-columns: 1.2fr 1fr;">
+  <section class="prose" style="margin-top:14px">
+    <h2>${ru ? 'Что даёт вклад' : 'What contribution gives'}</h2>
+    <ul>
+      <li>${ru ? '<b>Ранний доступ:</b> Active видит лиды через 30 минут, Core — сразу же.' : '<b>Early access:</b> Active sees leads after 30 minutes, Core instantly.'}</li>
+      <li>${ru ? '<b>Рейтинг:</b> +1.0 за первого, ×1.5 закрытый канал, ×1.5 эксклюзив за 6 часов.' : '<b>Rating:</b> +1.0 for the first sighting, ×1.5 private channel, ×1.5 for a 6-hour exclusive.'}</li>
+      <li>${ru ? '<b>Атрибуция:</b> источники недели — на странице <a href="/network">Сети</a>.' : '<b>Attribution:</b> sources of the week live on the <a href="/network">Network</a> page.'}</li>
+    </ul>
+    <p class="muted small">${ru
+      ? 'Не готовы делиться? Подпишитесь на RSS любого запроса — это тоже участие. Правила приёма источников: <a href="/sources">что уже подключено</a>.'
+      : 'Not ready to share? Subscribe to the RSS of any query — that counts too. What is already connected: <a href="/sources">the sources page</a>.'}</p>
+  </section>
+  <section class="prose" style="margin-top:14px">
+    <h2>${ru ? 'Уровни доступа' : 'Access tiers'}</h2>
+    <table class="profile-table">
+      <thead><tr><th>${ru ? 'Уровень' : 'Tier'}</th><th>${ru ? 'Как получить' : 'How'}</th><th>${ru ? 'Задержка' : 'Delay'}</th></tr></thead>
+      <tbody>
+        <tr><td>Guest</td><td>${ru ? 'без входа' : 'not signed in'}</td><td>12 ч</td></tr>
+        <tr><td>Member</td><td>GitHub</td><td>3 ч</td></tr>
+        <tr><td>Active</td><td>${ru ? 'рейтинг ≥ 10' : 'rating ≥ 10'}</td><td>30 ${ru ? 'мин' : 'min'}</td></tr>
+        <tr><td>Core</td><td>${ru ? 'рейтинг ≥ 50' : 'rating ≥ 50'}</td><td>—</td></tr>
+      </tbody>
+    </table>
+    <p class="muted small">${ru ? 'Подробности протокола: ' : 'Protocol details: '}<a href="${REPO_URL}/blob/main/docs/PROTOCOL.md" target="_blank" rel="noopener">docs/PROTOCOL.md</a></p>
+  </section>
+</div>`;
+
+  const description = ru
+    ? 'Подключите свой Telegram-канал, парсер или узел к openradar: без задержки, с контактами и рейтингом участника.'
+    : 'Connect your Telegram channel, parser or node to openradar: no delay, contacts, participant rating.';
+
+  return layout({
+    auth: options.auth,
+    lang: options.lang,
+    title: ru ? 'Участвовать' : 'Contribute',
+    version,
+    body,
+    head: `<meta name="description" content="${escapeHtml(description)}">
+<link rel="canonical" href="${escapeHtml(baseUrl)}/contribute">`,
+  });
+}
+
+/** What we collect, what we never collect, how to get data removed. */
+export function renderTrustPage(options: {
+  baseUrl: string;
+  version: string;
+  auth?: AuthDisplay;
+  lang?: SupportedLang;
+}): string {
+  const { baseUrl, version } = options;
+  const ru = options.lang !== 'en';
+  const body = `
+<nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/">openradar</a> / Trust</nav>
+<div class="page-head"><div>
+  <h1>Trust &amp; data</h1>
+  <p class="muted small">${ru ? 'Что собирает openradar, чего не собирает никогда и как удалить данные.' : 'What openradar collects, what it never does, and how to get data removed.'}</p>
+</div></div>
+<section class="prose" style="margin-top:0">
+  <h2>${ru ? 'Что собирается' : 'What we collect'}</h2>
+  <p>${ru
+    ? 'Только публичные постинги: открытые ленты бирж, официальные API, публичные страницы Telegram и письма-оповещения, которые оператор узла получил сам. Каждый источник объявляет уровень доступа и риски — это часть кода адаптера.'
+    : 'Public postings only: open board feeds, official APIs, public Telegram pages and job-alert mail the node operator received themselves. Every source declares its access level and risks — it is part of the adapter code.'}</p>
+  <h2>${ru ? 'Чего здесь нет и не будет' : 'What is never here'}</h2>
+  <ul>
+    <li>${ru ? 'Резюме и профилей кандидатов.' : 'Resumes and candidate profiles.'}</li>
+    <li>${ru ? 'Контактных данных людей, кроме тех, что написаны в самом посте; гостям они скрыты.' : 'People contact details beyond those written in the post itself; guests never see them.'}</li>
+    <li>${ru ? 'Обхода входа, капчи или платного доступа — это правило адаптеров, закреплённое в тестах.' : 'Login, CAPTCHA or paywall bypass — an adapter rule enforced in tests.'}</li>
+    <li>${ru ? 'Платного доступа: тарифов нет и не планируется.' : 'Paid access: there is no paid tier and none is planned.'}</li>
+  </ul>
+  <h2>${ru ? 'Безопасность' : 'Security'}</h2>
+  <p>${ru
+    ? 'Секреты только в переменных окружения узла. Запросы к источникам идут через SSRF-guard с проверкой адреса в момент соединения. События участников подписаны (BIP-340), HTTP-подписи одноразовые. HTML источников не рендерится, текст передаётся моделям как данные, скрытые Unicode-инструкции вырезаются на приёме.'
+    : 'Secrets live in node environment variables only. Outbound requests go through an SSRF guard that checks the address at connect time. Participant events are signed (BIP-340); HTTP signatures are single-use. Source HTML is never rendered; text is handed to models as data, and hidden Unicode instructions are stripped at intake.'}</p>
+  <h2>${ru ? 'Удаление' : 'Removal'}</h2>
+  <p>${ru
+    ? 'Площадка может потребовать убрать свой источник — он отключается из конфигурации, посты канала скрываются модератором. Участник удаляет свои посты событием kind 4042. По вопросам: '
+    : 'A board can ask to remove its source: it is disabled in the configuration and its posts are hidden by a moderator. A participant deletes their posts with a kind 4042 event. Questions: '}${'<a href="' + REPO_URL + '/issues" target="_blank" rel="noopener">GitHub issues</a>.'}</p>
+  <p class="muted small">${ru ? 'Статус сервиса: ' : 'Service status: '}<a href="/health">/health</a> · ${ru ? 'Описание API: ' : 'API description: '}<a href="/openapi.json">/openapi.json</a></p>
+</section>`;
+
+  const description = ru
+    ? 'Что собирает openradar (только публичные постинги), чего не собирает никогда, как обеспечивается безопасность и как удалить данные.'
+    : 'What openradar collects (public postings only), what it never does, how it is secured, and how to get data removed.';
+
+  return layout({
+    auth: options.auth,
+    lang: options.lang,
+    title: 'Trust & data',
+    version,
+    body,
+    head: `<meta name="description" content="${escapeHtml(description)}">
+<link rel="canonical" href="${escapeHtml(baseUrl)}/trust">`,
+  });
+}
+
 export function renderLlmsTxt(baseUrl: string): string {
   const line = (entry: CatalogEntry): string => `- [${entry.h1}](${baseUrl}/catalog/${entry.slug}): ${entry.description}`;
   return `# openradar
@@ -780,6 +1001,7 @@ export function renderLlmsTxt(baseUrl: string): string {
 - [Вопросы и ответы](${baseUrl}/faq)
 - [Расширение для браузера](${baseUrl}/extension): отправка вакансии с любого сайта и оценка рыночной оплаты.
 - [RSS-лента](${baseUrl}/feed.rss): параметры q (поиск) и type (gig — заказы, job — вакансии).
+- [HTTP API и MCP](${baseUrl}/openapi.json): OpenAPI-схема публичного API; каталог — ${baseUrl}/.well-known/api-catalog; MCP-сервер — ${baseUrl}/mcp (tools: search_leads, get_lead_details, get_market_stats).
 
 ## Заказы
 

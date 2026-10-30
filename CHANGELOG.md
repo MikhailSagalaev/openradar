@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.33.0
+
+- OpenAPI 3.1 description of the public read API at `/openapi.json`, discovered through an
+  RFC 9727 catalog at `/.well-known/api-catalog` and linked from `llms.txt`. A test keeps the
+  schema honest: every field of a live `/api/leads` lead must be described by the `Lead` schema.
+- JobSpy-compatible export: `radar export --jobspy` writes the columns pandas pipelines of
+  JobSpy expect (SITE, TITLE, COMPANY, … with CURRENCY, POSTED_PERIOD extras), amounts in the
+  posting currency, contacts never exported. See docs/JOBSPY_EXPORT.md.
+- The network page `/network`: the 30-day participant leaderboard (names only from published
+  profiles, keys abbreviated) and the sources of the week with their leads; private channels
+  are never listed. Cached for 10 minutes.
+- `/contribute` — the three ways to bring posts into the network (a Telegram account, a parser,
+  a full node) on one page with real snippets, tier table and the /network attribution link;
+  the footer's «Запустить свой узел» and «Предложить источник» now land there.
+- Adzuna adapter (official API, ~20 countries): keys live in RADAR_ADZUNA_APP_ID/KEY
+  environment variables, only real (not board-guessed) salaries become budgets, country
+  decides the currency, annual full-time pay is marked so the normalizer reads it right.
+  Preset «Adzuna — Вакансии США».
+- `/trust` — what is collected (public postings only), what is never collected, security
+  notes and the removal paths; linked from the footer.
+- docs/LOCAL_LLM.md — running the classifier and research extraction on ollama/LM Studio
+  with any OpenAI-compatible local endpoint. integrations/n8n — two ready workflows
+  (Signal webhook → Slack, daily /api/delta → Google Sheets). .github/FUNDING.yml.
 ## 0.32.1
 
 - The subscription bot reads its messages by long polling instead of a webhook, and Bot API calls
