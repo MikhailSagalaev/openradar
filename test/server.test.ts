@@ -1646,6 +1646,24 @@ describe('http server', () => {
     expect(filtered).toContain('<span class="filters-count">2</span>');
   });
 
+  it('fetches a preview only for a signed-in person and keeps the refusal reason in the log', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true });
+    const app = createApp(runtime);
+    const ask = (headers: Record<string, string> = {}) =>
+      app.request('/api/preview', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: 'http://localhost', ...headers },
+        body: JSON.stringify({ url: 'http://[::ffff:169.254.169.254]/latest/user-data' }),
+      });
+    expect((await ask()).status).toBe(401);
+
+    const user = await runtime.store.upsertGitHubUser!({ githubId: 41, handle: 'previewer' });
+    await runtime.store.createSession!('preview-session', new Date(Date.now() + 3600_000).toISOString(), user.id);
+    const res = await ask({ cookie: 'radar_session=preview-session' });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'blocked_url' });
+  });
+
   it('answers GET and DELETE on /mcp with 405: there is no server-sent stream', async () => {
     const app = createApp(makeRuntime({ RADAR_PUBLIC_READ: true }));
     const res = await app.request('/mcp');

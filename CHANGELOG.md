@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.26.4
+
+- `/api/preview` fetches a URL only for a signed-in person or an admin; it was open to anyone
+  on a public node. It no longer skips the same-origin check, and its limit is 20 requests in
+  10 minutes. A refused or failed fetch answers with a short code (`blocked_url`,
+  `preview_failed`); the reason, which can name internal addresses, goes to the log with the
+  URL and the client address.
+- CI fails on known high-severity vulnerabilities in production dependencies (`pnpm audit`).
+
 ## 0.26.3
 
 - Security: the SSRF guard missed IPv4 addresses written as IPv6. WHATWG URL turns

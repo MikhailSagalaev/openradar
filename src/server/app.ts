@@ -780,7 +780,6 @@ export function createApp(runtime: Runtime): Hono {
         c.req.path.startsWith('/api/ingest') ||
         c.req.path.startsWith('/api/v2/ingest') ||
         c.req.path === '/v2/events' ||
-        c.req.path === '/api/preview' ||
         c.req.path === '/api/submit' ||
         c.req.path === '/mcp';
       const hasBearerAuth = Boolean(c.req.header('authorization') || c.req.header('x-radar-token'));
@@ -1970,8 +1969,9 @@ export function createApp(runtime: Runtime): Hono {
     });
   });
 
-  app.post('/api/preview', rateLimit({ windowMs: 10 * 60_000, max: 30 }), async (c) => {
-    if (!await canRead(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
+  // The server fetches a URL the caller chose: only someone who can submit a lead may ask.
+  app.post('/api/preview', rateLimit({ windowMs: 10 * 60_000, max: 20 }), async (c) => {
+    if (!(await currentUser(c, runtime)) && !(await isAdmin(c, runtime))) return c.json({ error: 'unauthorized' }, 401);
     const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
     const url = asString(body?.url);
     if (!url) return c.json({ error: 'url_required' }, 400);
@@ -1989,10 +1989,15 @@ export function createApp(runtime: Runtime): Hono {
       const preview = extractPreviewFromHtml(html, url);
       return c.json({ ok: true, preview });
     } catch (err) {
-      return c.json(
-        { error: 'preview_failed', message: err instanceof Error ? err.message : String(err) },
-        500,
-      );
+      // The reason stays in the log: it can name internal addresses.
+      const message = err instanceof Error ? err.message : String(err);
+      const blocked = message.startsWith('Blocked');
+      runtime.logger.warn(blocked ? 'preview refused an internal address' : 'preview failed', {
+        url,
+        ip: c.req.header('x-real-ip') ?? c.req.header('x-forwarded-for'),
+        error: message,
+      });
+      return c.json({ error: blocked ? 'blocked_url' : 'preview_failed' }, blocked ? 400 : 502);
     }
   });
 
