@@ -1,3 +1,4 @@
+import { webPubkey } from '../hub/web-key.ts';
 import type { Logger } from '../core/types.ts';
 import { pollAll, type PollDeps } from './poll.ts';
 import { processOutbox } from './outbox.ts';
@@ -159,7 +160,8 @@ export class PollRunner {
       const runs = await store.cleanupRuns?.(30);
       const sessions = await store.purgeExpiredSessions?.();
       if (this.deps.env.RADAR_MODE === 'hub') {
-        const rating = await recomputeRatings(store, parseModerators(this.deps.env.RADAR_MODERATORS));
+        const secret = this.deps.env.RADAR_WEB_KEY_SECRET || this.deps.env.RADAR_ADMIN_TOKEN;
+        const rating = await recomputeRatings(store, parseModerators(this.deps.env.RADAR_MODERATORS), new Date(), secret ? (id) => webPubkey(secret, id) : undefined);
         this.logger.info('rating recomputed', { ...rating });
       }
       // Last month's market report is frozen once, early in the next month.

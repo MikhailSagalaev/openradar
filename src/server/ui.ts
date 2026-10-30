@@ -5,7 +5,7 @@ import { type SupportedLang, getTranslations } from './i18n.ts';
 import { renderLogo } from './logo.ts';
 import { type AnalyticsConfig, analyticsBody, analyticsHead } from './analytics.ts';
 import { formatLeadText } from './format.ts';
-import { BUDGET_STEPS_RUB, type FeedFilters, hasActiveFilters } from './filters.ts';
+import { activeFilterCount, BUDGET_STEPS_RUB, type FeedFilters, hasActiveFilters } from './filters.ts';
 import { SEO_CATALOG } from './seo.ts';
 import type { SourcePreset } from '../sources/presets.ts';
 
@@ -224,21 +224,8 @@ const DIRECT_KINDS = new Set(['hh', 'trudvsem', 'ats', 'kwork']);
 const DIRECT_RSS_HOSTS = new Set(['fl.ru', 'career.habr.com', 'hh.ru', 'freelancehunt.com']);
 const AGENCY_RE = /агентств|кадров|рекрут|hr-?агент|recruit|staffing|talent agency/i;
 
-export type ScoreBand = 'strong' | 'good' | 'weak' | 'noise';
-
-/** The word beside a score: 80+ strong, 60–79 good, 40–59 weak, below 40 noise. */
-export function scoreBand(score: number): ScoreBand {
-  if (score >= 80) return 'strong';
-  if (score >= 60) return 'good';
-  if (score >= 40) return 'weak';
-  return 'noise';
-}
-
-function scoreWithBand(score: number, lang: SupportedLang): string {
-  const t = getTranslations(lang);
-  const band = scoreBand(score);
-  const label = { strong: t.bandStrong, good: t.bandGood, weak: t.bandWeak, noise: t.bandNoise }[band];
-  return `<span class="score-wrap"><span class="score" title="${escapeHtml(t.scoreHint)}">${score}</span><span class="band band-${band}">${escapeHtml(label)}</span></span>`;
+function scoreCell(score: number, lang: SupportedLang): string {
+  return `<span class="score" title="${escapeHtml(getTranslations(lang).scoreHint)}">${score}</span>`;
 }
 
 /** What each source type is for, one line on its card in the type picker. */
@@ -287,15 +274,6 @@ const STYLE = `
   --emerald: #10b981;
   --rose: #ef4444;
   --amber: #f59e0b;
-  /* Score band pills: a pale fill with dark text, at least 6:1 */
-  --emerald-soft: #d1fae5;
-  --emerald-ink: #065f46;
-  --blue-soft: #dbeafe;
-  --blue-ink: #1e40af;
-  --amber-soft: #fef3c7;
-  --amber-ink: #92400e;
-  --neutral-soft: #f4f4f5;
-  --neutral-ink: #52525b;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -310,14 +288,6 @@ const STYLE = `
     --emerald: #34d399;
     --rose: #f87171;
     --amber: #fbbf24;
-    --emerald-soft: #052e22;
-    --emerald-ink: #6ee7b7;
-    --blue-soft: #172554;
-    --blue-ink: #93c5fd;
-    --amber-soft: #451a03;
-    --amber-ink: #fcd34d;
-    --neutral-soft: #27272a;
-    --neutral-ink: #d4d4d8;
   }
 }
 * { box-sizing: border-box; }
@@ -679,11 +649,11 @@ dialog::backdrop {
 .row:nth-child(9) { animation-delay: 0.18s; }
 .row:nth-child(10) { animation-delay: 0.20s; }
 .row:nth-child(n+11) { animation-delay: 0.22s; }
-.row:hover {
-  text-decoration: none;
-  opacity: 0.72;
+/* Hover only where there is a pointer: on a phone the tap state would stick. */
+@media (hover: hover) {
+  .row:hover { text-decoration: none; opacity: 0.72; }
+  .row:hover .row-title { text-decoration: underline; }
 }
-.row:hover .row-title { text-decoration: underline; }
 .row-title {
   font-weight: 600;
   font-size: 14.5px;
@@ -713,21 +683,6 @@ dialog::backdrop {
   font-size: 13.5px;
   font-variant-numeric: tabular-nums;
 }
-.score-wrap { display: inline-flex; align-items: center; gap: 6px; }
-.band {
-  display: inline-block;
-  padding: 1px 7px;
-  border-radius: 9999px;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.5;
-  letter-spacing: 0;
-  white-space: nowrap;
-}
-.band-strong { background: var(--emerald-soft); color: var(--emerald-ink); }
-.band-good { background: var(--blue-soft); color: var(--blue-ink); }
-.band-weak { background: var(--amber-soft); color: var(--amber-ink); }
-.band-noise { background: var(--neutral-soft); color: var(--neutral-ink); }
 .dot {
   display: inline-block;
   width: 6.5px;
@@ -1160,6 +1115,7 @@ dialog::backdrop {
 .load-more { display: flex; justify-content: center; padding: 20px 0 8px; }
 .btn-plus { display: none; }
 .filters > summary { display: none; }
+.filter-rss { display: none; }
 .filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
 .filter-bar select {
   height: 34px;
@@ -1706,17 +1662,45 @@ footer {
   .intro-action span { display: none; }
   .type-tab, .chip { min-height: 40px; display: inline-flex; align-items: center; }
   .btn-submit .btn-label { display: none; }
-  .filters > summary { display: block; width: max-content; margin-top: 2px; font-size: 13px; color: var(--ink); cursor: pointer; }
+  .filters { display: block; margin: 0 0 16px; }
+  .filters > summary {
+    display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px;
+    border: 1px solid var(--line); border-radius: 9999px; font-size: 13px; font-weight: 500;
+    color: var(--ink); cursor: pointer; list-style: none; user-select: none;
+  }
+  .filters > summary::-webkit-details-marker { display: none; }
+  .filters[open] > summary { border-color: var(--line-strong); }
+  .filters[open] .filters-chevron { transform: rotate(180deg); }
+  .filters-chevron { transition: transform 0.15s ease; color: var(--muted); }
+  .filters-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9999px; background: var(--ink); color: var(--bg); font-size: 11px; font-weight: 600; }
+  .filter-bar { margin-top: 12px; }
+  .filter-rss { display: inline-flex; align-items: center; height: 40px; padding: 0 14px; border: 1px solid var(--line); border-radius: 9999px; font-size: 13px; color: var(--ink); }
+  .search-bar .search-kbd, .search-bar .search-rss-inside { display: none; }
+  /* The feed starts higher: a smaller title and tighter gaps above it. */
+  .feed-title { font-size: 20px; }
+  .search-hero { margin: 0 0 12px; gap: 8px; }
+  /* Fingers need 40 px: buttons, nav links, the back link, votes. */
+  .btn { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; }
+  .search-btn-inside { min-height: 0; }
+  .nav a { padding: 10px 0 9px; }
+  .nav { padding-top: 0; }
+  .back { display: inline-flex; align-items: center; min-height: 40px; }
+  .community-votes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; overflow: visible; }
+  .vote-btn { min-height: 40px; justify-content: center; }
+  /* 16 px fields: iOS zooms into anything smaller. */
+  .filter-bar select, .search-bar input, .field input, .field select { font-size: 16px; }
+  .page-head .actions { margin-left: 0; }
+  .sources-cta { display: grid; }
+  .sources-cta .btn { width: 100%; }
   .btn-submit .btn-plus { display: inline; font-size: 18px; line-height: 1; }
   .search-bar { width: 100%; }
   .search-bar input { flex: 1 1 0; min-width: 0; }
   .type-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
   .chips { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; padding-bottom: 4px; width: 100%; }
   .chip { white-space: nowrap; }
-  .row { grid-template-columns: 1fr; gap: 6px; padding: 14px 0; }
-  .row-side { justify-content: flex-start; }
+  .row { gap: 12px; padding: 14px 0; }
+  .row-side { align-items: flex-start; padding-top: 1px; }
   .funnel-bar { flex-direction: column; align-items: stretch; gap: 12px; }
-  .community-votes { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; padding-bottom: 4px; }
 }
 `;
 
@@ -2156,7 +2140,7 @@ function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru', 
       ${subLine}
     </div>
     <div class="row-side">
-      ${scoreWithBand(lead.score, lang)}
+      ${scoreCell(lead.score, lang)}
       ${admin ? `<span>${statusDot(lead.status, lang)}</span>` : ''}
     </div>
   </a>`;
@@ -2289,10 +2273,12 @@ export function renderLeadsPage(data: LeadsPageData): string {
       ${option('en', t.langEn, filters.language === 'en')}
     </select>`;
   // On phones the filters fold under one button unless some are set (see the script below).
-  const filterBar = `<details class="filters" id="feed-filters" open><summary>${escapeHtml(t.filtersTitle)}${hasActiveFilters(filters) ? ' •' : ''}</summary><div class="filter-bar">
+  const activeCount = activeFilterCount(filters);
+  const filterBar = `<details class="filters" id="feed-filters" open><summary class="filters-toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>${escapeHtml(t.filtersTitle)}${activeCount ? `<span class="filters-count">${activeCount}</span>` : ''}<svg class="filters-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div class="filter-bar">
     ${sortSelect}${budgetSelect}${skillSelect}${languageSelect}
     <label class="filter-check"><input type="checkbox" name="remote" value="1"${filters.remote ? ' checked' : ''} onchange="this.form.submit()">${escapeHtml(t.remoteOnly)}</label>
     ${hasActiveFilters(filters) ? `<a class="filter-reset" href="${escapeHtml(hrefWith({ sort: undefined, budget: undefined, skill: undefined, language: undefined, remote: undefined }))}">${escapeHtml(t.resetFilters)}</a>` : ''}
+    <a class="filter-rss" href="${escapeHtml(rssHref)}" target="_blank" rel="noopener">RSS</a>
   </div></details>
   ${filters.sort !== 'new' ? `<p class="score-legend">${escapeHtml(t.rankedWindow)}</p>` : ''}
   ${hasActiveFilters(filters) ? '' : `<script>try{if(matchMedia('(max-width: 700px)').matches){document.getElementById('feed-filters').open=false}}catch(e){}</script>`}`;
@@ -2671,7 +2657,7 @@ ${cautionBanner}
       <div><dt>${escapeHtml(t.location)}</dt><dd>${escapeHtml(lead.city ?? (lead.isRemote !== false ? t.remote : '—'))}</dd></div>
       <div><dt>${escapeHtml(t.format)}</dt><dd>${lead.isRemote !== false ? escapeHtml(t.remoteFormat) : escapeHtml(t.onsiteFormat)}</dd></div>
       <div><dt>${escapeHtml(t.budget)}</dt><dd>${salaryDisplay}${usdEstimate}</dd></div>
-      <div><dt>${escapeHtml(t.score)}</dt><dd>${scoreWithBand(lead.score, lang)}</dd></div>
+      <div><dt>${escapeHtml(t.score)}</dt><dd>${scoreCell(lead.score, lang)}</dd></div>
       <div><dt>${escapeHtml(t.published)}</dt><dd>${formatDate(lead.publishedAt, lang)}</dd></div>
       ${Math.abs(Date.parse(lead.createdAt) - Date.parse(lead.publishedAt ?? lead.createdAt)) > 30 * 60_000 ? `<div><dt>${escapeHtml(t.added)}</dt><dd>${formatDate(lead.createdAt, lang)}</dd></div>` : ''}
       ${lead.author ? `<div><dt>${escapeHtml(t.author)}</dt><dd>${escapeHtml(lead.author)}</dd></div>` : ''}
@@ -3281,7 +3267,7 @@ export function renderProfilePage(data: ProfilePageData): string {
     </tbody></table>`
     : '';
   const keyBlock = data.pubkey
-    ? `<p>${ru ? 'Ключ участника' : 'Participant key'}: <code>${escapeHtml(data.pubkey.slice(0, 12))}…${escapeHtml(data.pubkey.slice(-6))}</code> · ${ru ? 'рейтинг за 30 дней' : '30-day rating'}: <strong>${(data.rating ?? 0).toFixed(1)}</strong></p>`
+    ? `<p>${ru ? 'Ключ участника' : 'Participant key'}: <code>${escapeHtml(data.pubkey.slice(0, 12))}…${escapeHtml(data.pubkey.slice(-6))}</code> · ${ru ? 'очки за 30 дней' : 'points over 30 days'}: <strong>${Math.round((data.rating ?? 0) * POINTS_SCALE)}</strong></p>`
     : `<p class="muted">${ru
         ? 'Ключ участника к аккаунту не привязан: рейтинг копится на ключе, которым подписаны ваши наблюдения.'
         : 'No participant key is linked to this account: rating accrues to the key that signs your observations.'}</p>`;
@@ -3324,7 +3310,7 @@ export function renderProfilePage(data: ProfilePageData): string {
   <ol class="profile-steps">
     <li>${ru ? 'Добавляйте заказы и вакансии <a href="/submit">по ссылке</a> или через <a href="/extension">расширение</a>: +10 очков за подтверждённый заказ, который вы принесли первым.' : 'Add leads <a href="/submit">by link</a> or with the <a href="/extension">extension</a>: +10 points for a confirmed lead you brought first.'}</li>
     <li>${ru ? 'Из закрытых каналов очков в полтора раза больше: подключите свой узел с Telegram и включите «делиться».' : 'Private channels earn half as much again: run your node with Telegram and turn on sharing.'}</li>
-    <li>${ru ? 'Голосуйте «полезно», «мусор», «закрыто»: голос, совпавший с итогом, даёт +1. Мусор и скам отнимают очки.' : 'Vote useful, junk, closed: a vote that matches the outcome gives +1. Junk and scam cost points.'}</li>
+    <li>${ru ? 'Голосуйте «полезно», «мусор», «закрыто» — так мусор и мошенники быстрее уходят из ленты. Если заказ принёс участник сети, голос, совпавший с итогом, даёт +1. Свои заказы, скрытые как мусор, отнимают очки.' : 'Vote useful, junk, closed: junk and scams leave the feed sooner. On a lead a network participant brought, a vote that matches the outcome gives +1. Your own leads hidden as junk cost points.'}</li>
     <li>${ru ? 'Очки считаются за 30 дней: уровень держится, пока вы приносите заказы.' : 'Points count over 30 days: the tier holds while you keep bringing leads.'}</li>
   </ol>
   ${keyBlock}

@@ -137,7 +137,7 @@ function printLeads(leads: Lead[]): void {
     lead.title.slice(0, 60),
     lead.url ?? '',
   ]);
-  console.log(table(['ID', 'Скор', 'Статус', 'Город', 'Бюджет', 'Заголовок', 'URL'], rows));
+  console.log(table(['ID', 'Рейтинг', 'Статус', 'Город', 'Бюджет', 'Заголовок', 'URL'], rows));
 }
 
 function configSummary(source: SourceRecord): string {

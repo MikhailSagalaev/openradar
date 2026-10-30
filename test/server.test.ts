@@ -1281,7 +1281,7 @@ describe('http server', () => {
       expect(guest).not.toContain('status=delivered');
       expect(guest).not.toContain('доставлен');
       expect(guest).toContain('id="feed-intro"');
-      expect(guest).toContain('Скор от 0 до 100');
+      expect(guest).toContain('Рейтинг от 0 до 100');
 
       for (const path of ['/api/leads', '/v2/feed', '/feed.rss', '/api/delta?since=2000-01-01T00:00:00Z']) {
         const body = await (await app.request(path)).text();
@@ -1630,6 +1630,20 @@ describe('http server', () => {
     expect((await app.request('/lang/ru?return=/en/research/index')).headers.get('location')).toBe('/research/index');
     expect((await app.request('/lang/en?return=/research/methodology')).headers.get('location')).toBe('/en/research/methodology');
     expect((await app.request('/lang/en', { headers: { referer: 'https://evil.example/x' } })).headers.get('location')).toBe('/');
+  });
+
+  it('shows a plain rating, a filter button with the count of set filters and RSS in the filters', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true });
+    const app = createApp(runtime);
+
+    const plain = await (await app.request('/', { headers: { cookie: 'openradar_lang=ru' } })).text();
+    expect(plain).not.toContain('class="band');
+    expect(plain).toContain('Что такое рейтинг?');
+    expect(plain).not.toContain('class="filters-count"');
+    expect(plain).toContain('class="filter-rss"');
+
+    const filtered = await (await app.request('/?remote=1&sort=score', { headers: { cookie: 'openradar_lang=ru' } })).text();
+    expect(filtered).toContain('<span class="filters-count">2</span>');
   });
 
   it('answers GET and DELETE on /mcp with 405: there is no server-sent stream', async () => {

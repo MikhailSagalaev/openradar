@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.26.1
+
+- The score pills are gone: a lead shows its number only. In Russian the score is called
+  «рейтинг» everywhere; a participant's standing is called «очки».
+- A vote on the site counts for the voter's web key when it matches the outcome of a lead a
+  network participant brought. It is not paid when the account brought the lead itself, and
+  one person gets one vote: a site vote is dropped when a key of the same account signed too.
+  The profile says when votes earn points.
+- Phones: the filters open from a button with the number of set filters; RSS moves into the
+  filters; the search pill keeps only «Найти»; a lead row keeps its rating on the right; the
+  feed starts higher; buttons, nav links, the back link and the vote buttons (now two by two)
+  are at least 40 px tall; fields use 16 px text so iOS does not zoom in; hover effects apply
+  only where there is a pointer.
+
 ## 0.26.0
 
 - A pill beside every score says what it means: strong (80+), good (60-79), weak (40-59),

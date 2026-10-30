@@ -242,6 +242,29 @@ describe('radar/2 rating: hub flow', () => {
     expect(await ledgerForLead(lead, archived, [], weights, later)).toEqual([]);
   });
 
+  it('pays a site vote that matches the outcome to the voter web key', async () => {
+    const { runtime, app } = hub();
+    const alice = generateKeyPair();
+    const leadId = (await send(app, [buildObservationEvent(observation({ source: { platform: 'rss', channel: 'https://example.com/rss', message_id: 'v' } }), alice.privKey)]))[0]!.leadId!;
+    // A confirmed lead: «useful» votes on it match the outcome.
+    const lead = { ...(await runtime.store.getLead(leadId))!, confirmedAt: new Date().toISOString() };
+    const observations = await runtime.store.listObservations(leadId);
+    const weights = new WeightResolver(runtime.store, new Set([alice.pubKey]));
+    const later = new Date(Date.parse(lead.createdAt) + 25 * 3600 * 1000);
+    const votes = [{ leadId, pubkey: 'web:7', signal: 'useful' as const, comment: '', createdAt: lead.createdAt }];
+    const webKey = 'b'.repeat(64);
+    const paid = (entries: Array<{ kind: string; pubkey: string }>) => entries.filter((e) => e.kind === 'signal_match').map((e) => e.pubkey);
+    expect(paid(await ledgerForLead(lead, observations, votes, weights, later, (id) => (id === 7 ? { payTo: webKey, keys: [webKey] } : undefined)))).toEqual([webKey]);
+    // Without a way to name the web key the vote stays unpaid, as before.
+    expect(paid(await ledgerForLead(lead, observations, votes, weights, later))).toEqual([]);
+    // An account whose own key brought the lead is not paid for voting on it.
+    expect(paid(await ledgerForLead(lead, observations, votes, weights, later, () => ({ payTo: webKey, keys: [webKey, alice.pubKey] })))).toEqual([]);
+    // One person, one vote: a key of the account already signed, so the site vote is dropped.
+    const nodeKey = 'c'.repeat(64);
+    const both = [...votes, { leadId, pubkey: nodeKey, signal: 'useful' as const, comment: '', createdAt: lead.createdAt }];
+    expect(paid(await ledgerForLead(lead, observations, both, weights, later, () => ({ payTo: webKey, keys: [webKey, nodeKey] })))).toEqual([nodeKey]);
+  });
+
   it('gives a ring of fresh keys nothing for confirming each other', async () => {
     const { runtime, app } = hub();
     const [author, ...ring] = [generateKeyPair(), generateKeyPair(), generateKeyPair(), generateKeyPair()];

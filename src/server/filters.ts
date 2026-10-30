@@ -47,9 +47,13 @@ export function filterOptions(filters: FeedFilters, now: Date = new Date()): Lis
   };
 }
 
+/** How many filters differ from the default view. */
+export function activeFilterCount(filters: FeedFilters): number {
+  return [filters.sort !== 'new', filters.remote, Boolean(filters.budgetRub), Boolean(filters.skill), Boolean(filters.language)]
+    .filter(Boolean).length;
+}
+
 /** True when any filter differs from the default view. */
 export function hasActiveFilters(filters: FeedFilters): boolean {
-  return (
-    filters.sort !== 'new' || filters.remote || Boolean(filters.budgetRub) || Boolean(filters.skill) || Boolean(filters.language)
-  );
+  return activeFilterCount(filters) > 0;
 }

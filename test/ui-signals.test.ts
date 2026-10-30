@@ -1,26 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { KIND_ACCESS, isDirectEmployerSource, layout, scoreBand } from '../src/server/ui.ts';
+import { KIND_ACCESS, isDirectEmployerSource, layout } from '../src/server/ui.ts';
 import { createSourceRegistry } from '../src/sources/index.ts';
 import type { SourceRecord } from '../src/core/types.ts';
 
 function source(kind: string, config: Record<string, unknown> = {}): SourceRecord {
   return { id: `s-${kind}`, kind, title: kind, enabled: true, config, createdAt: '', updatedAt: '' } as SourceRecord;
 }
-
-describe('scoreBand', () => {
-  it.each([
-    [100, 'strong'],
-    [80, 'strong'],
-    [79, 'good'],
-    [60, 'good'],
-    [59, 'weak'],
-    [40, 'weak'],
-    [39, 'noise'],
-    [0, 'noise'],
-  ])('%i is %s', (score, band) => {
-    expect(scoreBand(score)).toBe(band);
-  });
-});
 
 describe('isDirectEmployerSource', () => {
   it.each([
