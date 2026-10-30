@@ -2098,6 +2098,9 @@ function leadTitle(lead: Lead): string {
   return lead.title.trim() || firstLine(lead.text, 100) || 'Без заголовка';
 }
 
+/** The day counter counts up to this many leads; above it the page says «5 000+». */
+export const FOUND_TODAY_CAP = 5000;
+
 function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru', admin = true): string {
   const t = getTranslations(lang);
   // An absurd salary stays off the feed: the row says «проверить» instead of the number.
@@ -2328,7 +2331,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
   // One quiet line instead of a banner: today's volume, and the viewer's delay if any.
   const feedMeta = [
     // The number leads to /sources, where it breaks down by platform.
-    `<a class="found-today" href="/sources" title="${escapeHtml(t.foundTodayHint)}">${t.feedFoundToday.replace('{n}', `<strong>${new Intl.NumberFormat('ru-RU').format(stats.last24h)}</strong>`)}</a>`,
+    `<a class="found-today" href="/sources" title="${escapeHtml(t.foundTodayHint)}">${t.feedFoundToday.replace('{n}', `<strong>${new Intl.NumberFormat('ru-RU').format(stats.last24h)}${stats.last24h >= FOUND_TODAY_CAP ? '+' : ''}</strong>`)}</a>`,
     delay > 0 ? escapeHtml(t.feedDelayNote.replace('{d}', delayLabel)) + (data.auth ? '' : `, ${escapeHtml(t.contactsHiddenShort)}`) : '',
     delay > 0 ? `<a href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md#5-делиться-с-хабом-и-получать-рейтинг" target="_blank" rel="noopener noreferrer">${escapeHtml(t.removeDelay)}</a>` : '',
   ].filter(Boolean).join(' · ');

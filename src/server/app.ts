@@ -44,6 +44,7 @@ import {
   renderSourcesPage,
   renderSourceCatalogPage,
   renderSubmitPage,
+  FOUND_TODAY_CAP,
   STYLE,
   type AuthDisplay,
   STYLE_PATH,
@@ -1011,7 +1012,7 @@ export function createApp(runtime: Runtime): Hono {
     const cached = foundTodayCache.get(viewer.tier);
     if (cached && Date.now() - cached.at < 10 * 60_000) return cached.count;
     const until = Date.parse(visibleBefore(viewer, runtime.access) ?? new Date().toISOString());
-    const count = leadsFor(runtime, viewer, { limit: 5000, createdAfter: new Date(until - 24 * 3600_000).toISOString() })
+    const count = leadsFor(runtime, viewer, { limit: FOUND_TODAY_CAP, createdAfter: new Date(until - 24 * 3600_000).toISOString() })
       .then((recent) => recent.length);
     foundTodayCache.set(viewer.tier, { at: Date.now(), count });
     count.catch(() => foundTodayCache.delete(viewer.tier));

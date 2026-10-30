@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.27.3
+
+- «За сутки найдено» says «5 000+» when the count reaches its cap instead of a flat 5 000.
+- New README screenshots of the current feed, English and Russian.
+
 ## 0.27.2
 
 - Currency detection matches whole words: «евро» in «Европа», `aud` in «Claude» or «audit»,
