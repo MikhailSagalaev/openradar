@@ -576,9 +576,11 @@ function buildProgram(): Command {
             deliverDueSubscriptions(subscriptionDeps(runtime)),
           );
       runner?.start();
-      void startSubscriptionBot(runtime);
+      const bot = new AbortController();
+      void startSubscriptionBot(runtime, bot.signal);
 
       const shutdown = (): void => {
+        bot.abort();
         runner?.stop();
         server.close(async () => {
           try {

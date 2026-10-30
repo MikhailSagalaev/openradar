@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.32.1
+
+- The subscription bot reads its messages by long polling instead of a webhook, and Bot API calls
+  go through `RADAR_PROXY_URL`: from the hub in Russia `api.telegram.org` does not answer directly,
+  and Telegram cannot be counted on to reach the hub. The `/api/telegram/webhook` endpoint is gone.
+  A failed start is retried every minute.
+
 ## 0.32.0
 
 - Saved searches: «Следить» in the feed follows the filters on screen (query, type, IT, remote,
