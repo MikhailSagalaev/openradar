@@ -2240,7 +2240,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
       sort: filters.sort === (filters.defaultSort ?? 'new') ? undefined : filters.sort,
       budget: filters.budgetRub ? String(filters.budgetRub) : undefined,
       skill: filters.skill,
-      language: filters.language,
+      language: filters.language === filters.defaultLanguage ? undefined : (filters.language ?? 'all'),
       remote: filters.remote ? '1' : undefined,
       ...overrides,
     };
@@ -2252,7 +2252,8 @@ export function renderLeadsPage(data: LeadsPageData): string {
   const hrefForType = (nextType: string): string => hrefWith({ type: nextType });
   const hrefForStatus = (nextStatus: string): string => hrefWith({ status: nextStatus });
   const hrefForQuery = (nextQ: string): string => hrefWith({ q: nextQ });
-  const rssHref = hrefWith({ sort: undefined }, '/feed.rss');
+  // RSS has no default language: it gets the one this page shows.
+  const rssHref = hrefWith({ sort: undefined, language: filters.language }, '/feed.rss');
 
   const option = (value: string, label: string, selected: boolean): string =>
     `<option value="${escapeHtml(value)}"${selected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
@@ -2274,9 +2275,13 @@ export function renderLeadsPage(data: LeadsPageData): string {
       ${skills.map((name) => option(name, name, filters.skill?.toLowerCase() === name.toLowerCase())).join('')}
     </select>`;
   const languageSelect = `<select name="language" aria-label="${escapeHtml(t.langAny)}" onchange="this.form.submit()">
-      ${option('', t.langAny, !filters.language)}
-      ${option('ru', t.langRu, filters.language === 'ru')}
-      ${option('en', t.langEn, filters.language === 'en')}
+      ${([['all', t.langAny], ['ru', t.langRu], ['en', t.langEn]] as const)
+        .map(([value, label]) => option(
+          (value === 'all' ? undefined : value) === filters.defaultLanguage ? '' : value,
+          label,
+          (filters.language ?? 'all') === value,
+        ))
+        .join('')}
     </select>`;
   // On phones the filters fold under one button unless some are set (see the script below).
   const activeCount = activeFilterCount(filters);

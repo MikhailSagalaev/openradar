@@ -624,11 +624,17 @@ describe('http server', () => {
     }
     const auth = { headers: { authorization: 'Bearer secret' } };
 
-    const first = await (await app.request('/', auth)).text();
-    expect(first).toContain('href="/?page=2"');
-    const second = await (await app.request('/?page=2', auth)).text();
+    const first = await (await app.request('/?language=all', auth)).text();
+    expect(first).toContain('href="/?language=all&amp;page=2"');
+    const second = await (await app.request('/?language=all&page=2', auth)).text();
     expect(second).toContain('/leads/l0"');
-    expect(second).not.toContain('href="/?page=3"');
+    expect(second).not.toContain('page=3"');
+    // A Russian page opens with Russian leads only; «Любой язык» lifts it.
+    const russian = await (await app.request('/', auth)).text();
+    expect(russian).toContain('Бот на Python');
+    expect(russian).not.toContain('Python developer');
+    expect(russian).toContain('<option value="all">');
+    expect(russian).toContain('href="/feed.rss?language=ru"');
 
     const english = (await (await app.request('/api/leads?language=en&limit=100', auth)).json()) as Array<{ title: string }>;
     expect(english).toHaveLength(26);
@@ -1279,7 +1285,7 @@ describe('http server', () => {
       await seed(runtime);
       const app = createApp(runtime);
 
-      const guest = await (await app.request('/')).text();
+      const guest = await (await app.request('/?language=all')).text();
       expect(guest).toContain('Python bot');
       expect(guest).not.toContain('Write a review');
       expect(guest).not.toContain('status=delivered');
@@ -1295,7 +1301,7 @@ describe('http server', () => {
       expect((await app.request('/leads/lead-rejected')).status).toBe(404);
 
       const sessionId = await makeAdminSession(runtime);
-      const admin = await (await app.request('/', { headers: { cookie: `radar_session=${sessionId}` } })).text();
+      const admin = await (await app.request('/?language=all', { headers: { cookie: `radar_session=${sessionId}` } })).text();
       expect(admin).toContain('Write a review');
       expect(admin).toContain('status=rejected');
       expect(admin).not.toContain('id="feed-intro"');

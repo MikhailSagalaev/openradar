@@ -1049,7 +1049,8 @@ export function createApp(runtime: Runtime): Hono {
     const type: LeadType | undefined = rawType === 'job' || rawType === 'gig' ? rawType : undefined;
     const query = (c.req.query('q') ?? '').trim();
     // The first screen ranks by quality; «Сначала новые» is one click away.
-    const filters = parseFeedFilters(c, 'score');
+    // …in the interface's market: a Russian page opens with Russian leads, «Любой язык» is one click away.
+    const filters = parseFeedFilters(c, 'score', lang === 'ru' ? 'ru' : undefined);
     const page = Math.max(1, Math.min(Math.floor(Number(c.req.query('page')) || 1), 100));
     const pageSize = 50;
 
