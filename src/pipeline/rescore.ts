@@ -2,7 +2,10 @@ import { prepareRawLead } from '../core/prepare.ts';
 import { assessQuality, qualityFlagsOf } from '../core/quality.ts';
 import { scoreLead } from '../core/rules.ts';
 import type { Store } from '../core/store.ts';
-import type { SourceRecord } from '../core/types.ts';
+import type { Lead, SourceRecord } from '../core/types.ts';
+
+/** Leads read per store call: the stores cap a listing at 5000. */
+const RESCORE_PAGE = 5000;
 
 export interface RescoreSummary {
   checked: number;
@@ -19,14 +22,20 @@ export interface RescoreSummary {
  */
 export async function rescoreLeads(
   store: Store,
-  options: { limit?: number; days?: number; now?: Date } = {},
+  options: { limit?: number; days?: number; now?: Date; pageSize?: number } = {},
 ): Promise<RescoreSummary> {
   if (!store.updateLeadScore) return { checked: 0, changed: 0, requalified: 0 };
   const now = options.now ?? new Date();
-  const leads = await store.listLeads({
-    limit: options.limit ?? 5000,
-    createdAfter: options.days ? new Date(now.getTime() - options.days * 24 * 3600 * 1000).toISOString() : undefined,
-  });
+  const limit = options.limit ?? 5000;
+  const createdAfter = options.days ? new Date(now.getTime() - options.days * 24 * 3600 * 1000).toISOString() : undefined;
+  // The store returns at most 5000 leads a call; a long window is read page by page, newest first.
+  const leads: Lead[] = [];
+  while (leads.length < limit) {
+    const want = Math.min(options.pageSize ?? RESCORE_PAGE, limit - leads.length);
+    const page = await store.listLeads({ limit: want, createdAfter, offset: leads.length });
+    leads.push(...page);
+    if (page.length < want) break;
+  }
   const sources = new Map<string, SourceRecord | null>();
   let changed = 0;
   let requalified = 0;
