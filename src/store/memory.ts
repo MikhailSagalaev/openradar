@@ -1046,6 +1046,10 @@ export class MemoryStore implements Store {
     return this.subscriptions.delete(id);
   }
 
+  async listActiveSubscriptions(limit: number): Promise<SubscriptionRecord[]> {
+    return [...this.subscriptions.values()].filter((s) => !s.paused).slice(0, limit).map((s) => ({ ...s, filters: { ...s.filters } }));
+  }
+
   async listDueSubscriptions(checkedBefore: string, limit: number): Promise<SubscriptionRecord[]> {
     return [...this.subscriptions.values()]
       .filter((s) => !s.paused && (!s.checkedAt || s.checkedAt < checkedBefore))

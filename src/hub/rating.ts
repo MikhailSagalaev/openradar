@@ -1,3 +1,4 @@
+import { emitLeadClosed } from '../core/events.ts';
 import type { LedgerEntry, ObservationRecord, ParticipantRecord, SignalRecord, Store } from '../core/store.ts';
 import type { Lead, LeadState, ViewerTier } from '../core/types.ts';
 
@@ -146,6 +147,7 @@ export async function evaluateLeadState(
   store: Store,
   lead: Lead,
   weights: WeightResolver,
+  opts: { live?: boolean } = {},
 ): Promise<LeadState> {
   const decision = await store.getLeadDecision(lead.id);
   let state: LeadState;
@@ -161,7 +163,12 @@ export async function evaluateLeadState(
     const closedBy = decision && (decision.decidedBy === 'author' || decision.decidedBy === 'source') ? decision : null;
     state = closedBy && fromSignals === 'active' ? closedBy.state : fromSignals;
   }
-  if ((lead.state ?? 'active') !== state) await store.updateLeadState?.(lead.id, state);
+  if ((lead.state ?? 'active') !== state) {
+    await store.updateLeadState?.(lead.id, state);
+    // Live transitions (a signal, a moderator, an author) notify subscribers; the hourly
+    // recompute stays silent so a batch of old closures does not wake every subscriber.
+    if (opts.live && state !== 'active') emitLeadClosed(lead, state);
+  }
   return state;
 }
 

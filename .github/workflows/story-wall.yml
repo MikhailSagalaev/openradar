@@ -1,0 +1,42 @@
+name: Story wall
+
+# An issue labelled `on-the-record` goes onto the wall of stories: the workflow
+# regenerates docs/stories.json and commits it. The README badge and the /network
+# page read that file.
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  issues: read
+  contents: write
+
+concurrency:
+  group: story-wall
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    if: github.event.label.name == 'on-the-record'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/story-wall.mjs
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Commit the regenerated wall
+        run: |
+          git config user.name "openradar-bot"
+          git config user.email "bot@openradar.fun"
+          git add docs/stories.json
+          if git diff --cached --quiet; then
+            echo "Nothing changed"
+          else
+            git commit -m "docs: story wall rebuilt (#${{ github.event.issue.number }})"
+            git push
+          fi

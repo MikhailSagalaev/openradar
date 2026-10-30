@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.34.0
+
+- Closure events: when a lead leaves the active feed — closed by participants, hidden as
+  junk or scam — matching subscriptions are notified the moment it happens. The webhook
+  payload (`event: "lead.closed"`) carries the reason and the lead's public projection, signed
+  like the digests; Telegram sends a short «Закрыт» card. A subscriber is never told about a
+  lead their tier could not see yet, paused subscriptions stay quiet, and ten failed pushes
+  pause the subscription as with digests. Live transitions only: the hourly rating recompute
+  does not wake subscribers over old closures. The feed-side filter matcher
+  (`matchesSavedFilters`) mirrors the SQL semantics — type, skill, the IT set, remote,
+  language, budget and query words.
+- The wall of stories: an issue form «Я нашёл заказ через openradar» collects how the lead
+  was found and what helped; a maintainer label (`on-the-record`) rebuilds `docs/stories.json`
+  and the README badge counts the stories on the record. Linked from `/contribute`.
 ## 0.33.0
 
 - OpenAPI 3.1 description of the public read API at `/openapi.json`, discovered through an
