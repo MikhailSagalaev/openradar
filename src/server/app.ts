@@ -30,7 +30,7 @@ import { qualityFlagsOf } from '../core/quality.ts';
 import { rubToUsd } from '../core/salary.ts';
 import { sourceState } from '../core/source-health.ts';
 import { assertSafeUrl } from '../core/ssrf.ts';
-import { feedQuery, isEmptyFilter, MAX_SUBSCRIPTIONS_PER_USER, newWebhookSecret, savedFiltersFrom, subscriptionName, type SubscriptionRecord } from '../core/subscriptions.ts';
+import { feedQuery, isEmptyFilter, MAX_SUBSCRIPTIONS_PER_USER, newWebhookSecret, savedFiltersFrom, subscriptionName, type SavedFilters, type SubscriptionRecord } from '../core/subscriptions.ts';
 import { runTelegramPolling, setupSubscriptionBot, type SubscriptionDeps } from '../pipeline/subscriptions.ts';
 import { computeSalaryMedians, SALARY_FLOOR_RUB, SALARY_MEDIAN_MIN_SAMPLE, setSalaryMedians } from '../core/salary-sanity.ts';
 import { renderIndexPage } from '../research/index-page.ts';
@@ -818,6 +818,34 @@ export function subscriptionDeps(runtime: Runtime): SubscriptionDeps {
   };
 }
 
+/** One way to follow a filter, from the feed's button and from an agent's save_search. */
+async function createSubscriptionFor(
+  runtime: Runtime,
+  userId: number,
+  filters: SavedFilters,
+): Promise<{ status: 'created' | 'exists' | 'limit' | 'empty'; subscription?: SubscriptionRecord }> {
+  if (isEmptyFilter(filters)) return { status: 'empty' };
+  const existing = (await runtime.store.listSubscriptions?.(userId)) ?? [];
+  const same = existing.find((s) => feedQuery(s.filters) === feedQuery(filters));
+  if (same) return { status: 'exists', subscription: same };
+  if (existing.length >= MAX_SUBSCRIPTIONS_PER_USER) return { status: 'limit' };
+  const now = new Date().toISOString();
+  const subscription: SubscriptionRecord = {
+    id: randomUUID(),
+    userId,
+    name: subscriptionName(filters),
+    filters,
+    channel: 'telegram',
+    paused: false,
+    // Only leads that appear from now on: a new subscription does not resend the feed.
+    cursorAt: now,
+    failures: 0,
+    createdAt: now,
+  };
+  await runtime.store.createSubscription?.(subscription);
+  return { status: 'created', subscription };
+}
+
 /** Username of the hub's subscription bot, for t.me links; set when the bot is set up. */
 let subscriptionBotUsername: string | undefined;
 
@@ -1232,9 +1260,9 @@ export function createApp(runtime: Runtime): Hono {
     );
   });
 
-  app.get('/me', async (c) => {
+  /** The profile page; `agentToken` is a token just issued, shown this once. */
+  const renderProfile = async (c: Context, extra: { agentToken?: string } = {}): Promise<string> => {
     const viewer = await viewerFromRequest(c, runtime);
-    if (viewer.tier === 'guest') return c.redirect('/login?returnTo=/me');
     const participant = viewer.pubkey ? await runtime.store.getParticipant(viewer.pubkey) : null;
     const { admin: _admin, ...delays } = runtime.access.delays;
     // The account's keys: the linked one and its web key, when they differ.
@@ -1251,7 +1279,7 @@ export function createApp(runtime: Runtime): Hono {
       if (lead) titles.set(id, lead);
     }
     const rating = viewer.userId ? await accountRating(runtime, viewer.userId, participant) : participant?.rating;
-    return c.html(
+    return (
       renderProfilePage({
         version: VERSION,
         auth: await getAuthDisplay(c, runtime),
@@ -1285,8 +1313,22 @@ export function createApp(runtime: Runtime): Hono {
               notice: c.req.query('subscriptions') ?? undefined,
             }
           : undefined,
-      }),
+        agent: viewer.userId && runtime.store.hasAgentToken
+          ? {
+              hasToken: Boolean(extra.agentToken) || await runtime.store.hasAgentToken(viewer.userId),
+              newToken: extra.agentToken,
+              mcpUrl: `${publicBaseUrl(c, runtime)}/mcp`,
+              revoked: c.req.query('agent') === 'revoked',
+            }
+          : undefined,
+      })
     );
+  };
+
+  app.get('/me', async (c) => {
+    const viewer = await viewerFromRequest(c, runtime);
+    if (viewer.tier === 'guest') return c.redirect('/login?returnTo=/me');
+    return c.html(await renderProfile(c));
   });
 
   // Saved searches: follow a feed filter, get its new leads in Telegram or on a webhook.
@@ -1300,29 +1342,37 @@ export function createApp(runtime: Runtime): Hono {
     return { userId: user.id, subscription };
   };
 
+  /** The user behind `Authorization: Bearer mcp_…`; 'invalid' for a token that matches nobody. */
+  const agentUser = async (c: Context): Promise<UserRecord | 'invalid' | undefined> => {
+    const header = c.req.header('authorization') ?? '';
+    const token = header.toLowerCase().startsWith('bearer ') ? header.slice(7).trim() : '';
+    if (!token.startsWith('mcp_') || !runtime.store.getUserByAgentToken) return undefined;
+    return (await runtime.store.getUserByAgentToken(createHash('sha256').update(token).digest('hex'))) ?? 'invalid';
+  };
+
+  app.post('/me/agent-token', rateLimit({ windowMs: 10 * 60_000, max: 5 }), async (c) => {
+    const user = await currentUser(c, runtime);
+    if (!user || !runtime.store.setAgentToken) return c.redirect('/login?returnTo=/me');
+    const token = `mcp_${randomBytes(32).toString('hex')}`;
+    await runtime.store.setAgentToken(user.id, createHash('sha256').update(token).digest('hex'));
+    // Shown once, in this response only: the token is not stored and not put in a URL.
+    c.header('Cache-Control', 'no-store');
+    return c.html(await renderProfile(c, { agentToken: token }));
+  });
+
+  app.post('/me/agent-token/delete', async (c) => {
+    const user = await currentUser(c, runtime);
+    if (!user) return c.redirect('/login?returnTo=/me');
+    await runtime.store.deleteAgentToken?.(user.id);
+    return c.redirect('/me?agent=revoked#agent');
+  });
+
   app.post('/subscriptions', rateLimit({ windowMs: 60_000, max: 10 }), async (c) => {
     const user = await currentUser(c, runtime);
     if (!user) return c.redirect('/login?returnTo=/');
     if (!runtime.store.createSubscription || !runtime.store.listSubscriptions) return c.text('Subscriptions are not supported by this store', 501);
-    const filters = savedFiltersFrom(await c.req.parseBody());
-    if (isEmptyFilter(filters)) return c.redirect('/me?subscriptions=empty#subscriptions');
-    const existing = await runtime.store.listSubscriptions(user.id);
-    if (existing.some((s) => feedQuery(s.filters) === feedQuery(filters))) return c.redirect('/me?subscriptions=exists#subscriptions');
-    if (existing.length >= MAX_SUBSCRIPTIONS_PER_USER) return c.redirect('/me?subscriptions=limit#subscriptions');
-    const now = new Date().toISOString();
-    await runtime.store.createSubscription({
-      id: randomUUID(),
-      userId: user.id,
-      name: subscriptionName(filters),
-      filters,
-      channel: 'telegram',
-      paused: false,
-      // Only leads that appear from now on: a new subscription does not resend the feed.
-      cursorAt: now,
-      failures: 0,
-      createdAt: now,
-    });
-    return c.redirect('/me?subscriptions=created#subscriptions');
+    const result = await createSubscriptionFor(runtime, user.id, savedFiltersFrom(await c.req.parseBody()));
+    return c.redirect(`/me?subscriptions=${result.status}#subscriptions`);
   });
 
   app.post('/subscriptions/:id/delete', async (c) => {
@@ -2053,8 +2103,12 @@ export function createApp(runtime: Runtime): Hono {
 
   app.post('/mcp', rateLimit({ windowMs: 60_000, max: 60 }), async (c) => {
     // MCP is a free machine interface over the same feed: same tier, same delay,
-    // same contact rules as the HTTP API.
-    if (!await canRead(c, runtime)) {
+    // same contact rules as the HTTP API. A personal agent token makes the caller its user.
+    const agent = await agentUser(c);
+    if (agent === 'invalid') {
+      return c.json({ jsonrpc: '2.0', id: null, error: { code: -32000, message: 'Unknown or revoked agent token' } }, 401);
+    }
+    if (!agent && !await canRead(c, runtime)) {
       return c.json({ jsonrpc: '2.0', id: null, error: { code: -32000, message: 'Unauthorized' } }, 401);
     }
     const body = await c.req.json().catch(() => null);
@@ -2062,8 +2116,31 @@ export function createApp(runtime: Runtime): Hono {
       return c.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, 400);
     }
     const { handleMcpRequest } = await import('../mcp/server.ts');
-    const viewer = await viewerFromRequest(c, runtime);
+    const viewer = agent ? await viewerForUser(runtime, agent.id) : await viewerFromRequest(c, runtime);
+    const manageUrl = `${publicBaseUrl(c, runtime)}/me#subscriptions`;
     const resp = await handleMcpRequest(body, {
+      subscriptions: agent
+        ? {
+            save: async (filters) => {
+              const result = await createSubscriptionFor(runtime, agent.id, filters);
+              if (!result.subscription) {
+                return { error: result.status === 'limit' ? 'The user already has 20 saved searches' : 'Give at least one filter: query, skill, type, it, remote or budget' };
+              }
+              return {
+                id: result.subscription.id,
+                name: result.subscription.name,
+                created: result.status === 'created',
+                telegramLinked: Boolean(await runtime.store.getTelegramChat?.(agent.id)),
+                manageUrl,
+              };
+            },
+            list: async () => ({
+              searches: ((await runtime.store.listSubscriptions?.(agent.id)) ?? []).map((s) => ({ id: s.id, name: s.name, channel: s.channel, paused: s.paused })),
+              telegramLinked: Boolean(await runtime.store.getTelegramChat?.(agent.id)),
+              manageUrl,
+            }),
+          }
+        : undefined,
       listLeads: async (options) => (await leadsFor(runtime, viewer, options)).map((lead) => projectContacts(lead, viewer)),
       getLead: async (id) => {
         const lead = await runtime.store.getLead(id);

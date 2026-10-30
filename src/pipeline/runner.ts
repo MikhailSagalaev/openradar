@@ -4,6 +4,7 @@ import { pollAll, type PollDeps } from './poll.ts';
 import { processOutbox } from './outbox.ts';
 import { runDigestIfDue } from './digest.ts';
 import type { SubscriptionRound } from './subscriptions.ts';
+import { notifyPoints } from './points-notify.ts';
 import { checkLeadsLiveness } from './liveness.ts';
 import { recomputeRatings } from '../hub/rating.ts';
 import { parseModerators } from '../hub/service.ts';
@@ -175,6 +176,18 @@ export class PollRunner {
         const secret = this.deps.env.RADAR_WEB_KEY_SECRET || this.deps.env.RADAR_ADMIN_TOKEN;
         const rating = await recomputeRatings(store, parseModerators(this.deps.env.RADAR_MODERATORS), new Date(), secret ? (id) => webPubkey(secret, id) : undefined);
         this.logger.info('rating recomputed', { ...rating });
+        // Fresh credits go to their owners in Telegram right after the recompute.
+        const notices = await notifyPoints({
+          store,
+          env: this.deps.env,
+          logger: this.logger.child('points'),
+          fetchImpl: this.deps.fetchImpl,
+          pubkeysForUser: async (userId) => {
+            const linked = await store.getParticipantByGithubUser(userId);
+            return [...new Set([secret ? webPubkey(secret, userId) : undefined, linked?.pubkey].filter((k): k is string => Boolean(k)))];
+          },
+        });
+        if (notices.sent) this.logger.info('points notices sent', { ...notices });
       }
       // Last month's market report is frozen once, early in the next month.
       const snapshot = await ensureMonthlySnapshot(store, new Date(), { useModel: this.deps.env.RADAR_EXTRACT_APPLY });

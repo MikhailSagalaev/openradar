@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.39.0
+
+- Points in Telegram: after the hourly rating run, a user with a linked chat gets one message about
+  what was credited or taken since the last one («+10 — вы нашли первым, заказ подтвердили: …»,
+  «−10 — ваш заказ скрыли как мусор»). Each credit is reported once (`ledger_notices`); credits
+  from before the chat was linked are not sent.
+- Personal agent token: Profile → «Токен для ИИ-агента» issues an `mcp_…` token, shown once, one
+  per user (a new one revokes the old, «Отозвать» removes it, only its SHA-256 is stored). With it
+  `/mcp` acts as that user: their tier, delay and contacts.
+- MCP `save_search` subscribes the user to a search (query, type, skill, IT, remote, budget,
+  market) and `list_saved_searches` lists them. Without the token they say how to get one.
+- Migration `023_notices_and_agent_tokens.sql`.
+
 ## 0.38.0
 
 - `radar retitle` — a one-off pass over stored leads whose titles still open with channel

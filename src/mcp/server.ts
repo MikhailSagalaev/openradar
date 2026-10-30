@@ -7,6 +7,7 @@
 import { createInterface } from 'node:readline';
 import { qualityFlagsOf } from '../core/quality.ts';
 import { stripInvisible } from '../core/text.ts';
+import { savedFiltersFrom, type SavedFilters } from '../core/subscriptions.ts';
 import type { LeadSort, ListLeadsOptions } from '../core/store.ts';
 import { rubToUsd } from '../core/salary.ts';
 import { VERSION } from '../version.ts';
@@ -17,6 +18,8 @@ export interface McpBackend {
   listLeads(options: ListLeadsOptions): Promise<Lead[]>;
   /** One lead, or null when it does not exist or is not visible to this caller. */
   getLead(id: string): Promise<Lead | null>;
+  /** Present when the caller is a signed user. */
+  subscriptions?: McpSubscriptions;
 }
 
 export interface McpTool {
@@ -73,7 +76,40 @@ export const MCP_TOOLS: McpTool[] = [
       properties: { type: { type: 'string', enum: ['job', 'gig'] } },
     },
   },
+  {
+    name: 'save_search',
+    description:
+      'Subscribe the user to a search: new matching leads arrive in their Telegram (or webhook) at most every 15 minutes. ' +
+      'Needs the user\'s personal token (Authorization: Bearer mcp_…, made in their openradar profile). Ask the user before subscribing.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Keywords, e.g. "telegram бот"' },
+        type: { type: 'string', enum: ['job', 'gig'] },
+        skill: { type: 'string', description: 'One skill, e.g. "Python"' },
+        it: { type: 'boolean', description: 'Only IT work' },
+        remote: { type: 'boolean', description: 'Only remote work' },
+        min_budget_rub: { type: 'number', description: 'Minimum budget or monthly pay in roubles' },
+        market: { type: 'string', enum: ['ru', 'intl'], description: 'ru = Russian-language posts, intl = the rest' },
+      },
+    },
+  },
+  {
+    name: 'list_saved_searches',
+    description: 'The user\'s saved searches and whether their Telegram is linked. Needs the personal token, like save_search.',
+    inputSchema: { type: 'object', properties: {} },
+  },
 ];
+
+/** Saved searches of the caller, when the caller is a signed user (a personal token). */
+export interface McpSubscriptions {
+  save(filters: SavedFilters): Promise<{ id: string; name: string; created: boolean; telegramLinked: boolean; manageUrl: string } | { error: string }>;
+  list(): Promise<{ searches: Array<{ id: string; name: string; channel: string; paused: boolean }>; telegramLinked: boolean; manageUrl: string }>;
+}
+
+const NEEDS_TOKEN =
+  'Saved searches need the user\'s personal token: they sign in at openradar with GitHub, open Profile → «Токен для агента», ' +
+  'and give it to you as Authorization: Bearer mcp_…';
 
 const SUPPORTED_PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
@@ -266,6 +302,32 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend): Pr
         median_budget: budgets.length ? budgets[Math.floor(budgets.length / 2)] : 0,
         budget_samples_count: budgets.length,
       });
+    }
+
+    if (name === 'save_search') {
+      if (!backend.subscriptions) return fail(id, -32001, NEEDS_TOKEN);
+      const filters = savedFiltersFrom({
+        q: args.query,
+        type: args.type,
+        skill: args.skill,
+        it: args.it === true ? '1' : undefined,
+        remote: args.remote === true ? '1' : undefined,
+        budget: args.min_budget_rub,
+        language: args.market === 'ru' ? 'ru' : args.market === 'intl' ? 'en' : undefined,
+      });
+      const saved = await backend.subscriptions.save(filters);
+      if ('error' in saved) return fail(id, -32602, saved.error);
+      return text(id, {
+        ...saved,
+        note: saved.telegramLinked
+          ? 'New matching leads will arrive in the user\'s Telegram.'
+          : `The user has not linked Telegram yet: they open ${saved.manageUrl} and press «Подключить Telegram», or set a webhook there.`,
+      });
+    }
+
+    if (name === 'list_saved_searches') {
+      if (!backend.subscriptions) return fail(id, -32001, NEEDS_TOKEN);
+      return text(id, await backend.subscriptions.list());
     }
 
     return fail(id, -32601, `Unknown tool: ${String(name)}`);
