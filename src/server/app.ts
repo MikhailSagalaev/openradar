@@ -416,7 +416,7 @@ async function leadsFor(runtime: Runtime, viewer: Viewer, options: ListLeadsOpti
  * raw metadata) that only operators and the ingest pipeline need.
  */
 const PUBLIC_LEAD_KEYS = [
-  'id', 'type', 'title', 'text', 'url', 'canonicalUrl', 'author', 'city',
+  'id', 'type', 'title', 'text', 'url', 'canonicalUrl', 'author', 'city', 'score',
   'budget', 'currency', 'paymentPeriod', 'rawSalary', 'normalizedUsdMin', 'normalizedUsdMax',
   'category', 'skills', 'isRemote', 'publishedAt', 'createdAt',
   'votes_up', 'votes_down', 'votes_scam', 'votes_closed', 'contacts', 'sourceRef',
@@ -504,6 +504,9 @@ function formValues(body: Record<string, unknown>): SourceFormValues {
     provider: formString(body, 'provider'),
     companies: formString(body, 'companies'),
     pattern: formString(body, 'pattern'),
+    intervalSec: formString(body, 'intervalSec'),
+    perPoll: formString(body, 'perPoll'),
+    maxAgeDays: formString(body, 'maxAgeDays'),
     share: formString(body, 'share') === 'on',
   };
 }
@@ -543,6 +546,9 @@ function formValuesFromSource(source: SourceRecord): SourceFormValues {
     provider: text(config.provider),
     companies: text(config.companies),
     pattern: text(config.pattern),
+    intervalSec: text(config.intervalSec),
+    perPoll: text(config.perPoll),
+    maxAgeDays: text(config.maxAgeDays),
     share: config.share === true,
   };
 }
@@ -582,6 +588,23 @@ function buildSourceConfig(
   if (limit !== undefined) {
     if (limit <= 0 || isNaN(limit) || limit > 500) return { config, error: 'Лимит должен быть от 1 до 500.' };
     config.limit = limit;
+  }
+
+  // Poll pacing: seconds between polls, items per poll, post lifetime in days.
+  const intervalSec = asNumber(formString(body, 'intervalSec'));
+  if (intervalSec !== undefined) {
+    if (intervalSec < 60) return { config, error: 'Интервал опроса — не меньше 60 секунд.' };
+    config.intervalSec = Math.min(Math.round(intervalSec), 86_400);
+  }
+  const perPoll = asNumber(formString(body, 'perPoll'));
+  if (perPoll !== undefined) {
+    if (perPoll < 1) return { config, error: 'Элементов за опрос — не меньше одного.' };
+    config.perPoll = Math.min(Math.round(perPoll), 50);
+  }
+  const maxAgeDays = asNumber(formString(body, 'maxAgeDays'));
+  if (maxAgeDays !== undefined) {
+    if (maxAgeDays < 0) return { config, error: 'Жизнь поста — ноль или больше дней.' };
+    config.maxAgeDays = Math.min(Math.round(maxAgeDays), 365);
   }
 
   if (kind === 'rss') {

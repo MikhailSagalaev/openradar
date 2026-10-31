@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.37.0
+
+- Lead quality: a hashtag-only first line of a channel post («#ищу #смм») is no longer
+  the title — the first content line is taken instead, leading and trailing hashtag tokens
+  are stripped (a hashtag between words stays). Jobs found by this: the feed's titles
+  stopped opening with channel tags.
+- Salary display: when a range is inferred to be annual (the floor heuristic), the raw
+  salary now says «per year» — a bare «170000–200000 USD» read as monthly before.
+- ATS locations are normalized: Greenhouse codes («US-CA-Menlo Park») and multi-part
+  strings («London, United Kingdom») become plain cities.
+- `score` is in the public API projection and the OpenAPI schema — agents can rank by it.
+- Rate-limited routes answer with `x-ratelimit-limit/remaining/reset` headers.
+- `radar setup` writes .env with fresh secrets (does not touch an existing one); the
+  new-source form shows the poll pacing it always kept (intervalSec, perPoll, maxAgeDays).
+- docs/SIGNALS.md: subscription payloads, HMAC verification, delivery and pause rules.
 ## 0.36.0
 
 - Adapter-declared poll pacing: a source adapter may set `defaultPollIntervalSec`, and

@@ -41,6 +41,14 @@ function text(title: string, sections: Array<string | undefined>, body: string):
   return `${title}\n\n${head}${head ? '\n\n' : ''}${body}`.slice(0, MAX_TEXT);
 }
 
+/** ATS locations come raw: codes («US-CA-Menlo Park») and multi-part («London, United Kingdom»). */
+function cleanCity(location: string | undefined): string | undefined {
+  const trimmed = location?.trim();
+  if (!trimmed) return undefined;
+  const withoutCode = trimmed.replace(/^[A-Z]{2}-[A-Z]{2}-/, '');
+  return withoutCode.split(',')[0]!.trim() || trimmed;
+}
+
 const REMOTE = /\bremote\b|удал[её]нн/i;
 
 interface GreenhouseJob {
@@ -71,7 +79,7 @@ function fromGreenhouse(source: SourceRecord, slug: string, name: string | undef
       title,
       text: text(title, [company && `Company: ${company}`, location && `Location: ${location}`, j.departments?.[0]?.name && `Department: ${j.departments[0].name}`], body),
       author: company,
-      city: REMOTE.test(location) ? 'Онлайн' : location || undefined,
+      city: REMOTE.test(location) ? 'Онлайн' : cleanCity(location),
       isRemote: REMOTE.test(location),
       publishedAt: j.first_published ?? j.updated_at,
       raw: { ats: 'greenhouse', board: slug },
@@ -115,7 +123,7 @@ function fromLever(source: SourceRecord, slug: string, name: string | undefined,
       title,
       text: text(title, [`Company: ${company}`, location && `Location: ${location}`, p.categories?.team && `Team: ${p.categories.team}`, p.categories?.commitment && `Type: ${p.categories.commitment}`], body),
       author: company,
-      city: remote ? 'Онлайн' : location || undefined,
+      city: remote ? 'Онлайн' : cleanCity(location),
       isRemote: remote,
       rawSalary: withPay ? `${salary.min ?? ''}–${salary.max ?? ''} ${salary.currency} ${yearly ? 'per year' : monthly ? 'per month' : 'per hour'}` : undefined,
       publishedAt: p.createdAt ? new Date(p.createdAt).toISOString() : undefined,
@@ -165,7 +173,7 @@ function fromAshby(source: SourceRecord, slug: string, name: string | undefined,
       title,
       text: text(title, [`Company: ${company}`, location && `Location: ${location}`, j.department && `Department: ${j.department}`, j.employmentType && `Type: ${j.employmentType}`], j.descriptionPlain?.trim() ?? ''),
       author: company,
-      city: remote ? 'Онлайн' : location || undefined,
+      city: remote ? 'Онлайн' : cleanCity(location),
       isRemote: remote,
       rawSalary: salary && per ? `${salary.minValue ?? ''}–${salary.maxValue ?? ''} ${salary.currencyCode} ${per}` : undefined,
       publishedAt: j.publishedAt,

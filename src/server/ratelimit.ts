@@ -37,9 +37,14 @@ export function rateLimit(options: RateLimitOptions) {
     const client = options.keyFrom?.(c) || forwardedParts[forwardedParts.length - 1] || c.req.header('x-real-ip') || 'local';
     const key = client;
     const hits = (buckets.get(key) ?? []).filter((ts) => now - ts < options.windowMs);
+    // Agents pace themselves by these headers instead of discovering 429s blind.
+    c.header('x-ratelimit-limit', String(options.max));
+    c.header('x-ratelimit-remaining', String(Math.max(0, options.max - hits.length - 1)));
+    c.header('x-ratelimit-reset', String(Math.ceil((now + options.windowMs) / 1000)));
     if (hits.length >= options.max) {
       const retryAfterSec = Math.ceil((hits[0]! + options.windowMs - now) / 1000);
       c.header('retry-after', String(Math.max(1, retryAfterSec)));
+      c.header('x-ratelimit-remaining', '0');
       return c.json({ error: 'rate_limited' }, 429);
     }
     hits.push(now);

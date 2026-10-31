@@ -135,7 +135,7 @@ describe('radar/2 access tiers (hub mode)', () => {
     const app = createApp(runtime);
     const guestLeads = (await (await app.request('/api/leads')).json()) as Record<string, unknown>[];
     for (const lead of guestLeads) {
-      for (const key of ['fingerprint', 'titleKey', 'status', 'externalId', 'sourceId', 'metadata', 'reasons', 'score']) {
+      for (const key of ['fingerprint', 'titleKey', 'status', 'externalId', 'sourceId', 'metadata', 'reasons']) {
         expect(lead).not.toHaveProperty(key);
       }
       expect(lead).toHaveProperty('title');

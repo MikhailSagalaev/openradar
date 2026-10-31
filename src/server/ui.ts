@@ -118,6 +118,12 @@ export interface SourceFormValues {
   provider: string;
   /** ATS: company slugs, "slug" or "slug=Name". */
   companies: string;
+  /** Poll pacing: seconds between polls; empty = the adapter's own. */
+  intervalSec: string;
+  /** Poll pacing: items per poll for rotating sources (ATS, sitemap). */
+  perPoll: string;
+  /** Poll pacing: posts leave the feed after this many days (0 = never). */
+  maxAgeDays: string;
   /** Sitemap: regex that picks vacancy pages. */
   pattern: string;
   /** Send leads of this source to the hub. */
@@ -3218,6 +3224,15 @@ ${error ? `<div class="error-box" style="margin-bottom:16px">${escapeHtml(error)
       <input type="checkbox" name="share" value="on"${values.share ? ' checked' : ''} style="accent-color:var(--ink);width:16px;height:16px">
       <span>Отправлять лиды в хаб (нужны RADAR_HUB_URL и RADAR_NODE_KEY)</span>
     </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Опрос и жизнь поста</legend>
+    <div class="grid">
+      ${textField('intervalSec', 'Интервал опроса, сек', values.intervalSec, '', 'number', 'Пусто — собственный темп адаптера: у медленных бордов он уже снижен, чтобы не перекачивать одни и те же посты.')}
+      ${textField('perPoll', 'Элементов за опрос', values.perPoll, '', 'number', 'Для ротации компаний и sitemap: сколько читать за один тик.')}
+      ${textField('maxAgeDays', 'Жизнь поста, дней', values.maxAgeDays, '', 'number', 'Заказы и вакансии уходят из ленты через столько дней. 0 — не удалять.')}
+    </div>
   </fieldset>
 
   <div>

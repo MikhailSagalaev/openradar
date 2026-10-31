@@ -160,6 +160,7 @@ function leadSchema(): Record<string, unknown> {
       id: { type: 'string' },
       type: { type: 'string', enum: ['job', 'gig'] },
       title: { type: 'string' },
+      score: { type: 'integer', minimum: 0, maximum: 100, description: 'Static quality estimate; median ~60, 80+ is a strong lead' },
       text: { type: 'string', description: 'Up to 20 000 characters, contacts included for signed-in viewers' },
       url: { type: 'string', format: 'uri' },
       canonicalUrl: { type: 'string', format: 'uri' },

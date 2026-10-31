@@ -314,9 +314,16 @@ export function normalizeSalary(input: {
   const normalizedUsdMin = usdMin === undefined ? undefined : Math.round(usdMin);
   const normalizedUsdMax = usdMax === undefined ? undefined : Math.round(usdMax);
 
+  // A bare «170000–200000 USD» that the floor heuristic read as annual must say so:
+  // without the marker it displays as a monthly figure.
+  let rawSalary = input.rawSalary || (input.budget ? `${input.budget} ${currency}` : undefined);
+  if (yearly && rawSalary && !/per\s+year|\/\s*(?:yr|year)|annual|в\s+год/i.test(rawSalary)) {
+    rawSalary = `${rawSalary} per year`;
+  }
+
   return {
     paymentPeriod: period,
-    rawSalary: input.rawSalary || (input.budget ? `${input.budget} ${currency}` : undefined),
+    rawSalary,
     normalizedUsdMin,
     normalizedUsdMax,
     currency,
