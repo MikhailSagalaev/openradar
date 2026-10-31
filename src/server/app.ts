@@ -30,6 +30,7 @@ import { qualityFlagsOf } from '../core/quality.ts';
 import { rubToUsd } from '../core/salary.ts';
 import { sourceState } from '../core/source-health.ts';
 import { assertSafeUrl } from '../core/ssrf.ts';
+import { robotsFor } from '../pipeline/robots-audit.ts';
 import { feedQuery, isEmptyFilter, MAX_SUBSCRIPTIONS_PER_USER, newWebhookSecret, savedFiltersFrom, subscriptionName, type SavedFilters, type SubscriptionRecord } from '../core/subscriptions.ts';
 import { runTelegramPolling, setupSubscriptionBot, type SubscriptionDeps } from '../pipeline/subscriptions.ts';
 import { computeSalaryMedians, SALARY_FLOOR_RUB, SALARY_MEDIAN_MIN_SAMPLE, setSalaryMedians } from '../core/salary-sanity.ts';
@@ -1795,6 +1796,7 @@ export function createApp(runtime: Runtime): Hono {
         auth: await getAuthDisplay(c, runtime),
         lang,
         isAdmin: admin,
+        robots: admin ? robotsFor(source.id) : undefined,
       }),
     );
   });

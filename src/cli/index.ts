@@ -9,6 +9,7 @@ import type { Lead, LeadStatus, SourceConfig, SourceKind, SourceRecord } from '.
 import { pollAll, pollSource, type PollDeps, type PollSummary } from '../pipeline/poll.ts';
 import { retitleLeads } from '../pipeline/retitle.ts';
 import { rescoreLeads } from '../pipeline/rescore.ts';
+import { auditSourceRobots, robotsMarkdown } from '../pipeline/robots-audit.ts';
 import { PollRunner } from '../pipeline/runner.ts';
 import { jobspyCsv, siteSlugFor } from '../core/jobspy.ts';
 import { createRuntime, type Runtime } from '../runtime.ts';
@@ -511,6 +512,26 @@ function buildProgram(): Command {
     .action(async () => {
       await withRuntime(async (runtime) => {
         console.log(JSON.stringify(await runtime.store.getStats(), null, 2));
+      });
+    });
+
+  program
+    .command('robots')
+    .description('Check what robots.txt says about the address each source polls (RFC 9309)')
+    .option('--markdown', 'Print the source log as Markdown (docs/SOURCES_ROBOTS.md)')
+    .option('--all', 'Include disabled sources')
+    .action(async (options: { markdown?: boolean; all?: boolean }) => {
+      await withRuntime(async (runtime) => {
+        const sources = (await runtime.store.listSources()).filter((s) => options.all || s.enabled);
+        const items = await auditSourceRobots(sources, runtime.sources, runtime.env.RADAR_USER_AGENT, runtime.fetchImpl);
+        if (options.markdown) {
+          console.log(robotsMarkdown(items, new Date(), runtime.env.RADAR_USER_AGENT));
+          return;
+        }
+        for (const item of items) {
+          const verdict = item.robots ? `${item.robots.verdict}${item.robots.rule ? ` (${item.robots.rule})` : ''}` : `n/a: ${item.note}`;
+          console.log(`${verdict.padEnd(32)} ${item.source.title}${item.url ? ` — ${item.url}` : ''}`);
+        }
       });
     });
 

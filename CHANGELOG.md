@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.40.0
+
+- robots.txt discipline (#62): `src/net/robots.ts` reads robots.txt by RFC 9309 (the `RadarBot`
+  group or `*`, the longest rule wins, `Allow` on a tie, `*` and `$`; no robots.txt allows all,
+  a site that does not answer is «unknown», not a ban). `radar robots` checks the address every
+  enabled source polls; `--markdown` prints the source log for `docs/SOURCES_ROBOTS.md`.
+- The hub checks once a day and logs disallowed addresses; the admin source page shows the
+  verdict. Nothing is switched off by the check: the operator decides per source. Adapter rule 6
+  in docs/ARCHITECTURE.md: a site's protection is not worked round.
+
 ## 0.39.0
 
 - Points in Telegram: after the hourly rating run, a user with a linked chat gets one message about
