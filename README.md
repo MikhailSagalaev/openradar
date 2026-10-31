@@ -122,6 +122,8 @@ hub.observe([{"source": {"platform": "telegram", "channel": "-1001234567890", "v
 
 New boards are the most useful contribution: one adapter, one fixture, one test; `pnpm new:connector` writes the skeleton. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [code of conduct](CODE_OF_CONDUCT.md). Good first issues: the [`good first issue` label](https://github.com/MikhailSagalaev/openradar/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22). Report vulnerabilities privately: [SECURITY.md](SECURITY.md).
 
+⭐ If openradar helped you find work or data, a star helps the next person find it.
+
 ## License
 
 AGPL-3.0. See [LICENSE](LICENSE).
