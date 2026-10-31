@@ -188,6 +188,19 @@ export class MemoryStore implements Store {
     return true;
   }
 
+  async listHashTitledLeads(limit: number): Promise<Lead[]> {
+    return [...this.leads.values()].filter((l) => /^\s*#/.test(l.title)).slice(0, limit).map((l) => ({ ...l }));
+  }
+
+  async updateLeadTitle(id: string, title: string, titleKey: string, previousTitle: string): Promise<boolean> {
+    const lead = this.leads.get(id);
+    if (!lead) return false;
+    lead.title = title;
+    lead.titleKey = titleKey;
+    lead.metadata = { ...(lead.metadata ?? {}), retitle_from: previousTitle.slice(0, 200) };
+    return true;
+  }
+
   async updateLeadScore(id: string, baseScore: number): Promise<number | undefined> {
     const lead = this.leads.get(id);
     if (!lead) return undefined;

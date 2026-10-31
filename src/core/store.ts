@@ -289,6 +289,10 @@ export interface Store extends HubStore {
   updateLeadStatus(id: string, status: LeadStatus, deliveredAt?: string, scoreDelta?: number): Promise<void>;
   /** Sets a recomputed base score; the stored score is the base plus the community vote adjustment. */
   updateLeadScore?(id: string, baseScore: number): Promise<number | undefined>;
+  /** Leads whose stored title still opens with channel hashtags — the retitle pass's input. */
+  listHashTitledLeads?(limit: number): Promise<Lead[]>;
+  /** Retitles a stored lead and rebuilds its dedup key; the old title goes to metadata. */
+  updateLeadTitle?(id: string, title: string, titleKey: string, previousTitle: string): Promise<boolean>;
   /** Stores the quality stage's verdict: the corrected type and the flags (metadata.qualityFlags). */
   updateLeadQuality?(id: string, type: LeadType, flags: string[]): Promise<void>;
   updateLeadState?(id: string, state: LeadState): Promise<void>;

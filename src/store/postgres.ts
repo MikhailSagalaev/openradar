@@ -419,6 +419,24 @@ export class PostgresStore implements Store {
     }
   }
 
+  async listHashTitledLeads(limit: number): Promise<Lead[]> {
+    const res = await this.pool.query(
+      `SELECT * FROM leads WHERE title ~ '^\s*#' ORDER BY created_at DESC LIMIT $1`,
+      [limit],
+    );
+    return res.rows.map((r) => this.rowToLead(r));
+  }
+
+  async updateLeadTitle(id: string, title: string, titleKey: string, previousTitle: string): Promise<boolean> {
+    const res = await this.pool.query(
+      `UPDATE leads SET title = $2, title_key = $3,
+         metadata_json = metadata_json || jsonb_build_object('retitle_from', $4::text)
+       WHERE id = $1`,
+      [id, title, titleKey, previousTitle.slice(0, 200)],
+    );
+    return (res.rowCount ?? 0) > 0;
+  }
+
   async updateLeadScore(id: string, baseScore: number): Promise<number | undefined> {
     const res = await this.pool.query(
       `SELECT status, votes_up, votes_down, votes_scam, votes_closed FROM leads WHERE id = $1`,
