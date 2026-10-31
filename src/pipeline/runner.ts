@@ -5,6 +5,7 @@ import { processOutbox } from './outbox.ts';
 import { runDigestIfDue } from './digest.ts';
 import type { SubscriptionRound } from './subscriptions.ts';
 import { notifyPoints } from './points-notify.ts';
+import { auditSourceRobotsIfDue } from './robots-audit.ts';
 import { checkLeadsLiveness } from './liveness.ts';
 import { recomputeRatings } from '../hub/rating.ts';
 import { parseModerators } from '../hub/service.ts';
@@ -195,6 +196,17 @@ export class PollRunner {
       // The days that are over join the openradar index.
       const days = await ensureDailyCounts(store, new Date(), { useModel: this.deps.env.RADAR_EXTRACT_APPLY });
       if (days.length) this.logger.info('research daily counts saved', { from: days[0], to: days.at(-1) });
+      // Once a day: what robots.txt says about each source's address (report only, nothing is switched off).
+      const robots = await auditSourceRobotsIfDue(
+        (await store.listSources()).filter((s) => s.enabled),
+        this.deps.sources,
+        this.deps.env.RADAR_USER_AGENT,
+        this.deps.fetchImpl,
+      );
+      const disallowed = robots?.filter((item) => item.robots?.verdict === 'disallowed') ?? [];
+      if (disallowed.length) {
+        this.logger.warn('robots.txt disallows polled addresses', { sources: disallowed.map((item) => `${item.source.title}: ${item.robots?.rule}`) });
+      }
       if (leads || runs || sessions) {
         this.logger.info('maintenance cleanup finished', {
           leads,

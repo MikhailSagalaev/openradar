@@ -10,6 +10,7 @@ import { SEO_CATALOG } from './seo.ts';
 import { qualityFlagsOf } from '../core/quality.ts';
 import { BROKEN_AFTER, sourceState, type SourceState } from '../core/source-health.ts';
 import { feedQuery, type SubscriptionRecord } from '../core/subscriptions.ts';
+import type { SourceRobots } from '../pipeline/robots-audit.ts';
 import { salaryLooksWrong } from '../core/salary-sanity.ts';
 import type { SourcePreset } from '../sources/presets.ts';
 
@@ -70,6 +71,8 @@ export interface SourcePageData {
   auth?: AuthDisplay;
   lang?: SupportedLang;
   isAdmin?: boolean;
+  /** The last daily robots.txt audit of this source (admin only). */
+  robots?: { at: string; item: SourceRobots };
 }
 
 export interface LeadPageData {
@@ -3005,6 +3008,17 @@ export function renderSourcePage(data: SourcePageData): string {
   const webhook = source.kind === 'webhook'
     ? `<p class="hint" style="margin-top:12px">Приём: <code>POST /api/ingest/${escapeHtml(source.id)}</code> с заголовком <code>x-radar-token</code>.</p>`
     : '';
+  const robotsVerdict = data.robots?.item.robots;
+  const robots = !data.robots
+    ? '<p class="muted small">robots.txt ещё не проверялся: проверка идёт раз в сутки, вручную — <code>radar robots</code>.</p>'
+    : !robotsVerdict
+      ? `<p class="muted small">robots.txt не применяется: ${escapeHtml(data.robots.item.note ?? '')}.</p>`
+      : `<p class="small">${robotsVerdict.verdict === 'disallowed'
+          ? `<span class="text-warn">robots.txt запрещает этот адрес</span> (<code>${escapeHtml(robotsVerdict.rule ?? '')}</code>). Защиту сайтов не обходим: источник стоит отложить или перевести на разрешённый адрес.`
+          : robotsVerdict.verdict === 'allowed'
+            ? `robots.txt разрешает этот адрес${robotsVerdict.rule ? ` (<code>${escapeHtml(robotsVerdict.rule)}</code>)` : ''}.`
+            : `robots.txt проверить не удалось: ${escapeHtml(robotsVerdict.reason ?? '')}.`}
+        <span class="muted">Проверено ${formatRelative(data.robots.at, lang)}.</span></p>`;
 
   const body = `
 <a class="back" href="/sources">← ${escapeHtml(t.navSources)}</a>
@@ -3039,6 +3053,7 @@ ${metricRow([
   <h2>Конфигурация</h2>
   <dl class="meta-list">${config || '<div><dt>—</dt><dd>пусто</dd></div>'}</dl>
   ${webhook}
+  ${robots}
 </section>
 
 <section>
