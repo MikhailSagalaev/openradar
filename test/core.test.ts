@@ -172,9 +172,9 @@ describe('rules', () => {
 
     expect(reasons('Ищу работу', 'Ищу работу frontend-разработчиком, моё резюме по ссылке')).toContain('spam:JOB_SEEKER');
     expect(reasons('Ищу позицию CMO или Head of Marketing', 'В маркетинге 10+ лет')).toContain('spam:JOB_SEEKER');
-    expect(reasons('#резюме #designer #uxui', 'UX/UI дизайнер, 5+ лет')).toContain('spam:JOB_SEEKER');
-    expect(reasons('#resume #backend #python', 'Ищу fulltime, 6+ лет в Python')).toContain('spam:JOB_SEEKER');
-    expect(reasons('#помогу #монтаж #моушен', 'Смонтирую ролики для вашего бренда')).toContain('spam:JOB_SEEKER');
+    expect(reasons('', '#резюме #designer #uxui\nUX/UI дизайнер, 5+ лет')).toContain('spam:JOB_SEEKER');
+    expect(reasons('', '#resume #backend #python\nИщу fulltime, 6+ лет в Python')).toContain('spam:JOB_SEEKER');
+    expect(reasons('', '#помогу #монтаж #моушен\nСмонтирую ролики для вашего бренда')).toContain('spam:JOB_SEEKER');
     for (const [title, text] of [
       ['Junior Java Developer', 'Вакансия в продуктовой команде. Присылайте резюме на почту.'],
       ['Сделать сайт визитку/резюме', 'Нужен адаптивный сайт-резюме на Tilda'],

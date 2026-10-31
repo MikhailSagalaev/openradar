@@ -142,6 +142,9 @@ function augmentShortTitle(title: string, fallbackText: string): string {
   if (!fallbackText) return title;
 
   const sentences = fallbackText
+    .split('\n')
+    .filter((line) => !isTagOnlyLine(line))
+    .join('\n')
     .split(/(?<=[.!?\n])\s+/)
     .map((s) => s.trim().replace(/^[\s«"„“]+|[\s»"”\.…]+$/g, ''))
     .filter((s) => {
@@ -159,19 +162,46 @@ function augmentShortTitle(title: string, fallbackText: string): string {
   return `${title} — ${trimmedSentence}`;
 }
 
+
+/** A line of nothing but hashtags («#ищу #смм») or dividers carries no title. */
+function isTagOnlyLine(line: string): boolean {
+  const tokens = line.split(/\s+/).filter(Boolean);
+  return tokens.length > 0 && tokens.every((t) => /^#[\wа-яё_-]+$/iu.test(t) || /^[—–·•|=*-]+$/.test(t));
+}
+
+/** Leading and trailing hashtags are channel tags, not title words («#ищу — #ищу»). */
+function stripEdgeHashtags(title: string): string {
+  return title
+    // A bare «#» before a space (a broken tag) is consumed too, but never the word after it.
+    .replace(/^(?:\s*(?:#[\wа-яё_-]+|#(?=\s)|[—–-]))+/giu, '')
+    .replace(/(?:\s*#[\wа-яё_-]+)+$/giu, '')
+    .replace(/^[\s—–-]+/, '')
+    .trim();
+}
+
+/** The first line of the text that is not a hashtag row — the real title of channel posts. */
+function firstContentLine(text: string): string {
+  return text.split('\n').map((part) => part.trim()).find((part) => part && !isTagOnlyLine(part)) ?? '';
+}
+
 export function cleanTitle(rawTitle: string, fallbackText = ''): string {
-  const candidate = rawTitle || firstLine(fallbackText, 140);
+  let candidate = rawTitle || firstContentLine(fallbackText) || firstLine(fallbackText, 140);
+  // A hashtag-only first line is a channel tag: take the first content line instead.
+  if (isTagOnlyLine(candidate) && fallbackText) candidate = firstContentLine(fallbackText) || candidate;
   let title = stripEmoji(toPlainText(candidate))
     .replace(/^[\s«"„“]+|[\s»"”\.…]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 
+  // Leading and trailing hashtag tokens are channel tags, not title words.
+  title = stripEdgeHashtags(title);
+
   // Strip trailing budget suffixes and platform tags
   title = stripTitleNoiseAndBudget(title);
 
-  // If title was empty or too small, fall back to first line
+  // If title was empty or too small, fall back to the first content line
   if (title.length < 6 && fallbackText) {
-    title = stripTitleNoiseAndBudget(truncate(firstLine(fallbackText, 140), 120));
+    title = stripTitleNoiseAndBudget(truncate(firstContentLine(fallbackText) || firstLine(fallbackText, 140), 120));
   }
 
   // Augment single-word / degenerate titles with context from description

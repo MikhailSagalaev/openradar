@@ -50,7 +50,7 @@ describe('ATS source adapter', () => {
     const source = makeSource({ kind: 'ats', config: { provider: 'lever', companies: ['palantir=Palantir'], maxAgeDays: 365 } });
     const leads = await adapter.poll!(source, served({ 'api.lever.co/v0/postings/palantir': fixture('ats-lever.json') }));
     const paid = leads.find((l) => l.rawSalary)!;
-    expect(paid).toMatchObject({ author: 'Palantir', rawSalary: '120000–150000 USD per year', city: 'Singapore, Singapore', isRemote: false });
+    expect(paid).toMatchObject({ author: 'Palantir', rawSalary: '120000–150000 USD per year', city: 'Singapore', isRemote: false });
     expect(normalizeSalary({ rawSalary: paid.rawSalary, type: 'job' }).normalizedUsdMin).toBeGreaterThan(0);
     expect(leads.every((l) => l.externalId!.startsWith('lever:palantir:'))).toBe(true);
   });

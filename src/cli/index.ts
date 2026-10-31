@@ -2,7 +2,7 @@
 import '../net/tls.ts';
 import { Command } from 'commander';
 import { randomBytes } from 'node:crypto';
-import { appendFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Lead, LeadStatus, SourceConfig, SourceKind, SourceRecord } from '../core/types.ts';
@@ -195,6 +195,30 @@ function buildProgram(): Command {
       } catch (err) {
         fail(`Ошибка миграции: ${err instanceof Error ? err.message : String(err)}`);
       }
+    });
+
+  program
+    .command('setup')
+    .description('Create .env from .env.example with fresh secrets (does not overwrite an existing .env)')
+    .action(async () => {
+      const examplePath = resolve('.env.example');
+      const envPath = resolve('.env');
+      if (existsSync(envPath)) {
+        fail('.env уже существует — секреты в нём менять не нужно.');
+      }
+      if (!existsSync(examplePath)) fail('.env.example не найден — запустите из корня репозитория.');
+      const adminToken = randomBytes(32).toString('hex');
+      const dbPassword = randomBytes(24).toString('hex');
+      const contents = readFileSync(examplePath, 'utf8')
+        .replace(/^RADAR_ADMIN_TOKEN=.*/m, `RADAR_ADMIN_TOKEN=${adminToken}`)
+        .replace(/^POSTGRES_PASSWORD=.*/m, `POSTGRES_PASSWORD=${dbPassword}`)
+        .replace(/^DATABASE_URL=.*/m, `DATABASE_URL=postgres://radar:${dbPassword}@postgres:5432/radar`);
+      writeFileSync(envPath, contents, 'utf8');
+      console.log('Создан .env: свежие RADAR_ADMIN_TOKEN, POSTGRES_PASSWORD и DATABASE_URL.');
+      console.log('Дальше (persistent node):');
+      console.log('  docker compose run --rm radar migrate');
+      console.log('  docker compose up -d');
+      console.log('Или по-быстрому без базы:  pnpm dev serve');
     });
 
   program
