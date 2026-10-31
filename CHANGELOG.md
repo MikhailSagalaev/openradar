@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.38.0
+
+- `radar retitle` — a one-off pass over stored leads whose titles still open with channel
+  hashtags: the title is recomputed from the post body with the v0.37.0 rules, the dedup
+  key (`title_key`) is rebuilt, and the previous title is kept in `metadata.retitle_from`.
+  The v0.37.0 pipeline fix only changed new leads; posts ingested before it kept their
+  «#ищу #смм» titles.
 ## 0.37.0
 
 - Lead quality: a hashtag-only first line of a channel post («#ищу #смм») is no longer

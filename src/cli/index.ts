@@ -7,6 +7,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Lead, LeadStatus, SourceConfig, SourceKind, SourceRecord } from '../core/types.ts';
 import { pollAll, pollSource, type PollDeps, type PollSummary } from '../pipeline/poll.ts';
+import { retitleLeads } from '../pipeline/retitle.ts';
 import { rescoreLeads } from '../pipeline/rescore.ts';
 import { PollRunner } from '../pipeline/runner.ts';
 import { jobspyCsv, siteSlugFor } from '../core/jobspy.ts';
@@ -219,6 +220,17 @@ function buildProgram(): Command {
       console.log('  docker compose run --rm radar migrate');
       console.log('  docker compose up -d');
       console.log('Или по-быстрому без базы:  pnpm dev serve');
+    });
+
+  program
+    .command('retitle')
+    .description('Recompute titles of stored leads that still open with channel hashtags')
+    .option('--limit <n>', 'Max leads to check', '5000')
+    .action(async (options: { limit: string }) => {
+      await withRuntime(async (runtime) => {
+        const summary = await retitleLeads(runtime.store, { limit: Number(options.limit) || 5000 });
+        console.log(`Проверено ${summary.checked}, переименовано ${summary.retitled}.`);
+      });
     });
 
   program
