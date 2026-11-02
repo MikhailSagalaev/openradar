@@ -1106,19 +1106,27 @@ export function createApp(runtime: Runtime): Hono {
     return c.redirect(safeReturn);
   });
 
-  // Search suggestions: dictionary skills of the last week's leads, refreshed every 10 minutes.
+  // Search suggestions and dynamic filter skills: dictionary skills of recent leads (up to 30),
+  // filtered for significance (count >= 2), refreshed every 10 minutes.
   let popularCache: { at: number; items: Array<{ name: string; count: number }> } | undefined;
   const popularSkills = async (): Promise<Array<{ name: string; count: number }>> => {
     if (popularCache && Date.now() - popularCache.at < 10 * 60_000) return popularCache.items;
     const recent = await runtime.store.getLeadsForFeed({
-      limit: 1500,
-      createdAfter: new Date(Date.now() - 7 * 24 * 3600_000).toISOString(),
+      limit: 2000,
+      createdAfter: new Date(Date.now() - 14 * 24 * 3600_000).toISOString(),
     });
     const counts = new Map<string, number>();
     for (const lead of recent) {
-      for (const skill of extractTechSkills(`${lead.title}\n${lead.text}`)) counts.set(skill, (counts.get(skill) ?? 0) + 1);
+      const skills = lead.skills?.length ? lead.skills : extractTechSkills(`${lead.title}\n${lead.text}`);
+      for (const skill of skills) {
+        counts.set(skill, (counts.get(skill) ?? 0) + 1);
+      }
     }
-    const items = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, count]) => ({ name, count }));
+    const items = [...counts.entries()]
+      .filter(([, count]) => count >= 2)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 30)
+      .map(([name, count]) => ({ name, count }));
     popularCache = { at: Date.now(), items };
     return items;
   };

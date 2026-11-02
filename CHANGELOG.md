@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.40.1
+
+- Fix Telegram MTProto client leak: when MTProto handshake or connection times out or fails
+  with a transport error (e.g. over a proxy), the failed `TelegramClient` is destroyed cleanly
+  with `client.destroy()`, preventing zombie client instances from accumulating in memory.
+  A 60-second cooldown prevents repeated connection attempts from spamming Telegram DCs on every poll tick.
+- Dynamic feed skills filter: the `<select name="skill">` dropdown is dynamically populated
+  from actual active leads in the current window (top 30 significant skills with count, filtered
+  for count >= 2), with fallback to canonical tech skills. Current query skill is always retained.
+- Proxy-aware robots.txt checks: `radar robots` and source audits route Telegram checks through
+  the configured proxy (`undici` ProxyAgent), generating `docs/SOURCES_ROBOTS.md`.
+
 ## 0.40.0
 
 - robots.txt discipline (#62): `src/net/robots.ts` reads robots.txt by RFC 9309 (the `RadarBot`

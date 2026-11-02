@@ -2306,12 +2306,22 @@ export function renderLeadsPage(data: LeadsPageData): string {
       ${BUDGET_STEPS_RUB.map((rub) => option(String(rub), t.budgetFrom.replace('{n}', formatBudget(rub).replace(/\s*₽$/, '')), filters.budgetRub === rub)).join('')}
       ${filters.budgetRub && !(BUDGET_STEPS_RUB as readonly number[]).includes(filters.budgetRub) ? option(String(filters.budgetRub), t.budgetFrom.replace('{n}', formatBudget(filters.budgetRub).replace(/\s*₽$/, '')), true) : ''}
     </select>`;
-  const skills = filters.skill && !FILTER_SKILLS.some((name) => name.toLowerCase() === filters.skill!.toLowerCase())
-    ? [...FILTER_SKILLS, filters.skill]
-    : FILTER_SKILLS;
+  // Dynamic filter skills: populated from actual active leads (popularSkills), with count,
+  // falling back to FILTER_SKILLS when no recent leads are indexed.
+  const dynamicSkillItems: Array<{ name: string; count?: number }> = data.popularSkills?.length
+    ? data.popularSkills
+    : FILTER_SKILLS.map((name) => ({ name }));
+  const hasCurrentSkill = filters.skill && dynamicSkillItems.some((s) => s.name.toLowerCase() === filters.skill!.toLowerCase());
+  const skillItems = filters.skill && !hasCurrentSkill
+    ? [{ name: filters.skill }, ...dynamicSkillItems]
+    : dynamicSkillItems;
   const skillSelect = `<select name="skill" aria-label="${escapeHtml(t.skillAny)}" onchange="this.form.submit()">
       ${option('', t.skillAny, !filters.skill)}
-      ${skills.map((name) => option(name, name, filters.skill?.toLowerCase() === name.toLowerCase())).join('')}
+      ${skillItems.map((item) => option(
+        item.name,
+        item.count !== undefined ? `${item.name} (${item.count})` : item.name,
+        filters.skill?.toLowerCase() === item.name.toLowerCase()
+      )).join('')}
     </select>`;
   const languageSelect = `<select name="language" aria-label="${escapeHtml(t.langAny)}" onchange="this.form.submit()">
       ${([['all', t.langAny], ['ru', t.langRu], ['en', t.langEn]] as const)
@@ -2428,7 +2438,7 @@ ${intro}
         ${popular.length ? `<div class="suggestions-group">
           <div class="suggestions-header">${escapeHtml(t.popularSkills)}</div>
           <div class="suggestions-chips">
-            ${popular.map((item) => `<a class="sug-chip" href="${escapeHtml(hrefWith({ skill: item.name, page: undefined }))}">${escapeHtml(item.name)} <span class="sug-count">${item.count}</span></a>`).join('')}
+            ${popular.slice(0, 10).map((item) => `<a class="sug-chip" href="${escapeHtml(hrefWith({ skill: item.name, page: undefined }))}">${escapeHtml(item.name)} <span class="sug-count">${item.count}</span></a>`).join('')}
           </div>
         </div>` : ''}
         <div class="suggestions-group">
