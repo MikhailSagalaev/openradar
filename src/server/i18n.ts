@@ -112,6 +112,11 @@ export interface Translations {
   heroSendHint: string;
   heroDismiss: string;
   scoreHint: string;
+  sortSelectLabel: string;
+  budgetSelectLabel: string;
+  skillSelectLabel: string;
+  langSelectLabel: string;
+  closeDialog: string;
   sortNew: string;
   sortScore: string;
   sortBudget: string;
@@ -213,7 +218,7 @@ export const RU: Translations = {
   metricActiveSources: 'источников',
   metricNewToday: 'новых сегодня',
   metricApplied: 'откликов',
-  searchPlaceholder: 'Поиск по заказам, вакансиям и навыкам',
+  searchPlaceholder: 'Поиск по заказам и навыкам',
   searchBtn: 'Найти',
   emptyTitle: 'Ничего не найдено',
   emptyDesc: 'Попробуйте изменить запрос или проверить другие фильтры.',
@@ -288,6 +293,11 @@ export const RU: Translations = {
   notFoundTitle: 'Страница не найдена',
   notFoundDesc: 'Такой страницы нет: ссылка устарела, или заказ уже скрыт.',
   scoreHint: 'Рейтинг от 0 до 100 — насколько заказ стоит внимания: бюджет или зарплата, навыки, насколько подробно описана задача, прямой контакт и голоса участников. Медиана около 60, от 80 — сильный заказ.',
+  sortSelectLabel: 'Сортировка ленты',
+  budgetSelectLabel: 'Минимальный бюджет',
+  skillSelectLabel: 'Фильтр по навыку',
+  langSelectLabel: 'Язык публикаций',
+  closeDialog: 'Закрыть окно',
   sortNew: 'Сначала новые',
   sortScore: 'Сначала лучшие',
   sortBudget: 'Сначала дорогие',
@@ -384,7 +394,7 @@ export const EN: Translations = {
   metricActiveSources: 'active sources',
   metricNewToday: 'new today',
   metricApplied: 'applied',
-  searchPlaceholder: 'Search gigs, jobs and skills',
+  searchPlaceholder: 'Search jobs and skills',
   searchBtn: 'Search',
   emptyTitle: 'No leads found',
   emptyDesc: 'Try adjusting your search query or switching filters.',
@@ -459,6 +469,11 @@ export const EN: Translations = {
   notFoundTitle: 'Page not found',
   notFoundDesc: 'There is no such page: the link is outdated, or the lead has been hidden.',
   scoreHint: 'Score from 0 to 100: how much a lead is worth your attention. It counts the budget or salary, skills, how well the task is described, a direct contact and participant votes. The median is about 60; 80 and above is a strong lead.',
+  sortSelectLabel: 'Feed sort order',
+  budgetSelectLabel: 'Minimum budget',
+  skillSelectLabel: 'Filter by skill',
+  langSelectLabel: 'Publication language',
+  closeDialog: 'Close dialog',
   sortNew: 'Newest first',
   sortScore: 'Best first',
   sortBudget: 'Highest budget first',

@@ -51,7 +51,9 @@ export const telegramSource: SourceAdapter = {
     $('.tgme_widget_message_wrap').each((_index, element) => {
       if (leads.length >= limit) return;
       const message = $(element).find('.tgme_widget_message');
-      const text = $(element).find('.tgme_widget_message_text').text().trim();
+      const textEl = $(element).find('.tgme_widget_message_text');
+      textEl.find('br').replaceWith('\n');
+      const text = textEl.text().trim();
       if (!text) return;
 
       const postAttr = message.attr('data-post') ?? '';

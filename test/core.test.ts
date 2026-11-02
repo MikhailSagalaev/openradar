@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cleanTitle, extractBudget, extractBudgetAndCurrency, extractCity, stripTitleNoiseAndBudget } from '../src/core/extract.ts';
 import { prepareRawLead } from '../src/core/prepare.ts';
 import { applyRules, scoreLead } from '../src/core/rules.ts';
-import { normalizeTechTokens } from '../src/core/text.ts';
+import { decodeHtmlEntities, normalizeTechTokens, stripHtml, stripInvisible } from '../src/core/text.ts';
 import { canonicalizeUrl } from '../src/core/url.ts';
 import { makeSource, TEST_NOW } from './helpers.ts';
 
@@ -286,5 +286,21 @@ describe('score', () => {
     const raw = { title: 'Telegram-бот на Python', text: 'Нужен бот на aiogram с оплатой, бюджет 20 000 ₽', publishedAt: TEST_NOW.toISOString() };
     const later = new Date(TEST_NOW.getTime() + 20 * 3600 * 1000);
     expect(score(raw, later)).toBe(score(raw, TEST_NOW));
+  });
+
+  it('decodes HTML entities including unclosed entities and superscripts', () => {
+    expect(decodeHtmlEntities('Площадь 77 м&sup2')).toBe('Площадь 77 м²');
+    expect(decodeHtmlEntities('Температура 25&deg')).toBe('Температура 25°');
+    expect(decodeHtmlEntities('&copy; 2026 openradar &middot; free')).toBe('© 2026 openradar · free');
+  });
+
+  it('strips Braille blank spaces and preserves readable content', () => {
+    expect(stripInvisible('⠀\u2800Привет⠀мир\u2800')).toBe('Приветмир');
+  });
+
+  it('replaces <br> and <br /> with newlines in stripHtml', () => {
+    expect(stripHtml('Строка 1<br>Строка 2<br />Строка 3<br class="spacer"/>Строка 4')).toBe(
+      'Строка 1\nСтрока 2\nСтрока 3\nСтрока 4',
+    );
   });
 });

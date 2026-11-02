@@ -169,6 +169,16 @@ function isTagOnlyLine(line: string): boolean {
   return tokens.length > 0 && tokens.every((t) => /^#[\wа-яё_-]+$/iu.test(t) || /^[—–·•|=*-]+$/.test(t));
 }
 
+function isLocationOrMetadataLine(line: string): boolean {
+  const trimmed = line.trim().toLowerCase().replace(/^[\s«"„“—–·•|*=*-]+|[\s»"”\.…—–·•|*=*-]+$/g, '');
+  if (!trimmed) return true;
+  if (/^(?:локация|город|формат|занятость|тип занятости|location|city|format)\s*:/iu.test(trimmed)) {
+    return true;
+  }
+  const pureMarkers = /^(?:санкт-петербург|петербург|спб|москва|мск|краснодар|крд|ростов-на-дону|новосибирск|екатеринбург|казань|нижний новгород|сочи|ставрополь|минск|киев|алматы|астана|удаленка|удалёнка|удаленно|удалённо|remote|онлайн|офис|гибрид|полная занятость|частичная занятость|парт-тайм|full-time|part-time)(?:[,\s/·|—–-]+(?:санкт-петербург|петербург|спб|москва|мск|краснодар|крд|ростов-на-дону|новосибирск|екатеринбург|казань|нижний новгород|сочи|ставрополь|минск|киев|алматы|астана|удаленка|удалёнка|удаленно|удалённо|remote|онлайн|офис|гибрид|полная занятость|частичная занятость|парт-тайм|full-time|part-time))*$/iu;
+  return pureMarkers.test(trimmed);
+}
+
 /** Leading and trailing hashtags are channel tags, not title words («#ищу — #ищу»). */
 function stripEdgeHashtags(title: string): string {
   return title
@@ -179,17 +189,28 @@ function stripEdgeHashtags(title: string): string {
     .trim();
 }
 
-/** The first line of the text that is not a hashtag row — the real title of channel posts. */
+/** The first line of the text that is not a hashtag row or pure city/location marker — the real title of channel posts. */
 function firstContentLine(text: string): string {
-  return text.split('\n').map((part) => part.trim()).find((part) => part && !isTagOnlyLine(part)) ?? '';
+  const parts = text.split('\n').map((part) => part.trim()).filter((part) => part && !isTagOnlyLine(part));
+  if (!parts.length) return '';
+  const meaningful = parts.find((part) => !isLocationOrMetadataLine(part));
+  return meaningful ?? parts[0] ?? '';
 }
 
 export function cleanTitle(rawTitle: string, fallbackText = ''): string {
   let candidate = rawTitle || firstContentLine(fallbackText) || firstLine(fallbackText, 140);
-  // A hashtag-only first line is a channel tag: take the first content line instead.
-  if (isTagOnlyLine(candidate) && fallbackText) candidate = firstContentLine(fallbackText) || candidate;
+  if (candidate.includes('\n')) {
+    candidate = candidate.replace(/\r?\n+/g, ' · ');
+  }
+  // A hashtag-only or location-only first line is not a descriptive title: take the next content line instead.
+  if ((isTagOnlyLine(candidate) || isLocationOrMetadataLine(candidate)) && fallbackText) {
+    const next = firstContentLine(fallbackText);
+    if (next && !isTagOnlyLine(next) && !isLocationOrMetadataLine(next)) {
+      candidate = next;
+    }
+  }
   let title = stripEmoji(toPlainText(candidate))
-    .replace(/^[\s«"„“]+|[\s»"”\.…]+$/g, '')
+    .replace(/^[\s«"„“—–·•|*-]+|[\s»"”\.…—–·•|*-]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 

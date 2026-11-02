@@ -10,6 +10,7 @@ import {
   renderRobotsTxt,
   renderSitemapXml,
 } from '../src/server/seo.ts';
+import { renderLeadPage, renderLeadsPage } from '../src/server/ui.ts';
 import { makeSource } from './helpers.ts';
 
 const entry = findCatalogEntry('zakazy-na-razrabotku')!;
@@ -104,5 +105,52 @@ describe('SEO catalog pages', () => {
 
     const withLeads = renderSitemapXml('https://openradar.fun', [{ id: 'abc', createdAt: '2026-10-26T06:48:19.000Z' }]);
     expect(withLeads).toContain('<loc>https://openradar.fun/leads/abc</loc><lastmod>2026-10-26</lastmod>');
+  });
+
+  it('renders og metadata and WebSite SearchAction schema on the main page', () => {
+    const html = renderLeadsPage({
+      stats: { totalLeads: 10, activeSources: 2, sources: 2, last24h: 5 },
+      health: [],
+      leads: [],
+      query: '',
+      status: '',
+      version: 'test',
+    });
+    expect(html).toContain('property="og:description"');
+    expect(html).toContain('property="og:url"');
+    expect(html).toContain('name="twitter:description"');
+    expect(html).toContain('"@type": "WebSite"');
+    expect(html).toContain('"@type": "SearchAction"');
+    expect(html).toContain('https://openradar.fun/?q={search_term_string}');
+  });
+
+  it('renders JobPosting schema for gigs with CONTRACTOR and extracted company name', () => {
+    const lead = {
+      id: 'lead-test-123',
+      sourceId: 'src-1',
+      title: 'Разработчик frontend',
+      text: '#вакансия #frontend Компания: Яндекс Лавка\nИщем фронтенд разработчика на проект.',
+      type: 'gig' as const,
+      status: 'new' as const,
+      score: 75,
+      budget: 80000,
+      currency: 'RUB',
+      createdAt: '2026-11-01T10:00:00.000Z',
+      fingerprint: 'fp-123',
+      titleKey: 'разработчик frontend',
+      reasons: [],
+    };
+    const html = renderLeadPage({
+      lead,
+      source: undefined,
+      version: 'test',
+      auth: undefined,
+    });
+    expect(html).toContain('"@type": "JobPosting"');
+    expect(html).toContain('"employmentType": "CONTRACTOR"');
+    expect(html).toContain('"name": "Яндекс Лавка"');
+    // Leading hashtags are stripped from meta description
+    expect(html).not.toMatch(/content="#вакансия/);
+    expect(html).toContain('content="Компания: Яндекс Лавка');
   });
 });

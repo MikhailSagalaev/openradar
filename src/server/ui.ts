@@ -1142,7 +1142,7 @@ dialog::backdrop {
 .filter-bar select {
   height: 34px;
   min-height: 34px;
-  padding: 0 30px 0 14px;
+  padding: 0 34px 0 12px;
   border: 1px solid var(--line);
   border-radius: var(--control-radius);
   background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2371717a' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center;
@@ -1157,7 +1157,7 @@ dialog::backdrop {
 .filter-check input { margin: 0; accent-color: var(--ink); }
 .filter-reset { font-size: 13px; color: var(--muted); }
 @media (max-width: 640px) {
-  .filter-bar select { flex: 1 1 calc(50% - 4px); min-width: 0; height: 40px; }
+  .filter-bar select { flex: 1 1 calc(50% - 4px); min-width: 0; height: 40px; padding: 0 34px 0 12px; }
   .filter-check { height: 40px; }
 }
 .score[title] { cursor: help; }
@@ -1389,6 +1389,33 @@ a:focus-visible, button:focus-visible, summary:focus-visible, input[type=checkbo
 .lead-text a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 .lead-text .lead-heading { margin-bottom: 4px; font-weight: 600; }
 .lead-text .redacted { padding: 0 6px; border-radius: 4px; background: var(--soft); color: var(--muted); font-size: 13px; }
+.lead-text .redacted-btn {
+  display: inline-block;
+  vertical-align: middle;
+  padding: 1px 8px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 4px;
+  background: var(--soft);
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.lead-text .redacted-btn:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+  border-color: var(--ink);
+}
+.contacts-hidden-link {
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  cursor: pointer;
+}
+.contacts-hidden-link:hover {
+  color: var(--ink);
+}
 .lead-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .lead-tags .tag { padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 12.5px; color: var(--muted); }
 .meta-list { margin: 0; }
@@ -1834,7 +1861,6 @@ ${analyticsHeadHtml}
 <body>
 <a class="skip-link" href="#main">${escapeHtml(t.skipToFeed)}</a>
 ${analyticsBodyHtml}
-<main>
 <header class="top">
   <div class="top-brand-group">
     <a class="brand" href="/" aria-label="openradar">${renderLogo({ height: 24 })}</a>
@@ -1846,9 +1872,9 @@ ${analyticsBodyHtml}
   </nav>
   <div class="actions">${input.actions ?? ''}${authWidget}</div>
 </header>
-<div class="main-content" id="main" tabindex="-1">
+<main class="main-content" id="main" tabindex="-1">
 ${input.body}
-</div>
+</main>
 <footer>
   <div class="footer-wrap">
     <div class="footer-col footer-col-brand">
@@ -1895,11 +1921,10 @@ ${input.body}
     </span>
   </div>
 </footer>
-</main>
 <dialog id="auth-vote-dialog" style="border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);padding:24px;max-width:400px;width:calc(100vw - 32px);box-shadow:0 16px 40px rgba(0,0,0,0.22)">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
     <div style="display:inline-flex;align-items:center">${renderLogo({ height: 28 })}</div>
-    <button type="button" onclick="document.getElementById('auth-vote-dialog').close()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:22px;line-height:1;padding:0">&times;</button>
+    <button type="button" onclick="document.getElementById('auth-vote-dialog').close()" aria-label="${escapeHtml(t.closeDialog)}" title="${escapeHtml(t.closeDialog)}" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:22px;line-height:1;padding:0">&times;</button>
   </div>
   <p class="muted" style="font-size:13px;line-height:1.55;margin:0 0 20px">
     ${escapeHtml(lang === 'ru' ? 'Войдите через GitHub для голосования, оценки качества и участия в сети.' : 'Sign in with GitHub to vote, curate leads and see contacts.')}
@@ -1962,7 +1987,7 @@ document.addEventListener('click', function(e) {
 <dialog id="add-source-dialog" style="border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);padding:24px;max-width:480px;width:calc(100vw - 32px);box-shadow:0 16px 40px rgba(0,0,0,0.18)">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
     <h3 style="margin:0;font-size:16px;font-weight:600">${escapeHtml(t.addSource)}</h3>
-    <button type="button" onclick="document.getElementById('add-source-dialog').close()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1">&times;</button>
+    <button type="button" onclick="document.getElementById('add-source-dialog').close()" aria-label="${escapeHtml(t.closeDialog)}" title="${escapeHtml(t.closeDialog)}" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1">&times;</button>
   </div>
   <form method="post" action="/sources" style="display:grid;gap:14px">
     <div style="display:grid;gap:5px">
@@ -2002,16 +2027,38 @@ ${input.script ?? ''}
 }
 
 const POLL_SCRIPT = `<script>
+function showToast(message, isError) {
+  let toast = document.getElementById('global-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'global-toast';
+    toast.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;max-width:360px;padding:12px 18px;border-radius:8px;font-size:13px;line-height:1.4;box-shadow:0 8px 24px rgba(0,0,0,0.2);transition:opacity 0.2s ease,transform 0.2s ease;pointer-events:none;';
+    document.body.appendChild(toast);
+  }
+  toast.style.background = isError ? 'var(--rose, #ef4444)' : 'var(--ink, #09090b)';
+  toast.style.color = '#fff';
+  toast.textContent = message;
+  toast.style.opacity = '1';
+  toast.style.transform = 'translateY(0)';
+  clearTimeout(toast._timeout);
+  toast._timeout = setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(8px)';
+  }, 4000);
+}
+
 async function poll(url, button) {
   if (!button) return;
   button.disabled = true;
   try {
     const response = await fetch(url, { method: 'POST', headers: { accept: 'application/json' } });
     if (!response.ok) {
-      alert('Ошибка: ' + (await response.text()).slice(0, 300));
+      showToast('Ошибка: ' + (await response.text()).slice(0, 300), true);
       return;
     }
     location.reload();
+  } catch (err) {
+    showToast('Ошибка: ' + (err && err.message ? err.message : 'сеть недоступна'), true);
   } finally {
     button.disabled = false;
   }
@@ -2296,12 +2343,12 @@ export function renderLeadsPage(data: LeadsPageData): string {
 
   const option = (value: string, label: string, selected: boolean): string =>
     `<option value="${escapeHtml(value)}"${selected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
-  const sortSelect = `<select name="sort" aria-label="${escapeHtml(t.sortNew)}" onchange="this.form.submit()">
+  const sortSelect = `<select name="sort" aria-label="${escapeHtml(t.sortSelectLabel)}" onchange="this.form.submit()">
       ${(['score', 'new', 'budget'] as const)
         .map((sort) => option(sort === (filters.defaultSort ?? 'new') ? '' : sort, { new: t.sortNew, score: t.sortScore, budget: t.sortBudget }[sort], filters.sort === sort))
         .join('')}
     </select>`;
-  const budgetSelect = `<select name="budget" aria-label="${escapeHtml(t.budgetAny)}" onchange="this.form.submit()">
+  const budgetSelect = `<select name="budget" aria-label="${escapeHtml(t.budgetSelectLabel)}" onchange="this.form.submit()">
       ${option('', t.budgetAny, !filters.budgetRub)}
       ${BUDGET_STEPS_RUB.map((rub) => option(String(rub), t.budgetFrom.replace('{n}', formatBudget(rub).replace(/\s*₽$/, '')), filters.budgetRub === rub)).join('')}
       ${filters.budgetRub && !(BUDGET_STEPS_RUB as readonly number[]).includes(filters.budgetRub) ? option(String(filters.budgetRub), t.budgetFrom.replace('{n}', formatBudget(filters.budgetRub).replace(/\s*₽$/, '')), true) : ''}
@@ -2315,7 +2362,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
   const skillItems = filters.skill && !hasCurrentSkill
     ? [{ name: filters.skill }, ...dynamicSkillItems]
     : dynamicSkillItems;
-  const skillSelect = `<select name="skill" aria-label="${escapeHtml(t.skillAny)}" onchange="this.form.submit()">
+  const skillSelect = `<select name="skill" aria-label="${escapeHtml(t.skillSelectLabel)}" onchange="this.form.submit()">
       ${option('', t.skillAny, !filters.skill)}
       ${skillItems.map((item) => option(
         item.name,
@@ -2323,7 +2370,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
         filters.skill?.toLowerCase() === item.name.toLowerCase()
       )).join('')}
     </select>`;
-  const languageSelect = `<select name="language" aria-label="${escapeHtml(t.langAny)}" onchange="this.form.submit()">
+  const languageSelect = `<select name="language" aria-label="${escapeHtml(t.langSelectLabel)}" onchange="this.form.submit()">
       ${([['all', t.langAny], ['ru', t.langRu], ['en', t.langEn]] as const)
         .map(([value, label]) => option(
           (value === 'all' ? undefined : value) === filters.defaultLanguage ? '' : value,
@@ -2342,7 +2389,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
       : `<a class="btn ghost small filter-follow" href="${escapeHtml(`/login?returnTo=${encodeURIComponent(hrefWith({}))}`)}" title="${escapeHtml(t.followHint)}">${escapeHtml(t.follow)}</a>`;
   // On phones the filters fold under one button unless some are set (see the script below).
   const activeCount = activeFilterCount(filters);
-  const filterBar = `<details class="filters" id="feed-filters" open><summary class="filters-toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>${escapeHtml(t.filtersTitle)}${activeCount ? `<span class="filters-count">${activeCount}</span>` : ''}<svg class="filters-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div class="filter-bar">
+  const filterBar = `<details class="filters" id="feed-filters"${hasActiveFilters(filters) ? ' open' : ''}><summary class="filters-toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>${escapeHtml(t.filtersTitle)}${activeCount ? `<span class="filters-count">${activeCount}</span>` : ''}<svg class="filters-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div class="filter-bar">
     ${sortSelect}${budgetSelect}${skillSelect}${languageSelect}
     <label class="filter-check"><input type="checkbox" name="it" value="1"${filters.it ? ' checked' : ''} onchange="this.form.submit()">${escapeHtml(t.itOnly)}</label>
     <label class="filter-check"><input type="checkbox" name="remote" value="1"${filters.remote ? ' checked' : ''} onchange="this.form.submit()">${escapeHtml(t.remoteOnly)}</label>
@@ -2351,7 +2398,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
     <a class="filter-rss" href="${escapeHtml(rssHref)}" target="_blank" rel="noopener">RSS</a>
   </div></details>
   ${rankedWindowApplies(filters) ? `<p class="score-legend">${escapeHtml(t.rankedWindow)}</p>` : ''}
-  ${hasActiveFilters(filters) ? '' : `<script>try{if(matchMedia('(max-width: 700px)').matches){document.getElementById('feed-filters').open=false}}catch(e){}</script>`}`;
+  ${hasActiveFilters(filters) ? '' : `<script>try{if(!matchMedia('(max-width: 640px)').matches){document.getElementById('feed-filters').open=true}}catch(e){}</script>`}`;
 
   const tabs = typeTabs
     .map(
@@ -2555,6 +2602,26 @@ ${POLL_SCRIPT}
     : 'Freelance orders and IT jobs — an open feed';
 
   const typeParam = type ? `?type=${encodeURIComponent(type)}` : '';
+  const siteUrl = publicBaseUrl ?? 'https://openradar.fun';
+  const pageCanonical = `${siteUrl}/${typeParam}`;
+  const metaDesc = lang === 'ru'
+    ? 'openradar — открытая база заказов и вакансий: свежие проекты с бирж и Telegram-каналов, вилки зарплат, фильтры по стеку и RSS на любой запрос.'
+    : 'openradar — open decentralized feed of freelance gigs and IT jobs from freelance boards, Telegram channels and RSS feeds.';
+  const websiteSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'openradar',
+    url: siteUrl,
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: {
+        '@type': 'EntryPoint',
+        urlTemplate: `${siteUrl}/?q={search_term_string}`,
+      },
+      'query-input': 'required name=search_term_string',
+    },
+  };
+
   return layout({
     title: pageTitle,
     version,
@@ -2564,8 +2631,14 @@ ${POLL_SCRIPT}
     script: searchHotkeyScript,
     auth: data.auth,
     lang,
-    head: `<link rel="canonical" href="${escapeHtml(publicBaseUrl ?? 'https://openradar.fun')}/${typeParam}">
-<meta name="description" content="openradar — открытая база заказов и вакансий: свежие проекты с бирж и Telegram-каналов, вилки зарплат, фильтры по стеку и RSS на любой запрос.">`,
+    head: `<link rel="canonical" href="${escapeHtml(pageCanonical)}">
+<meta name="description" content="${escapeHtml(metaDesc)}">
+<meta property="og:description" content="${escapeHtml(metaDesc)}">
+<meta property="og:url" content="${escapeHtml(pageCanonical)}">
+<meta name="twitter:description" content="${escapeHtml(metaDesc)}">
+<script type="application/ld+json">
+${jsonForScript(websiteSchema)}
+</script>`,
   });
 }
 
@@ -2734,7 +2807,7 @@ ${cautionBanner}
       ${lead.author ? `<div><dt>${escapeHtml(t.author)}</dt><dd>${escapeHtml(lead.author)}</dd></div>` : ''}
       ${lead.sourceRef ? `<div><dt>${escapeHtml(t.channel)}</dt><dd>${escapeHtml(lead.sourceRef.channelTitle || lead.sourceRef.channel)}${lead.sourceRef.visibility !== 'public' ? ` (${escapeHtml(t.privateChannel)})` : ''}</dd></div>` : ''}
       ${data.contactsHidden
-        ? `<div><dt>${escapeHtml(t.contacts)}</dt><dd><a href="/login">${escapeHtml(t.contactsHidden)}</a></dd></div>`
+        ? `<div><dt>${escapeHtml(t.contacts)}</dt><dd><a href="/login" onclick="openLoginModal();return false;" class="contacts-hidden-link">${escapeHtml(t.contactsHidden)}</a></dd></div>`
         : lead.contacts?.length
           ? `<div><dt>${escapeHtml(t.contacts)}</dt><dd>${lead.contacts.map(renderContact).join('<br>')}</dd></div>`
           : ''}
@@ -2752,7 +2825,11 @@ ${data.similar?.length ? `<section class="similar">
   <div class="list">${data.similar.map((item) => leadRow(item, undefined, lang, false)).join('')}</div>
 </section>` : ''}`;
 
-  const cleanText = (lead.text || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+  const textWithoutTags = (lead.text || '').replace(/^(?:\s*#[\wа-яё_-]+)+/giu, '').trim();
+  const cleanText = textWithoutTags.replace(/\s+/g, ' ').trim().slice(0, 160);
+  const companyMatch = (lead.text || '').match(/(?:Компания|Работодатель|Company)\s*:\s*([^\n·]+)/i);
+  const extractedCompany = companyMatch ? companyMatch[1]?.trim().replace(/^[\s«"„“]+|[\s»"”\.…]+$/g, '') : undefined;
+  const hiringOrgName = extractedCompany || lead.author || 'openradar';
   // A closed or expired lead stays readable by link but leaves the search index.
   const gone = lead.state === 'closed' || Boolean(data.expired);
   const posted = lead.publishedAt || lead.createdAt;
@@ -2769,23 +2846,20 @@ ${publicBaseUrl ? `<meta property="og:url" content="${escapeHtml(publicBaseUrl)}
 <script type="application/ld+json">
 ${jsonForScript({
   '@context': 'https://schema.org',
-  '@type': lead.type === 'job' ? 'JobPosting' : 'CreativeWork',
-  ...(lead.type === 'job' ? { title: lead.title } : { name: lead.title }),
+  '@type': 'JobPosting',
+  title: leadTitle(lead) || lead.title,
   description: lead.text,
   url: publicBaseUrl ? `${publicBaseUrl}/leads/${lead.id}` : undefined,
-  ...(lead.type === 'job'
-    ? {
-        datePosted: posted,
-        validThrough: new Date(Date.parse(posted) + 30 * 86_400_000).toISOString(),
-        jobLocationType: lead.isRemote !== false && !lead.city ? 'TELECOMMUTE' : undefined,
-      }
-    : { datePublished: posted }),
-  hiringOrganization: lead.author ? { '@type': 'Organization', name: lead.author } : undefined,
+  datePosted: posted,
+  validThrough: new Date(Date.parse(posted) + 30 * 86_400_000).toISOString(),
+  employmentType: lead.type === 'gig' ? 'CONTRACTOR' : 'FULL_TIME',
+  jobLocationType: lead.isRemote !== false && !lead.city ? 'TELECOMMUTE' : undefined,
+  hiringOrganization: { '@type': 'Organization', name: hiringOrgName },
   jobLocation: lead.city ? { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: lead.city } } : undefined,
   baseSalary: typeof lead.budget === 'number' ? {
     '@type': 'MonetaryAmount',
     currency: lead.currency || 'RUB',
-    value: { '@type': 'QuantitativeValue', value: lead.budget, unitText: 'MONTH' },
+    value: { '@type': 'QuantitativeValue', value: lead.budget, unitText: lead.type === 'gig' ? 'PROJECT' : 'MONTH' },
   } : undefined,
 })}
 </script>`;
