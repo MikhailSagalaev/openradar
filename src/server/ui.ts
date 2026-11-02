@@ -2259,7 +2259,7 @@ ${input.body}
   <details style="margin-top:16px">
     <summary class="muted" style="cursor:pointer;font-size:12px;user-select:none">${escapeHtml(lang === 'ru' ? 'Вход для администратора по токену' : 'Admin token sign-in')}</summary>
     <form method="post" action="/login" style="margin-top:10px;display:grid;gap:8px">
-      <input type="password" name="token" placeholder="${escapeHtml(lang === 'ru' ? 'Токен администратора' : 'Admin token')}">
+      <input type="password" name="token" autocomplete="current-password" placeholder="${escapeHtml(lang === 'ru' ? 'Токен администратора' : 'Admin token')}">
       <button class="btn" type="submit">${escapeHtml(lang === 'ru' ? 'Войти по токену' : 'Sign in with token')}</button>
     </form>
   </details>
