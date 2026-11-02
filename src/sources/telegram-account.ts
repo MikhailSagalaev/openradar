@@ -37,20 +37,46 @@ export async function newTelegramClient(): Promise<TelegramClient> {
 /** One connected client per session for the whole process, shared by all its sources. */
 const clients = new Map<string, Promise<TelegramClient>>();
 
+/** Cooldown after a failed connect/handshake so we don't hammer Telegram DCs every poll tick. */
+const lastFailedAt = new Map<string, { at: number; error: string }>();
+const FAILURE_COOLDOWN_MS = 60_000;
+
+export async function resetTelegramClients(): Promise<void> {
+  const all = [...clients.values()];
+  clients.clear();
+  lastFailedAt.clear();
+  await Promise.allSettled(all.map(async (p) => {
+    const client = await p.catch(() => null);
+    if (client) await client.destroy().catch(() => {});
+  }));
+}
+
 async function clientFor(sessionEnv: string): Promise<TelegramClient> {
+  const failed = lastFailedAt.get(sessionEnv);
+  if (failed && Date.now() - failed.at < FAILURE_COOLDOWN_MS) {
+    throw new Error(`${sessionEnv} in cooldown after connect failure: ${failed.error}`);
+  }
+
   let pending = clients.get(sessionEnv);
   if (!pending) {
     pending = (async () => {
       const session = process.env[sessionEnv]?.trim();
       if (!session) throw new Error(`${sessionEnv} is empty: run "radar telegram login" and put the session there`);
       const client = await newTelegramClient();
-      await client.importSession(session);
-      await client.connect();
-      // The storage starts empty: reading the dialogs once lets chats be named by numeric id.
-      for await (const _dialog of client.iterDialogs({ limit: 500 })) {
-        // only fills the peer cache
+      try {
+        await client.importSession(session);
+        await client.connect();
+        // The storage starts empty: reading the dialogs once lets chats be named by numeric id.
+        for await (const _dialog of client.iterDialogs({ limit: 500 })) {
+          // only fills the peer cache
+        }
+        lastFailedAt.delete(sessionEnv);
+        return client;
+      } catch (error) {
+        lastFailedAt.set(sessionEnv, { at: Date.now(), error: error instanceof Error ? error.message : String(error) });
+        await client.destroy().catch(() => {});
+        throw error;
       }
-      return client;
     })();
     clients.set(sessionEnv, pending);
     // A failed connection is retried on the next poll instead of being cached.
