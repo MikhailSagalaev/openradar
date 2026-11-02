@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { AccessKind, Contact, Lead, LeadVoteSignal, RunRecord, SourceHealth, SourceRecord, Stats } from '../core/types.ts';
-import { escapeHtml, firstLine, jsonForScript, truncate } from '../core/text.ts';
+import { decodeHtmlEntities, escapeHtml, firstLine, jsonForScript, truncate } from '../core/text.ts';
 import { type SupportedLang, getTranslations } from './i18n.ts';
 import { renderLogo } from './logo.ts';
 import { type AnalyticsConfig, analyticsBody, analyticsHead } from './analytics.ts';
@@ -1985,7 +1985,9 @@ footer {
   .feed-title { font-size: 20px; }
   /* Fingers need 40 px: buttons, nav links, the back link, votes. */
   .btn { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; }
-  .search-btn-inside { min-height: 0; }
+  .search-input-wrap input { padding: 8px 10px 8px 30px; }
+  .search-icon-svg { left: 8px; }
+  .search-btn-inside { min-height: 0; padding: 6px 10px; font-size: 13px; }
   .nav a { padding: 10px 0 9px; }
   .nav { padding-top: 0; }
   .back { display: inline-flex; align-items: center; min-height: 40px; }
@@ -2423,7 +2425,13 @@ function metricRow(values: Array<{ value: string | number; label: string }>): st
 }
 
 function leadTitle(lead: Lead): string {
-  return lead.title.trim() || firstLine(lead.text, 100) || 'Без заголовка';
+  let title = lead.title.trim() || firstLine(lead.text, 100) || 'Без заголовка';
+  title = decodeHtmlEntities(title);
+  // Strip glued metadata labels like "Компания: ...", "Формат: ..."
+  title = title.replace(/(?:\s+|[a-zа-яё0-9\)])(?:Компания|Работодатель|Company|Формат\s+работы|Формат|Локация|Уровень|Занятость|Вилка|ЗП|Зарплата)\s*:[^·\n]*/iu, '');
+  // Strip leading/trailing noise characters like bullets, pipes, colons, braille blanks
+  title = title.replace(/^[\s\u2800«"„“—–·•|*:-]+|[\s\u2800»"”\.…—–·•|*:-]+$/g, '').trim();
+  return title || 'Без заголовка';
 }
 
 /** The day counter counts up to this many leads; above it the page says «5 000+». */
@@ -3167,8 +3175,9 @@ ${data.similar?.length ? `<section class="similar">
 
   const textWithoutTags = (lead.text || '').replace(/^(?:\s*#[\wа-яё_-]+)+/giu, '').trim();
   const cleanText = textWithoutTags.replace(/\s+/g, ' ').trim().slice(0, 160);
-  const companyMatch = (lead.text || '').match(/(?:Компания|Работодатель|Company)\s*:\s*([^\n·]+)/i);
-  const extractedCompany = companyMatch ? companyMatch[1]?.trim().replace(/^[\s«"„“]+|[\s»"”\.…]+$/g, '') : undefined;
+  const companyMatch = (lead.text || '').match(/(?:Компания|Работодатель|Company)\s*:\s*([^·\n\r|]{1,60}?)(?=\s*(?:Формат|Локация|ЗП|З\/П|График|Занятость|Вилка|Опыт|Стек|Требования|Обязанности|Условия|О нас|Всем привет|Мы\b|Контакты|$|[·\n\r|]))/iu);
+  const rawCompany = companyMatch ? companyMatch[1]?.trim().replace(/^[\s«"„“]+|[\s»"”\.…,;]+$/g, '').slice(0, 45).trim() : undefined;
+  const extractedCompany = (rawCompany && rawCompany.length >= 2 && rawCompany.length <= 45) ? rawCompany : undefined;
   const hiringOrgName = extractedCompany || lead.author || 'openradar';
   // A closed or expired lead stays readable by link but leaves the search index.
   const gone = lead.state === 'closed' || Boolean(data.expired);

@@ -16,9 +16,9 @@ describe('TelegramAuthService', () => {
   it('runs complete QR login flow with mock Telegram client', async () => {
     const store = new MemoryStore();
 
-    let capturedOnUrlUpdated: (url: string, expires: Date) => void;
-    let capturedOnQrScanned: () => void;
-    let capturedPasswordCb: () => Promise<string>;
+    let capturedOnUrlUpdated!: (url: string, expires: Date) => void;
+    let capturedOnQrScanned!: () => void;
+    let capturedPasswordCb!: () => Promise<string>;
     let clientDestroyed = false;
 
     const mockClient: any = {
@@ -93,16 +93,17 @@ describe('TelegramAuthService', () => {
     // Verify account saved to store
     const accounts = await store.listTelegramAccounts(userId);
     expect(accounts).toHaveLength(1);
-    expect(accounts[0].tgUserId).toBe(999888777);
-    expect(accounts[0].tgUsername).toBe('radar_dev');
-    expect(accounts[0].displayName).toBe('Radar Dev');
+    const account = accounts[0]!;
+    expect(account.tgUserId).toBe(999888777);
+    expect(account.tgUsername).toBe('radar_dev');
+    expect(account.displayName).toBe('Radar Dev');
 
     // Verify session decryption matches exported session
     const decrypted = decryptTelegramSession(
       {
-        session_encrypted: accounts[0].sessionEncrypted,
-        iv: accounts[0].iv,
-        tag: accounts[0].tag,
+        session_encrypted: account.sessionEncrypted,
+        iv: account.iv,
+        tag: account.tag,
       },
       masterSecret,
       userId

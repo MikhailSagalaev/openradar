@@ -82,8 +82,14 @@ export function filterOptions(filters: FeedFilters, now: Date = new Date()): Lis
 
 /** How many filters differ from the default view. */
 export function activeFilterCount(filters: FeedFilters): number {
-  return [filters.sort !== (filters.defaultSort ?? 'new'), filters.remote, Boolean(filters.it), Boolean(filters.budgetRub), Boolean(filters.skill), filters.language !== filters.defaultLanguage]
-    .filter(Boolean).length;
+  return [
+    filters.sort !== (filters.defaultSort ?? 'new'),
+    Boolean(filters.remote),
+    Boolean(filters.it),
+    Boolean(filters.budgetRub),
+    Boolean(filters.skill),
+    Boolean(filters.language && filters.language !== filters.defaultLanguage),
+  ].filter(Boolean).length;
 }
 
 /** True when any filter differs from the default view. */

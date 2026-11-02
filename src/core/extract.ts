@@ -1,5 +1,5 @@
 import { normalizeMoneyText } from './salary.ts';
-import { firstLine, normalizeWhitespace, stripEmoji, toPlainText, truncate } from './text.ts';
+import { decodeHtmlEntities, firstLine, normalizeWhitespace, stripEmoji, toPlainText, truncate } from './text.ts';
 
 const CITY_PATTERNS: Array<{ city: string; pattern: RegExp }> = [
   { city: 'Москва', pattern: /(?:^|[^\p{L}])(?:москв[а-я]*|мск|зеленоград[а-я]*|химк[а-я]*|мытищ[а-я]*|подольск[а-я]*|люберц[а-я]*|балаших[а-я]*|одинцов[а-я]*)(?:[^\p{L}]|$)/iu },
@@ -165,8 +165,10 @@ function augmentShortTitle(title: string, fallbackText: string): string {
 
 /** A line of nothing but hashtags («#ищу #смм») or dividers carries no title. */
 function isTagOnlyLine(line: string): boolean {
-  const tokens = line.split(/\s+/).filter(Boolean);
-  return tokens.length > 0 && tokens.every((t) => /^#[\wа-яё_-]+$/iu.test(t) || /^[—–·•|=*-]+$/.test(t));
+  const cleaned = line.replace(/[\u2800\u200B-\u200D\uFEFF]/g, ' ').trim();
+  if (!cleaned) return true;
+  const tokens = cleaned.split(/\s+/).filter(Boolean);
+  return tokens.length === 0 || tokens.every((t) => /^#[\wа-яё_-]+$/iu.test(t) || /^[—–·•|=*:-]+$/.test(t));
 }
 
 function isLocationOrMetadataLine(line: string): boolean {
@@ -202,15 +204,22 @@ export function cleanTitle(rawTitle: string, fallbackText = ''): string {
   if (candidate.includes('\n')) {
     candidate = candidate.replace(/\r?\n+/g, ' · ');
   }
+  // Decode HTML entities
+  candidate = decodeHtmlEntities(candidate);
+
   // A hashtag-only or location-only first line is not a descriptive title: take the next content line instead.
   if ((isTagOnlyLine(candidate) || isLocationOrMetadataLine(candidate)) && fallbackText) {
     const next = firstContentLine(fallbackText);
     if (next && !isTagOnlyLine(next) && !isLocationOrMetadataLine(next)) {
-      candidate = next;
+      candidate = decodeHtmlEntities(next);
     }
   }
+
+  // Strip glued metadata labels like "Компания: ...", "Формат: ...", "Локация: ..." if they follow the job title
+  candidate = candidate.replace(/(?:\s+|[a-zа-яё0-9\)])(?:Компания|Работодатель|Company|Формат\s+работы|Формат|Локация|Уровень|Занятость|Вилка|ЗП|Зарплата)\s*:[^·\n]*/iu, '');
+
   let title = stripEmoji(toPlainText(candidate))
-    .replace(/^[\s«"„“—–·•|*-]+|[\s»"”\.…—–·•|*-]+$/g, '')
+    .replace(/^[\s«"„“—–·•|*:-]+|[\s»"”\.…—–·•|*:-]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 
