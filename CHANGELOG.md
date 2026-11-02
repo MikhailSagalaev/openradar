@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.41.1
+
+- Security hardening for user-connected Telegram accounts and session crypto:
+  - **Sanitized status endpoint**: `TelegramAuthService.getAuthStatus` emits `PublicTelegramAccountRecord`, stripping `sessionEncrypted`, `iv` and `tag` so encrypted session ciphertexts never leak to the client or browser network logs.
+  - **Production secret enforcement**: `deriveUserSessionKey` and `TelegramAuthService` reject the insecure fallback secret (`openradar-telegram-key-secret-fallback`) when `NODE_ENV === 'production'`, enforcing a real $\ge 16$-character `RADAR_WEB_KEY_SECRET`.
+  - **Environment variable guard**: `telegram-account.ts clientFor` validates `sessionEnv` against `TELEGRAM_SESSION_ENV_RE` (`/^RADAR_TELEGRAM_SESSION(?:_[A-Z0-9]{1,32})?$/`), preventing unauthorized access to other server environment variables.
+
 ## 0.41.0
 
 - X-Ray & Decision Maker Discovery engine (direct candidate-to-lead outreach):

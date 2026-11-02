@@ -90,6 +90,12 @@ describe('TelegramAuthService', () => {
     expect(status?.status).toBe('authenticated');
     expect(clientDestroyed).toBe(true);
 
+    // Verify sanitized status record NEVER exposes sessionEncrypted, iv or tag to client
+    expect((status?.accountRecord as any)?.sessionEncrypted).toBeUndefined();
+    expect((status?.accountRecord as any)?.iv).toBeUndefined();
+    expect((status?.accountRecord as any)?.tag).toBeUndefined();
+    expect(status?.accountRecord?.tgUsername).toBe('radar_dev');
+
     // Verify account saved to store
     const accounts = await store.listTelegramAccounts(userId);
     expect(accounts).toHaveLength(1);
@@ -142,5 +148,17 @@ describe('TelegramAuthService', () => {
     expect(aborted).toBe(true);
     const status = service.getAuthStatus(authSessionId, userId);
     expect(status?.status).toBe('expired');
+  });
+
+  it('rejects missing or short masterSecret in production', () => {
+    const origEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const store = new MemoryStore();
+      expect(() => new TelegramAuthService({ store, masterSecret: '' })).toThrow('RADAR_WEB_KEY_SECRET must be configured');
+      expect(() => new TelegramAuthService({ store, masterSecret: 'too-short' })).toThrow('RADAR_WEB_KEY_SECRET must be configured');
+    } finally {
+      process.env.NODE_ENV = origEnv;
+    }
   });
 });

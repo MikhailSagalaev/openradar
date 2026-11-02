@@ -52,6 +52,10 @@ export async function resetTelegramClients(): Promise<void> {
 }
 
 async function clientFor(sessionEnv: string): Promise<TelegramClient> {
+  if (!TELEGRAM_SESSION_ENV_RE.test(sessionEnv)) {
+    throw new Error(`Invalid session environment variable name: "${sessionEnv}". Only RADAR_TELEGRAM_SESSION and RADAR_TELEGRAM_SESSION_NAME are permitted.`);
+  }
+
   const failed = lastFailedAt.get(sessionEnv);
   if (failed && Date.now() - failed.at < FAILURE_COOLDOWN_MS) {
     throw new Error(`${sessionEnv} in cooldown after connect failure: ${failed.error}`);
