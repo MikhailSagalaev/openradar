@@ -83,7 +83,7 @@ import {
 } from './seo.ts';
 import { renderApiCatalog, renderOpenApi } from './openapi.ts';
 import { datasetCsv, liveReport, monthSnapshot } from '../research/service.ts';
-import { renderMethodologyPage, renderReportPage, renderRolePage } from '../research/pages.ts';
+import { renderEmbedPage, renderMethodologyPage, renderReportPage, renderRolePage } from '../research/pages.ts';
 import { extractPreviewFromHtml, validateSubmissionUrl } from './preview.ts';
 import { renderLogo, LOGO_SVG, LOGO_ASSET_PATH, FAVICON_SVG } from './logo.ts';
 
@@ -2668,6 +2668,15 @@ export function createApp(runtime: Runtime): Hono {
     if (english) return english;
     const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
     return c.html(renderReportPage({ report, baseUrl: seoBaseUrl(c), version: VERSION, snapshots: await researchSnapshots(), auth: await getAuthDisplay(c, runtime) }));
+  });
+
+  app.get('/embed/:chartId', async (c) => {
+    const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+    const html = renderEmbedPage({ chartId: c.req.param('chartId'), report, baseUrl: seoBaseUrl(c) });
+    if (!html) return c.html(renderNotFound(VERSION), 404);
+    c.header('access-control-allow-origin', '*');
+    c.header('x-frame-options', 'ALLOWALL');
+    return c.html(html);
   });
   app.get('/research/index', async (c) => {
     const english = toEnglish(c, '/research/index');

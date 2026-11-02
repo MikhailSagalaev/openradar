@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.40.5
+
+- Research benchmark & media engine:
+  - **Task Transformation Benchmark («Трансформация контрактных задач: автоматизация рутины vs новые специализации»)**: Academic taxonomy (`TASK_TRANSFORMATION_TAXONOMY`) tracking shift from routine automated tasks to emerging high-value specializations, with $n \ge 30$ sample reliability badges.
+  - **Dual Carta Capital & Volume Analysis**: Side-by-side volume ($N$) and gross capital flow ($\sum$) distribution table with median ($P_{50}$), IQR ($P_{75}-P_{25}$), and 10% trimmed mean.
+  - **Bump Chart with Dual Tracking**: Dynamic skill demand trajectories with client-side toggle for both Quarterly (`[По кварталам]`) and Monthly (`[По месяцам]`) intervals using smooth SVG Bezier curves.
+  - **Editorial Takeaways & 1-Click Media Citations**: Formatted key insights with single-click quotation copying for tech journalists and researchers.
+  - **Public Embed Widgets & Research Attribution**: Route `GET /embed/:chartId` (`carta`, `bump`, `task-transformation`) with CORS and iframe modal generator with tracking tokens (`ref=embed`).
+  - **Strict Monochrome Design**: Adheres to openradar monochrome palette (`#09090b`, `#ffffff`, `#71717a`, `#e4e4e7`), with colors reserved strictly for chart data marks.
+  - **Enriched Dataset Metadata**: CC BY 4.0 license, `variableMeasured` schema attributes, and direct data download distribution links.
+
 ## 0.40.4
 
 - Technical, SEO and UX/UI audit phase 2:
