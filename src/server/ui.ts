@@ -345,11 +345,22 @@ body {
   70% { box-shadow: 0 0 0 5px rgba(16, 185, 129, 0); }
   100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
 }
-main {
+/* Layout grid: header, main content, and footer share the exact same bounds */
+.top,
+main,
+footer {
   max-width: 1040px;
-  margin: 0 auto;
-  padding: 0 24px 80px;
-  min-height: 100vh;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+main {
+  padding-top: 0;
+  padding-bottom: 80px;
+  min-height: calc(100vh - 180px);
   display: flex;
   flex-direction: column;
   animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -359,8 +370,9 @@ main {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 0;
-  margin-bottom: 20px;
+  padding-top: 18px;
+  padding-bottom: 0;
+  margin-bottom: 24px;
 }
 .top-brand-group {
   display: inline-flex;
@@ -380,7 +392,6 @@ main {
   height: 24px;
   width: auto;
   display: block;
-}
 }
 .source-error-tooltip {
   display: inline-flex;
@@ -420,7 +431,28 @@ main {
 }
 .nav a:hover { color: var(--ink); text-decoration: none; }
 .nav a.active { color: var(--ink); border-color: var(--ink); }
-.actions { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.btn-submit {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 14px 0 10px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  box-sizing: border-box;
+}
+.btn-submit .btn-plus {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+  display: inline-block;
+}
+.btn-submit .btn-label {
+  display: inline;
+}
 .auth-handle { font-size: 12.5px; font-weight: 600; color: var(--ink); }
 .user-menu-wrap {
   position: relative;
@@ -431,7 +463,9 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 14px 5px 6px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0 12px 0 5px;
   background: var(--surface);
   border: 1px solid var(--line-strong);
   border-radius: 9999px;
@@ -440,6 +474,7 @@ main {
   font: inherit;
   font-size: 12.5px;
   font-weight: 500;
+  box-sizing: border-box;
   transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .user-pill:hover, .user-pill[aria-expanded="true"] {
@@ -448,8 +483,8 @@ main {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 .user-avatar-badge {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: var(--ink);
   color: var(--bg);
@@ -459,6 +494,7 @@ main {
   font-size: 11px;
   font-weight: 700;
   line-height: 1;
+  flex-shrink: 0;
 }
 .user-handle-text {
   max-width: 140px;
@@ -563,7 +599,7 @@ a:hover { text-decoration: underline; }
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin: 0 0 20px;
+  margin: 0;
   min-width: 0;
 }
 .metrics { display: flex; flex-wrap: wrap; gap: 32px; margin: 0 0 32px; }
@@ -728,6 +764,9 @@ dialog::backdrop {
   gap: 14px;
 }
 .search-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   width: 100%;
 }
 .search-bar {
@@ -1139,6 +1178,108 @@ dialog::backdrop {
 .filters > summary { display: none; }
 .filter-rss { display: none; }
 .filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.custom-dropdown {
+  position: relative;
+  display: inline-block;
+}
+.custom-dropdown-btn {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 10px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  white-space: nowrap;
+}
+.custom-dropdown-btn:hover,
+.custom-dropdown-btn[aria-expanded="true"] {
+  border-color: var(--line-strong);
+  background: var(--surface-hover);
+}
+.custom-dropdown-btn.active {
+  border-color: var(--ink);
+  font-weight: 600;
+}
+.custom-dropdown-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.custom-dropdown-chevron {
+  color: var(--muted);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+.custom-dropdown-btn[aria-expanded="true"] .custom-dropdown-chevron {
+  transform: rotate(180deg);
+}
+.custom-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 100%;
+  max-width: 280px;
+  max-height: 280px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  z-index: 120;
+  padding: 4px;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+.custom-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: background 0.1s ease;
+}
+.custom-dropdown-item:hover {
+  background: var(--surface-hover);
+}
+.custom-dropdown-item.selected {
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.04);
+}
+.custom-dropdown-count {
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  padding: 0 6px;
+  border-radius: 9999px;
+  line-height: 1.5;
+  margin-left: auto;
+}
+.custom-dropdown-item .check-svg {
+  color: var(--ink);
+  flex-shrink: 0;
+  margin-left: auto;
+}
 .filter-bar select {
   height: 34px;
   min-height: 34px;
@@ -1153,7 +1294,32 @@ dialog::backdrop {
   cursor: pointer;
 }
 .filter-bar select:hover { border-color: var(--line-strong); }
-.filter-check { display: inline-flex; align-items: center; gap: 6px; height: 34px; font-size: 13px; color: var(--ink); cursor: pointer; }
+.filter-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+  user-select: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, background 0.15s ease, font-weight 0.15s ease;
+}
+.filter-check:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-hover);
+}
+.filter-check.active {
+  border-color: var(--ink);
+  font-weight: 600;
+}
 .filter-check input { margin: 0; accent-color: var(--ink); }
 .filter-reset { font-size: 13px; color: var(--muted); }
 @media (max-width: 640px) {
@@ -1699,10 +1865,91 @@ footer {
   }
 }
 @media (max-width: 700px) {
-  main { padding: 0 16px 56px; }
-  .top { flex-wrap: wrap; gap: 12px; }
-  .nav { order: 3; width: 100%; margin-left: 0; padding-top: 8px; border-top: 1px solid var(--line); gap: 16px; }
-  .actions { margin-left: auto; }
+  .top,
+  main,
+  footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  main {
+    padding-top: 0;
+    padding-bottom: 56px;
+  }
+  .top {
+    flex-wrap: wrap;
+    gap: 12px;
+    padding-top: 14px;
+    padding-bottom: 0;
+    margin-bottom: 18px;
+  }
+  .nav {
+    order: 3;
+    width: 100%;
+    margin-left: 0;
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+    gap: 16px;
+  }
+  .actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  /* Mobile header: plus button and user avatar button are identical 34px circles */
+  .btn-submit {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+  }
+  .btn-submit .btn-label {
+    display: none !important;
+  }
+  .btn-submit .btn-plus {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 18px !important;
+    line-height: 1 !important;
+    margin: 0 !important;
+  }
+  .user-pill {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+  }
+  .user-handle-text {
+    display: none !important;
+  }
+  .user-pill .chevron-svg {
+    display: none !important;
+  }
+  .user-avatar-badge {
+    width: 24px;
+    height: 24px;
+    margin: 0;
+  }
+  .auth-signin-btn {
+    height: 34px !important;
+    min-height: 34px !important;
+    padding: 0 14px !important;
+    font-size: 12.5px !important;
+    border-radius: 9999px !important;
+  }
   .page-head { flex-direction: column; align-items: flex-start; gap: 14px; }
   .lead-actions { width: 100%; display: flex; gap: 8px; }
   .lead-actions .btn { flex: 1 1 auto; text-align: center; padding: 8px 12px; }
@@ -1710,15 +1957,15 @@ footer {
   .detail-grid { grid-template-columns: 1fr; gap: 28px; }
   .grid { grid-template-columns: 1fr; }
   .search-hero { margin: 8px 0 20px; gap: 12px; }
+  .search-form { display: flex; flex-direction: column; gap: 12px; width: 100%; }
   .intro { padding: 12px 14px; gap: 10px; }
   .intro p { font-size: 13px; padding-right: 48px; }
   .intro-action { flex: 1 1 auto; padding: 8px 10px; }
   .intro-action span { display: none; }
   .type-tab, .chip { min-height: 40px; display: inline-flex; align-items: center; }
-  .btn-submit .btn-label { display: none; }
-  .filters { display: block; margin: 0 0 16px; }
+  .filters { display: block; margin: 0; }
   .filters > summary {
-    display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px;
+    display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px;
     border: 1px solid var(--line); border-radius: 9999px; font-size: 13px; font-weight: 500;
     color: var(--ink); cursor: pointer; list-style: none; user-select: none;
   }
@@ -1727,12 +1974,15 @@ footer {
   .filters[open] .filters-chevron { transform: rotate(180deg); }
   .filters-chevron { transition: transform 0.15s ease; color: var(--muted); }
   .filters-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9999px; background: var(--ink); color: var(--bg); font-size: 11px; font-weight: 600; }
-  .filter-bar { margin-top: 12px; }
-  .filter-rss { display: inline-flex; align-items: center; height: 40px; padding: 0 14px; border: 1px solid var(--line); border-radius: 9999px; font-size: 13px; color: var(--ink); }
+  .filter-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .custom-dropdown { flex: 1 1 calc(50% - 4px); min-width: 130px; }
+  .custom-dropdown-btn { width: 100%; justify-content: space-between; height: 38px; min-height: 38px; font-size: 14px; }
+  .custom-dropdown-menu { max-width: calc(100vw - 32px); width: 100%; }
+  .filter-check { flex: 1 1 calc(50% - 4px); justify-content: center; height: 38px; min-height: 38px; }
+  .filter-rss { display: inline-flex; align-items: center; height: 38px; padding: 0 14px; border: 1px solid var(--line); border-radius: 9999px; font-size: 13px; color: var(--ink); }
   .search-bar .search-kbd, .search-bar .search-rss-inside { display: none; }
   /* The feed starts higher: a smaller title and tighter gaps above it. */
   .feed-title { font-size: 20px; }
-  .search-hero { margin: 0 0 12px; gap: 8px; }
   /* Fingers need 40 px: buttons, nav links, the back link, votes. */
   .btn { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; }
   .search-btn-inside { min-height: 0; }
@@ -1746,7 +1996,6 @@ footer {
   .page-head .actions { margin-left: 0; }
   .sources-cta { display: grid; }
   .sources-cta .btn { width: 100%; }
-  .btn-submit .btn-plus { display: inline; font-size: 18px; line-height: 1; }
   .search-bar { width: 100%; }
   .search-bar input { flex: 1 1 0; min-width: 0; }
   .type-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
@@ -2341,18 +2590,63 @@ export function renderLeadsPage(data: LeadsPageData): string {
   // RSS has no default language: it gets the one this page shows.
   const rssHref = hrefWith({ sort: undefined, language: filters.language }, '/feed.rss');
 
-  const option = (value: string, label: string, selected: boolean): string =>
-    `<option value="${escapeHtml(value)}"${selected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
-  const sortSelect = `<select name="sort" aria-label="${escapeHtml(t.sortSelectLabel)}" onchange="this.form.submit()">
-      ${(['score', 'new', 'budget'] as const)
-        .map((sort) => option(sort === (filters.defaultSort ?? 'new') ? '' : sort, { new: t.sortNew, score: t.sortScore, budget: t.sortBudget }[sort], filters.sort === sort))
-        .join('')}
-    </select>`;
-  const budgetSelect = `<select name="budget" aria-label="${escapeHtml(t.budgetSelectLabel)}" onchange="this.form.submit()">
-      ${option('', t.budgetAny, !filters.budgetRub)}
-      ${BUDGET_STEPS_RUB.map((rub) => option(String(rub), t.budgetFrom.replace('{n}', formatBudget(rub).replace(/\s*₽$/, '')), filters.budgetRub === rub)).join('')}
-      ${filters.budgetRub && !(BUDGET_STEPS_RUB as readonly number[]).includes(filters.budgetRub) ? option(String(filters.budgetRub), t.budgetFrom.replace('{n}', formatBudget(filters.budgetRub).replace(/\s*₽$/, '')), true) : ''}
-    </select>`;
+  interface DropdownItem {
+    value: string;
+    label: string;
+    displayLabel?: string;
+    count?: number;
+    selected: boolean;
+  }
+
+  const renderDropdown = (name: string, ariaLabel: string, items: DropdownItem[], isFilterActive?: boolean): string => {
+    const selectedItem = items.find((i) => i.selected) ?? items[0];
+    const active = isFilterActive ?? Boolean(selectedItem && selectedItem.value !== '' && selectedItem.value !== 'all');
+    const triggerLabel = selectedItem ? (selectedItem.displayLabel ?? selectedItem.label) : '';
+
+    return `<div class="custom-dropdown" data-name="${escapeHtml(name)}">
+      <select name="${escapeHtml(name)}" class="native-filter-select sr-only" tabindex="-1" aria-hidden="true" onchange="this.form.submit()">
+        ${items.map((i) => `<option value="${escapeHtml(i.value)}"${i.selected ? ' selected' : ''}>${escapeHtml(i.count !== undefined ? `${i.label} (${i.count})` : i.label)}</option>`).join('')}
+      </select>
+      <button type="button" class="custom-dropdown-btn${active ? ' active' : ''}" aria-haspopup="listbox" aria-expanded="false" aria-label="${escapeHtml(ariaLabel)}">
+        <span class="custom-dropdown-label">${escapeHtml(triggerLabel)}</span>
+        <svg class="custom-dropdown-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <div class="custom-dropdown-menu" role="listbox" style="display:none">
+        ${items.map((i) => `
+          <button type="button" class="custom-dropdown-item${i.selected ? ' selected' : ''}" role="option" aria-selected="${i.selected}" data-value="${escapeHtml(i.value)}">
+            <span class="custom-dropdown-item-text">${escapeHtml(i.label)}</span>
+            ${i.count !== undefined ? `<span class="custom-dropdown-count">${i.count}</span>` : ''}
+            ${i.selected ? `<svg class="check-svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>` : ''}
+          </button>
+        `).join('')}
+      </div>
+    </div>`;
+  };
+
+  const sortItems: DropdownItem[] = (['score', 'new', 'budget'] as const).map((sort) => ({
+    value: sort === (filters.defaultSort ?? 'new') ? '' : sort,
+    label: { new: t.sortNew, score: t.sortScore, budget: t.sortBudget }[sort],
+    selected: filters.sort === sort,
+  }));
+  const sortSelect = renderDropdown('sort', t.sortSelectLabel, sortItems, Boolean(filters.sort && filters.sort !== (filters.defaultSort ?? 'new')));
+
+  const budgetItems: DropdownItem[] = [
+    { value: '', label: t.budgetAny, selected: !filters.budgetRub },
+    ...BUDGET_STEPS_RUB.map((rub) => ({
+      value: String(rub),
+      label: t.budgetFrom.replace('{n}', formatBudget(rub).replace(/\s*₽$/, '')),
+      selected: filters.budgetRub === rub,
+    })),
+    ...(filters.budgetRub && !(BUDGET_STEPS_RUB as readonly number[]).includes(filters.budgetRub)
+      ? [{
+          value: String(filters.budgetRub),
+          label: t.budgetFrom.replace('{n}', formatBudget(filters.budgetRub).replace(/\s*₽$/, '')),
+          selected: true,
+        }]
+      : []),
+  ];
+  const budgetSelect = renderDropdown('budget', t.budgetSelectLabel, budgetItems, Boolean(filters.budgetRub));
+
   // Dynamic filter skills: populated from actual active leads (popularSkills), with count,
   // falling back to FILTER_SKILLS when no recent leads are indexed.
   const dynamicSkillItems: Array<{ name: string; count?: number }> = data.popularSkills?.length
@@ -2362,23 +2656,29 @@ export function renderLeadsPage(data: LeadsPageData): string {
   const skillItems = filters.skill && !hasCurrentSkill
     ? [{ name: filters.skill }, ...dynamicSkillItems]
     : dynamicSkillItems;
-  const skillSelect = `<select name="skill" aria-label="${escapeHtml(t.skillSelectLabel)}" onchange="this.form.submit()">
-      ${option('', t.skillAny, !filters.skill)}
-      ${skillItems.map((item) => option(
-        item.name,
-        item.count !== undefined ? `${item.name} (${item.count})` : item.name,
-        filters.skill?.toLowerCase() === item.name.toLowerCase()
-      )).join('')}
-    </select>`;
-  const languageSelect = `<select name="language" aria-label="${escapeHtml(t.langSelectLabel)}" onchange="this.form.submit()">
-      ${([['all', t.langAny], ['ru', t.langRu], ['en', t.langEn]] as const)
-        .map(([value, label]) => option(
-          (value === 'all' ? undefined : value) === filters.defaultLanguage ? '' : value,
-          label,
-          (filters.language ?? 'all') === value,
-        ))
-        .join('')}
-    </select>`;
+  const skillDropdownItems: DropdownItem[] = [
+    { value: '', label: t.skillAny, selected: !filters.skill },
+    ...skillItems.map((item) => ({
+      value: item.name,
+      label: item.name,
+      count: item.count,
+      selected: filters.skill?.toLowerCase() === item.name.toLowerCase(),
+    })),
+  ];
+  const skillSelect = renderDropdown('skill', t.skillSelectLabel, skillDropdownItems, Boolean(filters.skill));
+
+  const languageDropdownItems: DropdownItem[] = ([['all', t.langAny], ['ru', t.langRu], ['en', t.langEn]] as const).map(([value, label]) => ({
+    value: (value === 'all' ? undefined : value) === filters.defaultLanguage ? '' : value,
+    label,
+    selected: (filters.language ?? 'all') === value,
+  }));
+  const languageSelect = renderDropdown(
+    'language',
+    t.langSelectLabel,
+    languageDropdownItems,
+    Boolean(filters.language && filters.language !== filters.defaultLanguage)
+  );
+
   // «Следить» submits the same form by POST: the subscription takes exactly the filters on screen.
   // The default language rides on the button, so a plain search URL stays clean.
   const following = Boolean(query) || hasActiveFilters(filters) || Boolean(type);
@@ -2391,8 +2691,8 @@ export function renderLeadsPage(data: LeadsPageData): string {
   const activeCount = activeFilterCount(filters);
   const filterBar = `<details class="filters" id="feed-filters"${hasActiveFilters(filters) ? ' open' : ''}><summary class="filters-toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>${escapeHtml(t.filtersTitle)}${activeCount ? `<span class="filters-count">${activeCount}</span>` : ''}<svg class="filters-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div class="filter-bar">
     ${sortSelect}${budgetSelect}${skillSelect}${languageSelect}
-    <label class="filter-check"><input type="checkbox" name="it" value="1"${filters.it ? ' checked' : ''} onchange="this.form.submit()">${escapeHtml(t.itOnly)}</label>
-    <label class="filter-check"><input type="checkbox" name="remote" value="1"${filters.remote ? ' checked' : ''} onchange="this.form.submit()">${escapeHtml(t.remoteOnly)}</label>
+    <label class="filter-check${filters.it ? ' active' : ''}"><input type="checkbox" name="it" value="1"${filters.it ? ' checked' : ''} onchange="this.form.submit()">${escapeHtml(t.itOnly)}</label>
+    <label class="filter-check${filters.remote ? ' active' : ''}"><input type="checkbox" name="remote" value="1"${filters.remote ? ' checked' : ''} onchange="this.form.submit()">${escapeHtml(t.remoteOnly)}</label>
     ${hasActiveFilters(filters) ? `<a class="filter-reset" href="${escapeHtml(hrefWith({ sort: undefined, budget: undefined, skill: undefined, language: undefined, remote: undefined, it: undefined }))}">${escapeHtml(t.resetFilters)}</a>` : ''}
     ${followControl}
     <a class="filter-rss" href="${escapeHtml(rssHref)}" target="_blank" rel="noopener">RSS</a>
@@ -2577,7 +2877,47 @@ ${POLL_SCRIPT}
     });
   }
 
+  // Custom filter dropdowns: interactive popover menus
+  document.addEventListener('click', (e) => {
+    const trigger = e.target instanceof Element ? e.target.closest('.custom-dropdown-btn') : null;
+    if (trigger) {
+      const wrap = trigger.closest('.custom-dropdown');
+      const menu = wrap?.querySelector('.custom-dropdown-menu');
+      if (menu instanceof HTMLElement) {
+        const isOpen = menu.style.display !== 'none';
+        document.querySelectorAll('.custom-dropdown-menu').forEach((m) => { if (m instanceof HTMLElement) m.style.display = 'none'; });
+        document.querySelectorAll('.custom-dropdown-btn').forEach((b) => { b.setAttribute('aria-expanded', 'false'); });
+        if (!isOpen) {
+          menu.style.display = 'block';
+          trigger.setAttribute('aria-expanded', 'true');
+        }
+      }
+      return;
+    }
+
+    const item = e.target instanceof Element ? e.target.closest('.custom-dropdown-item') : null;
+    if (item) {
+      const wrap = item.closest('.custom-dropdown');
+      const val = item.getAttribute('data-value') ?? '';
+      const select = wrap?.querySelector('.native-filter-select');
+      if (select instanceof HTMLSelectElement) {
+        select.value = val;
+        select.form?.submit();
+      }
+      return;
+    }
+
+    if (!(e.target instanceof Element && e.target.closest('.custom-dropdown'))) {
+      document.querySelectorAll('.custom-dropdown-menu').forEach((m) => { if (m instanceof HTMLElement) m.style.display = 'none'; });
+      document.querySelectorAll('.custom-dropdown-btn').forEach((b) => { b.setAttribute('aria-expanded', 'false'); });
+    }
+  });
+
   window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.custom-dropdown-menu').forEach((m) => { if (m instanceof HTMLElement) m.style.display = 'none'; });
+      document.querySelectorAll('.custom-dropdown-btn').forEach((b) => { b.setAttribute('aria-expanded', 'false'); });
+    }
     if (e.key === '/' && document.activeElement?.tagName !== 'INPUT') {
       e.preventDefault();
       input?.focus();

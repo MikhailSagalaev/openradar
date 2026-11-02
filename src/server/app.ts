@@ -28,6 +28,7 @@ import { rateLimit } from './ratelimit.ts';
 import { indexCsv, openradarIndex } from '../research/index.ts';
 import { qualityFlagsOf } from '../core/quality.ts';
 import { rubToUsd } from '../core/salary.ts';
+import { TelegramAuthService } from './tg-auth.ts';
 import { sourceState } from '../core/source-health.ts';
 import { assertSafeUrl } from '../core/ssrf.ts';
 import { robotsFor } from '../pipeline/robots-audit.ts';
@@ -2456,6 +2457,122 @@ export function createApp(runtime: Runtime): Hono {
     const auth = await extensionUser(c);
     if (auth) await runtime.store.deleteExtensionToken?.(auth.hash);
     return c.json({ ok: true });
+  });
+
+  // User-connected Telegram accounts (MTProto QR authentication & personal sources)
+  const tgAuthService = new TelegramAuthService({
+    store: runtime.store,
+    masterSecret: runtime.env.RADAR_WEB_KEY_SECRET,
+  });
+
+  app.post('/api/tg/auth/start', rateLimit({ windowMs: 60_000, max: 10 }), async (c) => {
+    const user = await currentUser(c, runtime);
+    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    try {
+      const result = await tgAuthService.startAuth(user.id);
+      return c.json(result);
+    } catch (err: any) {
+      return c.json({ error: err.message || 'Failed to start Telegram QR auth' }, 500);
+    }
+  });
+
+  app.get('/api/tg/auth/status/:authSessionId', async (c) => {
+    const user = await currentUser(c, runtime);
+    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    const authSessionId = c.req.param('authSessionId');
+    const status = tgAuthService.getAuthStatus(authSessionId, user.id);
+    if (!status) return c.json({ error: 'session_not_found' }, 404);
+    return c.json(status);
+  });
+
+  app.post('/api/tg/auth/password', rateLimit({ windowMs: 60_000, max: 10 }), async (c) => {
+    const user = await currentUser(c, runtime);
+    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    const body = (await c.req.json().catch(() => null)) as { authSessionId?: string; password?: string } | null;
+    if (!body?.authSessionId || !body?.password) return c.json({ error: 'invalid_request' }, 400);
+    try {
+      await tgAuthService.submitPassword(body.authSessionId, user.id, body.password);
+      return c.json({ ok: true });
+    } catch (err: any) {
+      return c.json({ error: err.message || 'Failed to submit password' }, 400);
+    }
+  });
+
+  app.post('/api/tg/auth/cancel', async (c) => {
+    const user = await currentUser(c, runtime);
+    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    const body = (await c.req.json().catch(() => null)) as { authSessionId?: string } | null;
+    if (!body?.authSessionId) return c.json({ error: 'invalid_request' }, 400);
+    await tgAuthService.cancelAuth(body.authSessionId, user.id);
+    return c.json({ ok: true });
+  });
+
+  app.get('/api/tg/accounts', async (c) => {
+    const user = await currentUser(c, runtime);
+    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    const accounts = (await runtime.store.listTelegramAccounts?.(user.id)) ?? [];
+    return c.json({
+      accounts: accounts.map((a) => ({
+        id: a.id,
+        tgUserId: a.tgUserId,
+        tgUsername: a.tgUsername,
+        displayName: a.displayName,
+        phone: a.phone,
+        status: a.status,
+        lastPolledAt: a.lastPolledAt,
+        createdAt: a.createdAt,
+      })),
+    });
+  });
+
+  app.delete('/api/tg/accounts/:id', async (c) => {
+    const user = await currentUser(c, runtime);
+    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    const id = c.req.param('id');
+    const deleted = (await runtime.store.deleteTelegramAccount?.(id, user.id)) ?? false;
+    return c.json({ ok: deleted });
+  });
+
+  app.get('/api/user-sources', async (c) => {
+    const user = await currentUser(c, runtime);
+    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    const sources = (await runtime.store.listUserSources?.(user.id)) ?? [];
+    return c.json({ sources });
+  });
+
+  app.post('/api/user-sources', rateLimit({ windowMs: 60_000, max: 20 }), async (c) => {
+    const user = await currentUser(c, runtime);
+    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    const body = (await c.req.json().catch(() => null)) as {
+      accountId?: string;
+      title?: string;
+      folder?: string;
+      chats?: string[];
+      shareToNetwork?: boolean;
+    } | null;
+    if (!body?.accountId || !body?.title?.trim()) return c.json({ error: 'invalid_request' }, 400);
+
+    const account = await runtime.store.getTelegramAccount?.(body.accountId, user.id);
+    if (!account) return c.json({ error: 'account_not_found' }, 404);
+
+    const source = await runtime.store.createUserSource?.({
+      userId: user.id,
+      accountId: body.accountId,
+      title: body.title.trim(),
+      folder: body.folder?.trim() || undefined,
+      chats: body.chats ?? [],
+      shareToNetwork: body.shareToNetwork !== false,
+      enabled: true,
+    });
+    return c.json({ source });
+  });
+
+  app.delete('/api/user-sources/:id', async (c) => {
+    const user = await currentUser(c, runtime);
+    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    const id = c.req.param('id');
+    const deleted = (await runtime.store.deleteUserSource?.(id, user.id)) ?? false;
+    return c.json({ ok: deleted });
   });
 
   const serveFeed = async (c: Context) => {

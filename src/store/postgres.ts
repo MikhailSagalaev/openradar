@@ -36,6 +36,10 @@ import type {
   UserRecord,
   UserVoteResult,
   AdminStats,
+  UserTelegramAccountInput,
+  UserTelegramAccountRecord,
+  UserSourceInput,
+  UserSourceRecord,
 } from '../core/store.ts';
 import type { LeadFactsFill, ResearchDailyRow } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
@@ -1231,6 +1235,170 @@ export class PostgresStore implements Store {
 
   async deleteExtensionToken(tokenHash: string): Promise<void> {
     await this.pool.query(`DELETE FROM extension_tokens WHERE token_hash = $1`, [tokenHash]);
+  }
+
+  async upsertTelegramAccount(input: UserTelegramAccountInput): Promise<UserTelegramAccountRecord> {
+    const res = await this.pool.query(
+      `INSERT INTO user_telegram_accounts
+        (user_id, tg_user_id, tg_username, display_name, phone, session_encrypted, iv, tag, status, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+       ON CONFLICT (user_id, tg_user_id) DO UPDATE SET
+        tg_username = EXCLUDED.tg_username,
+        display_name = EXCLUDED.display_name,
+        phone = EXCLUDED.phone,
+        session_encrypted = EXCLUDED.session_encrypted,
+        iv = EXCLUDED.iv,
+        tag = EXCLUDED.tag,
+        status = EXCLUDED.status,
+        updated_at = NOW()
+       RETURNING *`,
+      [
+        input.userId,
+        input.tgUserId,
+        input.tgUsername ?? null,
+        input.displayName ?? null,
+        input.phone ?? null,
+        input.sessionEncrypted,
+        input.iv,
+        input.tag,
+        input.status ?? 'active',
+      ],
+    );
+    return this.rowToTelegramAccount(res.rows[0]);
+  }
+
+  async listTelegramAccounts(userId: number): Promise<UserTelegramAccountRecord[]> {
+    const res = await this.pool.query(
+      `SELECT * FROM user_telegram_accounts WHERE user_id = $1 ORDER BY created_at DESC`,
+      [userId],
+    );
+    return res.rows.map((r) => this.rowToTelegramAccount(r));
+  }
+
+  async getTelegramAccount(id: string, userId?: number): Promise<UserTelegramAccountRecord | null> {
+    const query = userId !== undefined
+      ? `SELECT * FROM user_telegram_accounts WHERE id = $1 AND user_id = $2`
+      : `SELECT * FROM user_telegram_accounts WHERE id = $1`;
+    const params = userId !== undefined ? [id, userId] : [id];
+    const res = await this.pool.query(query, params);
+    return res.rows[0] ? this.rowToTelegramAccount(res.rows[0]) : null;
+  }
+
+  async deleteTelegramAccount(id: string, userId: number): Promise<boolean> {
+    const res = await this.pool.query(
+      `DELETE FROM user_telegram_accounts WHERE id = $1 AND user_id = $2`,
+      [id, userId],
+    );
+    return (res.rowCount ?? 0) > 0;
+  }
+
+  private rowToTelegramAccount(row: any): UserTelegramAccountRecord {
+    return {
+      id: String(row.id),
+      userId: Number(row.user_id),
+      tgUserId: Number(row.tg_user_id),
+      tgUsername: row.tg_username ?? null,
+      displayName: row.display_name ?? null,
+      phone: row.phone ?? null,
+      sessionEncrypted: row.session_encrypted,
+      iv: row.iv,
+      tag: row.tag,
+      status: row.status,
+      lastPolledAt: row.last_polled_at ? new Date(row.last_polled_at).toISOString() : null,
+      createdAt: new Date(row.created_at).toISOString(),
+      updatedAt: new Date(row.updated_at).toISOString(),
+    };
+  }
+
+  async createUserSource(input: UserSourceInput): Promise<UserSourceRecord> {
+    const res = await this.pool.query(
+      `INSERT INTO user_sources
+        (user_id, account_id, title, folder, chats, cursors, share_to_network, enabled, updated_at)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, NOW())
+       RETURNING *`,
+      [
+        input.userId,
+        input.accountId,
+        input.title,
+        input.folder ?? null,
+        JSON.stringify(input.chats ?? []),
+        JSON.stringify(input.cursors ?? {}),
+        input.shareToNetwork !== false,
+        input.enabled !== false,
+      ],
+    );
+    return this.rowToUserSource(res.rows[0]);
+  }
+
+  async listUserSources(userId: number): Promise<UserSourceRecord[]> {
+    const res = await this.pool.query(
+      `SELECT * FROM user_sources WHERE user_id = $1 ORDER BY created_at DESC`,
+      [userId],
+    );
+    return res.rows.map((r) => this.rowToUserSource(r));
+  }
+
+  async getUserSource(id: string, userId?: number): Promise<UserSourceRecord | null> {
+    const query = userId !== undefined
+      ? `SELECT * FROM user_sources WHERE id = $1 AND user_id = $2`
+      : `SELECT * FROM user_sources WHERE id = $1`;
+    const params = userId !== undefined ? [id, userId] : [id];
+    const res = await this.pool.query(query, params);
+    return res.rows[0] ? this.rowToUserSource(res.rows[0]) : null;
+  }
+
+  async updateUserSource(
+    id: string,
+    userId: number,
+    patch: Partial<Omit<UserSourceRecord, 'id' | 'userId' | 'accountId' | 'createdAt'>>,
+  ): Promise<UserSourceRecord | null> {
+    const columns: Record<string, string> = {
+      title: 'title',
+      folder: 'folder',
+      chats: 'chats',
+      cursors: 'cursors',
+      shareToNetwork: 'share_to_network',
+      enabled: 'enabled',
+      lastPolledAt: 'last_polled_at',
+    };
+    const sets: string[] = ['updated_at = NOW()'];
+    const params: unknown[] = [id, userId];
+    for (const [key, value] of Object.entries(patch)) {
+      const col = columns[key];
+      if (!col) continue;
+      params.push(key === 'chats' || key === 'cursors' ? JSON.stringify(value) : value ?? null);
+      sets.push(`${col} = $${params.length}${key === 'chats' || key === 'cursors' ? '::jsonb' : ''}`);
+    }
+    const res = await this.pool.query(
+      `UPDATE user_sources SET ${sets.join(', ')} WHERE id = $1 AND user_id = $2 RETURNING *`,
+      params,
+    );
+    return res.rows[0] ? this.rowToUserSource(res.rows[0]) : null;
+  }
+
+  async deleteUserSource(id: string, userId: number): Promise<boolean> {
+    const res = await this.pool.query(
+      `DELETE FROM user_sources WHERE id = $1 AND user_id = $2`,
+      [id, userId],
+    );
+    return (res.rowCount ?? 0) > 0;
+  }
+
+  private rowToUserSource(row: any): UserSourceRecord {
+    return {
+      id: String(row.id),
+      userId: Number(row.user_id),
+      accountId: String(row.account_id),
+      title: row.title,
+      folder: row.folder ?? null,
+      chats: Array.isArray(row.chats) ? row.chats : typeof row.chats === 'string' ? JSON.parse(row.chats) : [],
+      cursors: typeof row.cursors === 'object' && row.cursors !== null ? row.cursors : {},
+      shareToNetwork: Boolean(row.share_to_network),
+      enabled: Boolean(row.enabled),
+      lastPolledAt: row.last_polled_at ? new Date(row.last_polled_at).toISOString() : null,
+      createdAt: new Date(row.created_at).toISOString(),
+      updatedAt: new Date(row.updated_at).toISOString(),
+    };
   }
 
   async getUserBySession(sessionId: string): Promise<UserRecord | null> {

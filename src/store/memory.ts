@@ -20,6 +20,10 @@ import type {
   UserRecord,
   UserVoteResult,
   AdminStats,
+  UserTelegramAccountInput,
+  UserTelegramAccountRecord,
+  UserSourceInput,
+  UserSourceRecord,
 } from '../core/store.ts';
 import type { LeadFactsFill, ResearchDailyRow } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
@@ -751,6 +755,107 @@ export class MemoryStore implements Store {
 
   async deleteExtensionToken(tokenHash: string): Promise<void> {
     this.extensionTokens.delete(tokenHash);
+  }
+
+  private telegramAccounts = new Map<string, UserTelegramAccountRecord>();
+  private userSourcesMap = new Map<string, UserSourceRecord>();
+
+  async upsertTelegramAccount(input: UserTelegramAccountInput): Promise<UserTelegramAccountRecord> {
+    const existing = [...this.telegramAccounts.values()].find(
+      (a) => a.userId === input.userId && a.tgUserId === input.tgUserId,
+    );
+    const now = new Date().toISOString();
+    const record: UserTelegramAccountRecord = {
+      id: existing ? existing.id : randomUUID(),
+      userId: input.userId,
+      tgUserId: input.tgUserId,
+      tgUsername: input.tgUsername ?? null,
+      displayName: input.displayName ?? null,
+      phone: input.phone ?? null,
+      sessionEncrypted: input.sessionEncrypted,
+      iv: input.iv,
+      tag: input.tag,
+      status: input.status ?? 'active',
+      lastPolledAt: existing?.lastPolledAt ?? null,
+      createdAt: existing ? existing.createdAt : now,
+      updatedAt: now,
+    };
+    this.telegramAccounts.set(record.id, record);
+    return record;
+  }
+
+  async listTelegramAccounts(userId: number): Promise<UserTelegramAccountRecord[]> {
+    return [...this.telegramAccounts.values()]
+      .filter((a) => a.userId === userId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async getTelegramAccount(id: string, userId?: number): Promise<UserTelegramAccountRecord | null> {
+    const account = this.telegramAccounts.get(id);
+    if (!account) return null;
+    if (userId !== undefined && account.userId !== userId) return null;
+    return account;
+  }
+
+  async deleteTelegramAccount(id: string, userId: number): Promise<boolean> {
+    const account = this.telegramAccounts.get(id);
+    if (!account || account.userId !== userId) return false;
+    return this.telegramAccounts.delete(id);
+  }
+
+  async createUserSource(input: UserSourceInput): Promise<UserSourceRecord> {
+    const now = new Date().toISOString();
+    const record: UserSourceRecord = {
+      id: randomUUID(),
+      userId: input.userId,
+      accountId: input.accountId,
+      title: input.title,
+      folder: input.folder ?? null,
+      chats: input.chats ?? [],
+      cursors: input.cursors ?? {},
+      shareToNetwork: input.shareToNetwork !== false,
+      enabled: input.enabled !== false,
+      lastPolledAt: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.userSourcesMap.set(record.id, record);
+    return record;
+  }
+
+  async listUserSources(userId: number): Promise<UserSourceRecord[]> {
+    return [...this.userSourcesMap.values()]
+      .filter((s) => s.userId === userId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async getUserSource(id: string, userId?: number): Promise<UserSourceRecord | null> {
+    const source = this.userSourcesMap.get(id);
+    if (!source) return null;
+    if (userId !== undefined && source.userId !== userId) return null;
+    return source;
+  }
+
+  async updateUserSource(
+    id: string,
+    userId: number,
+    patch: Partial<Omit<UserSourceRecord, 'id' | 'userId' | 'accountId' | 'createdAt'>>,
+  ): Promise<UserSourceRecord | null> {
+    const source = this.userSourcesMap.get(id);
+    if (!source || source.userId !== userId) return null;
+    const updated: UserSourceRecord = {
+      ...source,
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    };
+    this.userSourcesMap.set(id, updated);
+    return updated;
+  }
+
+  async deleteUserSource(id: string, userId: number): Promise<boolean> {
+    const source = this.userSourcesMap.get(id);
+    if (!source || source.userId !== userId) return false;
+    return this.userSourcesMap.delete(id);
   }
 
   async getUserBySession(sessionId: string): Promise<UserRecord | null> {
