@@ -31,10 +31,10 @@ Job seekers should not have to pay for subscriptions to parsers or for respondin
 
 - **One feed of every trade.** FL.ru, Kwork, Freelancehunt, Habr Career, hh.ru, Работа России, We Work Remotely, Jobicy, RemoteOK and Telegram channels (public ones as they are, private ones and chats through your own account): development, design, video, writing, ads, sales and more. A post seen on two boards is one lead.
 - **Search, filters and a rating.** Budget from, skill, remote only, language. The feed opens with the best recent leads first (rating, fading with age); newest or highest budget are one click away. Each lead gets a 0-100 rating from its pay, skills, detail and a direct contact. A vacancy whose pay is far below the usual for its role shows «check the salary» instead of the number.
-- **Browser extension.** Sign in with GitHub once, then add a vacancy or an order from any site in one click; it also shows what similar work usually pays and whether the pay on the page is below, within or above it.
+- **Browser extension.** Sign in with GitHub once, then add a vacancy or an order from any site in one click; it also shows what similar work usually pays and whether the pay on the page is below, within or above it. Includes 1-click **X-Ray Direct Outreach** to locate engineering leads and hiring managers across LinkedIn, Telegram, Habr and GitHub.
 - **Votes and submissions.** Signed-in users mark leads as useful, junk, scam or closed, and add posts by link.
 - **Market research.** [openradar.fun/research](https://openradar.fun/research): pay in vacancies and order budgets by role, grade, language, city and skill, with medians, quartiles and sample sizes. Monthly reports are frozen so they can be cited; the data is open under CC BY 4.0 (CSV and JSON). How it is counted: [methodology](https://openradar.fun/research/methodology).
-- **RSS for any query**, an HTTP API and an MCP server over the same feed.
+- **RSS for any query**, an HTTP API and an MCP server over the same feed (including `xray_generate_dorks` for AI agent sourcing).
 - **Your own node.** Run it at home or on a server, connect your sources, filters and notifications (Telegram, webhook). Nothing leaves the node unless you share a source.
 
 ## The network

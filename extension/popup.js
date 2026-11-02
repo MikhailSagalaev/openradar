@@ -18,6 +18,11 @@ const fields = {
   marketBase: document.getElementById('marketBase'),
   estimate: document.getElementById('estimate'),
   marketResult: document.getElementById('market-result'),
+  xraySection: document.getElementById('xray-section'),
+  xrayTarget: document.getElementById('xray-target'),
+  xrayButtons: document.getElementById('xray-buttons'),
+  xrayPitchText: document.getElementById('xray-pitch-text'),
+  xrayCopyPitch: document.getElementById('xray-copy-pitch'),
 };
 
 /** The hub answers market estimates; any openradar server with priced leads can. */
@@ -178,10 +183,76 @@ async function initPreview() {
       } else {
         fields.selectionSnippet.style.display = 'none';
       }
+
+      initXRay(page);
     }
   } catch {
     fields.pageTitle.textContent = t('currentPage');
   }
+}
+
+function initXRay(page) {
+  if (!fields.xraySection || !window.openRadarXRay) return;
+
+  const jp = page?.jobPosting;
+  let company = jp?.company;
+  const role = jp?.title || page?.title || '';
+  const skills = jp?.skills || [];
+
+  if (!company && page?.url) {
+    try {
+      const u = new URL(page.url);
+      const host = u.hostname.replace(/^www\./i, '');
+      const genericBoards = ['hh.ru', 'habr.com', 'career.habr.com', 'linkedin.com', 'fl.ru', 'kwork.ru', 'remoteok.com'];
+      if (!genericBoards.includes(host)) {
+        company = host.split('.')[0];
+      }
+    } catch {}
+  }
+
+  if (!company && page?.title) {
+    const match = page.title.match(/(?:в\s+компани[юие]|в|at)\s+["'«»]?([A-Za-zА-Яа-я0-9\s._-]{2,40})["'«»]?/i);
+    if (match && match[1]) {
+      company = match[1].trim();
+    }
+  }
+
+  if (!company) {
+    fields.xraySection.hidden = true;
+    return;
+  }
+
+  const plan = window.openRadarXRay.buildXRayPlan(company, role, skills);
+  fields.xrayTarget.textContent = plan.cleanCompany || plan.company;
+  fields.xrayButtons.innerHTML = '';
+
+  for (const dork of plan.dorks) {
+    const link = document.createElement('a');
+    link.className = 'xray-link-btn';
+    link.href = dork.url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+
+    const icon = document.createElement('span');
+    icon.className = 'xray-link-icon';
+    icon.textContent = dork.icon;
+
+    const label = document.createElement('span');
+    label.className = 'xray-link-label';
+    label.textContent = dork.title;
+
+    const arrow = document.createElement('span');
+    arrow.className = 'xray-link-arrow';
+    arrow.textContent = '↗';
+
+    link.appendChild(icon);
+    link.appendChild(label);
+    link.appendChild(arrow);
+    fields.xrayButtons.appendChild(link);
+  }
+
+  fields.xrayPitchText.value = plan.outreachTemplate;
+  fields.xraySection.hidden = false;
 }
 
 async function sendPage() {
@@ -470,6 +541,22 @@ async function checkUpdate() {
 
 document.getElementById('sign-in').addEventListener('click', signIn);
 document.getElementById('sign-out').addEventListener('click', signOut);
+
+if (fields.xrayCopyPitch) {
+  fields.xrayCopyPitch.addEventListener('click', async () => {
+    const text = fields.xrayPitchText?.value;
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      const original = fields.xrayCopyPitch.textContent;
+      fields.xrayCopyPitch.textContent = t('copied');
+      setTimeout(() => {
+        fields.xrayCopyPitch.textContent = original;
+      }, 1500);
+    } catch {}
+  });
+}
+
 getAccount().then(renderAccount);
 
 loadConfig().catch((error) => setStatus(String(error), 'err'));

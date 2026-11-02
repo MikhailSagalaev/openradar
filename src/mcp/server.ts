@@ -10,6 +10,7 @@ import { stripInvisible } from '../core/text.ts';
 import { savedFiltersFrom, type SavedFilters } from '../core/subscriptions.ts';
 import type { LeadSort, ListLeadsOptions } from '../core/store.ts';
 import { rubToUsd } from '../core/salary.ts';
+import { buildXRayResult } from '../core/xray.ts';
 import { VERSION } from '../version.ts';
 import type { Lead, LeadType } from '../core/types.ts';
 
@@ -98,6 +99,21 @@ export const MCP_TOOLS: McpTool[] = [
     name: 'list_saved_searches',
     description: 'The user\'s saved searches and whether their Telegram is linked. Needs the personal token, like save_search.',
     inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'xray_generate_dorks',
+    description:
+      'Generate targeted Boolean search queries (Google Dorks) to locate engineering leaders, team leads, ' +
+      'and hiring managers for a specific company and role across LinkedIn, Telegram, Habr, and GitHub.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        company: { type: 'string', description: 'Company name, e.g. "Ozon", "Skyeng", "Acme"' },
+        role: { type: 'string', description: 'Role or job title, e.g. "Senior Go Developer", "DevOps Engineer"' },
+        skills: { type: 'array', items: { type: 'string' }, description: 'Relevant tech skills, e.g. ["Go", "Kafka"]' },
+      },
+      required: ['company'],
+    },
   },
 ];
 
@@ -328,6 +344,15 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend): Pr
     if (name === 'list_saved_searches') {
       if (!backend.subscriptions) return fail(id, -32001, NEEDS_TOKEN);
       return text(id, await backend.subscriptions.list());
+    }
+
+    if (name === 'xray_generate_dorks') {
+      const company = typeof args.company === 'string' ? args.company.trim() : '';
+      if (!company) return fail(id, -32602, 'Company name is required');
+      const role = typeof args.role === 'string' ? args.role : undefined;
+      const skills = Array.isArray(args.skills) ? args.skills.map(String) : undefined;
+      const result = buildXRayResult({ company, role, skills });
+      return text(id, result);
     }
 
     return fail(id, -32601, `Unknown tool: ${String(name)}`);

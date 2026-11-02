@@ -59,6 +59,22 @@
     <div id="market-result" class="market-result" hidden></div>
   </section>
 
+  <section class="xray-section" id="xray-section" hidden>
+    <div class="xray-header">
+      <span class="xray-title" data-i18n="xrayTitle"></span>
+      <span class="xray-target" id="xray-target"></span>
+    </div>
+    <p class="xray-desc" data-i18n="xrayDesc"></p>
+    <div class="xray-buttons" id="xray-buttons"></div>
+    <div class="xray-template-box" id="xray-template-box">
+      <div class="xray-template-header">
+        <span class="xray-template-title" data-i18n="xrayPitchTitle"></span>
+        <button type="button" class="mini-btn" id="xray-copy-pitch" data-i18n="copy"></button>
+      </div>
+      <textarea id="xray-pitch-text" readonly rows="3"></textarea>
+    </div>
+  </section>
+
   <details id="settings-details">
     <summary data-i18n="ownNode"></summary>
     <p class="account-note" data-i18n="ownNodeNote"></p>
@@ -88,6 +104,7 @@
   </details>
 
   <script src="i18n.js"></script>
+  <script src="xray.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

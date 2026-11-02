@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.41.0
+
+- X-Ray & Decision Maker Discovery engine (direct candidate-to-lead outreach):
+  - **Core X-Ray module (`src/core/xray.ts`)**: Deterministic Google Dork generator with corporate entity normalization (`cleanCompanyName` stripping legal noise like ООО, АО, LLC, Inc., quotes and web prefixes), leadership persona categorization (Go, Python, JVM, Frontend, Mobile, DevOps/SRE, QA, Data/ML, Design, Product), and multi-platform Boolean queries.
+  - **1-Click X-Ray Navigator in Browser Extension (`extension/`)**: Automatically detects company, role, and tech stack from active tab or `JobPosting` schema; renders 1-click search buttons for LinkedIn, Telegram (chats and channels), Habr tech articles, and GitHub contributors. Includes copyable value-focused outreach pitch template.
+  - **MCP Tool `xray_generate_dorks`**: Exposed to AI agents (Claude Desktop, Cursor, Antigravity) via `src/mcp/server.ts` to programmatically generate targeted Boolean queries for any company and role.
+  - **Zero-backend client execution**: All search queries execute directly from the candidate's browser, preventing server IP bans, CAPTCHAs, and eliminating personal data storage risks under 152-FZ/GDPR.
+
 ## 0.40.5
 
 - Research benchmark & media engine:

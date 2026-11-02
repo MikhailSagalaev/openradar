@@ -337,5 +337,20 @@
         "content": "$2"
       }
     }
+  },
+  "xrayTitle": {
+    "message": "🎯 Direct Contact (X-Ray)"
+  },
+  "xrayDesc": {
+    "message": "Find the hiring manager or engineering team directly, bypassing ATS filters:"
+  },
+  "xrayPitchTitle": {
+    "message": "Direct outreach pitch"
+  },
+  "copy": {
+    "message": "Copy"
+  },
+  "copied": {
+    "message": "Copied!"
   }
 }
