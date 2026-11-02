@@ -1,4 +1,6 @@
+import { fetch as undiciFetch } from 'undici';
 import { assertSafeUrl, safeFetchImpl } from '../core/ssrf.ts';
+import { getProxyAgent } from './proxy.ts';
 
 /**
  * robots.txt by RFC 9309: may our crawler fetch this URL? openradar does not get round a site's
@@ -89,7 +91,7 @@ const cache = new Map<string, { at: number; text?: string; status?: number; erro
 const CACHE_MS = 24 * 3600_000;
 const MAX_ROBOTS_BYTES = 512 * 1024;
 
-async function fetchRobots(origin: string, userAgent: string, fetchImpl?: typeof fetch): Promise<{ text?: string; status?: number; error?: string }> {
+async function fetchRobots(origin: string, userAgent: string, fetchImpl?: typeof fetch, proxyUrl?: string): Promise<{ text?: string; status?: number; error?: string }> {
   const hit = cache.get(origin);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit;
   let result: { text?: string; status?: number; error?: string };
@@ -99,7 +101,11 @@ async function fetchRobots(origin: string, userAgent: string, fetchImpl?: typeof
     // RFC 9309: follow at least five redirects.
     for (let hop = 0; hop <= 5; hop += 1) {
       await assertSafeUrl(url);
-      response = await safeFetchImpl(fetchImpl)(url, { redirect: 'manual', headers: { 'User-Agent': userAgent }, signal: AbortSignal.timeout(10_000) });
+      const init = { redirect: 'manual' as const, headers: { 'User-Agent': userAgent }, signal: AbortSignal.timeout(10_000) };
+      // Through the source's proxy when it has one: t.me answers the hub only that way.
+      response = proxyUrl
+        ? ((await undiciFetch(url, { ...init, dispatcher: getProxyAgent(proxyUrl) })) as unknown as Response)
+        : await safeFetchImpl(fetchImpl)(url, init);
       const location = response.headers.get('location');
       if (response.status >= 300 && response.status < 400 && location) {
         url = new URL(location, url).toString();
@@ -117,9 +123,9 @@ async function fetchRobots(origin: string, userAgent: string, fetchImpl?: typeof
 }
 
 /** May a crawler with this User-Agent fetch `url`? */
-export async function checkRobots(url: string, userAgent: string, fetchImpl?: typeof fetch): Promise<RobotsVerdict> {
+export async function checkRobots(url: string, userAgent: string, fetchImpl?: typeof fetch, proxyUrl?: string): Promise<RobotsVerdict> {
   const parsed = new URL(url);
-  const robots = await fetchRobots(parsed.origin, userAgent, fetchImpl);
+  const robots = await fetchRobots(parsed.origin, userAgent, fetchImpl, proxyUrl);
   if (robots.error) return { url, verdict: 'unknown', reason: robots.error };
   if (robots.status !== undefined && robots.status >= 400 && robots.status < 500) return { url, verdict: 'allowed', reason: `robots.txt: HTTP ${robots.status}` };
   if (robots.text === undefined) return { url, verdict: 'unknown', reason: `robots.txt: HTTP ${robots.status}` };

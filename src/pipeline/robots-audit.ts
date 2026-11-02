@@ -1,4 +1,5 @@
 import type { SourceRecord } from '../core/types.ts';
+import { resolveProxyUrl, sourceProxyUrl } from '../net/proxy.ts';
 import { checkRobots, type RobotsVerdict } from '../net/robots.ts';
 import type { SourceRegistry } from '../sources/index.ts';
 
@@ -45,7 +46,10 @@ export async function auditSourceRobots(
       url,
       note,
     };
-    if (url) item.robots = await checkRobots(url, userAgent, fetchImpl);
+    // The same route as the adapter: Telegram previews always take the proxy when one is set,
+    // other sources only when their config asks for it.
+    const proxyUrl = source.kind === 'telegram' ? resolveProxyUrl(source.config) : sourceProxyUrl(source.config);
+    if (url) item.robots = await checkRobots(url, userAgent, fetchImpl, proxyUrl);
     out.push(item);
   }
   return out;
