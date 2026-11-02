@@ -17,7 +17,7 @@ describe('lead text formatting', () => {
     const out = formatLeadText('Пример: https://example.com/a?b=1&c=2. <b>x</b> Пишите [контакт скрыт]');
     expect(out.html).toContain('<a href="https://example.com/a?b=1&amp;c=2" target="_blank" rel="noopener noreferrer nofollow ugc">');
     expect(out.html).toContain('&lt;b&gt;x&lt;/b&gt;');
-    expect(out.html).toContain('<span class="redacted">контакт скрыт</span>');
+    expect(out.html).toContain('<button type="button" class="redacted-btn" onclick="openLoginModal()" title="Войдите, чтобы увидеть контакты">[контакт скрыт]</button>');
   });
 
   it('splits a long wall of text into paragraphs', () => {

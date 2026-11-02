@@ -28,7 +28,10 @@ function inline(text: string): string {
     last = index + url.length;
   }
   out += escapeHtml(text.slice(last));
-  return out.replaceAll(escapeHtml(CONTACT_PLACEHOLDER), `<span class="redacted">${escapeHtml(CONTACT_PLACEHOLDER.slice(1, -1))}</span>`);
+  return out.replaceAll(
+    escapeHtml(CONTACT_PLACEHOLDER),
+    `<button type="button" class="redacted-btn" onclick="openLoginModal()" title="Войдите, чтобы увидеть контакты">${escapeHtml(CONTACT_PLACEHOLDER)}</button>`,
+  );
 }
 
 /** Splits a one-line wall of text on sentence ends into paragraphs of a readable size. */

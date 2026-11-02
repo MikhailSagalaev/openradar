@@ -25,4 +25,15 @@ describe('channel-post titles: hashtag rows are tags, not titles', () => {
       'Разработчик на Python в команду аналитики',
     );
   });
+
+  it('skips a pure location or city first line to find the actual title', () => {
+    const title = cleanTitle('Санкт-Петербург', 'Санкт-Петербург\nТребуется веб-дизайнер для редизайна сайта');
+    expect(title).toBe('Требуется веб-дизайнер для редизайна сайта');
+  });
+
+  it('joins multiline titles with delimiters and cleans Braille / leading dashes', () => {
+    const raw = ' ⠀ — ⠀ В проект врача диетолога\nтребуется технический специалист ';
+    const title = cleanTitle(raw);
+    expect(title).toBe('В проект врача диетолога · требуется технический специалист');
+  });
 });

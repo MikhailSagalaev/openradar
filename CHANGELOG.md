@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.40.2
+
+- Technical, SEO and UX/UI audit improvements across the site:
+  - **Multline and HTML entity parsing**: Cheerio `.tgme_widget_message_text` converts `<br>` tags to newlines before text extraction; `decodeHtmlEntities` supports unclosed entities (`&sup2` -> `²`, `&deg` -> `°`), and `stripInvisible` removes Braille blank spaces (`\u2800`).
+  - **Clean title extraction**: `cleanTitle` ignores degenerate one-line city or format lines (e.g. `Санкт-Петербург`, `Москва`, `Удаленка`), searching for the actual vacancy title on subsequent lines; joins multiline titles with delimiter ` · ` and strips leading dashes and blank symbols.
+  - **Accessibility (WCAG AA)**: Moved `<header class="top">` and `<footer>` outside `<main id="main">`; added semantic `aria-label` to feed filter selects (`sort`, `budget`, `skill`, `language`) and close dialog buttons (`aria-label="Закрыть окно"`).
+  - **Mobile UX (390×844)**: Filters are collapsed by default on mobile viewports (< 640px) unless active filters are present in the URL, reducing initial fold height so orders appear on the first screen; updated select padding to `padding: 0 34px 0 12px`; shortened search placeholder to `Поиск по заказам и навыкам`.
+  - **SEO & Schema.org**: Added `og:description`, `og:url`, `twitter:description`, and `WebSite` + `SearchAction` JSON-LD schema on the main page (`/`); updated `/leads/:id` to emit `JobPosting` schema with `employmentType: 'CONTRACTOR'` for gigs, parsed employer company from text (`(?:Компания|Работодатель|Company)\s*:\s*([^\n·]+)`), and cleaned leading hashtags from `meta description`.
+  - **Interactive redacted contacts**: Replaced static `[контакт скрыт]` with interactive `<button type="button" class="redacted-btn" onclick="openLoginModal()">` and made sidebar «Контакты видны после входа» trigger the GitHub sign-in modal with graceful fallback.
+  - **Non-blocking toast alerts**: Replaced blocking `window.alert()` in manual polling (`[data-poll]`) with toast notifications.
+
 ## 0.40.1
 
 - Fix Telegram MTProto client leak: when MTProto handshake or connection times out or fails

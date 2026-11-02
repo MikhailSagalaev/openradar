@@ -15,20 +15,35 @@ const NAMED_ENTITIES: Record<string, string> = {
   copy: '©',
   reg: '®',
   trade: '™',
+  sup1: '¹',
+  sup2: '²',
+  sup3: '³',
+  deg: '°',
+  plusmn: '±',
+  times: '×',
+  divide: '÷',
+  bull: '•',
+  middot: '·',
+  euro: '€',
+  pound: '£',
+  yen: '¥',
+  cent: '¢',
+  sect: '§',
+  para: '¶',
 };
 
 export function decodeHtmlEntities(input: string): string {
   if (!input) return '';
   return input
-    .replace(/&#x([0-9a-f]+);/gi, (_match, hex: string) => {
+    .replace(/&#x([0-9a-f]+);?/gi, (_match, hex: string) => {
       const code = Number.parseInt(hex, 16);
       return Number.isFinite(code) ? String.fromCodePoint(code) : '';
     })
-    .replace(/&#(\d+);/g, (_match, dec: string) => {
+    .replace(/&#(\d+);?/g, (_match, dec: string) => {
       const code = Number.parseInt(dec, 10);
       return Number.isFinite(code) ? String.fromCodePoint(code) : '';
     })
-    .replace(/&([a-z][a-z0-9]+);/gi, (match, name: string) => {
+    .replace(/&([a-z][a-z0-9]*);?/gi, (match, name: string) => {
       const value = NAMED_ENTITIES[name.toLowerCase()];
       return value ?? match;
     });
@@ -38,8 +53,8 @@ export function stripHtml(input: string): string {
   if (!input) return '';
   return decodeHtmlEntities(
     input
-      .replace(/<\s*(br|br\/)\s*>/gi, '\n')
-      .replace(/<\s*\/\s*(p|div|li|h[1-6])\s*>/gi, '\n')
+      .replace(/<\s*br\b[^>]*\/?>/gi, '\n')
+      .replace(/<\s*\/\s*(p|div|li|h[1-6]|tr)\b[^>]*>/gi, '\n')
       .replace(/<script[\s\S]*?<\/script>/gi, ' ')
       .replace(/<style[\s\S]*?<\/style>/gi, ' ')
       .replace(/<[^>]+>/g, ' '),
@@ -60,7 +75,7 @@ export function stripInvisible(input: string): string {
   return input
     .replace(/[\u202a-\u202e\u2066-\u2069\u200e\u200f\u061c]/g, '')
     .replace(/[\u{e0000}-\u{e007f}]/gu, '')
-    .replace(/[\u200b-\u200d\u2060-\u2064\ufeff\u00ad]/g, '')
+    .replace(/[\u200b-\u200d\u2060-\u2064\ufeff\u00ad\u2800]/g, '')
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '');
 }
 
