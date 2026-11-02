@@ -109,7 +109,7 @@ describe('SEO catalog pages', () => {
 
   it('renders og metadata and WebSite SearchAction schema on the main page', () => {
     const html = renderLeadsPage({
-      stats: { totalLeads: 10, activeSources: 2, sources: 2, last24h: 5 },
+      stats: { leads: 10, newLeads: 5, deliveredLeads: 5, rejectedLeads: 0, enabledSources: 2, sources: 2, last24h: 5 },
       health: [],
       leads: [],
       query: '',

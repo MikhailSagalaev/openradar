@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.40.4
+
+- Technical, SEO and UX/UI audit phase 2:
+  - **Clean title parsing & HTML entity unwrap**: Two-pass HTML entity decoding for double-encoded entities (`&amp;quot;` -> `"`). Strips glued metadata labels (`Компания:`, `Формат:`, `Локация:`, etc.) following job titles and removes noise punctuation and Braille spaces (`\u2800`).
+  - **Schema.org JobPosting hiringOrganization guard**: Non-greedy lookahead stops capturing employer company names before standard job section headers (`Формат`, `Локация`, `ЗП`, `График`, `Занятость`, `Вилка`, `Опыт`, `Стек`, `Требования`, `Обязанности`, `Условия`, `О нас`, `Всем привет`, `Мы`, `Контакты`), capping max length at 45 characters.
+  - **Mobile viewport (390×844) fold fix**: Filter count logic fixed so visiting without filters does not treat language as active, keeping `<details id="feed-filters">` collapsed by default on mobile screens (< 640px). Reduced search bar padding to avoid clipping search placeholder.
+  - **Database migration 025**: Cleans HTML entities, Braille blank spaces, glued metadata and trims noise punctuation from historical lead titles, keeping `title_key` synchronized.
+
+## 0.40.3
+
+- User Telegram account session encryption and QR login infrastructure (AES-256-GCM + HKDF with AAD).
+
 ## 0.40.2
 
 - Technical, SEO and UX/UI audit improvements across the site:

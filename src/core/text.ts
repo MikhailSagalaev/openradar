@@ -34,19 +34,25 @@ const NAMED_ENTITIES: Record<string, string> = {
 
 export function decodeHtmlEntities(input: string): string {
   if (!input) return '';
-  return input
-    .replace(/&#x([0-9a-f]+);?/gi, (_match, hex: string) => {
-      const code = Number.parseInt(hex, 16);
-      return Number.isFinite(code) ? String.fromCodePoint(code) : '';
-    })
-    .replace(/&#(\d+);?/g, (_match, dec: string) => {
-      const code = Number.parseInt(dec, 10);
-      return Number.isFinite(code) ? String.fromCodePoint(code) : '';
-    })
-    .replace(/&([a-z][a-z0-9]*);?/gi, (match, name: string) => {
-      const value = NAMED_ENTITIES[name.toLowerCase()];
-      return value ?? match;
-    });
+  let str = input;
+  // Decode up to 2 passes to safely unwrap double-encoded entities like &amp;quot; or &amp;sup2;
+  for (let i = 0; i < 2; i++) {
+    if (!str.includes('&')) break;
+    str = str
+      .replace(/&#x([0-9a-f]+);?/gi, (_match, hex: string) => {
+        const code = Number.parseInt(hex, 16);
+        return Number.isFinite(code) ? String.fromCodePoint(code) : '';
+      })
+      .replace(/&#(\d+);?/g, (_match, dec: string) => {
+        const code = Number.parseInt(dec, 10);
+        return Number.isFinite(code) ? String.fromCodePoint(code) : '';
+      })
+      .replace(/&([a-z][a-z0-9]*);?/gi, (match, name: string) => {
+        const value = NAMED_ENTITIES[name.toLowerCase()];
+        return value ?? match;
+      });
+  }
+  return str;
 }
 
 export function stripHtml(input: string): string {
