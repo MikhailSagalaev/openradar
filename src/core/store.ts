@@ -108,6 +108,60 @@ export interface UserRecord {
   githubCreatedAt?: string;
 }
 
+export interface UserTelegramAccountRecord {
+  id: string;
+  userId: number;
+  tgUserId: number;
+  tgUsername: string | null;
+  displayName: string | null;
+  phone: string | null;
+  sessionEncrypted: string;
+  iv: string;
+  tag: string;
+  status: 'active' | 'auth_error' | 'revoked';
+  lastPolledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserTelegramAccountInput {
+  userId: number;
+  tgUserId: number;
+  tgUsername?: string | null;
+  displayName?: string | null;
+  phone?: string | null;
+  sessionEncrypted: string;
+  iv: string;
+  tag: string;
+  status?: 'active' | 'auth_error' | 'revoked';
+}
+
+export interface UserSourceRecord {
+  id: string;
+  userId: number;
+  accountId: string;
+  title: string;
+  folder: string | null;
+  chats: string[];
+  cursors: Record<string, number>;
+  shareToNetwork: boolean;
+  enabled: boolean;
+  lastPolledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserSourceInput {
+  userId: number;
+  accountId: string;
+  title: string;
+  folder?: string | null;
+  chats?: string[];
+  cursors?: Record<string, number>;
+  shareToNetwork?: boolean;
+  enabled?: boolean;
+}
+
 export interface UserVoteResult {
   votes_up: number;
   votes_down: number;
@@ -374,6 +428,18 @@ export interface Store extends HubStore {
   saveExtensionToken?(tokenHash: string, userId: number): Promise<void>;
   getUserByExtensionToken?(tokenHash: string): Promise<UserRecord | null>;
   deleteExtensionToken?(tokenHash: string): Promise<void>;
+
+  // User-connected Telegram accounts and personal sources
+  upsertTelegramAccount?(input: UserTelegramAccountInput): Promise<UserTelegramAccountRecord>;
+  listTelegramAccounts?(userId: number): Promise<UserTelegramAccountRecord[]>;
+  getTelegramAccount?(id: string, userId?: number): Promise<UserTelegramAccountRecord | null>;
+  deleteTelegramAccount?(id: string, userId: number): Promise<boolean>;
+
+  createUserSource?(input: UserSourceInput): Promise<UserSourceRecord>;
+  listUserSources?(userId: number): Promise<UserSourceRecord[]>;
+  getUserSource?(id: string, userId?: number): Promise<UserSourceRecord | null>;
+  updateUserSource?(id: string, userId: number, patch: Partial<Omit<UserSourceRecord, 'id' | 'userId' | 'accountId' | 'createdAt'>>): Promise<UserSourceRecord | null>;
+  deleteUserSource?(id: string, userId: number): Promise<boolean>;
 
   recordRun(run: RunRecord): Promise<void>;
   listRuns(limit?: number, sourceId?: string): Promise<RunRecord[]>;
