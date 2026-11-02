@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 // @ts-ignore
 import { cleanText, findJobPosting, extractJobPosting, extractPageData } from '../extension/content.js';
+// @ts-ignore
+import { cleanCompanyName, categorizePersonas, buildXRayPlan } from '../extension/xray.js';
 
 describe('extension content script JobPosting extractor', () => {
   it('cleans HTML text tags cleanly', () => {
@@ -113,5 +115,25 @@ describe('extension content script JobPosting extractor', () => {
     expect(data.description).toBe('OG Description: Need a landing page in Next.js');
     expect(data.selection).toBe('Selected spec fragment');
     expect(data.detectedType).toBe('gig');
+  });
+
+  describe('extension xray script', () => {
+    it('cleans company name and creates 1-click dork links', () => {
+      const plan = buildXRayPlan('ООО "Авито Тех"', 'Senior Frontend Engineer', ['React', 'TypeScript']);
+      expect(plan.cleanCompany).toBe('Авито Тех');
+      expect(plan.category).toBe('frontend');
+      expect(plan.dorks).toHaveLength(4);
+
+      const [linkedin, telegram, habr, github] = plan.dorks;
+      expect(linkedin.query).toContain('site:linkedin.com/in/');
+      expect(linkedin.query).toContain('"Авито Тех"');
+      expect(linkedin.query).toContain('Frontend Lead');
+      expect(linkedin.url).toContain('https://www.google.com/search?q=');
+
+      expect(telegram.query).toContain('site:t.me');
+      expect(habr.query).toContain('site:habr.com');
+      expect(github.query).toContain('site:github.com');
+      expect(plan.outreachTemplate).toContain('Авито Тех');
+    });
   });
 });

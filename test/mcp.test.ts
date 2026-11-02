@@ -82,7 +82,7 @@ describe('MCP server', () => {
   it('lists the tools', async () => {
     const resp = (await handleMcpRequest({ jsonrpc: '2.0', id: 2, method: 'tools/list' }, backend)) as Content;
     expect((resp.result?.tools as unknown[]).length).toBe(MCP_TOOLS.length);
-    expect(MCP_TOOLS.map((t) => t.name)).toEqual(['search_leads', 'get_lead_details', 'get_market_analytics', 'save_search', 'list_saved_searches']);
+    expect(MCP_TOOLS.map((t) => t.name)).toEqual(['search_leads', 'get_lead_details', 'get_market_analytics', 'save_search', 'list_saved_searches', 'xray_generate_dorks']);
   });
 
   it('searches by query, skills and minimum budget', async () => {
@@ -129,6 +129,18 @@ describe('MCP server', () => {
     expect(stats.total_analyzed_leads).toBe(2);
     expect(stats.budget_samples_count).toBe(2);
     expect(stats.top_skills.length).toBeGreaterThan(0);
+  });
+
+  it('generates X-Ray dorks for company and role targeting', async () => {
+    const res = parsed(await call('xray_generate_dorks', { company: 'ООО "Авито"', role: 'Senior Go Developer', skills: ['Kafka'] }));
+    expect(res.cleanCompany).toBe('Авито');
+    expect(res.roleCategory).toBe('golang');
+    expect(res.dorks).toHaveLength(5);
+    expect(res.dorks[0].query).toContain('site:linkedin.com/in/');
+    expect(res.dorks[0].query).toContain('"Авито"');
+
+    const err = await call('xray_generate_dorks', { company: '  ' });
+    expect(err.error?.code).toBe(-32602);
   });
 
   it('rejects unknown tools and methods', async () => {
