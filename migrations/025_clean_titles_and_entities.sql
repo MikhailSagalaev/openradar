@@ -71,5 +71,5 @@ WHERE title ~ '[\s*•|:—–-]+$';
 
 -- 7. Sync title_key with cleaned titles
 UPDATE leads
-SET title_key = trim(regexp_replace(lower(title), '[^\p{L}\p{N}]+', ' ', 'g'))
-WHERE title_key <> trim(regexp_replace(lower(title), '[^\p{L}\p{N}]+', ' ', 'g'));
+SET title_key = trim(regexp_replace(lower(title), '[^a-zа-яё0-9]+', ' ', 'g'))
+WHERE title_key <> trim(regexp_replace(lower(title), '[^a-zа-яё0-9]+', ' ', 'g'));
