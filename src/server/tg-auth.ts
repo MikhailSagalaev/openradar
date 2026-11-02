@@ -11,6 +11,8 @@ export type TelegramAuthStatus =
   | 'error'
   | 'expired';
 
+export type PublicTelegramAccountRecord = Omit<UserTelegramAccountRecord, 'sessionEncrypted' | 'iv' | 'tag'>;
+
 export interface TelegramAuthSessionState {
   authSessionId: string;
   userId: number;
@@ -18,7 +20,7 @@ export interface TelegramAuthSessionState {
   qrUrl?: string;
   qrExpiresAt?: number;
   error?: string;
-  accountRecord?: UserTelegramAccountRecord;
+  accountRecord?: PublicTelegramAccountRecord;
   createdAt: number;
   expiresAt: number;
 }
@@ -53,11 +55,18 @@ export class TelegramAuthService {
 
   constructor(options: TelegramAuthServiceOptions) {
     this.store = options.store;
-    this.masterSecret =
+    const secret =
       options.masterSecret ||
       process.env.RADAR_WEB_KEY_SECRET ||
-      process.env.RADAR_SESSION_SECRET ||
-      'openradar-telegram-key-secret-fallback';
+      process.env.RADAR_SESSION_SECRET;
+
+    if (process.env.NODE_ENV === 'production' && (!secret || secret.length < 16)) {
+      throw new Error(
+        'RADAR_WEB_KEY_SECRET must be configured with at least 16 characters in production to enable Telegram account connections.'
+      );
+    }
+
+    this.masterSecret = secret || 'openradar-telegram-key-secret-fallback';
     this.defaultApiId = options.defaultApiId ?? (process.env.RADAR_TELEGRAM_API_ID ? Number(process.env.RADAR_TELEGRAM_API_ID) : undefined);
     this.defaultApiHash = options.defaultApiHash ?? process.env.RADAR_TELEGRAM_API_HASH?.trim();
     this.ttlMs = options.ttlMs ?? 180_000; // 3 minutes TTL
@@ -170,7 +179,7 @@ export class TelegramAuthService {
         const displayName = [user.firstName, user.lastName].filter(Boolean).join(' ') || (user.username ? `@${user.username}` : String(tgUserId));
 
         if (this.store.upsertTelegramAccount) {
-          state.accountRecord = await this.store.upsertTelegramAccount({
+          const rawAccount = await this.store.upsertTelegramAccount({
             userId,
             tgUserId,
             tgUsername: user.username ?? null,
@@ -181,6 +190,20 @@ export class TelegramAuthService {
             tag: encrypted.tag,
             status: 'active',
           });
+
+          // Sanitize: strip encrypted credentials before storing in memory / exposing to status endpoint
+          state.accountRecord = {
+            id: rawAccount.id,
+            userId: rawAccount.userId,
+            tgUserId: rawAccount.tgUserId,
+            tgUsername: rawAccount.tgUsername,
+            displayName: rawAccount.displayName,
+            phone: rawAccount.phone,
+            status: rawAccount.status,
+            lastPolledAt: rawAccount.lastPolledAt,
+            createdAt: rawAccount.createdAt,
+            updatedAt: rawAccount.updatedAt,
+          };
         }
 
         state.status = 'authenticated';
