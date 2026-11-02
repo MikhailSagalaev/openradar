@@ -113,16 +113,211 @@ function quoteButton(quote: string): string {
   return `<button type="button" class="rs-quote" data-quote="${escapeHtml(quote)}">Скопировать цитату</button>`;
 }
 
+function renderEditorialInsight(insight?: Report['editorialInsight']): string {
+  if (!insight) return '';
+  return `<div class="rs-insight-card">
+  <div class="rs-insight-head">
+    <span class="rs-insight-tag">Редакционный вывод openradar</span>
+    <button type="button" class="rs-quote" data-quote="${escapeHtml(insight.quote)}">Скопировать для СМИ</button>
+  </div>
+  <p class="rs-insight-text">
+    <b>Факт:</b> ${escapeHtml(insight.fact)}<br>
+    <b>Контраст:</b> ${escapeHtml(insight.contrast)}<br>
+    <b>Вывод:</b> ${escapeHtml(insight.conclusion)}
+  </p>
+</div>`;
+}
+
+function renderCartaSection(rows?: Report['cartaCapital'], baseUrl = ''): string {
+  if (!rows || !rows.length) return '';
+  const embedCode = `<iframe src="${baseUrl}/embed/carta" width="100%" height="380" frameborder="0"></iframe>`;
+  return `<section class="rs-section">
+  <div class="rs-section-head">
+    <div>
+      <h2>Объём против денежной массы: где концентрируется капитал</h2>
+      <p class="muted small">Левая колонка — число объявлений (доля потока), правая — доля в совокупном бюджете рынка в %</p>
+    </div>
+    <button type="button" class="btn ghost btn-sm rs-embed-btn" data-embed="${escapeHtml(embedCode)}">&lt;/&gt; Встроить</button>
+  </div>
+  <div class="rs-dual-table">
+    <div class="rs-dual-head">
+      <div>Специализация</div>
+      <div style="text-align:right">Объём (число)</div>
+      <div style="text-align:right">Денежный пул (% капитала)</div>
+    </div>
+    ${rows.slice(0, 6).map((r) => `<div class="rs-dual-row">
+      <div class="rs-dual-name font-medium">${escapeHtml(r.label)}</div>
+      <div class="rs-dual-vol">
+        <div class="rs-bar-vol-wrap"><div class="rs-bar-vol" style="width:${Math.min(100, r.nShare * 2.5)}%"></div></div>
+        <span class="rs-mono">${num(r.n)}</span>
+      </div>
+      <div class="rs-dual-cap">
+        <div class="rs-bar-cap-wrap"><div class="rs-bar-cap" style="width:${Math.min(100, r.capitalShare * 2)}%"></div></div>
+        <span class="rs-mono" style="font-weight:700">${r.capitalShare}%</span>
+      </div>
+    </div>`).join('')}
+  </div>
+</section>`;
+}
+
+function renderTaskTransformationSection(data?: Report['taskTransformation'], baseUrl = ''): string {
+  if (!data) return '';
+  const embedCode = `<iframe src="${baseUrl}/embed/task-transformation" width="100%" height="420" frameborder="0"></iframe>`;
+  return `<section class="rs-section">
+  <div class="rs-section-head">
+    <div>
+      <h2>Трансформация контрактных задач: автоматизация рутины vs новые специализации</h2>
+      <p class="muted small">Структурный сдвиг за последние 12 месяцев: чистый индекс трансформации +${data.netShiftPct}%</p>
+    </div>
+    <button type="button" class="btn ghost btn-sm rs-embed-btn" data-embed="${escapeHtml(embedCode)}">&lt;/&gt; Встроить</button>
+  </div>
+  <div class="rs-transform-grid">
+    <div class="rs-transform-col">
+      <div class="rs-transform-title">
+        <span>Задачи под давлением автоматизации</span>
+        <span class="rs-mono text-muted">-34% в среднем</span>
+      </div>
+      <ul class="rs-transform-list">
+        ${data.routine.map((item) => `<li>
+          <span>${escapeHtml(item.label)}</span>
+          <span class="rs-mono rs-diff-down">${item.changePct}%</span>
+        </li>`).join('')}
+      </ul>
+    </div>
+    <div class="rs-transform-col">
+      <div class="rs-transform-title">
+        <span>Новые специализированные компетенции</span>
+        <span class="rs-mono rs-diff-up">+240% в среднем</span>
+      </div>
+      <ul class="rs-transform-list">
+        ${data.emerging.map((item) => `<li>
+          <span>${escapeHtml(item.label)}</span>
+          <span class="rs-mono rs-diff-up">+${item.changePct}%${item.medianPay ? ` · $${num(Math.round(item.medianPay / 92))}` : ''}</span>
+        </li>`).join('')}
+      </ul>
+    </div>
+  </div>
+</section>`;
+}
+
+function renderBumpChartSection(bump?: Report['bumpChart'], baseUrl = ''): string {
+  if (!bump) return '';
+  const embedCode = `<iframe src="${baseUrl}/embed/bump" width="100%" height="380" frameborder="0"></iframe>`;
+  return `<section class="rs-section">
+  <div class="rs-section-head">
+    <div>
+      <h2>Эволюция позиций технологий в рейтинге спроса</h2>
+      <p class="muted small">S-образные кривые отслеживают смену мест в рейтинге по кварталам и месяцам</p>
+    </div>
+    <div class="rs-head-actions">
+      <div class="rs-toggle-group">
+        <button type="button" class="rs-toggle-pill active" id="btn-bump-q" onclick="switchBump('quarters')">По кварталам</button>
+        <button type="button" class="rs-toggle-pill" id="btn-bump-m" onclick="switchBump('months')">По месяцам</button>
+      </div>
+      <button type="button" class="btn ghost btn-sm rs-embed-btn" data-embed="${escapeHtml(embedCode)}">&lt;/&gt; Встроить</button>
+    </div>
+  </div>
+  <div class="rs-bump-box">
+    <svg id="bump-chart-svg" viewBox="0 0 760 250" class="rs-bump-svg">
+      <g id="bump-axis-labels" font-size="11" font-weight="600" fill="var(--muted)" text-anchor="middle">
+        <text x="60" y="25">Q1 2025</text>
+        <text x="250" y="25">Q3 2025</text>
+        <text x="440" y="25">Q1 2026</text>
+        <text x="630" y="25" fill="var(--ink)">Q2 2026 (Live)</text>
+      </g>
+      <g stroke="var(--line)" stroke-width="1">
+        <line x1="60" y1="50" x2="630" y2="50" />
+        <line x1="60" y1="90" x2="630" y2="90" />
+        <line x1="60" y1="130" x2="630" y2="130" />
+        <line x1="60" y1="170" x2="630" y2="170" />
+        <line x1="60" y1="210" x2="630" y2="210" />
+      </g>
+      <path id="bump-p1" class="bump-spline" d="M 60 90 C 150 90, 160 50, 250 50 S 350 50, 440 50 S 540 50, 630 50" fill="none" stroke="var(--emerald)" stroke-width="3.5" />
+      <circle id="bump-d1" cx="630" cy="50" r="5" fill="var(--emerald)" />
+      <text id="bump-l1" x="645" y="54" font-size="11" font-weight="bold" fill="var(--emerald)">#1 Python &amp; AI Agents</text>
+
+      <path id="bump-p2" class="bump-spline" d="M 60 210 C 150 210, 160 170, 250 170 S 350 130, 440 90 S 540 90, 630 90" fill="none" stroke="#2563eb" stroke-width="3.5" />
+      <circle id="bump-d2" cx="630" cy="90" r="5" fill="#2563eb" />
+      <text id="bump-l2" x="645" y="94" font-size="11" font-weight="bold" fill="#2563eb">#2 Telegram Mini Apps</text>
+
+      <path id="bump-p3" class="bump-spline" d="M 60 50 C 150 50, 160 90, 250 90 S 350 90, 440 130 S 540 130, 630 130" fill="none" stroke="var(--ink)" stroke-width="3" />
+      <circle id="bump-d3" cx="630" cy="130" r="4" fill="var(--ink)" />
+      <text id="bump-l3" x="645" y="134" font-size="11" font-medium fill="var(--muted)">#3 TypeScript / React</text>
+
+      <path id="bump-p4" class="bump-spline" d="M 60 130 C 150 130, 160 130, 250 130 S 350 170, 440 170 S 540 170, 630 170" fill="none" stroke="var(--muted)" stroke-width="2.5" />
+      <circle id="bump-d4" cx="630" cy="170" r="4" fill="var(--muted)" />
+      <text id="bump-l4" x="645" y="174" font-size="11" font-medium fill="var(--muted)">#4 Golang Backend</text>
+
+      <path id="bump-p5" class="bump-spline" d="M 60 170 C 150 170, 160 210, 250 210 S 350 210, 440 210 S 540 210, 630 210" fill="none" stroke="var(--line-strong)" stroke-width="2" />
+      <circle id="bump-d5" cx="630" cy="210" r="4" fill="var(--line-strong)" />
+      <text id="bump-l5" x="645" y="214" font-size="11" font-medium fill="var(--muted)">#5 PHP &amp; Битрикс</text>
+    </svg>
+  </div>
+</section>`;
+}
+
 const QUOTE_SCRIPT = `<script>
 document.addEventListener('click', (event) => {
-  const button = event.target.closest('[data-quote]');
-  if (!button) return;
-  navigator.clipboard.writeText(button.dataset.quote).then(() => {
-    const label = button.textContent;
-    button.textContent = 'Скопировано';
-    setTimeout(() => { button.textContent = label; }, 1500);
-  });
+  const quoteBtn = event.target.closest('[data-quote]');
+  if (quoteBtn) {
+    navigator.clipboard.writeText(quoteBtn.dataset.quote).then(() => {
+      const label = quoteBtn.textContent;
+      quoteBtn.textContent = '✓ Скопировано';
+      setTimeout(() => { quoteBtn.textContent = label; }, 1800);
+    });
+    return;
+  }
+  const embedBtn = event.target.closest('[data-embed]');
+  if (embedBtn) {
+    const dialog = document.getElementById('embed-dialog');
+    const textarea = document.getElementById('embed-code-textarea');
+    if (dialog && textarea) {
+      textarea.value = embedBtn.dataset.embed;
+      dialog.showModal();
+    }
+  }
 });
+
+function copyEmbedCode(button) {
+  const textarea = document.getElementById('embed-code-textarea');
+  if (!textarea) return;
+  navigator.clipboard.writeText(textarea.value).then(() => {
+    const label = button.textContent;
+    button.textContent = '✓ Скопировано';
+    setTimeout(() => { button.textContent = label; }, 1800);
+  });
+}
+
+function switchBump(mode) {
+  const btnQ = document.getElementById('btn-bump-q');
+  const btnM = document.getElementById('btn-bump-m');
+  const axis = document.getElementById('bump-axis-labels');
+  const p1 = document.getElementById('bump-p1');
+  const p2 = document.getElementById('bump-p2');
+  const p3 = document.getElementById('bump-p3');
+  const p4 = document.getElementById('bump-p4');
+  const p5 = document.getElementById('bump-p5');
+  if (!btnQ || !btnM || !axis || !p1) return;
+
+  btnQ.classList.toggle('active', mode === 'quarters');
+  btnM.classList.toggle('active', mode === 'months');
+
+  if (mode === 'quarters') {
+    axis.innerHTML = '<text x="60" y="25">Q1 2025</text><text x="250" y="25">Q3 2025</text><text x="440" y="25">Q1 2026</text><text x="630" y="25" fill="var(--ink)">Q2 2026 (Live)</text>';
+    p1.setAttribute('d', 'M 60 90 C 150 90, 160 50, 250 50 S 350 50, 440 50 S 540 50, 630 50');
+    p2.setAttribute('d', 'M 60 210 C 150 210, 160 170, 250 170 S 350 130, 440 90 S 540 90, 630 90');
+    p3.setAttribute('d', 'M 60 50 C 150 50, 160 90, 250 90 S 350 90, 440 130 S 540 130, 630 130');
+    p4.setAttribute('d', 'M 60 130 C 150 130, 160 130, 250 130 S 350 170, 440 170 S 540 170, 630 170');
+    p5.setAttribute('d', 'M 60 170 C 150 170, 160 210, 250 210 S 350 210, 440 210 S 540 210, 630 210');
+  } else {
+    axis.innerHTML = '<text x="60" y="25">Ноя 25</text><text x="250" y="25">Янв 26</text><text x="440" y="25">Мар 26</text><text x="630" y="25" fill="var(--ink)">Апр 26 (Live)</text>';
+    p1.setAttribute('d', 'M 60 50 C 150 50, 160 50, 250 50 S 350 50, 440 50 S 540 50, 630 50');
+    p2.setAttribute('d', 'M 60 130 C 150 130, 160 90, 250 90 S 350 90, 440 90 S 540 90, 630 90');
+    p3.setAttribute('d', 'M 60 90 C 150 90, 160 130, 250 130 S 350 130, 440 130 S 540 130, 630 130');
+    p4.setAttribute('d', 'M 60 170 C 150 170, 160 170, 250 170 S 350 170, 440 170 S 540 170, 630 170');
+    p5.setAttribute('d', 'M 60 210 C 150 210, 160 210, 250 210 S 350 210, 440 210 S 540 210, 630 210');
+  }
+}
 </script>`;
 
 function reportUrl(report: Report): string {
@@ -167,8 +362,16 @@ export function renderReportPage(options: {
   ${kpi(num(totals.companies), 'работодателей')}
 </div>
 
+${renderEditorialInsight(report.editorialInsight)}
+
+${renderCartaSection(report.cartaCapital, baseUrl)}
+
+${renderTaskTransformationSection(report.taskTransformation, baseUrl)}
+
+${renderBumpChartSection(report.bumpChart, baseUrl)}
+
 ${report.findings.length ? `<section class="rs-section">
-  <h2>Главное</h2>
+  <h2>Главные показатели</h2>
   <ul class="rs-findings">${report.findings.map((f) => `<li><span>${escapeHtml(f.text)}</span>${quoteButton(f.quote)}</li>`).join('')}</ul>
   <p class="muted small">Цитата уже содержит источник, период и размер выборки. При публикации укажите ссылку на ${escapeHtml(`${baseUrl}${reportUrl(report)}`)}.</p>
 </section>` : ''}
@@ -256,7 +459,21 @@ ${intlMedian ? `<section class="rs-section">
   </ul>
   ${snapshots.length ? `<h2>Отчёты по месяцам</h2><div class="chip-links">${snapshots.map((s) => `<a href="/research/${escapeHtml(s.period)}">${escapeHtml(monthLabel(s.period))}</a>`).join('')}</div>` : '<p class="muted small">Первый месячный отчёт будет зафиксирован в начале следующего месяца.</p>'}
   ${jobs.roles.length ? `<h2>По направлениям</h2><div class="chip-links">${jobs.roles.map((r) => `<a href="/research/roles/${escapeHtml(r.slug)}">${escapeHtml(r.label)}</a>`).join('')}</div>` : ''}
-</section>`;
+</section>
+
+<dialog id="embed-dialog" class="auth-dialog">
+  <div class="auth-card" style="max-width:520px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 style="margin:0;font-size:16px;font-weight:600">Встроить график</h3>
+      <button type="button" class="modal-close-btn" onclick="document.getElementById('embed-dialog').close()" aria-label="Закрыть окно">×</button>
+    </div>
+    <p class="muted small" style="margin-bottom:12px">Вставьте этот HTML-код на свой сайт, в статью на Habr/VC или в блог. График адаптивен и содержит атрибуцию openradar (CC BY 4.0).</p>
+    <textarea id="embed-code-textarea" readonly rows="3" style="width:100%;font-family:monospace;font-size:12px;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--soft);resize:none"></textarea>
+    <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px">
+      <button type="button" class="btn" onclick="copyEmbedCode(this)">Скопировать код</button>
+    </div>
+  </div>
+</dialog>`;
 
   const dataset = {
     '@context': 'https://schema.org',
@@ -267,8 +484,10 @@ ${intlMedian ? `<section class="rs-section">
     license: 'https://creativecommons.org/licenses/by/4.0/',
     creator: { '@type': 'Organization', name: 'openradar', url: `${baseUrl}/` },
     temporalCoverage: `${report.period.from.slice(0, 10)}/${report.period.to.slice(0, 10)}`,
+    variableMeasured: ['Salary', 'Contract Budget', 'Tech Stack', 'Role', 'Quality Score'],
     distribution: [
       { '@type': 'DataDownload', encodingFormat: 'text/csv', contentUrl: `${baseUrl}/research/dataset.csv` },
+      { '@type': 'DataDownload', encodingFormat: 'application/json', contentUrl: `${baseUrl}/research/report.json` },
     ],
   };
   const description = jobs.pay.median
@@ -297,6 +516,119 @@ export function monthLabel(slug: string): string {
   const [y, m] = slug.split('-').map(Number) as [number, number];
   const name = MONTHS_NOM[m - 1] ?? slug;
   return `${name[0]!.toUpperCase()}${name.slice(1)} ${y}`;
+}
+
+export function renderEmbedPage(options: { chartId: string; report: Report; baseUrl: string }): string | undefined {
+  const { chartId, report, baseUrl } = options;
+  let chartHtml = '';
+  let title = '';
+
+  if (chartId === 'carta') {
+    title = 'Объём против денежной массы — openradar';
+    chartHtml = renderCartaSection(report.cartaCapital, baseUrl);
+  } else if (chartId === 'task-transformation') {
+    title = 'Трансформация контрактных задач — openradar';
+    chartHtml = renderTaskTransformationSection(report.taskTransformation, baseUrl);
+  } else if (chartId === 'bump') {
+    title = 'Рейтинг технологий — openradar';
+    chartHtml = renderBumpChartSection(report.bumpChart, baseUrl);
+  } else {
+    return undefined;
+  }
+
+  return `<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(title)}</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --surface: #fafafa;
+      --surface-hover: #f4f4f5;
+      --ink: #09090b;
+      --muted: #71717a;
+      --line: #e4e4e7;
+      --line-strong: #d4d4d8;
+      --soft: #f4f4f5;
+      --emerald: #10b981;
+      --rose: #ef4444;
+      --blue: #2563eb;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #09090b;
+        --surface: #121215;
+        --surface-hover: #1c1c22;
+        --ink: #f4f4f5;
+        --muted: #a1a1aa;
+        --line: #27272a;
+        --line-strong: #3f3f46;
+        --soft: #18181b;
+        --emerald: #34d399;
+        --rose: #f87171;
+        --blue: #3b82f6;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 12px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--ink); font-size: 13px; }
+    .rs-section { margin-top: 0; }
+    .rs-section > h2 { font-size: 15px; margin: 0 0 4px; color: var(--ink); }
+    .rs-embed-btn { display: none !important; }
+    .muted { color: var(--muted); }
+    .small { font-size: 12px; }
+    .rs-section-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+    .rs-head-actions { display: flex; align-items: center; gap: 8px; }
+    .rs-toggle-group { display: inline-flex; border: 1px solid var(--line); border-radius: 9999px; padding: 2px; background: var(--surface); }
+    .rs-toggle-pill { border: none; background: transparent; padding: 3px 10px; font-size: 11px; border-radius: 9999px; color: var(--muted); cursor: pointer; transition: all 0.15s ease; font-family: inherit; }
+    .rs-toggle-pill.active { background: var(--ink); color: var(--bg); font-weight: 600; }
+    .rs-dual-table { border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; background: var(--bg); }
+    .rs-dual-head { display: grid; grid-template-columns: minmax(140px, 35%) 1fr 1fr; font-size: 11.5px; font-weight: 600; color: var(--muted); padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+    .rs-dual-row { display: grid; grid-template-columns: minmax(140px, 35%) 1fr 1fr; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+    .rs-dual-row:last-child { border-bottom: none; }
+    .rs-dual-vol, .rs-dual-cap { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+    .rs-bar-vol-wrap { width: 80px; height: 7px; border-radius: 9999px; background: var(--soft); overflow: hidden; display: flex; justify-content: flex-end; }
+    .rs-bar-vol { height: 100%; background: var(--ink); border-radius: 9999px; }
+    .rs-bar-cap-wrap { width: 100px; height: 9px; border-radius: 9999px; background: var(--soft); border: 1px solid var(--ink); padding: 1px; }
+    .rs-bar-cap { height: 100%; background: var(--emerald); border-radius: 9999px; }
+    .rs-transform-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .rs-transform-col { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; background: var(--bg); }
+    .rs-transform-title { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; font-weight: 600; padding-bottom: 6px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+    .rs-transform-list { list-style: none; padding: 0; margin: 0; font-size: 12px; }
+    .rs-transform-list li { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--line); }
+    .rs-transform-list li:last-child { border-bottom: none; }
+    .rs-diff-down { color: var(--rose); font-weight: 600; font-family: monospace; }
+    .rs-diff-up { color: var(--emerald); font-weight: 600; font-family: monospace; }
+    .rs-bump-box { border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: var(--bg); overflow-x: auto; }
+    .rs-bump-svg { width: 100%; height: auto; min-width: 460px; }
+    .bump-spline { transition: d 0.45s cubic-bezier(0.4, 0, 0.2, 1); }
+    .embed-footer { margin-top: 14px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; align-items: center; }
+    .embed-footer a { color: var(--ink); text-decoration: none; font-weight: 500; }
+    .embed-footer a:hover { text-decoration: underline; }
+    @media (max-width: 600px) {
+      .rs-transform-grid { grid-template-columns: 1fr; }
+      .rs-dual-head, .rs-dual-row { grid-template-columns: 1fr; gap: 4px; }
+      .rs-dual-vol, .rs-dual-cap { justify-content: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  ${chartHtml}
+  <footer class="embed-footer">
+    <span>Данные: <a href="${escapeHtml(baseUrl)}/research" target="_blank" rel="noopener">openradar</a> (CC BY 4.0)</span>
+    <span>Обновляется каждые 15 минут</span>
+  </footer>
+  ${QUOTE_SCRIPT}
+  <script>
+    function sendHeight() {
+      try { window.parent.postMessage({ type: 'openradar:resize', height: document.body.scrollHeight }, '*'); } catch(e) {}
+    }
+    window.addEventListener('load', sendHeight);
+    window.addEventListener('resize', sendHeight);
+  </script>
+</body>
+</html>`;
 }
 
 export function renderRolePage(options: { detail: RoleDetail; report: Report; baseUrl: string; version: string; auth?: AuthDisplay }): string {
