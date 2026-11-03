@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import type { Lead } from '../src/core/types.ts';
-import { researchRecords } from '../src/research/service.ts';
+import { liveReport, researchRecords, resetResearchCache } from '../src/research/service.ts';
 import { createTestStore } from './helpers.ts';
 
 describe('research reads posts a page at a time', () => {
@@ -25,5 +25,20 @@ describe('research reads posts a page at a time', () => {
     }
     const records = await researchRecords(store, `${day}T00:00:00.000Z`, '2001-03-05T00:00:00.000Z', {}, 2);
     expect(records.map((r) => r.id).sort()).toEqual([...ids].sort());
+  });
+
+  it('serves a stale live report at once and builds the next one behind it', async () => {
+    resetResearchCache();
+    const store = createTestStore();
+    const t0 = new Date('2026-11-03T12:00:00Z');
+    const first = await liveReport(store, t0);
+    // Twenty minutes later the cache is stale: the same report comes back without waiting.
+    const later = new Date(t0.getTime() + 20 * 60_000);
+    expect(await liveReport(store, later)).toBe(first);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const next = await liveReport(store, later);
+    expect(next).not.toBe(first);
+    expect(next.report.generatedAt ?? next.report.period.to).toBeDefined();
+    resetResearchCache();
   });
 });

@@ -32,10 +32,29 @@ let cached: { at: number; report: Report; records: ResearchRecord[] } | undefine
 
 export function resetResearchCache(): void {
   cached = undefined;
+  building = undefined;
 }
 
+/** The build under way: callers wait for one build, never start a second. */
+let building: Promise<{ report: Report; records: ResearchRecord[] }> | undefined;
+
+/**
+ * The live report. Building it takes seconds (deriving a month of posts), so a stale report
+ * is served at once while a new one is built behind it; only the very first call waits.
+ */
 export async function liveReport(store: Store, now: Date = new Date(), options: DeriveOptions = {}): Promise<{ report: Report; records: ResearchRecord[] }> {
   if (cached && now.getTime() - cached.at < CACHE_MS) return cached;
+  building ??= buildLive(store, now, options).finally(() => {
+    building = undefined;
+  });
+  if (cached) {
+    building.catch(() => {});
+    return cached;
+  }
+  return building;
+}
+
+async function buildLive(store: Store, now: Date, options: DeriveOptions): Promise<{ report: Report; records: ResearchRecord[] }> {
   const period = livePeriod(now, LIVE_DAYS);
   const records = await researchRecords(store, period.from, period.to, options);
   // The base is younger than the window: say from when the data really starts.

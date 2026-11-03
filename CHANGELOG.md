@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.43.3
+
+- The live research report no longer makes a visitor wait: deriving a month of posts takes about 3 s of CPU, so a stale report is served at once while the next one is built behind it, and the background loop keeps it built from the start.
+- The robots.txt log names each ATS source's own system (Workable, Recruitee, …) instead of «Greenhouse, Ashby, Lever» for all. docs/SOURCES_ROBOTS.md is regenerated with the sources added in 0.43.
+
 ## 0.43.2
 
 - Research pages follow the primary key: a page takes 30 ms instead of 370, because an order by date sorted the whole period again for every page; the live report built in 6 s after a restart. The records still come out newest day first.

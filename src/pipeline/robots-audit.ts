@@ -2,6 +2,7 @@ import type { SourceRecord } from '../core/types.ts';
 import { resolveProxyUrl, sourceProxyUrl } from '../net/proxy.ts';
 import { checkRobots, type RobotsVerdict } from '../net/robots.ts';
 import type { SourceRegistry } from '../sources/index.ts';
+import { ATS_LABELS, type AtsProvider } from '../sources/ats.ts';
 
 /**
  * The robots.txt log of a node's sources: for each source, the address it polls and what that
@@ -27,7 +28,10 @@ export function pollUrlOf(source: Pick<SourceRecord, 'kind' | 'config'>): { url?
   if (source.kind === 'kwork') return { url: 'https://kwork.ru/projects' };
   if (source.kind === 'telegram-account') return { note: 'Telegram-аккаунт (MTProto): не HTTP, robots.txt не применяется' };
   if (source.kind === 'webhook') return { note: 'входящий вебхук: данные присылают нам' };
-  if (source.kind === 'ats') return { note: 'публичные API карьерных страниц компаний (Greenhouse, Ashby, Lever)' };
+  if (source.kind === 'ats') {
+    const provider = ATS_LABELS[source.config.provider as AtsProvider] ?? String(source.config.provider ?? '');
+    return { note: `публичный API карьерных страниц компаний (${provider})` };
+  }
   return { note: 'адрес задаёт адаптер' };
 }
 
