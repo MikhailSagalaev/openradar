@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { Context } from 'hono';
+import type { Context, Next } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
@@ -881,6 +881,7 @@ export function createApp(runtime: Runtime): Hono {
   const analytics = analyticsFromEnv(runtime.env);
   setAnalytics(analytics);
   const csp = contentSecurityPolicy(analytics);
+  const embedCsp = csp.replace(/frame-ancestors [^;]*/, 'frame-ancestors *');
   // Request bodies are read into memory, so every route has a ceiling: 10 MB where nodes
   // send batches, 1 MB for forms and JSON everywhere else.
   const largeBodyLimit = bodyLimit({ maxSize: MAX_BATCH_BODY_BYTES, onError: (c) => c.json({ error: 'payload_too_large' }, 413) });
@@ -2459,20 +2460,31 @@ export function createApp(runtime: Runtime): Hono {
     return c.json({ ok: true });
   });
 
-  // User-connected Telegram accounts (MTProto QR authentication & personal sources)
-  const tgAuthService = new TelegramAuthService({
-    store: runtime.store,
-    masterSecret: runtime.env.RADAR_WEB_KEY_SECRET,
-  });
+  // User-connected Telegram accounts (MTProto QR authentication & personal sources).
+  // Off unless RADAR_USER_TELEGRAM: nothing reads these sessions yet, and a stored session is
+  // full access to someone's account. Only when on is RADAR_WEB_KEY_SECRET required.
+  let tgAuth: TelegramAuthService | undefined;
+  const tgAuthService = (): TelegramAuthService => {
+    tgAuth ??= new TelegramAuthService({ store: runtime.store, masterSecret: runtime.env.RADAR_WEB_KEY_SECRET });
+    return tgAuth;
+  };
+  const userTelegramOff = async (c: Context, next: Next) => {
+    if (!runtime.env.RADAR_USER_TELEGRAM) return c.json({ error: 'not_found' }, 404);
+    await next();
+  };
+  app.use('/api/tg/*', userTelegramOff);
+  app.use('/api/user-sources', userTelegramOff);
+  app.use('/api/user-sources/*', userTelegramOff);
 
   app.post('/api/tg/auth/start', rateLimit({ windowMs: 60_000, max: 10 }), async (c) => {
     const user = await currentUser(c, runtime);
     if (!user) return c.json({ error: 'unauthorized' }, 401);
     try {
-      const result = await tgAuthService.startAuth(user.id);
+      const result = await tgAuthService().startAuth(user.id);
       return c.json(result);
-    } catch (err: any) {
-      return c.json({ error: err.message || 'Failed to start Telegram QR auth' }, 500);
+    } catch (err) {
+      console.error('[tg-auth] start failed:', err instanceof Error ? err.message : err);
+      return c.json({ error: 'telegram_auth_unavailable' }, 503);
     }
   });
 
@@ -2480,7 +2492,7 @@ export function createApp(runtime: Runtime): Hono {
     const user = await currentUser(c, runtime);
     if (!user) return c.json({ error: 'unauthorized' }, 401);
     const authSessionId = c.req.param('authSessionId');
-    const status = tgAuthService.getAuthStatus(authSessionId, user.id);
+    const status = tgAuthService().getAuthStatus(authSessionId, user.id);
     if (!status) return c.json({ error: 'session_not_found' }, 404);
     return c.json(status);
   });
@@ -2491,10 +2503,10 @@ export function createApp(runtime: Runtime): Hono {
     const body = (await c.req.json().catch(() => null)) as { authSessionId?: string; password?: string } | null;
     if (!body?.authSessionId || !body?.password) return c.json({ error: 'invalid_request' }, 400);
     try {
-      await tgAuthService.submitPassword(body.authSessionId, user.id, body.password);
+      await tgAuthService().submitPassword(body.authSessionId, user.id, body.password);
       return c.json({ ok: true });
-    } catch (err: any) {
-      return c.json({ error: err.message || 'Failed to submit password' }, 400);
+    } catch {
+      return c.json({ error: 'not_waiting_for_password' }, 400);
     }
   });
 
@@ -2503,7 +2515,7 @@ export function createApp(runtime: Runtime): Hono {
     if (!user) return c.json({ error: 'unauthorized' }, 401);
     const body = (await c.req.json().catch(() => null)) as { authSessionId?: string } | null;
     if (!body?.authSessionId) return c.json({ error: 'invalid_request' }, 400);
-    await tgAuthService.cancelAuth(body.authSessionId, user.id);
+    await tgAuthService().cancelAuth(body.authSessionId, user.id);
     return c.json({ ok: true });
   });
 
@@ -2517,7 +2529,6 @@ export function createApp(runtime: Runtime): Hono {
         tgUserId: a.tgUserId,
         tgUsername: a.tgUsername,
         displayName: a.displayName,
-        phone: a.phone,
         status: a.status,
         lastPolledAt: a.lastPolledAt,
         createdAt: a.createdAt,
@@ -2529,8 +2540,10 @@ export function createApp(runtime: Runtime): Hono {
     const user = await currentUser(c, runtime);
     if (!user) return c.json({ error: 'unauthorized' }, 401);
     const id = c.req.param('id');
+    // Log the session out at Telegram first; a failed revoke does not keep the row.
+    const revoked = await tgAuthService().revokeAccount(id, user.id);
     const deleted = (await runtime.store.deleteTelegramAccount?.(id, user.id)) ?? false;
-    return c.json({ ok: deleted });
+    return c.json({ ok: deleted, revoked });
   });
 
   app.get('/api/user-sources', async (c) => {
@@ -2551,6 +2564,11 @@ export function createApp(runtime: Runtime): Hono {
       shareToNetwork?: boolean;
     } | null;
     if (!body?.accountId || !body?.title?.trim()) return c.json({ error: 'invalid_request' }, 400);
+    const chats = Array.isArray(body.chats) ? body.chats : [];
+    if (body.title.length > 200 || (body.folder?.length ?? 0) > 200 || chats.length > 500
+      || chats.some((chat) => typeof chat !== 'string' || chat.length > 200)) {
+      return c.json({ error: 'invalid_request' }, 400);
+    }
 
     const account = await runtime.store.getTelegramAccount?.(body.accountId, user.id);
     if (!account) return c.json({ error: 'account_not_found' }, 404);
@@ -2560,7 +2578,7 @@ export function createApp(runtime: Runtime): Hono {
       accountId: body.accountId,
       title: body.title.trim(),
       folder: body.folder?.trim() || undefined,
-      chats: body.chats ?? [],
+      chats,
       shareToNetwork: body.shareToNetwork !== false,
       enabled: true,
     });
@@ -2674,8 +2692,11 @@ export function createApp(runtime: Runtime): Hono {
     const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
     const html = renderEmbedPage({ chartId: c.req.param('chartId'), report, baseUrl: seoBaseUrl(c) });
     if (!html) return c.html(renderNotFound(VERSION), 404);
+    // Widgets are meant for other sites: any page may frame them. X-Frame-Options has no
+    // "allow" value, so it is dropped and frame-ancestors alone decides.
     c.header('access-control-allow-origin', '*');
-    c.header('x-frame-options', 'ALLOWALL');
+    c.header('X-Frame-Options', undefined);
+    c.header('Content-Security-Policy', embedCsp);
     return c.html(html);
   });
   app.get('/research/index', async (c) => {

@@ -764,6 +764,40 @@ describe('http server', () => {
     expect(await verify.text()).toContain('Verification: 3fb8622ca1035d2f');
   });
 
+  it('keeps Telegram account linking off unless enabled, and starts without its secret', async () => {
+    const off = makeRuntime({ RADAR_PUBLIC_READ: true });
+    const offApp = createApp(off);
+    const offSession = await makeUserSession(off, 'octocat');
+    const headers = { cookie: `radar_session=${offSession}`, origin: 'http://localhost', 'content-type': 'application/json' };
+    expect((await offApp.request('http://localhost/api/tg/accounts', { headers })).status).toBe(404);
+    expect((await offApp.request('http://localhost/api/user-sources', { headers })).status).toBe(404);
+    expect((await offApp.request('http://localhost/api/tg/auth/start', { method: 'POST', headers })).status).toBe(404);
+
+    // On, but no RADAR_WEB_KEY_SECRET: the app still boots; the call answers with a code, not an internal message.
+    const on = makeRuntime({ RADAR_PUBLIC_READ: true, RADAR_USER_TELEGRAM: true, RADAR_WEB_KEY_SECRET: undefined });
+    const onApp = createApp(on);
+    const onSession = await makeUserSession(on, 'octocat');
+    const res = await onApp.request('http://localhost/api/tg/auth/start', {
+      method: 'POST',
+      headers: { ...headers, cookie: `radar_session=${onSession}` },
+    });
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: 'telegram_auth_unavailable' });
+    expect((await onApp.request('http://localhost/api/tg/accounts', { headers: { cookie: `radar_session=${onSession}` } })).status).toBe(200);
+  });
+
+  it('lets any site frame the research widgets and nothing else', async () => {
+    for (const env of [{}, { RADAR_YANDEX_METRIKA_ID: '113821053' }]) {
+      const app = createApp(makeRuntime({ RADAR_PUBLIC_READ: true, ...env }));
+      const res = await app.request('/embed/carta');
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-security-policy')).toContain('frame-ancestors *');
+      expect(res.headers.get('x-frame-options')).toBeNull();
+      const page = await app.request('/research');
+      expect(page.headers.get('content-security-policy')).not.toContain('frame-ancestors *');
+    }
+  });
+
   it('shows /admin to the token admin and to listed GitHub accounts only', async () => {
     const plain = makeRuntime({ RADAR_PUBLIC_READ: true });
     const plainApp = createApp(plain);

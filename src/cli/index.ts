@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url';
 import type { Lead, LeadStatus, SourceConfig, SourceKind, SourceRecord } from '../core/types.ts';
 import { pollAll, pollSource, type PollDeps, type PollSummary } from '../pipeline/poll.ts';
 import { retitleLeads } from '../pipeline/retitle.ts';
+import { rekeyTitles } from '../pipeline/rekey.ts';
 import { rescoreLeads } from '../pipeline/rescore.ts';
 import { auditSourceRobots, robotsMarkdown } from '../pipeline/robots-audit.ts';
 import { PollRunner } from '../pipeline/runner.ts';
@@ -231,6 +232,16 @@ function buildProgram(): Command {
       await withRuntime(async (runtime) => {
         const summary = await retitleLeads(runtime.store, { limit: Number(options.limit) || 5000 });
         console.log(`Проверено ${summary.checked}, переименовано ${summary.retitled}.`);
+      });
+    });
+
+  program
+    .command('rekey')
+    .description('Rebuild the dedup key (title_key) of every stored lead with the current rule')
+    .action(async () => {
+      await withRuntime(async (runtime) => {
+        const summary = await rekeyTitles(runtime.store);
+        console.log(`Проверено ${summary.checked}, ключ обновлён у ${summary.rekeyed}.`);
       });
     });
 

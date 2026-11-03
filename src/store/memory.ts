@@ -196,6 +196,19 @@ export class MemoryStore implements Store {
     return [...this.leads.values()].filter((l) => /^\s*#/.test(l.title)).slice(0, limit).map((l) => ({ ...l }));
   }
 
+  async listTitleKeys(afterId: string | null, limit: number): Promise<Array<{ id: string; title: string; titleKey: string }>> {
+    return [...this.leads.values()]
+      .filter((l) => afterId === null || l.id > afterId)
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .slice(0, limit)
+      .map((l) => ({ id: l.id, title: l.title, titleKey: l.titleKey }));
+  }
+
+  async updateLeadTitleKey(id: string, titleKey: string): Promise<void> {
+    const lead = this.leads.get(id);
+    if (lead) lead.titleKey = titleKey;
+  }
+
   async updateLeadTitle(id: string, title: string, titleKey: string, previousTitle: string): Promise<boolean> {
     const lead = this.leads.get(id);
     if (!lead) return false;

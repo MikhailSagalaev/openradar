@@ -18,6 +18,8 @@ permissions:
 
 jobs:
   release:
+    # Tags belong to the public repo; a tag that reaches the private one builds nothing.
+    if: github.repository == 'MikhailSagalaev/openradar'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -44,10 +46,20 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Install & Build App
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # The same gate as CI, so a red commit never becomes a release.
+      - name: Check versions, types and tests
+        env:
+          TZ: Europe/Moscow
         run: |
-          pnpm install --frozen-lockfile
-          pnpm build
+          node scripts/check-version.js
+          pnpm typecheck
+          pnpm test
+
+      - name: Build App
+        run: pnpm build
 
       - name: Sync extension version & package zip
         run: |

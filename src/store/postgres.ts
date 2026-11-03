@@ -483,6 +483,18 @@ export class PostgresStore implements Store {
     return res.rows.map((r) => this.rowToLead(r));
   }
 
+  async listTitleKeys(afterId: string | null, limit: number): Promise<Array<{ id: string; title: string; titleKey: string }>> {
+    const res = await this.pool.query(
+      `SELECT id, title, title_key FROM leads WHERE ($1::text IS NULL OR id > $1::text) ORDER BY id LIMIT $2`,
+      [afterId, limit],
+    );
+    return res.rows.map((r) => ({ id: String(r.id), title: String(r.title ?? ''), titleKey: String(r.title_key ?? '') }));
+  }
+
+  async updateLeadTitleKey(id: string, titleKey: string): Promise<void> {
+    await this.pool.query(`UPDATE leads SET title_key = $2 WHERE id = $1`, [id, titleKey]);
+  }
+
   async updateLeadTitle(id: string, title: string, titleKey: string, previousTitle: string): Promise<boolean> {
     const res = await this.pool.query(
       `UPDATE leads SET title = $2, title_key = $3,

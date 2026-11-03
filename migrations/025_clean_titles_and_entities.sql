@@ -46,30 +46,15 @@ SET title = trim(regexp_replace(title, '\s*(?:Компания|Работода�
 WHERE title ~* '(?:\S|\))\s*(?:Компания|Работодатель|Company|Формат\s+работы|Формат|Локация|Уровень|Занятость|Вилка|ЗП|Зарплата):'
   AND length(regexp_replace(title, '\s*(?:Компания|Работодатель|Company|Формат\s+работы|Формат|Локация|Уровень|Занятость|Вилка|ЗП|Зарплата):.*$', '', 'i')) >= 6;
 
--- 4. Specific historical audit leads
-UPDATE leads
-SET title = 'В проект врача-эндокринолога Алины Самариной «Инсулинотерапия для врачей»'
-WHERE id = '7962b211-639d-497e-a514-6c9a54d3f1c1';
-
-UPDATE leads
-SET title = 'Помогаю бизнесу расти через соцсети: привлекать аудиторию'
-WHERE id = 'ca38b412-22e7-45b8-aaa0-b4977def7e0d';
-
-UPDATE leads
-SET title = 'Юрист для онлайн и офлайн бизнеса и IT-компаний — Ульяна Зварыгина'
-WHERE id = 'b9fe82b6-f771-4520-8a64-547391f637b0';
-
--- 5. Strip leading markdown, bullets, pipes, colons, dashes
+-- 4. Strip leading markdown, bullets, pipes, colons, dashes
 UPDATE leads
 SET title = trim(regexp_replace(title, '^[\s*#•|:—–-]+', ''))
 WHERE title ~ '^[\s*#•|:—–-]';
 
--- 6. Strip trailing punctuation, markdown and noise
+-- 5. Strip trailing punctuation, markdown and noise
 UPDATE leads
 SET title = trim(regexp_replace(title, '[\s*•|:—–-]+$', ''))
 WHERE title ~ '[\s*•|:—–-]+$';
 
--- 7. Sync title_key with cleaned titles
-UPDATE leads
-SET title_key = trim(regexp_replace(lower(title), '[^a-zа-яё0-9]+', ' ', 'g'))
-WHERE title_key <> trim(regexp_replace(lower(title), '[^a-zа-яё0-9]+', ' ', 'g'));
+-- title_key is rebuilt by `radar rekey` with the same rule as the app (titleKeyOf):
+-- SQL cannot reproduce its NFC, ё→е and \p{L} handling.

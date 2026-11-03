@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Refuses to push commits that someone else authored or that carry a Co-Authored-By
+# trailer: openradar history has one author. Enable once per checkout:
+#   git config core.hooksPath scripts/hooks
+# Allowed authors: the GitHub noreply addresses of MikhailSagalaev, or RADAR_ALLOWED_AUTHORS
+# (space-separated emails).
+
+set -euo pipefail
+
+allowed_re='^([0-9]+\+)?MikhailSagalaev@users\.noreply\.github\.com$'
+zero=0000000000000000000000000000000000000000
+bad=0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue
+  if [ "$remote_sha" = "$zero" ]; then
+    # A new ref: only commits that no remote branch has yet.
+    range=$(git rev-list "$local_sha" --not --remotes)
+  else
+    range=$(git rev-list "$remote_sha..$local_sha")
+  fi
+  for c in $range; do
+    email=$(git log -1 --format=%ae "$c")
+    ok=0
+    echo "$email" | grep -Eq "$allowed_re" && ok=1
+    for extra in ${RADAR_ALLOWED_AUTHORS:-}; do [ "$email" = "$extra" ] && ok=1; done
+    if [ "$ok" = 0 ]; then
+      echo "pre-push: $(git log -1 --format='%h %an <%ae>' "$c") is not an allowed author" >&2
+      bad=1
+    fi
+    if git log -1 --format=%B "$c" | grep -Eiq '^co-authored-by:'; then
+      echo "pre-push: $(git log -1 --format=%h "$c") has a Co-Authored-By trailer" >&2
+      bad=1
+    fi
+  done
+done
+
+[ "$bad" = 0 ] || { echo "pre-push: push refused (amend the author or drop the trailer)" >&2; exit 1; }

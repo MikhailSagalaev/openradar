@@ -6,7 +6,8 @@
 # same commit. With --tag it also creates v<version> at HEAD and pushes that tag
 # only to public. The server at /opt/radar-test deploys public tags, not private main.
 #
-# Refuses a non-fast-forward. Does not push tags to the private repo.
+# Refuses a non-fast-forward and anything whose private CI run is not green.
+# Does not push tags to the private repo.
 
 set -euo pipefail
 
@@ -50,6 +51,21 @@ grep -q "^## ${version}$" CHANGELOG.md || die "CHANGELOG.md has no section '## $
 
 echo "push main -> origin (${origin_url})"
 git push origin main
+
+# Nothing reaches the public repo (and so the server) before private CI is green on this
+# exact commit: 0.40.3 went out with a red CI.
+command -v gh >/dev/null || die "gh CLI is needed to check CI before publishing"
+head_sha=$(git rev-parse HEAD)
+run_id=""
+for _ in $(seq 1 30); do
+  run_id=$(gh run list -R MikhailSagalaev/radar-oss --workflow CI --commit "$head_sha" --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+  [ -n "$run_id" ] && break
+  sleep 10
+done
+[ -n "$run_id" ] || die "no CI run for ${head_sha} on radar-oss"
+echo "waiting for CI run ${run_id} on ${head_sha}"
+gh run watch "$run_id" -R MikhailSagalaev/radar-oss --exit-status >/dev/null || die "CI failed for ${head_sha}; not publishing"
+
 echo "push main -> public (${public_url})"
 git push public main
 

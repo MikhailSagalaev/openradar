@@ -35,6 +35,8 @@ export interface Env {
   RADAR_EXTRACT_MODEL?: string;
   RADAR_EXTRACT_PER_HOUR: number;
   RADAR_EXTRACT_APPLY: boolean;
+  /** Site visitors may link their own Telegram account by QR (sessions stored encrypted). */
+  RADAR_USER_TELEGRAM: boolean;
   RADAR_EXTRACT_PROVIDER: 'openai' | 'gigachat';
   GIGACHAT_AUTH_KEY?: string;
   GIGACHAT_SCOPE: string;

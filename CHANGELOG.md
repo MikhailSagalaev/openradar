@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.41.3
+
+- Duplicate detection works again for older leads. Migration 025 (0.40.4) rewrote `title_key` in SQL with its own rule: it kept «ё», dropped letters outside Latin and Cyrillic and did not cut at 160 characters, so reposts of those leads stopped matching. The step is gone from the migration, and the new `radar rekey` rebuilds every key with the app's rule. **After upgrading from 0.40.4–0.41.2, run once:** `docker compose run --rm -T radar rekey`.
+- Migration 025 no longer carries hand-picked lead ids and names.
+- Research widgets can be embedded on other sites: `/embed/*` sends `frame-ancestors *` and no `X-Frame-Options` (the global policy blocked every frame, and `ALLOWALL` is not a valid value).
+- X-Ray reads Russian job titles: «Тестировщик», «Дизайнер», «Аналитик», «Фронтенд-разработчик» get their personas instead of the generic engineering set (`\b` only knows ASCII letters).
+- Research, AI skill premium: no invented 100 000 ₽ baseline, a negative premium keeps its sign instead of becoming 0 %, no percent where either side has fewer than 10 paid posts, and the terms match whole words (`flux` no longer catches «influx»; html/css skills no longer make any frontend post «template coding»).
+- Linking a visitor's own Telegram account is off unless `RADAR_USER_TELEGRAM=true`: nothing reads these sessions yet, and each one is full access to an account. With the flag off, `/api/tg/*` and `/api/user-sources` answer 404, and the server starts without `RADAR_WEB_KEY_SECRET` again (0.41.1 refused to boot in production without it).
+- When it is on: removing an account logs its session out at Telegram first; the phone number is neither stored nor returned; one QR login per person at a time; a finished login no longer turns into `expired`; errors reach the client as codes, details stay in the log; personal source titles, folders and chat lists are length-checked.
+- Releases: the Release workflow checks versions, types and tests before building and runs only in the public repo; `publish-public.sh` waits for green private CI on the exact commit; `scripts/hooks/pre-push` refuses commits by other authors or with a Co-Authored-By trailer (`git config core.hooksPath scripts/hooks`).
+
 ## 0.41.2
 
 - Research data consistency, strict mathematical integrity & visual synchronization:
@@ -8,6 +19,8 @@
   - **Authentic Bump Chart (`computeBumpChart`)**: Eliminated fictional 2025 quarters and months. Replaced with real dynamic rankings computed directly from database records across the 4 active weeks (`[По неделям]`) and market rhythm intervals (`[По дням недели]`: Пн, Вт–Ср, Чт–Пт, Сб–Вс) using horizontally tangented cubic Bezier splines and live client toggling.
   - **Simpson's Paradox editorial note**: Added clear methodological disclaimer under the weekly dynamics chart explaining the sample expansion from October 26 (addition of national platforms `hh.ru` and `trudvsem.ru`), preventing misinterpretation of median salary adjustments.
   - **Dynamic editorial takeaways (`computeEditorialInsight`)**: Editorial lead cards now derive facts, contrasts, and media citation quotes dynamically from live Carta table calculations.
+
+## 0.41.1
 
 - Security hardening for user-connected Telegram accounts and session crypto:
   - **Sanitized status endpoint**: `TelegramAuthService.getAuthStatus` emits `PublicTelegramAccountRecord`, stripping `sessionEncrypted`, `iv` and `tag` so encrypted session ciphertexts never leak to the client or browser network logs.

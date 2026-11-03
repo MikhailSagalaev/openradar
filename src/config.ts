@@ -42,6 +42,7 @@ const envSchema = z.object({
   RADAR_EXTRACT_PER_HOUR: z.coerce.number().int().nonnegative().default(300),
   // Answers are saved either way; figures use them only once their quality is checked.
   RADAR_EXTRACT_APPLY: booleanFromEnv(false),
+  RADAR_USER_TELEGRAM: booleanFromEnv(false),
   RADAR_EXTRACT_PROVIDER: z.enum(['openai', 'gigachat']).default('openai'),
   GIGACHAT_AUTH_KEY: optionalString,
   GIGACHAT_SCOPE: z.string().default('GIGACHAT_API_PERS'),
