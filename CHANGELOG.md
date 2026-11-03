@@ -1,6 +1,13 @@
 # Changelog
 
-## 0.41.1
+## 0.41.2
+
+- Research data consistency, strict mathematical integrity & visual synchronization:
+  - **Carta capital & volume alignment (`computeCartaCapital`)**: Grouped by canonical role taxonomy (`roleDef`), outputting Top 5 directions by gross capital with exact remainder aggregated into «Другие направления». Enforced strict 100.0% constraint for both volume (`nShare`) and capital flow (`capitalShare`), guaranteeing that total sample counts $N$ and shares match the underlying database and page tables exactly.
+  - **Dynamic Task Transformation Benchmark (`computeTaskTransformation`)**: Replaced fictional 12-month retrospective estimates with an honest synchronous market cross-section (cross-sectional benchmark) calculating the actual live AI skill premium ($\text{AI Skill Premium}$), real sample counts $n$, and median compensation in rubles (₽) across routine tasks and emerging AI competencies.
+  - **Authentic Bump Chart (`computeBumpChart`)**: Eliminated fictional 2025 quarters and months. Replaced with real dynamic rankings computed directly from database records across the 4 active weeks (`[По неделям]`) and market rhythm intervals (`[По дням недели]`: Пн, Вт–Ср, Чт–Пт, Сб–Вс) using horizontally tangented cubic Bezier splines and live client toggling.
+  - **Simpson's Paradox editorial note**: Added clear methodological disclaimer under the weekly dynamics chart explaining the sample expansion from October 26 (addition of national platforms `hh.ru` and `trudvsem.ru`), preventing misinterpretation of median salary adjustments.
+  - **Dynamic editorial takeaways (`computeEditorialInsight`)**: Editorial lead cards now derive facts, contrasts, and media citation quotes dynamically from live Carta table calculations.
 
 - Security hardening for user-connected Telegram accounts and session crypto:
   - **Sanitized status endpoint**: `TelegramAuthService.getAuthStatus` emits `PublicTelegramAccountRecord`, stripping `sessionEncrypted`, `iv` and `tag` so encrypted session ciphertexts never leak to the client or browser network logs.

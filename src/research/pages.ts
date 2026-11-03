@@ -15,6 +15,8 @@ import {
   formatRub,
   formatShare,
   rubMonthToUsdYear,
+  type BumpRankItem,
+  type BumpSnapshot,
   type Dist,
   type Report,
   type RoleDetail,
@@ -98,7 +100,10 @@ function weekly(rows: Report['jobs']['weekly']): string {
   <span class="rs-hist-x">${r.week.slice(8, 10)}.${r.week.slice(5, 7)}</span>
 </div>`)
     .join('')}</div>
-<p class="rs-legend">Столбик — число вакансий за неделю (по понедельникам), подпись — медианная зарплата, тыс. ₽</p>`;
+<p class="rs-legend">Столбик — число вакансий за неделю (по понедельникам), подпись — медианная зарплата, тыс. ₽</p>
+<p class="muted small" style="margin-top: 10px; line-height: 1.5; border-left: 2px solid var(--line-strong); padding-left: 10px;">
+  <b>Обратите внимание на структуру выборки:</b> с 26 октября в мониторинг подключены общероссийские платформы (hh.ru, «Работа России»), что значительно увеличило долю региональных и сервисных вакансий и скорректировало общую медиану к уровню рынка РФ (парадокс Симпсона). Для сопоставимости по конкретным специализациям смотрите срезы по направлениям ниже.
+</p>`;
 }
 
 function kpi(value: string, label: string): string {
@@ -131,6 +136,10 @@ function renderEditorialInsight(insight?: Report['editorialInsight']): string {
 function renderCartaSection(rows?: Report['cartaCapital'], baseUrl = ''): string {
   if (!rows || !rows.length) return '';
   const embedCode = `<iframe src="${baseUrl}/embed/carta" width="100%" height="380" frameborder="0"></iframe>`;
+  const maxVol = Math.max(...rows.map((r) => r.nShare), 1);
+  const maxCap = Math.max(...rows.map((r) => r.capitalShare), 1);
+  const totalN = rows.reduce((s, r) => s + r.n, 0);
+
   return `<section class="rs-section">
   <div class="rs-section-head">
     <div>
@@ -145,29 +154,33 @@ function renderCartaSection(rows?: Report['cartaCapital'], baseUrl = ''): string
       <div style="text-align:right">Объём (число)</div>
       <div style="text-align:right">Денежный пул (% капитала)</div>
     </div>
-    ${rows.slice(0, 6).map((r) => `<div class="rs-dual-row">
+    ${rows.map((r) => `<div class="rs-dual-row">
       <div class="rs-dual-name font-medium">${escapeHtml(r.label)}</div>
       <div class="rs-dual-vol">
-        <div class="rs-bar-vol-wrap"><div class="rs-bar-vol" style="width:${Math.min(100, r.nShare * 2.5)}%"></div></div>
-        <span class="rs-mono">${num(r.n)}</span>
+        <div class="rs-bar-vol-wrap"><div class="rs-bar-vol" style="width:${Math.min(100, Math.round((r.nShare / maxVol) * 100))}%"></div></div>
+        <span class="rs-mono">${num(r.n)} <span class="muted small">(${formatShare(r.nShare)})</span></span>
       </div>
       <div class="rs-dual-cap">
-        <div class="rs-bar-cap-wrap"><div class="rs-bar-cap" style="width:${Math.min(100, r.capitalShare * 2)}%"></div></div>
-        <span class="rs-mono" style="font-weight:700">${r.capitalShare}%</span>
+        <div class="rs-bar-cap-wrap"><div class="rs-bar-cap" style="width:${Math.min(100, Math.round((r.capitalShare / maxCap) * 100))}%"></div></div>
+        <span class="rs-mono" style="font-weight:700">${formatShare(r.capitalShare)}</span>
       </div>
     </div>`).join('')}
   </div>
+  <p class="muted small" style="margin-top:8px;text-align:right">Сумма долей: 100,0% объема (${num(totalN)} объявлений) · 100,0% контрактного капитала</p>
 </section>`;
 }
 
 function renderTaskTransformationSection(data?: Report['taskTransformation'], baseUrl = ''): string {
   if (!data) return '';
   const embedCode = `<iframe src="${baseUrl}/embed/task-transformation" width="100%" height="420" frameborder="0"></iframe>`;
+  const shiftText = data.netShiftPct >= 0 ? `+${data.netShiftPct}%` : `${data.netShiftPct}%`;
+  const subTitle = `Синхронный срез рынка: премия за AI-компетенции ${shiftText} к базовой оплате${data.totalMatched ? ` (выборка: ${num(data.totalMatched)} публикаций)` : ''}`;
+
   return `<section class="rs-section">
   <div class="rs-section-head">
     <div>
-      <h2>Трансформация контрактных задач: автоматизация рутины vs новые специализации</h2>
-      <p class="muted small">Структурный сдвиг за последние 12 месяцев: чистый индекс трансформации +${data.netShiftPct}%</p>
+      <h2>Трансформация задач: давление автоматизации vs новые AI-компетенции</h2>
+      <p class="muted small">${escapeHtml(subTitle)}</p>
     </div>
     <button type="button" class="btn ghost btn-sm rs-embed-btn" data-embed="${escapeHtml(embedCode)}">&lt;/&gt; Встроить</button>
   </div>
@@ -175,24 +188,24 @@ function renderTaskTransformationSection(data?: Report['taskTransformation'], ba
     <div class="rs-transform-col">
       <div class="rs-transform-title">
         <span>Задачи под давлением автоматизации</span>
-        <span class="rs-mono text-muted">-34% в среднем</span>
+        <span class="rs-mono text-muted">${data.routineMedian ? `медиана ${formatRub(data.routineMedian)}` : 'базовые задачи'}</span>
       </div>
       <ul class="rs-transform-list">
         ${data.routine.map((item) => `<li>
-          <span>${escapeHtml(item.label)}</span>
-          <span class="rs-mono rs-diff-down">${item.changePct}%</span>
+          <span>${escapeHtml(item.label)} <span class="muted small">(n = ${num(item.n)})</span></span>
+          <span class="rs-mono rs-diff-down">${item.medianPay ? formatRub(item.medianPay) : (item.changePct ? `${item.changePct}%` : '—')}</span>
         </li>`).join('')}
       </ul>
     </div>
     <div class="rs-transform-col">
       <div class="rs-transform-title">
         <span>Новые специализированные компетенции</span>
-        <span class="rs-mono rs-diff-up">+240% в среднем</span>
+        <span class="rs-mono rs-diff-up">${data.emergingMedian ? `медиана ${formatRub(data.emergingMedian)}` : 'AI-компетенции'}</span>
       </div>
       <ul class="rs-transform-list">
         ${data.emerging.map((item) => `<li>
-          <span>${escapeHtml(item.label)}</span>
-          <span class="rs-mono rs-diff-up">+${item.changePct}%${item.medianPay ? ` · $${num(Math.round(item.medianPay / 92))}` : ''}</span>
+          <span>${escapeHtml(item.label)} <span class="muted small">(n = ${num(item.n)})</span></span>
+          <span class="rs-mono rs-diff-up">${item.medianPay ? formatRub(item.medianPay) : ''}${item.changePct ? ` · +${item.changePct}%` : ''}</span>
         </li>`).join('')}
       </ul>
     </div>
@@ -200,19 +213,76 @@ function renderTaskTransformationSection(data?: Report['taskTransformation'], ba
 </section>`;
 }
 
+function bumpSpline(r0: number, r1: number, r2: number, r3: number): string {
+  const y0 = 50 + (r0 - 1) * 40;
+  const y1 = 50 + (r1 - 1) * 40;
+  const y2 = 50 + (r2 - 1) * 40;
+  const y3 = 50 + (r3 - 1) * 40;
+  return `M 60 ${y0} C 155 ${y0}, 155 ${y1}, 250 ${y1} S 345 ${y2}, 440 ${y2} S 535 ${y3}, 630 ${y3}`;
+}
+
 function renderBumpChartSection(bump?: Report['bumpChart'], baseUrl = ''): string {
-  if (!bump) return '';
+  if (!bump || bump.quarters.length < 4 || bump.months.length < 4) return '';
   const embedCode = `<iframe src="${baseUrl}/embed/bump" width="100%" height="380" frameborder="0"></iframe>`;
+
+  const getLines = (snapshots: BumpSnapshot[]) => {
+    const lastSnap = snapshots[3];
+    if (!lastSnap) return [];
+    const sorted = [...lastSnap.ranks].sort((a, b) => a.rank - b.rank);
+    return sorted.map((item) => {
+      const r0 = snapshots[0]?.ranks.find((r: BumpRankItem) => r.name === item.name)?.rank ?? item.rank;
+      const r1 = snapshots[1]?.ranks.find((r: BumpRankItem) => r.name === item.name)?.rank ?? item.rank;
+      const r2 = snapshots[2]?.ranks.find((r: BumpRankItem) => r.name === item.name)?.rank ?? item.rank;
+      const r3 = item.rank;
+      const cy = 50 + (r3 - 1) * 40;
+      return {
+        name: item.name,
+        rank: r3,
+        d: bumpSpline(r0, r1, r2, r3),
+        cy,
+        ty: cy + 4,
+      };
+    });
+  };
+
+  const weeklyLines = getLines(bump.quarters);
+  const rhythmLines = getLines(bump.months);
+  if (weeklyLines.length < 5 || rhythmLines.length < 5) return '';
+
+  const STYLES = [
+    { stroke: 'var(--emerald)', fill: 'var(--emerald)', width: 3.5, fontColor: 'var(--emerald)', weight: 'bold' },
+    { stroke: '#2563eb', fill: '#2563eb', width: 3.5, fontColor: '#2563eb', weight: 'bold' },
+    { stroke: 'var(--ink)', fill: 'var(--ink)', width: 3, fontColor: 'var(--muted)', weight: '500' },
+    { stroke: 'var(--muted)', fill: 'var(--muted)', width: 2.5, fontColor: 'var(--muted)', weight: '500' },
+    { stroke: 'var(--line-strong)', fill: 'var(--line-strong)', width: 2, fontColor: 'var(--muted)', weight: '500' },
+  ];
+
+  const p0 = bump.quarters[0]?.period ?? '';
+  const p1 = bump.quarters[1]?.period ?? '';
+  const p2 = bump.quarters[2]?.period ?? '';
+  const p3 = bump.quarters[3]?.period ?? '';
+
+  const clientData = {
+    weeks: {
+      periods: bump.quarters.map((q) => q.period),
+      lines: weeklyLines,
+    },
+    days: {
+      periods: bump.months.map((m) => m.period),
+      lines: rhythmLines,
+    },
+  };
+
   return `<section class="rs-section">
   <div class="rs-section-head">
     <div>
-      <h2>Эволюция позиций технологий в рейтинге спроса</h2>
-      <p class="muted small">S-образные кривые отслеживают смену мест в рейтинге по кварталам и месяцам</p>
+      <h2>Эволюция позиций направлений в рейтинге спроса</h2>
+      <p class="muted small">S-образные кривые отслеживают смену мест ключевых специализаций по неделям и дням недели</p>
     </div>
     <div class="rs-head-actions">
       <div class="rs-toggle-group">
-        <button type="button" class="rs-toggle-pill active" id="btn-bump-q" onclick="switchBump('quarters')">По кварталам</button>
-        <button type="button" class="rs-toggle-pill" id="btn-bump-m" onclick="switchBump('months')">По месяцам</button>
+        <button type="button" class="rs-toggle-pill active" id="btn-bump-w" onclick="switchBump('weeks')">По неделям</button>
+        <button type="button" class="rs-toggle-pill" id="btn-bump-d" onclick="switchBump('days')">По дням недели</button>
       </div>
       <button type="button" class="btn ghost btn-sm rs-embed-btn" data-embed="${escapeHtml(embedCode)}">&lt;/&gt; Встроить</button>
     </div>
@@ -220,10 +290,10 @@ function renderBumpChartSection(bump?: Report['bumpChart'], baseUrl = ''): strin
   <div class="rs-bump-box">
     <svg id="bump-chart-svg" viewBox="0 0 760 250" class="rs-bump-svg">
       <g id="bump-axis-labels" font-size="11" font-weight="600" fill="var(--muted)" text-anchor="middle">
-        <text x="60" y="25">Q1 2025</text>
-        <text x="250" y="25">Q3 2025</text>
-        <text x="440" y="25">Q1 2026</text>
-        <text x="630" y="25" fill="var(--ink)">Q2 2026 (Live)</text>
+        <text x="60" y="25">${escapeHtml(p0)}</text>
+        <text x="250" y="25">${escapeHtml(p1)}</text>
+        <text x="440" y="25">${escapeHtml(p2)}</text>
+        <text x="630" y="25" fill="var(--ink)">${escapeHtml(p3)}</text>
       </g>
       <g stroke="var(--line)" stroke-width="1">
         <line x1="60" y1="50" x2="630" y2="50" />
@@ -232,27 +302,19 @@ function renderBumpChartSection(bump?: Report['bumpChart'], baseUrl = ''): strin
         <line x1="60" y1="170" x2="630" y2="170" />
         <line x1="60" y1="210" x2="630" y2="210" />
       </g>
-      <path id="bump-p1" class="bump-spline" d="M 60 90 C 150 90, 160 50, 250 50 S 350 50, 440 50 S 540 50, 630 50" fill="none" stroke="var(--emerald)" stroke-width="3.5" />
-      <circle id="bump-d1" cx="630" cy="50" r="5" fill="var(--emerald)" />
-      <text id="bump-l1" x="645" y="54" font-size="11" font-weight="bold" fill="var(--emerald)">#1 Python &amp; AI Agents</text>
-
-      <path id="bump-p2" class="bump-spline" d="M 60 210 C 150 210, 160 170, 250 170 S 350 130, 440 90 S 540 90, 630 90" fill="none" stroke="#2563eb" stroke-width="3.5" />
-      <circle id="bump-d2" cx="630" cy="90" r="5" fill="#2563eb" />
-      <text id="bump-l2" x="645" y="94" font-size="11" font-weight="bold" fill="#2563eb">#2 Telegram Mini Apps</text>
-
-      <path id="bump-p3" class="bump-spline" d="M 60 50 C 150 50, 160 90, 250 90 S 350 90, 440 130 S 540 130, 630 130" fill="none" stroke="var(--ink)" stroke-width="3" />
-      <circle id="bump-d3" cx="630" cy="130" r="4" fill="var(--ink)" />
-      <text id="bump-l3" x="645" y="134" font-size="11" font-medium fill="var(--muted)">#3 TypeScript / React</text>
-
-      <path id="bump-p4" class="bump-spline" d="M 60 130 C 150 130, 160 130, 250 130 S 350 170, 440 170 S 540 170, 630 170" fill="none" stroke="var(--muted)" stroke-width="2.5" />
-      <circle id="bump-d4" cx="630" cy="170" r="4" fill="var(--muted)" />
-      <text id="bump-l4" x="645" y="174" font-size="11" font-medium fill="var(--muted)">#4 Golang Backend</text>
-
-      <path id="bump-p5" class="bump-spline" d="M 60 170 C 150 170, 160 210, 250 210 S 350 210, 440 210 S 540 210, 630 210" fill="none" stroke="var(--line-strong)" stroke-width="2" />
-      <circle id="bump-d5" cx="630" cy="210" r="4" fill="var(--line-strong)" />
-      <text id="bump-l5" x="645" y="214" font-size="11" font-medium fill="var(--muted)">#5 PHP &amp; Битрикс</text>
+      ${weeklyLines.map((l, i) => {
+        const s = STYLES[i] ?? STYLES[4]!;
+        return `
+      <path id="bump-p${i + 1}" class="bump-spline" d="${l.d}" fill="none" stroke="${s.stroke}" stroke-width="${s.width}" />
+      <circle id="bump-d${i + 1}" cx="630" cy="${l.cy}" r="${i < 2 ? 5 : 4}" fill="${s.fill}" />
+      <text id="bump-l${i + 1}" x="645" y="${l.ty}" font-size="11" font-weight="${s.weight}" fill="${s.fontColor}">#${l.rank} ${escapeHtml(l.name)}</text>
+      `;
+      }).join('')}
     </svg>
   </div>
+  <script>
+    window.BUMP_DATA = ${jsonForScript(clientData)};
+  </script>
 </section>`;
 }
 
@@ -289,34 +351,33 @@ function copyEmbedCode(button) {
 }
 
 function switchBump(mode) {
-  const btnQ = document.getElementById('btn-bump-q');
-  const btnM = document.getElementById('btn-bump-m');
+  const btnW = document.getElementById('btn-bump-w');
+  const btnD = document.getElementById('btn-bump-d');
   const axis = document.getElementById('bump-axis-labels');
-  const p1 = document.getElementById('bump-p1');
-  const p2 = document.getElementById('bump-p2');
-  const p3 = document.getElementById('bump-p3');
-  const p4 = document.getElementById('bump-p4');
-  const p5 = document.getElementById('bump-p5');
-  if (!btnQ || !btnM || !axis || !p1) return;
+  if (!window.BUMP_DATA || !axis) return;
+  const isWeeks = mode === 'weeks';
+  if (btnW) btnW.classList.toggle('active', isWeeks);
+  if (btnD) btnD.classList.toggle('active', !isWeeks);
 
-  btnQ.classList.toggle('active', mode === 'quarters');
-  btnM.classList.toggle('active', mode === 'months');
+  const data = isWeeks ? window.BUMP_DATA.weeks : window.BUMP_DATA.days;
+  if (!data || !data.periods || !data.lines) return;
 
-  if (mode === 'quarters') {
-    axis.innerHTML = '<text x="60" y="25">Q1 2025</text><text x="250" y="25">Q3 2025</text><text x="440" y="25">Q1 2026</text><text x="630" y="25" fill="var(--ink)">Q2 2026 (Live)</text>';
-    p1.setAttribute('d', 'M 60 90 C 150 90, 160 50, 250 50 S 350 50, 440 50 S 540 50, 630 50');
-    p2.setAttribute('d', 'M 60 210 C 150 210, 160 170, 250 170 S 350 130, 440 90 S 540 90, 630 90');
-    p3.setAttribute('d', 'M 60 50 C 150 50, 160 90, 250 90 S 350 90, 440 130 S 540 130, 630 130');
-    p4.setAttribute('d', 'M 60 130 C 150 130, 160 130, 250 130 S 350 170, 440 170 S 540 170, 630 170');
-    p5.setAttribute('d', 'M 60 170 C 150 170, 160 210, 250 210 S 350 210, 440 210 S 540 210, 630 210');
-  } else {
-    axis.innerHTML = '<text x="60" y="25">Ноя 25</text><text x="250" y="25">Янв 26</text><text x="440" y="25">Мар 26</text><text x="630" y="25" fill="var(--ink)">Апр 26 (Live)</text>';
-    p1.setAttribute('d', 'M 60 50 C 150 50, 160 50, 250 50 S 350 50, 440 50 S 540 50, 630 50');
-    p2.setAttribute('d', 'M 60 130 C 150 130, 160 90, 250 90 S 350 90, 440 90 S 540 90, 630 90');
-    p3.setAttribute('d', 'M 60 90 C 150 90, 160 130, 250 130 S 350 130, 440 130 S 540 130, 630 130');
-    p4.setAttribute('d', 'M 60 170 C 150 170, 160 170, 250 170 S 350 170, 440 170 S 540 170, 630 170');
-    p5.setAttribute('d', 'M 60 210 C 150 210, 160 210, 250 210 S 350 210, 440 210 S 540 210, 630 210');
-  }
+  axis.innerHTML = '<text x="60" y="25">' + data.periods[0] + '</text>' +
+    '<text x="250" y="25">' + data.periods[1] + '</text>' +
+    '<text x="440" y="25">' + data.periods[2] + '</text>' +
+    '<text x="630" y="25" fill="var(--ink)">' + data.periods[3] + '</text>';
+
+  data.lines.forEach((l, idx) => {
+    const p = document.getElementById('bump-p' + (idx + 1));
+    const d = document.getElementById('bump-d' + (idx + 1));
+    const t = document.getElementById('bump-l' + (idx + 1));
+    if (p) p.setAttribute('d', l.d);
+    if (d) d.setAttribute('cy', l.cy);
+    if (t) {
+      t.setAttribute('y', l.ty);
+      t.textContent = '#' + l.rank + ' ' + l.name;
+    }
+  });
 }
 </script>`;
 
