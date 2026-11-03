@@ -9,7 +9,7 @@
  */
 import type { Env, Lead, Logger } from '../core/types.ts';
 import { GRADE_ORDER, MIN_CONFIDENCE, ROLES, type Grade } from './derive.ts';
-import { gigachatFetch, gigachatToken, resetGigachatToken } from './gigachat.ts';
+import { GigachatBusyError, gigachatFetch, gigachatToken, markGigachatBusy, resetGigachatToken, retryAfterMs } from './gigachat.ts';
 
 export { MIN_CONFIDENCE };
 
@@ -154,6 +154,11 @@ export async function extractWithModel(
         ],
       }),
     });
+    if (gigachat && response.status === 429) {
+      const ms = retryAfterMs(response);
+      markGigachatBusy(ms);
+      throw new GigachatBusyError('chat', ms);
+    }
     if (!response.ok) {
       if (gigachat && response.status === 401) resetGigachatToken();
       deps.logger.warn('model extraction HTTP error', { status: response.status, body: (await response.text().catch(() => '')).slice(0, 200) });
@@ -162,6 +167,8 @@ export async function extractWithModel(
     const content = ((await response.json()) as ChatResponse).choices?.[0]?.message?.content;
     return content ? parseModelAnswer(content) : undefined;
   } catch (error) {
+    // A 429 is not this post's fault: the batch decides what to do with it.
+    if (error instanceof GigachatBusyError) throw error;
     deps.logger.warn('model extraction failed', { error: error instanceof Error ? error.message : String(error) });
     return undefined;
   } finally {
@@ -174,6 +181,8 @@ export interface ExtractionSummary {
   saved: number;
   failed: number;
   ids: string[];
+  /** Set when GigaChat answered 429 and the rest of the batch was left for the next run. */
+  pausedMs?: number;
 }
 
 /**
@@ -193,7 +202,18 @@ export async function runModelExtraction(
   const worker = async (): Promise<void> => {
     for (let lead = queue.shift(); lead; lead = queue.shift()) {
       summary.asked++;
-      const facts = await extractWithModel(lead, deps);
+      let facts: ModelFacts | undefined;
+      try {
+        facts = await extractWithModel(lead, deps);
+      } catch (error) {
+        if (!(error instanceof GigachatBusyError)) throw error;
+        // The posts stay without an answer and come first in the next batch.
+        summary.failed++;
+        summary.pausedMs = error.retryAfterMs;
+        queue.length = 0;
+        deps.logger.warn('model extraction paused', { reason: error.message });
+        break;
+      }
       if (!facts) {
         summary.failed++;
         continue;

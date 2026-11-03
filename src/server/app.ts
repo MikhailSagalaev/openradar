@@ -12,6 +12,8 @@ import type { Lead, LeadStatus, LeadType, RawLead, SourceConfig, SourceKind, Sou
 import type { ListLeadsOptions } from '../core/store.ts';
 import { pollAll, pollSource } from '../pipeline/poll.ts';
 import { ingestRawLead, type IngestDeps } from '../pipeline/ingest.ts';
+import type { UserTelegramDeps } from '../pipeline/user-telegram.ts';
+import { renderSVG } from 'uqr';
 import { fetchSafeHttp } from '../pipeline/preview.ts';
 import { feedMaxAge } from '../pipeline/liveness.ts';
 import type { Runtime } from '../runtime.ts';
@@ -799,6 +801,27 @@ function toRawLead(body: Record<string, unknown>, sourceId: string): RawLead | n
   };
 }
 
+/**
+ * What the reader of members' Telegram sources needs, or nothing when the feature is off or
+ * not configured (no session secret, no Telegram app keys).
+ */
+export function userTelegramDeps(runtime: Runtime): UserTelegramDeps | undefined {
+  const masterSecret = runtime.env.RADAR_WEB_KEY_SECRET;
+  if (!runtime.env.RADAR_USER_TELEGRAM || !masterSecret || masterSecret.length < 16) return undefined;
+  if (!process.env.RADAR_TELEGRAM_API_ID || !process.env.RADAR_TELEGRAM_API_HASH) return undefined;
+  return {
+    store: runtime.store,
+    ingest: deps(runtime),
+    logger: runtime.logger.child('user-telegram'),
+    masterSecret,
+    credit: async (userId, outcome) => {
+      const secret = webKeySecret(runtime);
+      if (runtime.access.mode !== 'hub' || !secret || !outcome.lead) return;
+      await recordWebObservation(runtime.store, secret, userId, outcome.lead, outcome.status !== 'duplicate');
+    },
+  };
+}
+
 /** What saved-search delivery needs from the server: the feed's visibility and projection. */
 export function subscriptionDeps(runtime: Runtime): SubscriptionDeps {
   return {
@@ -1324,6 +1347,17 @@ export function createApp(runtime: Runtime): Hono {
               notice: c.req.query('subscriptions') ?? undefined,
             }
           : undefined,
+        telegram: viewer.userId && runtime.env.RADAR_USER_TELEGRAM && runtime.store.listTelegramAccounts
+          ? {
+              accounts: (await runtime.store.listTelegramAccounts(viewer.userId)).map((a) => ({
+                id: a.id, tgUserId: a.tgUserId, tgUsername: a.tgUsername, displayName: a.displayName, status: a.status,
+              })),
+              sources: ((await runtime.store.listUserSources?.(viewer.userId)) ?? []).map((s) => ({
+                id: s.id, title: s.title, folder: s.folder, chats: s.chats,
+                lastPolledAt: s.lastPolledAt, lastCount: s.lastCount, lastError: s.lastError,
+              })),
+            }
+          : undefined,
         agent: viewer.userId && runtime.store.hasAgentToken
           ? {
               hasToken: Boolean(extra.agentToken) || await runtime.store.hasAgentToken(viewer.userId),
@@ -1540,7 +1574,8 @@ export function createApp(runtime: Runtime): Hono {
 
     if (!title && !text) return c.redirect('/submit');
 
-    const sources = await runtime.store.listSources();
+    // Not the row personal Telegram sources file their posts under.
+    const sources = (await runtime.store.listSources()).filter((s) => s.config.userTelegram !== true);
     let source =
       sources.find((s) => s.kind === 'webhook' && s.enabled) ??
       sources.find((s) => s.kind === 'webhook');
@@ -2322,7 +2357,8 @@ export function createApp(runtime: Runtime): Hono {
     const rawType = asString(body.type);
     const type: LeadType = rawType === 'job' || rawType === 'gig' ? rawType : 'gig';
 
-    const sources = await runtime.store.listSources();
+    // Not the row personal Telegram sources file their posts under.
+    const sources = (await runtime.store.listSources()).filter((s) => s.config.userTelegram !== true);
     let source =
       sources.find((s) => s.kind === 'webhook' && s.enabled) ??
       sources.find((s) => s.kind === 'webhook');
@@ -2497,6 +2533,16 @@ export function createApp(runtime: Runtime): Hono {
     return c.json(status);
   });
 
+  // The QR of a running login as an image; the code inside changes every half minute.
+  app.get('/api/tg/auth/qr/:authSessionId', async (c) => {
+    const user = await currentUser(c, runtime);
+    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    const status = tgAuthService().getAuthStatus(c.req.param('authSessionId'), user.id);
+    if (!status?.qrUrl) return c.json({ error: 'session_not_found' }, 404);
+    c.header('Cache-Control', 'no-store');
+    return c.body(renderSVG(status.qrUrl, { border: 2 }), 200, { 'Content-Type': 'image/svg+xml' });
+  });
+
   app.post('/api/tg/auth/password', rateLimit({ windowMs: 60_000, max: 10 }), async (c) => {
     const user = await currentUser(c, runtime);
     if (!user) return c.json({ error: 'unauthorized' }, 401);
@@ -2579,7 +2625,8 @@ export function createApp(runtime: Runtime): Hono {
       title: body.title.trim(),
       folder: body.folder?.trim() || undefined,
       chats,
-      shareToNetwork: body.shareToNetwork !== false,
+      // Only public channels and groups are read, and they go to the shared feed.
+      shareToNetwork: true,
       enabled: true,
     });
     return c.json({ source });

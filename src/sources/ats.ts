@@ -188,6 +188,12 @@ const ENDPOINTS: Record<AtsProvider, (slug: string) => string> = {
   ashby: (slug) => `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(slug)}?includeCompensation=true`,
 };
 
+/**
+ * Big employers' boards are large: OpenAI's Ashby board is about 14 MB of job descriptions,
+ * and Ashby has no lighter listing. ATS answers are JSON from known hosts, so they get more room.
+ */
+const ATS_MAX_BYTES = 40 * 1024 * 1024;
+
 const PARSERS: Record<AtsProvider, (source: SourceRecord, slug: string, name: string | undefined, json: string) => RawLead[]> = {
   greenhouse: fromGreenhouse,
   lever: fromLever,
@@ -219,7 +225,7 @@ export const atsSource: SourceAdapter = {
     const leads: RawLead[] = [];
     for (const { slug, name } of nextBatch(source.id, companies, perPoll)) {
       try {
-        const json = await fetchText(ctx, ENDPOINTS[provider](slug), { Accept: 'application/json' });
+        const json = await fetchText(ctx, ENDPOINTS[provider](slug), { Accept: 'application/json' }, ATS_MAX_BYTES);
         const found = PARSERS[provider](source, slug, name, json)
           .filter((lead) => !lead.publishedAt || new Date(lead.publishedAt).toISOString() >= since)
           .sort((a, b) => (b.publishedAt ?? '').localeCompare(a.publishedAt ?? ''))

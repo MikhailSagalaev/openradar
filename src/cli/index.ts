@@ -14,7 +14,8 @@ import { auditSourceRobots, robotsMarkdown } from '../pipeline/robots-audit.ts';
 import { PollRunner } from '../pipeline/runner.ts';
 import { jobspyCsv, siteSlugFor } from '../core/jobspy.ts';
 import { createRuntime, type Runtime } from '../runtime.ts';
-import { createApp, startSubscriptionBot, subscriptionDeps } from '../server/app.ts';
+import { createApp, startSubscriptionBot, subscriptionDeps, userTelegramDeps } from '../server/app.ts';
+import { pollUserTelegramSources } from '../pipeline/user-telegram.ts';
 import { deliverDueSubscriptions, deliverLeadClosedToSubscriptions } from '../pipeline/subscriptions.ts';
 import { leadEvents } from '../core/events.ts';
 import { startServer } from '../server/index.ts';
@@ -640,10 +641,15 @@ function buildProgram(): Command {
       const app = createApp(runtime);
       const port = numberOption(options.port) ?? runtime.env.PORT;
       const server = startServer(app, port, runtime.env.RADAR_BIND);
+      const userTelegram = userTelegramDeps(runtime);
       const runner = options.noScheduler
         ? undefined
-        : new PollRunner(pollDeps(runtime), runtime.env.RADAR_POLL_INTERVAL_SEC, runtime.logger, () =>
-            deliverDueSubscriptions(subscriptionDeps(runtime)),
+        : new PollRunner(
+            pollDeps(runtime),
+            runtime.env.RADAR_POLL_INTERVAL_SEC,
+            runtime.logger,
+            () => deliverDueSubscriptions(subscriptionDeps(runtime)),
+            userTelegram ? () => pollUserTelegramSources(userTelegram) : undefined,
           );
       runner?.start();
       // Closure events: a lead leaving the active feed (closed, hidden as junk or scam)

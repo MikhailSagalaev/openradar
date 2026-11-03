@@ -1304,6 +1304,23 @@ export class PostgresStore implements Store {
     return (res.rowCount ?? 0) > 0;
   }
 
+  async setTelegramAccountStatus(id: string, status: UserTelegramAccountRecord['status']): Promise<void> {
+    await this.pool.query(`UPDATE user_telegram_accounts SET status = $2, updated_at = NOW() WHERE id = $1`, [id, status]);
+  }
+
+  async listDueUserSources(beforeIso: string, limit: number): Promise<UserSourceRecord[]> {
+    const res = await this.pool.query(
+      `SELECT s.* FROM user_sources s
+       JOIN user_telegram_accounts a ON a.id = s.account_id
+       WHERE s.enabled AND a.status = 'active'
+         AND (s.last_polled_at IS NULL OR s.last_polled_at < $1::timestamptz)
+       ORDER BY s.last_polled_at ASC NULLS FIRST
+       LIMIT $2`,
+      [beforeIso, limit],
+    );
+    return res.rows.map((r) => this.rowToUserSource(r));
+  }
+
   private rowToTelegramAccount(row: any): UserTelegramAccountRecord {
     return {
       id: String(row.id),
@@ -1372,6 +1389,8 @@ export class PostgresStore implements Store {
       shareToNetwork: 'share_to_network',
       enabled: 'enabled',
       lastPolledAt: 'last_polled_at',
+      lastError: 'last_error',
+      lastCount: 'last_count',
     };
     const sets: string[] = ['updated_at = NOW()'];
     const params: unknown[] = [id, userId];
@@ -1408,6 +1427,8 @@ export class PostgresStore implements Store {
       shareToNetwork: Boolean(row.share_to_network),
       enabled: Boolean(row.enabled),
       lastPolledAt: row.last_polled_at ? new Date(row.last_polled_at).toISOString() : null,
+      lastError: row.last_error ?? null,
+      lastCount: Number(row.last_count ?? 0),
       createdAt: new Date(row.created_at).toISOString(),
       updatedAt: new Date(row.updated_at).toISOString(),
     };

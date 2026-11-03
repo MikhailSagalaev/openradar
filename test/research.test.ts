@@ -413,6 +413,32 @@ describe('model extraction', () => {
     expect(body.temperature).toBeGreaterThan(0);
     resetGigachatToken();
   });
+
+  it('stops the batch on a GigaChat 429 and asks for no token until the pause is over', async () => {
+    resetGigachatToken();
+    const runtime = makeTestRuntime({ RADAR_EXTRACT_ENABLED: true, RADAR_EXTRACT_PROVIDER: 'gigachat', GIGACHAT_AUTH_KEY: 'auth-key' });
+    const source = await runtime.store.createSource({ kind: 'telegram', title: 'tg', config: { channel: 'jobs' } });
+    for (const id of ['b1', 'b2', 'b3', 'b4']) await runtime.store.insertLead(lead(id, { sourceId: source.id, type: 'gig', title: 'Нужен бот', text: 'Бот для записи' }));
+    let oauthCalls = 0;
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      if (input.toString().endsWith('/oauth')) {
+        oauthCalls++;
+        return new Response('{}', { status: 429, headers: { 'retry-after': '30' } });
+      }
+      throw new Error('no chat call expected');
+    }) as typeof fetch;
+
+    const summary = await runModelExtraction({ ...runtime, fetchImpl }, { limit: 10, concurrency: 3 });
+    expect(oauthCalls).toBe(1);
+    expect(summary.saved).toBe(0);
+    expect(summary.asked).toBeLessThanOrEqual(3);
+    expect(summary.pausedMs).toBe(30_000);
+
+    const again = await runModelExtraction({ ...runtime, fetchImpl }, { limit: 10 });
+    expect(oauthCalls).toBe(1);
+    expect(again.pausedMs).toBeGreaterThan(0);
+    resetGigachatToken();
+  });
 });
 
 describe('research data consistency & honest visual metrics', () => {

@@ -786,6 +786,27 @@ describe('http server', () => {
     expect((await onApp.request('http://localhost/api/tg/accounts', { headers: { cookie: `radar_session=${onSession}` } })).status).toBe(200);
   });
 
+  it('shows the Telegram sources section on /me only when linking is on', async () => {
+    const off = makeRuntime({ RADAR_PUBLIC_READ: true });
+    const offSession = await makeUserSession(off, 'octocat');
+    const offPage = await (await createApp(off).request('/me', { headers: { cookie: `radar_session=${offSession}` } })).text();
+    expect(offPage).not.toContain('telegram-sources');
+
+    const on = makeRuntime({ RADAR_PUBLIC_READ: true, RADAR_USER_TELEGRAM: true, RADAR_WEB_KEY_SECRET: '0123456789abcdef0123456789abcdef' });
+    const onApp = createApp(on);
+    const onSession = await makeUserSession(on, 'octocat');
+    const user = (await on.store.getUserBySession!(onSession))!;
+    const account = await on.store.upsertTelegramAccount!({ userId: user.id, tgUserId: 9, displayName: 'Мой <b>TG</b>', sessionEncrypted: 'x', iv: 'y', tag: 'z' });
+    await on.store.createUserSource!({ userId: user.id, accountId: account.id, title: 'Работа', folder: 'Работа' });
+    const page = await (await onApp.request('/me', { headers: { cookie: `radar_session=${onSession}` } })).text();
+    expect(page).toContain('id="telegram-sources"');
+    expect(page).toContain('Мой &lt;b&gt;TG&lt;/b&gt;');
+    expect(page).toContain('папка «Работа»');
+    expect(page).toContain('только публичные');
+    expect(page).not.toContain('sessionEncrypted');
+    expect((await onApp.request('/api/tg/auth/qr/nope', { headers: { cookie: `radar_session=${onSession}` } })).status).toBe(404);
+  });
+
   it('lets any site frame the research widgets and nothing else', async () => {
     for (const env of [{}, { RADAR_YANDEX_METRIKA_ID: '113821053' }]) {
       const app = createApp(makeRuntime({ RADAR_PUBLIC_READ: true, ...env }));

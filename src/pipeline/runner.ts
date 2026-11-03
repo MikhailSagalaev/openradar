@@ -12,11 +12,13 @@ import { parseModerators } from '../hub/service.ts';
 import { ensureMonthlySnapshot } from '../research/service.ts';
 import { ensureDailyCounts } from '../research/index.ts';
 import { extractionEnabled, runModelExtraction } from '../research/model.ts';
+import type { UserTelegramRound } from './user-telegram.ts';
 
 const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000;
 const BACKGROUND_INTERVAL_MS = 60 * 1000;
 const LIVENESS_INTERVAL_MS = 5 * 60 * 1000;
 const EXTRACTION_INTERVAL_MS = 10 * 60 * 1000;
+const USER_TELEGRAM_CHECK_MS = 5 * 60 * 1000;
 
 export class PollRunner {
   private timer: NodeJS.Timeout | undefined;
@@ -28,6 +30,8 @@ export class PollRunner {
   private lastMaintenanceAt = 0;
   private lastExtractionAt = 0;
   private extractionRunning = false;
+  private lastUserTelegramAt = 0;
+  private userTelegramRunning = false;
 
   constructor(
     private readonly deps: PollDeps,
@@ -35,6 +39,8 @@ export class PollRunner {
     private readonly logger: Logger,
     /** Saved-search delivery, given by the server (it knows each user's tier). */
     private readonly deliverSubscriptions?: () => Promise<SubscriptionRound>,
+    /** Members' own Telegram folders and chats, given by the server when RADAR_USER_TELEGRAM is on. */
+    private readonly pollUserTelegram?: () => Promise<UserTelegramRound>,
   ) {}
 
   start(): void {
@@ -91,6 +97,7 @@ export class PollRunner {
       await this.runMaintenanceIfDue();
       await this.runLivenessIfDue();
       this.runExtractionIfDue();
+      this.runUserTelegramIfDue();
 
       if (this.deliverSubscriptions) {
         try {
@@ -139,6 +146,24 @@ export class PollRunner {
       })
       .finally(() => {
         this.livenessRunning = false;
+      });
+  }
+
+  /** Personal Telegram sources: each is read every quarter of an hour, the check runs every five minutes. */
+  private runUserTelegramIfDue(): void {
+    if (!this.pollUserTelegram || this.userTelegramRunning) return;
+    if (Date.now() - this.lastUserTelegramAt < USER_TELEGRAM_CHECK_MS) return;
+    this.lastUserTelegramAt = Date.now();
+    this.userTelegramRunning = true;
+    void this.pollUserTelegram()
+      .then((round) => {
+        if (round.sources) this.logger.info('personal Telegram sources read', { ...round });
+      })
+      .catch((error) => {
+        this.logger.warn('personal Telegram sources failed', { error: error instanceof Error ? error.message : String(error) });
+      })
+      .finally(() => {
+        this.userTelegramRunning = false;
       });
   }
 

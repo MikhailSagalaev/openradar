@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.42.0
+
+- Members read their own Telegram into the feed. On `/me`, «Telegram-источники»: link the account by QR (Telegram → Settings → Devices → Link Desktop Device; the cloud password when two-step verification is on), then name a Telegram folder or a list of chats. Every 15 minutes the hub reads them and adds the orders it finds to the shared feed, credited to the member for points. Behind `RADAR_USER_TELEGRAM=true`.
+- Only public channels and groups (with an @username) are read. Dialogs with people, bots and chats without a public link are skipped and counted on the source; nothing is ever sent from the account. A session Telegram revoked marks the account «link again» and stops its sources.
+- Migration 026: the last read's count and note per personal source; phone numbers left from 0.40.3–0.41.2 are cleared.
+- GigaChat: one token request at a time (parallel posts used to ask for a token each and all got HTTP 429 after a restart); on a 429 for the token or a chat call the batch stops, honours `Retry-After` (a minute by default) and leaves the rest for the next run.
+- ATS boards may be up to 40 MB: OpenAI's Ashby board is about 14 MB and was dropped by the general 10 MB ceiling.
+- New dependency: `uqr` 0.1.3 (MIT, no dependencies) draws the login QR as SVG.
+
 ## 0.41.3
 
 - Duplicate detection works again for older leads. Migration 025 (0.40.4) rewrote `title_key` in SQL with its own rule: it kept «ё», dropped letters outside Latin and Cyrillic and did not cut at 160 characters, so reposts of those leads stopped matching. The step is gone from the migration, and the new `radar rekey` rebuilds every key with the app's rule. **After upgrading from 0.40.4–0.41.2, run once:** `docker compose run --rm -T radar rekey`.
