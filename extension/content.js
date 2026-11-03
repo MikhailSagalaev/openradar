@@ -65,6 +65,9 @@ function extractCompany(org) {
 
 function extractCity(loc) {
   if (!loc) return '';
+  if (Array.isArray(loc)) {
+    return loc.map(extractCity).filter(Boolean).slice(0, 3).join(', ');
+  }
   if (typeof loc === 'string') return loc.trim();
   if (typeof loc === 'object') {
     const addr = loc.address;

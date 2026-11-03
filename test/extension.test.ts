@@ -117,6 +117,42 @@ describe('extension content script JobPosting extractor', () => {
     expect(data.detectedType).toBe('gig');
   });
 
+  it('handles array of job locations and recognizes onsite transition', () => {
+    const mockJsonLd = {
+      '@context': 'https://schema.org',
+      '@type': 'JobPosting',
+      title: 'Audit and Compliance Program Manager',
+      description: 'You will have the flexibility to work remotely while we establish our office, with expectation that this role will transition to onsite once office opens.',
+      hiringOrganization: { name: 'Groq' },
+      jobLocation: [
+        { '@type': 'Place', address: { addressLocality: 'Dallas', addressRegion: 'TX' } },
+        { '@type': 'Place', address: { addressLocality: 'San Francisco', addressRegion: 'CA' } },
+      ],
+      baseSalary: {
+        currency: 'USD',
+        value: { minValue: 186600, maxValue: 252400 },
+      },
+    };
+
+    const mockDoc = {
+      querySelectorAll(selector: string) {
+        if (selector === 'script[type="application/ld+json"]') {
+          return [{ textContent: JSON.stringify(mockJsonLd) }];
+        }
+        return [];
+      },
+      location: { href: 'https://jobs.gem.com/groq/123' },
+      title: 'Audit and Compliance Program Manager',
+    };
+
+    const extracted = extractJobPosting(mockDoc);
+    expect(extracted.city).toBe('Dallas, San Francisco');
+    expect(extracted.isRemote).toBe(false);
+    expect(extracted.currency).toBe('USD');
+    expect(extracted.budget).toBe(186600);
+    expect(extracted.salaryMax).toBe(252400);
+  });
+
   describe('extension xray script', () => {
     it('cleans company name and creates 1-click dork links', () => {
       const plan = buildXRayPlan('ООО "Авито Тех"', 'Senior Frontend Engineer', ['React', 'TypeScript']);
