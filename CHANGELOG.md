@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.43.4
+
+- RSS feeds with a bare «&» (`R&D`, `?a=1&b=2` in a link) are read: the strict XML parser dropped the whole feed, so GeekJob and Real Work From Anywhere gave nothing. Entities and CDATA are left as they are.
+- The openradar index is served stale while it rebuilds, like the live report, and the background loop keeps both built.
+
 ## 0.43.3
 
 - The live research report no longer makes a visitor wait: deriving a month of posts takes about 3 s of CPU, so a stale report is served at once while the next one is built behind it, and the background loop keeps it built from the start.
