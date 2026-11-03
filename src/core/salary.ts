@@ -195,7 +195,9 @@ export function parseSalaryRange(text: string): { min?: number; max?: number } {
 }
 
 const CURRENCY_UNIT = String.raw`₽|руб(?:лей|ля|ль|\.|,)?|р\.|usd|\$|eur|€|kzt|₸|byn|uah|₴|тенге|грн|pln|zł|gbp|£|chf|cad|aud`;
-const AMOUNT_PATTERN = String.raw`\d[\d\s,]{0,14}`;
+// A comma or a space separates thousands only before exactly three digits: "350,800 USD",
+// "150 000 руб". Otherwise it is a list, and "Команда 5, 120 000 ₽" must not read as 5 120 000.
+const AMOUNT_PATTERN = String.raw`\d{1,3}(?:[ ,]\d{3})+(?!\d)|\d+`;
 
 function parseAmount(raw: string | undefined): number | undefined {
   if (!raw) return undefined;

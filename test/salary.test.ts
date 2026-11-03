@@ -108,6 +108,13 @@ describe('anchored salary extraction from free text', () => {
     expect(garbage.normalizedUsdMax).toBeUndefined();
   });
 
+  it('reads commas as thousands only before three digits, not in lists', () => {
+    expect(extractAnchoredSalary('$259,300 - $350,800')).toEqual({ min: 259300, max: 350800 });
+    expect(extractAnchoredSalary('350,800 USD')).toEqual({ min: 350800, max: 350800 });
+    expect(extractAnchoredSalary('Команда 5, 120 000 ₽')).toEqual({ min: 120000, max: 120000 });
+    expect(extractAnchoredSalary('Требования: 2026, 150 000 руб')).toEqual({ min: 150000, max: 150000 });
+  });
+
   it('prefers anchored text salary over nothing and keeps explicit budget otherwise', () => {
     const anchored = normalizeSalary({ text: 'Оплата 90 000 руб за этап', type: 'gig' });
     expect(anchored.normalizedUsdMin).toBe(Math.round(90000 / 92));

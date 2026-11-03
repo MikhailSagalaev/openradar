@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.42.2
+
+- Salaries: a comma or a space joins digits only as a thousands separator before exactly three digits. 0.42.1 read «Команда 5, 120 000 ₽» as 5 120 000 ₽ and dropped the pay in «Требования: 2026, 150 000 руб»; «$259,300 - $350,800» still reads right.
+- Remote detection (site preview and extension): an explicit «fully remote», «100% remote», «remote-first» or «полностью удалённо» wins over a passing «no onsite visits».
+- Versions: package.json, src/version.ts and server.json agree again (0.42.1 changed only package.json, so CI and the Release were red and /health said 0.42.0). `deploy-server.sh` now refuses a release tag whose three version files disagree.
+
 ## 0.42.1
 
 - US/international salary parsing: comma thousands separators (`$259,300 - $350,800`) are parsed accurately instead of truncating at the comma.

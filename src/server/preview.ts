@@ -103,6 +103,8 @@ function extractRemote(posting: Record<string, unknown>): boolean {
   if (posting.jobLocationType === 'TELECOMMUTE') return true;
   if (posting.applicantLocationRequirements) return true;
   const combined = `${posting.title || ''} ${posting.description || ''}`.toLowerCase();
+  // An explicit fully remote wins over a passing "no onsite visits".
+  if (/fully\s+remote|100%\s+remote|remote[- ]first|полностью\s+удал/i.test(combined)) return true;
   if (/transition\s+to\s+onsite|on-site|onsite|гибрид|hybrid|no\s+remote|not\s+remote/i.test(combined)) {
     return false;
   }
