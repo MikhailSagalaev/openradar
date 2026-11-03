@@ -153,12 +153,27 @@ export function buildIndex(rows: ResearchDailyRow[], now: Date = new Date()): Op
 let cached: { at: number; index: OpenradarIndex } | undefined;
 const CACHE_MS = 60 * 60_000;
 
+let building: Promise<OpenradarIndex> | undefined;
+
 export function resetIndexCache(): void {
   cached = undefined;
+  building = undefined;
 }
 
+/** Like the live report: a stale index is served at once while the next one is built. */
 export async function openradarIndex(store: Store, now: Date = new Date(), options: DeriveOptions = {}): Promise<OpenradarIndex> {
   if (cached && now.getTime() - cached.at < CACHE_MS) return cached.index;
+  building ??= buildOpenradarIndex(store, now, options).finally(() => {
+    building = undefined;
+  });
+  if (cached) {
+    building.catch(() => {});
+    return cached.index;
+  }
+  return building;
+}
+
+async function buildOpenradarIndex(store: Store, now: Date, options: DeriveOptions): Promise<OpenradarIndex> {
   await ensureDailyCounts(store, now, options);
   const rows = (await store.listResearchDaily?.(PANEL_START, now.toISOString().slice(0, 10))) ?? [];
   const index = buildIndex(rows, now);

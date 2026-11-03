@@ -5,6 +5,14 @@ import { fetchText } from './http.ts';
 
 const parser = new Parser();
 
+/**
+ * A bare «&» («R&D», «?a=1&b=2» in a link) is not XML, and the strict parser drops the whole
+ * feed on it (GeekJob, Real Work From Anywhere). Entities and CDATA stay as they are.
+ */
+export function escapeBareAmpersands(xml: string): string {
+  return xml.replace(/(<!\[CDATA\[[\s\S]*?\]\]>)|&(?!(?:[a-zA-Z][a-zA-Z0-9]*|#\d+|#x[0-9a-fA-F]+);)/g, (_match, cdata: string | undefined) => cdata ?? '&amp;');
+}
+
 export const rssSource: SourceAdapter = {
   kind: 'rss',
   access: 'official',
@@ -15,7 +23,7 @@ export const rssSource: SourceAdapter = {
     if (!url) throw new Error('RSS source requires config.url');
 
     const xml = await fetchText(ctx, url);
-    const feed = await parser.parseString(xml);
+    const feed = await parser.parseString(escapeBareAmpersands(xml));
     const limit = Math.max(1, Math.min(Number(source.config.limit ?? 30), 100));
 
     return (feed.items ?? []).slice(0, limit).map((item) => {
