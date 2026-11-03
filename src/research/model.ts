@@ -4,8 +4,8 @@
  * rest as strict JSON. The rules and the page markup still win; the model only fills gaps,
  * and only answers it is confident in reach the report.
  *
- * Any OpenAI-compatible API works (OpenAI, DeepSeek, OpenRouter, a local Ollama or vLLM),
- * and GigaChat.
+ * Any OpenAI-compatible API works (Groq, OpenAI, DeepSeek, OpenRouter, a local Ollama or
+ * vLLM), and GigaChat.
  */
 import type { Env, Lead, Logger } from '../core/types.ts';
 import { GRADE_ORDER, MIN_CONFIDENCE, ROLES, type Grade } from './derive.ts';
@@ -154,9 +154,10 @@ export async function extractWithModel(
         ],
       }),
     });
-    if (gigachat && response.status === 429) {
+    // Any provider's 429 stops the batch: Groq's free plan counts requests per day and tokens per minute.
+    if (response.status === 429) {
       const ms = retryAfterMs(response);
-      markGigachatBusy(ms);
+      if (gigachat) markGigachatBusy(ms);
       throw new GigachatBusyError('chat', ms);
     }
     if (!response.ok) {

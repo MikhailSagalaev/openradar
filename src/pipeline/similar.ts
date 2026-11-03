@@ -17,16 +17,45 @@ function isEmptySketch(sketch: string): boolean {
   return !sketch || /^A*$/.test(sketch);
 }
 
+type IndexStore = Pick<Store, 'listRecentSketches'>
+  & Partial<Pick<Store, 'saveLeadBands' | 'findBandCandidates' | 'pruneLeadBands' | 'hasLeadBands'>>;
+
+/** Candidates read per lookup: a band shared by more posts than this is too generic to help. */
+const MAX_CANDIDATES = 200;
+const PRUNE_EVERY_MS = 3600_000;
+
 /**
- * In-process LSH index of recent MinHash sketches. Uses 16-band Locality-Sensitive Hashing
- * to prune candidate search from O(N) linear scans down to O(1) indexed lookups.
+ * LSH index of recent MinHash sketches: 16 bands narrow the candidates to posts sharing one,
+ * and the sketches decide. Stores with band tables (Postgres, migration 027) keep the index
+ * there, shared by every process and kept across restarts; other stores keep it in memory.
  */
 export class SimilarIndex {
   private entries: Entry[] = [];
   private buckets = new Map<string, Set<Entry>>();
   private loading?: Promise<void>;
+  private prunedAt = 0;
 
-  constructor(private readonly store: Pick<Store, 'listRecentSketches'>, private readonly maxEntries = 50_000) {}
+  constructor(private readonly store: IndexStore, private readonly maxEntries = 50_000) {}
+
+  private get shared(): boolean {
+    return Boolean(this.store.saveLeadBands && this.store.findBandCandidates);
+  }
+
+  /** The first lookup after the upgrade fills the table with the last week's posts. */
+  private async ensureShared(now: Date): Promise<void> {
+    this.loading ??= (async () => {
+      if (await this.store.hasLeadBands?.()) return;
+      const since = new Date(now.getTime() - SIMILAR_WINDOW_MS).toISOString();
+      for (const row of await this.store.listRecentSketches(since, this.maxEntries)) {
+        if (!isEmptySketch(row.minhash)) await this.store.saveLeadBands!(row.id, computeMinHashBands(row.minhash), row.createdAt);
+      }
+    })();
+    await this.loading;
+    if (now.getTime() - this.prunedAt > PRUNE_EVERY_MS && this.store.pruneLeadBands) {
+      this.prunedAt = now.getTime();
+      await this.store.pruneLeadBands(new Date(now.getTime() - SIMILAR_WINDOW_MS).toISOString());
+    }
+  }
 
   private addEntry(entry: Entry): void {
     this.entries.push(entry);
@@ -84,6 +113,7 @@ export class SimilarIndex {
 
   async findSimilar(sketch: string, now: Date, threshold = SIMILAR_JACCARD): Promise<string | undefined> {
     if (isEmptySketch(sketch)) return undefined;
+    if (this.shared) return this.findShared(sketch, now, threshold);
     await this.ensureLoaded(now);
     this.prune(now);
 
@@ -116,11 +146,29 @@ export class SimilarIndex {
     return best?.id;
   }
 
-  add(id: string, sketch: string | undefined, createdAt: string): void {
+  private async findShared(sketch: string, now: Date, threshold: number): Promise<string | undefined> {
+    await this.ensureShared(now);
+    const bands = computeMinHashBands(sketch);
+    if (!bands.length) return undefined;
+    const since = new Date(now.getTime() - SIMILAR_WINDOW_MS).toISOString();
+    let best: { id: string; j: number } | undefined;
+    for (const candidate of await this.store.findBandCandidates!(bands, since, MAX_CANDIDATES)) {
+      const j = estimateJaccardFromSketches(sketch, candidate.minhash);
+      if (j >= threshold && (!best || j > best.j)) best = { id: candidate.id, j };
+    }
+    return best?.id;
+  }
+
+  async add(id: string, sketch: string | undefined, createdAt: string): Promise<void> {
     if (!sketch || isEmptySketch(sketch)) return;
+    if (this.shared) {
+      await this.store.saveLeadBands!(id, computeMinHashBands(sketch), createdAt);
+      return;
+    }
     this.addEntry({ id, createdAtMs: Date.parse(createdAt), sketch });
   }
 
+  /** Only the in-memory index needs this: stored bands go with the lead (ON DELETE CASCADE). */
   remove(id: string): void {
     const entry = this.entries.find((e) => e.id === id);
     if (!entry) return;

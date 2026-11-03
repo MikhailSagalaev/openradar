@@ -4,12 +4,17 @@ import { fetchText } from './http.ts';
 
 /**
  * Company career boards through the public job-board APIs of applicant tracking systems:
- * Greenhouse, Lever and Ashby publish them for anyone to read, without a key. One source
- * holds a list of companies of one system; each poll reads a few of them in turn.
+ * Greenhouse, Lever, Ashby, Workable, Recruitee and SmartRecruiters publish them for anyone
+ * to read, without a key. One source holds a list of companies of one system; each poll
+ * reads a few of them in turn.
  */
-export type AtsProvider = 'greenhouse' | 'lever' | 'ashby';
+export type AtsProvider = 'greenhouse' | 'lever' | 'ashby' | 'workable' | 'recruitee' | 'smartrecruiters';
 
-const PROVIDERS: AtsProvider[] = ['greenhouse', 'lever', 'ashby'];
+export const ATS_PROVIDERS: AtsProvider[] = ['greenhouse', 'lever', 'ashby', 'workable', 'recruitee', 'smartrecruiters'];
+export const ATS_LABELS: Record<AtsProvider, string> = {
+  greenhouse: 'Greenhouse', lever: 'Lever', ashby: 'Ashby', workable: 'Workable', recruitee: 'Recruitee', smartrecruiters: 'SmartRecruiters',
+};
+const PROVIDERS = ATS_PROVIDERS;
 const MAX_TEXT = 8000;
 
 /** "gitlab" or "gitlab=GitLab": the board slug and, optionally, the name to show. */
@@ -182,10 +187,135 @@ function fromAshby(source: SourceRecord, slug: string, name: string | undefined,
   });
 }
 
+interface WorkableJob {
+  title?: string;
+  shortcode?: string;
+  employment_type?: string;
+  telecommuting?: boolean;
+  department?: string;
+  published_on?: string;
+  created_at?: string;
+  country?: string;
+  city?: string;
+  description?: string;
+}
+
+function fromWorkable(source: SourceRecord, slug: string, name: string | undefined, json: string): RawLead[] {
+  const data = JSON.parse(json) as { name?: string; jobs?: WorkableJob[] };
+  return (data.jobs ?? []).filter((j) => j.shortcode && j.title?.trim()).map((j) => {
+    const title = j.title!.trim();
+    const company = name ?? data.name?.trim() ?? slug;
+    const location = [j.city, j.country].filter(Boolean).join(', ');
+    const remote = Boolean(j.telecommuting) || REMOTE.test(title);
+    return {
+      sourceId: source.id,
+      type: 'job',
+      externalId: `workable:${slug}:${j.shortcode}`,
+      // The board address names the company, so copies on aggregators join it (core/company.ts).
+      url: `https://apply.workable.com/${slug}/j/${j.shortcode}/`,
+      title,
+      text: text(title, [`Company: ${company}`, location && `Location: ${location}`, j.department && `Department: ${j.department}`, j.employment_type && `Type: ${j.employment_type}`], stripHtml(j.description ?? '').trim()),
+      author: company,
+      city: remote ? 'Онлайн' : j.city?.trim() || undefined,
+      isRemote: remote,
+      publishedAt: j.published_on ?? j.created_at,
+      raw: { ats: 'workable', board: slug },
+    } satisfies RawLead;
+  });
+}
+
+interface RecruiteeOffer {
+  id?: number | string;
+  title?: string;
+  careers_url?: string;
+  company_name?: string;
+  city?: string;
+  country?: string;
+  location?: string;
+  remote?: boolean;
+  published_at?: string;
+  created_at?: string;
+  description?: string;
+  requirements?: string;
+  employment_type_code?: string;
+  salary?: { min?: number | string | null; max?: number | string | null; period?: string | null; currency?: string | null };
+}
+
+function fromRecruitee(source: SourceRecord, slug: string, name: string | undefined, json: string): RawLead[] {
+  const offers = (JSON.parse(json) as { offers?: RecruiteeOffer[] }).offers ?? [];
+  return offers.filter((o) => o.id && o.title?.trim()).map((o) => {
+    const title = o.title!.trim();
+    const company = name ?? o.company_name?.trim() ?? slug;
+    const location = o.location?.trim() || [o.city, o.country].filter(Boolean).join(', ');
+    const remote = o.remote === true || REMOTE.test(location);
+    const s = o.salary;
+    const per = s?.period === 'year' ? 'per year' : s?.period === 'month' ? 'per month' : s?.period === 'hour' ? 'per hour' : undefined;
+    const body = [o.description, o.requirements].map((part) => stripHtml(part ?? '').trim()).filter(Boolean).join('\n\n');
+    return {
+      sourceId: source.id,
+      type: 'job',
+      externalId: `recruitee:${slug}:${o.id}`,
+      // careers_url may be the company's own domain; the Recruitee address names the company.
+      url: `https://${slug}.recruitee.com/o/${String(o.careers_url ?? '').split('/o/')[1] ?? o.id}`,
+      title,
+      text: text(title, [`Company: ${company}`, location && `Location: ${location}`, o.employment_type_code && `Type: ${o.employment_type_code}`], body),
+      author: company,
+      city: remote ? 'Онлайн' : o.city?.trim() || cleanCity(location),
+      isRemote: remote,
+      rawSalary: s && (s.min || s.max) && s.currency && per ? `${s.min ?? ''}–${s.max ?? ''} ${s.currency} ${per}` : undefined,
+      // Recruitee writes «2026-10-30 16:32:58 UTC».
+      publishedAt: (o.published_at ?? o.created_at)?.replace(' UTC', 'Z').replace(' ', 'T'),
+      raw: { ats: 'recruitee', board: slug },
+    } satisfies RawLead;
+  });
+}
+
+interface SmartRecruitersPosting {
+  id?: string;
+  name?: string;
+  releasedDate?: string;
+  company?: { identifier?: string; name?: string };
+  location?: { city?: string; country?: string; remote?: boolean; fullLocation?: string };
+  function?: { label?: string };
+  typeOfEmployment?: { label?: string };
+  experienceLevel?: { label?: string };
+}
+
+/** The listing has no description: the title, function and level are what the post says. */
+function fromSmartRecruiters(source: SourceRecord, slug: string, name: string | undefined, json: string): RawLead[] {
+  const postings = (JSON.parse(json) as { content?: SmartRecruitersPosting[] }).content ?? [];
+  return postings.filter((p) => p.id && p.name?.trim()).map((p) => {
+    const title = p.name!.trim();
+    const company = name ?? p.company?.name?.trim() ?? slug;
+    const location = p.location?.fullLocation?.trim() || [p.location?.city, p.location?.country?.toUpperCase()].filter(Boolean).join(', ');
+    const remote = p.location?.remote === true || REMOTE.test(location);
+    return {
+      sourceId: source.id,
+      type: 'job',
+      externalId: `smartrecruiters:${slug}:${p.id}`,
+      url: `https://jobs.smartrecruiters.com/${encodeURIComponent(p.company?.identifier ?? slug)}/${p.id}`,
+      title,
+      text: text(title, [
+        `Company: ${company}`, location && `Location: ${location}`, p.function?.label && `Function: ${p.function.label}`,
+        p.experienceLevel?.label && `Level: ${p.experienceLevel.label}`, p.typeOfEmployment?.label && `Type: ${p.typeOfEmployment.label}`,
+      ], ''),
+      author: company,
+      city: remote ? 'Онлайн' : p.location?.city?.trim() || undefined,
+      isRemote: remote,
+      publishedAt: p.releasedDate,
+      raw: { ats: 'smartrecruiters', board: slug },
+    } satisfies RawLead;
+  });
+}
+
 const ENDPOINTS: Record<AtsProvider, (slug: string) => string> = {
   greenhouse: (slug) => `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(slug)}/jobs?content=true`,
   lever: (slug) => `https://api.lever.co/v0/postings/${encodeURIComponent(slug)}?mode=json`,
   ashby: (slug) => `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(slug)}?includeCompensation=true`,
+  workable: (slug) => `https://apply.workable.com/api/v1/widget/accounts/${encodeURIComponent(slug)}?details=true`,
+  recruitee: (slug) => `https://${encodeURIComponent(slug)}.recruitee.com/api/offers/`,
+  // Newest first; the listing pages by 100.
+  smartrecruiters: (slug) => `https://api.smartrecruiters.com/v1/companies/${encodeURIComponent(slug)}/postings?limit=100`,
 };
 
 /**
@@ -198,13 +328,16 @@ const PARSERS: Record<AtsProvider, (source: SourceRecord, slug: string, name: st
   greenhouse: fromGreenhouse,
   lever: fromLever,
   ashby: fromAshby,
+  workable: fromWorkable,
+  recruitee: fromRecruitee,
+  smartrecruiters: fromSmartRecruiters,
 };
 
 export const atsSource: SourceAdapter = {
   kind: 'ats',
   access: 'official',
   description:
-    'Карьерные страницы компаний через публичные API систем найма (Greenhouse, Lever, Ashby): компании публикуют их для всех, без ключа.',
+    'Карьерные страницы компаний через публичные API систем найма (Greenhouse, Lever, Ashby, Workable, Recruitee, SmartRecruiters): компании публикуют их для всех, без ключа.',
   defaultPollIntervalSec: 3600, // the company rotation re-reads boards that rarely change
   risks: [
     'Список компаний ведётся вручную: компания, сменившая систему найма, перестаёт отдавать вакансии',

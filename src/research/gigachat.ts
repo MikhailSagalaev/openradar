@@ -39,7 +39,7 @@ export const gigachatFetch: typeof fetch = (input, init) =>
  */
 export class GigachatBusyError extends Error {
   constructor(readonly what: 'token' | 'chat', readonly retryAfterMs: number) {
-    super(`GigaChat ${what}: HTTP 429, retry in ${Math.round(retryAfterMs / 1000)} s`);
+    super(`${what === 'token' ? 'GigaChat token' : 'Model'}: HTTP 429, retry in ${Math.round(retryAfterMs / 1000)} s`);
   }
 }
 

@@ -1,0 +1,3 @@
+{
+  "rewrites": [{ "source": "/:token/openai/v1/:path*", "destination": "/api/relay" }]
+}

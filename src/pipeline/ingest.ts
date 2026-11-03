@@ -5,6 +5,7 @@ import { assessQuality } from '../core/quality.ts';
 import { extractTechSkills } from '../core/text.ts';
 import { emitLeadCreated } from '../core/events.ts';
 import { estimateJaccardFromSketches } from '../core/fingerprint.ts';
+import { companyKeyOf } from '../core/company.ts';
 import { SIMILAR_MIN_WORDS, type SimilarIndex } from './similar.ts';
 import type {
   Classifier,
@@ -51,6 +52,36 @@ function wordCount(text: string): number {
   return text.split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 2).length;
 }
 
+/** A vacancy with the same title at the same company within this window is the same vacancy. */
+export const TITLE_COMPANY_WINDOW_MS = 30 * 24 * 3600 * 1000;
+
+/**
+ * The same vacancy at another address: an aggregator's copy of an ATS page, or the other way
+ * round. Generic titles are open at many companies, so the employer has to agree too.
+ */
+async function findSameVacancy(prepared: { titleKey: string; url?: string; author?: string }, now: Date, deps: IngestDeps): Promise<Lead | null> {
+  const company = companyKeyOf(prepared);
+  if (!company || !deps.store.listRecentByTitleKey) return null;
+  const since = new Date(now.getTime() - TITLE_COMPANY_WINDOW_MS).toISOString();
+  for (const candidate of await deps.store.listRecentByTitleKey(prepared.titleKey, since, 50)) {
+    if (companyKeyOf(candidate) === company) return candidate;
+  }
+  return null;
+}
+
+/** Keeps where else a stored lead was published; a re-read of the same page adds nothing. */
+async function recordSighting(outcome: IngestOutcome, url: string | undefined, source: SourceRecord, deps: IngestDeps): Promise<IngestOutcome> {
+  const lead = outcome.lead;
+  if (!lead || !url || !deps.store.addLeadSighting || url === lead.url) return outcome;
+  const method = (outcome.reasons?.[0] ?? 'duplicate:unknown').replace(/^duplicate:/, '');
+  try {
+    await deps.store.addLeadSighting({ leadId: lead.id, url, sourceId: source.id, method, similarity: 1 });
+  } catch (error) {
+    deps.logger.warn('sighting not saved', { error: error instanceof Error ? error.message : String(error) });
+  }
+  return outcome;
+}
+
 /** Minimum MinHash similarity for two posts sharing a contact to count as one lead. */
 export const CONTACT_MATCH_JACCARD = 0.6;
 
@@ -80,7 +111,7 @@ export async function ingestRawLead(
   const prepared = prepareRawLead(raw, source, now);
 
   const byFingerprint = await deps.store.findLeadByFingerprint(prepared.fingerprint);
-  if (byFingerprint) return duplicateLead(byFingerprint, prepared.fingerprint);
+  if (byFingerprint) return recordSighting(duplicateLead(byFingerprint, prepared.fingerprint), prepared.url, source, deps);
 
   if (prepared.canonicalUrl) {
     const byUrl = await deps.store.findLeadByCanonicalUrl(prepared.canonicalUrl);
@@ -89,16 +120,24 @@ export async function ingestRawLead(
 
   const since = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
   const byTitle = await deps.store.findRecentByTitleKey(prepared.titleKey, prepared.city, since);
-  if (byTitle) return duplicateLead(byTitle, prepared.fingerprint);
+  // «IT Support Engineer» at two named companies is two vacancies, even on the same day.
+  const company = companyKeyOf(prepared);
+  const otherCompany = byTitle ? companyKeyOf(byTitle) : undefined;
+  if (byTitle && !(company && otherCompany && company !== otherCompany)) return recordSighting(duplicateLead(byTitle, prepared.fingerprint), prepared.url, source, deps);
+
+  if (prepared.type === 'job') {
+    const sameVacancy = await findSameVacancy(prepared, now, deps);
+    if (sameVacancy) return recordSighting({ status: 'duplicate', lead: sameVacancy, reasons: ['duplicate:title_company'] }, prepared.url, source, deps);
+  }
 
   // Cross-post by the same author: a shared contact and similar text within 14 days.
   const byContact = await findCrossPost(prepared.contacts, prepared.minhash_sketch, now, deps);
-  if (byContact) return { status: 'duplicate', lead: byContact, reasons: ['duplicate:contact'] };
+  if (byContact) return recordSighting({ status: 'duplicate', lead: byContact, reasons: ['duplicate:contact'] }, prepared.url, source, deps);
 
   if (deps.similar && wordCount(prepared.text) >= SIMILAR_MIN_WORDS) {
     const similarId = await deps.similar.findSimilar(prepared.minhash_sketch, now);
     const similar = similarId ? await deps.store.getLead(similarId) : null;
-    if (similar) return { status: 'duplicate', lead: similar, reasons: ['duplicate:similar'] };
+    if (similar) return recordSighting({ status: 'duplicate', lead: similar, reasons: ['duplicate:similar'] }, prepared.url, source, deps);
   }
 
   // The quality stage runs before the rules: the corrected type picks the pay ladder of the score.
@@ -208,7 +247,7 @@ export async function ingestRawLead(
     return { status: 'rejected', lead, reasons };
   }
 
-  deps.similar?.add(lead.id, lead.minhash_sketch, lead.createdAt);
+  await deps.similar?.add(lead.id, lead.minhash_sketch, lead.createdAt);
   emitLeadCreated(lead);
 
   const registeredSinks = deps.sinks.list().filter((s) => !s.accepts || s.accepts(lead, source)).map((s) => s.kind);

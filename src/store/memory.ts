@@ -25,7 +25,7 @@ import type {
   UserSourceInput,
   UserSourceRecord,
 } from '../core/store.ts';
-import type { LeadFactsFill, ResearchDailyRow } from '../core/store.ts';
+import type { LeadFactsFill, LeadSighting, ResearchDailyRow } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
 import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
 import { computeSalaryMedians } from '../core/salary-sanity.ts';
@@ -156,6 +156,58 @@ export class MemoryStore implements Store {
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .slice(-limit)
       .map((l) => ({ id: l.id, createdAt: l.createdAt, minhash: l.minhash_sketch! }));
+  }
+
+  async listRecentByTitleKey(titleKey: string, sinceIso: string, limit: number): Promise<Lead[]> {
+    return [...this.leads.values()]
+      .filter((l) => l.titleKey === titleKey && l.createdAt >= sinceIso)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
+  }
+
+  private bands = new Map<string, Map<string, string>>();
+
+  async saveLeadBands(leadId: string, bands: string[], createdAt: string): Promise<void> {
+    for (const band of bands) {
+      const ids = this.bands.get(band) ?? new Map<string, string>();
+      ids.set(leadId, createdAt);
+      this.bands.set(band, ids);
+    }
+  }
+
+  async findBandCandidates(bands: string[], sinceIso: string, limit: number): Promise<Array<{ id: string; minhash: string }>> {
+    const ids = new Set<string>();
+    for (const band of bands) for (const [id, at] of this.bands.get(band) ?? []) if (at >= sinceIso) ids.add(id);
+    return [...ids].slice(0, limit).flatMap((id) => {
+      const minhash = this.leads.get(id)?.minhash_sketch;
+      return minhash ? [{ id, minhash }] : [];
+    });
+  }
+
+  async pruneLeadBands(beforeIso: string): Promise<number> {
+    let removed = 0;
+    for (const [band, ids] of this.bands) {
+      for (const [id, at] of ids) if (at < beforeIso) { ids.delete(id); removed++; }
+      if (!ids.size) this.bands.delete(band);
+    }
+    return removed;
+  }
+
+  async hasLeadBands(): Promise<boolean> {
+    return this.bands.size > 0;
+  }
+
+  private sightings = new Map<string, LeadSighting[]>();
+
+  async addLeadSighting(sighting: LeadSighting): Promise<void> {
+    const list = this.sightings.get(sighting.leadId) ?? [];
+    if (list.some((s) => s.url === sighting.url)) return;
+    list.push({ ...sighting, seenAt: sighting.seenAt ?? new Date().toISOString() });
+    this.sightings.set(sighting.leadId, list);
+  }
+
+  async listLeadSightings(leadId: string): Promise<LeadSighting[]> {
+    return [...(this.sightings.get(leadId) ?? [])];
   }
 
   async findRecentByContacts(contacts: Contact[], sinceIso: string, limit = 20): Promise<Lead[]> {
@@ -317,15 +369,17 @@ export class MemoryStore implements Store {
     }
   }
 
-  async listLeadsForResearch(options: { from: string; to: string; limit: number }): Promise<Lead[]> {
+  async listLeadsForResearch(options: { from: string; to: string; limit: number; before?: { createdAt: string; id: string } }): Promise<Lead[]> {
+    const before = options.before;
     return Array.from(this.leads.values())
       .filter((l) => {
         const at = l.publishedAt ?? l.createdAt;
         return at >= options.from && at < options.to
           && l.state !== 'hidden_junk' && l.state !== 'hidden_scam'
-          && l.status !== 'rejected' && l.status !== 'failed';
+          && l.status !== 'rejected' && l.status !== 'failed'
+          && (!before || l.createdAt < before.createdAt || (l.createdAt === before.createdAt && l.id < before.id));
       })
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
       .slice(0, options.limit)
       .map((l) => ({ ...l, text: l.text.slice(0, 3000) }));
   }

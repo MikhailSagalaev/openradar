@@ -16,7 +16,7 @@ pnpm typecheck
 pnpm test
 ```
 
-Node.js 22.19+ and pnpm 11+. Tests use an in-memory store and never call the network; adapters are tested against saved fixtures. `RADAR_TEST_STORE=postgres DATABASE_URL=... pnpm test` runs the same suite on PostgreSQL.
+Node.js 22.19+ (CI runs 26 LTS) and pnpm 12+. Tests use an in-memory store and never call the network; adapters are tested against saved fixtures. `RADAR_TEST_STORE=postgres DATABASE_URL=... pnpm test` runs the same suite on PostgreSQL.
 
 ### Adding a source
 

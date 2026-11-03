@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.43.0
+
+- **PostgreSQL 18.** `docker-compose.yml` runs `pgvector/pgvector:pg18-trixie` on a new volume `radar_pgdata18`. `deploy-server.sh` moves the data over with `scripts/pg-upgrade.sh`: a dump of the running 17, a restore into 18, and the old volume `radar_pgdata` left untouched for a rollback. **Without deploy-server.sh, run once before `docker compose up`:** `bash scripts/pg-upgrade.sh` (while the old `radar_postgres` is still running). See docs/BACKUP_AND_RESTORE.md.
+- **Node 26 LTS** in the image (`node:26-trixie-slim`) and in CI; pnpm 12.16.1; hono 4.13.16, @hono/node-server 2.1.6, imapflow 2.10.0, mailparser 3.14.1, pg 8.23.1, vitest 5.1.0. GitHub Actions: checkout v7, setup-node v7, docker/login-action v4.
+- Duplicates across boards. A vacancy with the same title at the same company within 30 days is one vacancy: an aggregator's copy (Himalayas, Working Nomads) joins the company's ATS page. The employer comes from the address on boards that name it (Himalayas, Greenhouse, Ashby, Lever, Workable, Recruitee, SmartRecruiters) or from the author. The one-day title rule no longer merges the same title at two named companies («IT Support Engineer» at ElevenLabs and at Socure).
+- Copies are kept, not dropped: migration 027 adds `lead_sightings`, the lead page shows «Также опубликовано» with the other boards, and `/v2/leads/:id` returns `sightings`. The never-written `lead_duplicates` table is dropped.
+- The near-duplicate index (MinHash LSH, 16 bands) lives in Postgres (`lead_minhash_bands`, migration 027) instead of the process: every worker sees one index and a restart loses nothing. The first lookup after the upgrade fills it with the last seven days; bands older than seven days are pruned hourly.
+- Research reads posts a page of 2 000 at a time instead of the whole period at once, so the live report no longer holds a month of full texts in memory (the hub's peak was 743 MB); the ceiling of 200 000 posts per report is now 500 000.
+- Memory ceilings in `docker-compose.yml`: `mem_limit` 2 GB for the app (`RADAR_MEM_LIMIT`), heap 1.5 GB (`RADAR_NODE_OPTIONS`), 1 GB for Postgres (`RADAR_PG_MEM_LIMIT`).
+- Model extraction from any OpenAI-compatible provider pauses the batch on HTTP 429 and honours `Retry-After`, as GigaChat did: Groq's free plan counts requests per day and tokens per minute. Groq refuses Russian addresses, so `deploy/model-relay` is a small Vercel relay for it (docs/LOCAL_LLM.md).
+- Sources: Workable and Recruitee career boards in the ATS adapter (with SmartRecruiters, which has no preset: its API disallows robots), the Working Nomads API adapter, and presets for GeekJob, Landing.jobs, Python.org jobs, Golang Projects, LaraJobs, Ruby on Rails Jobs, Elixir Jobs, Hacker News jobs, Dribbble jobs, Cryptocurrency Jobs and Real Work From Anywhere. Every new address was checked against its robots.txt; hh.kz, rabota.by, hh.uz and zarplata.ru were left out, since they disallow every address with a query, as hh.ru does.
+- The sitemap source's memory of read pages stops at 20 000 per source.
+
 ## 0.42.2
 
 - Salaries: a comma or a space joins digits only as a thousands separator before exactly three digits. 0.42.1 read «Команда 5, 120 000 ₽» as 5 120 000 ₽ and dropped the pay in «Требования: 2026, 150 000 руб»; «$259,300 - $350,800» still reads right.

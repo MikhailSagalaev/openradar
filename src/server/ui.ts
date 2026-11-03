@@ -13,6 +13,7 @@ import { feedQuery, type SubscriptionRecord } from '../core/subscriptions.ts';
 import type { SourceRobots } from '../pipeline/robots-audit.ts';
 import { salaryLooksWrong } from '../core/salary-sanity.ts';
 import type { SourcePreset } from '../sources/presets.ts';
+import { ATS_LABELS, ATS_PROVIDERS } from '../sources/ats.ts';
 
 export interface AuthDisplay {
   /** GitHub handle when the session belongs to a registered user. */
@@ -88,6 +89,8 @@ export interface LeadPageData {
   similar?: Lead[];
   /** Older than the feed keeps leads of its type. */
   expired?: boolean;
+  /** Other addresses where the same post was seen (migration 027). */
+  sightings?: Array<{ url: string }>;
 }
 
 export interface SourceFormValues {
@@ -117,7 +120,7 @@ export interface SourceFormValues {
   area: string;
   /** Remotive category. */
   remotiveCategory: string;
-  /** ATS: greenhouse, lever or ashby. */
+  /** ATS: one of ATS_PROVIDERS (sources/ats.ts). */
   provider: string;
   /** ATS: company slugs, "slug" or "slug=Name". */
   companies: string;
@@ -176,6 +179,7 @@ const KIND_LABELS: Record<string, string> = {
   hh: 'HeadHunter',
   remoteok: 'RemoteOK',
   remotive: 'Remotive',
+  workingnomads: 'Working Nomads',
   arbeitnow: 'Arbeitnow',
   hn: 'Hacker News — Who is hiring',
   ats: 'Карьерные страницы компаний',
@@ -198,6 +202,7 @@ export const KIND_ACCESS: Record<string, AccessKind> = {
   hh: 'official',
   remoteok: 'official',
   remotive: 'official',
+  workingnomads: 'official',
   arbeitnow: 'official',
   hn: 'official',
   ats: 'official',
@@ -254,14 +259,15 @@ const KIND_HINTS: Record<string, string> = {
   trudvsem: 'Открытый API портала «Работа России»',
   remoteok: 'Удалённые вакансии RemoteOK',
   remotive: 'Удалённые вакансии Remotive',
+  workingnomads: 'Удалённые вакансии Working Nomads',
   arbeitnow: 'Вакансии Германии и ЕС',
   hn: 'Ежемесячный тред «Who is hiring?»',
-  ats: 'Компании на Greenhouse, Lever или Ashby',
+  ats: 'Компании на Greenhouse, Lever, Ashby, Workable, Recruitee или SmartRecruiters',
   sitemap: 'Страницы вакансий с разметкой JobPosting',
 };
 const KIND_GROUPS: Array<{ title: string; kinds: string[] }> = [
   { title: 'Ленты и каналы', kinds: ['rss', 'telegram', 'telegram-account', 'imap', 'webhook'] },
-  { title: 'Биржи и сайты вакансий', kinds: ['kwork', 'hh', 'trudvsem', 'remoteok', 'remotive', 'arbeitnow', 'hn'] },
+  { title: 'Биржи и сайты вакансий', kinds: ['kwork', 'hh', 'trudvsem', 'remoteok', 'remotive', 'workingnomads', 'arbeitnow', 'hn'] },
   { title: 'Сайты компаний', kinds: ['ats', 'sitemap'] },
 ];
 
@@ -3085,6 +3091,20 @@ function safeHttpUrl(url: string | undefined): string | undefined {
   return undefined;
 }
 
+/** One link per board, by host: «hh.ru, career.habr.com». */
+function alsoPublished(sightings: Array<{ url: string }> | undefined, label: string): string {
+  const byHost = new Map<string, string>();
+  for (const s of sightings ?? []) {
+    const url = safeHttpUrl(s.url);
+    if (!url) continue;
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    if (!byHost.has(host)) byHost.set(host, url);
+  }
+  if (!byHost.size) return '';
+  const links = [...byHost].slice(0, 8).map(([host, url]) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer nofollow">${escapeHtml(host)}</a>`);
+  return `<div><dt>${escapeHtml(label)}</dt><dd>${links.join(', ')}</dd></div>`;
+}
+
 export function renderLeadPage(data: LeadPageData): string {
   const { lead, source, version, auth, lang = 'ru' } = data;
   const t = getTranslations(lang);
@@ -3237,6 +3257,7 @@ ${cautionBanner}
       <div><dt>${escapeHtml(t.published)}</dt><dd>${formatDate(lead.publishedAt, lang)}</dd></div>
       ${Math.abs(Date.parse(lead.createdAt) - Date.parse(lead.publishedAt ?? lead.createdAt)) > 30 * 60_000 ? `<div><dt>${escapeHtml(t.added)}</dt><dd>${formatDate(lead.createdAt, lang)}</dd></div>` : ''}
       ${lead.author ? `<div><dt>${escapeHtml(t.author)}</dt><dd>${escapeHtml(lead.author)}</dd></div>` : ''}
+      ${alsoPublished(data.sightings, t.alsoPublished)}
       ${lead.sourceRef ? `<div><dt>${escapeHtml(t.channel)}</dt><dd>${escapeHtml(lead.sourceRef.channelTitle || lead.sourceRef.channel)}${lead.sourceRef.visibility !== 'public' ? ` (${escapeHtml(t.privateChannel)})` : ''}</dd></div>` : ''}
       ${data.contactsHidden
         ? `<div><dt>${escapeHtml(t.contacts)}</dt><dd><a href="/login" onclick="openLoginModal();return false;" class="contacts-hidden-link">${escapeHtml(t.contactsHidden)}</a></dd></div>`
@@ -3714,7 +3735,7 @@ ${error ? `<div class="error-box" style="margin-bottom:16px">${escapeHtml(error)
   <div data-kind="ats">
     <label class="field">Система найма
       <select name="provider">
-        ${['greenhouse', 'lever', 'ashby'].map((provider) => `<option value="${provider}"${values.provider === provider ? ' selected' : ''}>${provider[0]!.toUpperCase()}${provider.slice(1)}</option>`).join('')}
+        ${ATS_PROVIDERS.map((provider) => `<option value="${provider}"${values.provider === provider ? ' selected' : ''}>${ATS_LABELS[provider]}</option>`).join('')}
       </select>
     </label>
     ${textField('companies', 'Компании', values.companies, 'gitlab=GitLab, cloudflare=Cloudflare', 'text', 'Через запятую: имя компании в адресе её доски (boards.greenhouse.io/gitlab → gitlab), после «=» — название для ленты. За опрос читается несколько компаний по кругу.')}

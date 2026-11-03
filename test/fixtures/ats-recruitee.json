@@ -1,0 +1,46 @@
+{
+ "offers": [
+  {
+   "id": 2804401,
+   "title": "AML Manager, Austria",
+   "careers_url": "https://careers.bunq.com/o/aml-manager-austria",
+   "company_name": "bunq",
+   "city": "Vienna",
+   "country": "Austria",
+   "location": "Vienna, Wien, Austria",
+   "remote": false,
+   "published_at": "2026-10-30 16:32:58 UTC",
+   "created_at": "2026-10-30 15:29:49 UTC",
+   "description": "<p>At bunq, we’re more than a bank. We’re on a mission to make banking work for people wherever they live in Europe. With local IBANs, our users can pay rent, sign up for the gym and get paid like a local from day one. Every successful transaction is a step toward making them feel at home and letting us truly “Make Life Easy.”</p><p>Austria is next, and we need someone on the ground to make it happen. As our AML Manager Austria, you’ll be bunq’s accountable local owner of compliance in Austria. You’ll help bring bunq into the market through the EU passporting process, then run AML operations, ",
+   "requirements": "<ul><li><p>You live in Austria and are fluent in German and English</p></li><li><p>Deep, hands-on knowledge of the Austrian AML/CFT framework and FMA requirements, ideally from 7+ years in AML, fraud, KYC or CDD</p></li><li><p>Experience contributing to a regulatory notification or licensing process",
+   "employment_type_code": "fulltime_permanent",
+   "salary": {
+    "max": null,
+    "min": null,
+    "period": null,
+    "currency": null
+   }
+  },
+  {
+   "id": 2800490,
+   "title": "Data Scientist Marketing",
+   "careers_url": "https://careers.bunq.com/o/data-scientist-marketing-3",
+   "company_name": "bunq",
+   "city": "Amsterdam",
+   "country": "Netherlands",
+   "location": "Amsterdam, Noord-Holland, Netherlands",
+   "remote": false,
+   "published_at": "2026-10-28 13:21:58 UTC",
+   "created_at": "2026-10-28 12:08:13 UTC",
+   "description": "<p style=\"text-align:start;\">At bunq, we’re on a mission to Make Life Easy for our users by creating the most user-centric banking experience out there. Our paid marketing campaigns run on predictions about which new users will turn out to be valuable. This role makes sure those predictions are right.</p><p style=\"text-align:start;\">That’s where you come in. As our&nbsp;<strong>Data Scientist, Marketing</strong>, you’ll own the machine learning models that predict the value of every newly verified user and feed that value into Google Ads, so our campaigns find more users like them. If the mode",
+   "requirements": "<ul><li><p>You’ve built predictive models with traditional machine learning, such as XGBoost.</p></li><li><p>You’ve written Python and built the data pipelines a model needs, including when none existed.</p></li><li><p>You’ve shipped ML models to production and kept them running.</p></li><li><p>You’",
+   "employment_type_code": "fulltime_permanent",
+   "salary": {
+    "max": null,
+    "min": null,
+    "period": null,
+    "currency": null
+   }
+  }
+ ]
+}

@@ -40,6 +40,7 @@ export interface Translations {
   // Lead page
   backToLeads: string;
   openOriginal: string;
+  alsoPublished: string;
   copyText: string;
   copied: string;
   copyFailed: string;
@@ -224,6 +225,7 @@ export const RU: Translations = {
   emptyDesc: 'Попробуйте изменить запрос или проверить другие фильтры.',
   backToLeads: '← Все заказы',
   openOriginal: 'Открыть оригинал ↗',
+  alsoPublished: 'Также опубликовано',
   copyText: 'Копировать текст',
   copied: 'Скопировано',
   copyFailed: 'Не удалось',
@@ -400,6 +402,7 @@ export const EN: Translations = {
   emptyDesc: 'Try adjusting your search query or switching filters.',
   backToLeads: '← All leads',
   openOriginal: 'Open original ↗',
+  alsoPublished: 'Also published at',
   copyText: 'Copy text',
   copied: 'Copied',
   copyFailed: 'Failed',

@@ -99,7 +99,10 @@ RADAR_HOST_PORT=${RADAR_HOST_PORT:-8787}
 echo "Сборка обновленного образа Radar..."
 docker compose build radar
 
-# 5. Проверка работы базы данных
+# 5. Новая major-версия PostgreSQL в docker-compose.yml: данные переносятся дампом на новый том,
+# пока старый сервер ещё запущен; старый том остаётся для отката.
+RADAR_DIR="$TARGET_DIR" bash scripts/pg-upgrade.sh
+
 echo "Проверка и запуск PostgreSQL..."
 docker compose up -d postgres
 

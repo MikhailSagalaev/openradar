@@ -1,14 +1,17 @@
 services:
   postgres:
-    image: pgvector/pgvector:pg17
+    # A new major version takes a new volume: scripts/pg-upgrade.sh moves the data over.
+    image: pgvector/pgvector:pg18-trixie
     container_name: radar_postgres
     restart: unless-stopped
+    mem_limit: ${RADAR_PG_MEM_LIMIT:-1g}
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-radar}
       POSTGRES_USER: ${POSTGRES_USER:-radar}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (openssl rand -hex 24)}
     volumes:
-      - radar_pgdata:/var/lib/postgresql/data
+      # PostgreSQL 18 images keep data under /var/lib/postgresql/18/docker.
+      - radar_pgdata18:/var/lib/postgresql
     ports:
       - "127.0.0.1:5434:5432"
     healthcheck:
@@ -26,6 +29,9 @@ services:
     build: .
     container_name: radar_app
     restart: unless-stopped
+    # A ceiling well above the usual 400–700 MB: the hub may share its server, and a runaway
+    # process must not take the neighbours' memory. The heap stops a little below it.
+    mem_limit: ${RADAR_MEM_LIMIT:-2g}
     depends_on:
       postgres:
         condition: service_healthy
@@ -38,6 +44,7 @@ services:
       - RADAR_MODE=${RADAR_MODE:-node}
       - PORT=8787
       - NODE_ENV=production
+      - NODE_OPTIONS=${RADAR_NODE_OPTIONS:---max-old-space-size=1536}
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
     env_file:
@@ -51,4 +58,6 @@ services:
         max-file: "3"
 
 volumes:
+  # PostgreSQL 17 data of 0.42 and earlier; kept for a rollback, unused by the services.
   radar_pgdata:
+  radar_pgdata18:

@@ -1,5 +1,5 @@
 # Multi-stage unprivileged Dockerfile for Radar
-FROM node:22-bookworm-slim AS build
+FROM node:26-trixie-slim AS build
 WORKDIR /app
 RUN corepack enable
 # Corepack and pnpm download over TLS with Node's defaults; TLS 1.2 keeps the handshake in
@@ -11,7 +11,7 @@ COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
 RUN pnpm build
 
-FROM node:22-bookworm-slim AS runtime
+FROM node:26-trixie-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 ENV RADAR_BIND=0.0.0.0
