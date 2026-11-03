@@ -81,12 +81,15 @@ function extractRemote(posting) {
   if (posting.jobLocationType === 'TELECOMMUTE') return true;
   if (posting.applicantLocationRequirements) return true;
   const combined = `${posting.title || ''} ${posting.description || ''}`.toLowerCase();
+  if (/transition\s+to\s+onsite|on-site|onsite|гибрид|hybrid|no\s+remote|not\s+remote/i.test(combined)) {
+    return false;
+  }
   return combined.includes('удаленн') || combined.includes('remote') || combined.includes('telecommute');
 }
 
 function extractSalary(salary) {
-  if (!salary) return { budget: undefined, salaryMax: undefined, currency: 'RUB' };
-  const currency = typeof salary.currency === 'string' ? salary.currency : 'RUB';
+  if (!salary) return { budget: undefined, salaryMax: undefined, currency: undefined };
+  const currency = typeof salary.currency === 'string' && salary.currency.trim() ? salary.currency.trim().toUpperCase() : undefined;
   const val = salary.value;
   if (typeof val === 'number') {
     return { budget: val, salaryMax: val, currency };

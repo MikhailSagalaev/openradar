@@ -3,7 +3,7 @@ import { computeMinHashSketch, fingerprintOf, sha256, titleKeyOf } from './finge
 import { extractContacts, mergeContacts, normalizeContact } from './contacts.ts';
 import { postKeyOf } from './observation.ts';
 import type { Contact } from './types.ts';
-import { normalizeSalary } from './salary.ts';
+import { detectCurrency, normalizeSalary } from './salary.ts';
 import { cleanShortField, normalizeForMatch, toPlainText, truncate } from './text.ts';
 import type { LeadType, RawLead, SourceRecord } from './types.ts';
 import { canonicalizeUrl, isHttpUrl } from './url.ts';
@@ -23,7 +23,7 @@ const MAX_TEXT_LENGTH = 20_000;
 const JOB_HINT = /ваканс|vacanc|career|hiring|в\s+штат|оклад|трудоустр|соискател/i;
 
 /** Boards that publish only vacancies: a post from them is a job whatever its title says. */
-const JOB_BOARD_URL = /^https?:\/\/(?:www\.)?(?:jobicy\.com|weworkremotely\.com|remoteok\.com|remotive\.com|arbeitnow\.com|himalayas\.app|getmatch\.ru|hh\.ru\/vacancy|career\.habr\.com\/vacancies|trudvsem\.ru|boards\.greenhouse\.io|jobs\.lever\.co|jobs\.ashbyhq\.com)\b/i;
+const JOB_BOARD_URL = /^https?:\/\/(?:www\.)?(?:jobicy\.com|weworkremotely\.com|remoteok\.com|remotive\.com|arbeitnow\.com|himalayas\.app|getmatch\.ru|hh\.ru\/vacancy|career\.habr\.com\/vacancies|trudvsem\.ru|boards\.greenhouse\.io|jobs\.lever\.co|jobs\.ashbyhq\.com|jobs\.gem\.com)\b/i;
 const JOB_PATH_RE = /\/(?:jobs?|vacanc(?:y|ies)|careers?|positions?)\b/i;
 
 function detectLeadType(raw: RawLead, title: string, url?: string): LeadType {
@@ -59,7 +59,13 @@ export function prepareRawLead(
       : undefined;
   const extractedMoney = extractBudgetAndCurrency(`${raw.title || ''}\n${normalizedText}`);
   const budget = explicitBudget ?? extractedMoney.budget;
-  const currency = cleanShortField(raw.currency, 8) || extractedMoney.currency;
+  const detected = detectCurrency(`${raw.title || ''}\n${normalizedText}`);
+  let currency = cleanShortField(raw.currency, 8);
+  if (!currency || (!explicitBudget && extractedMoney.currency)) {
+    currency = extractedMoney.currency || detected || 'RUB';
+  } else if (currency === 'RUB' && detected !== 'RUB' && (extractedMoney.currency === detected || !explicitBudget)) {
+    currency = detected;
+  }
 
   const explicitCity = cleanShortField(raw.city, 100);
   const extractedCity = extractCity(`${title}\n${normalizedText}`);
