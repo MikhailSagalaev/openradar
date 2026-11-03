@@ -9,7 +9,7 @@ import { auditSourceRobotsIfDue } from './robots-audit.ts';
 import { checkLeadsLiveness } from './liveness.ts';
 import { recomputeRatings } from '../hub/rating.ts';
 import { parseModerators } from '../hub/service.ts';
-import { ensureMonthlySnapshot } from '../research/service.ts';
+import { ensureMonthlySnapshot, liveReport } from '../research/service.ts';
 import { ensureDailyCounts } from '../research/index.ts';
 import { extractionEnabled, runModelExtraction } from '../research/model.ts';
 import type { UserTelegramRound } from './user-telegram.ts';
@@ -98,6 +98,10 @@ export class PollRunner {
       await this.runLivenessIfDue();
       this.runExtractionIfDue();
       this.runUserTelegramIfDue();
+      // Keeps the live research report built, so no visitor waits the seconds it takes.
+      void liveReport(this.deps.store, new Date(), { useModel: this.deps.env.RADAR_EXTRACT_APPLY }).catch((error: unknown) => {
+        this.logger.warn('research report build failed', { error: error instanceof Error ? error.message : String(error) });
+      });
 
       if (this.deliverSubscriptions) {
         try {
