@@ -82,8 +82,18 @@ export function estimateMarket(query: MarketQuery, leads: Lead[]): MarketEstimat
 
   const priced = leads
     .filter((lead) => (lead.type ?? 'gig') === query.type)
-    .map((lead) => ({ lead, usd: budgetUsd(lead) }))
-    .filter((item): item is { lead: Lead; usd: number } => typeof item.usd === 'number' && item.usd > 0);
+    .map((lead) => {
+      let usd = budgetUsd(lead);
+      if (usd !== undefined && query.type === 'job' && lead.paymentPeriod === 'hourly' && usd <= 300) {
+        usd = Math.round(usd * 168);
+      }
+      return { lead, usd };
+    })
+    .filter((item): item is { lead: Lead; usd: number } => {
+      if (typeof item.usd !== 'number' || !Number.isFinite(item.usd) || item.usd <= 0) return false;
+      if (query.type === 'job' && item.usd < 100) return false;
+      return true;
+    });
 
   const scored = priced.map((item) => {
     const other = titleTokens(item.lead.title);

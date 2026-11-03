@@ -39,6 +39,8 @@ describe('salary & currency normalization', () => {
   it('parses salary ranges', () => {
     expect(parseSalaryRange('от 150 000 до 250 000 руб.')).toEqual({ min: 150000, max: 250000 });
     expect(parseSalaryRange('3000 - 5000 USD')).toEqual({ min: 3000, max: 5000 });
+    expect(parseSalaryRange('$259,300 - $350,800 USD')).toEqual({ min: 259300, max: 350800 });
+    expect(parseSalaryRange('$350,800')).toEqual({ min: 350800, max: 350800 });
     expect(parseSalaryRange('от 200 000 руб')).toEqual({ min: 200000 });
   });
 
@@ -65,6 +67,11 @@ describe('salary & currency normalization', () => {
 
   it('reads yearly pay of international boards as a monthly figure', () => {
     expect(normalizeSalary({ rawSalary: '$120,000 - $180,000', type: 'job' }).normalizedUsdMax).toBe(15000);
+    expect(normalizeSalary({ rawSalary: '$259,300 - $350,800 USD', type: 'job' })).toMatchObject({
+      currency: 'USD',
+      normalizedUsdMin: 21608,
+      normalizedUsdMax: 29233,
+    });
     expect(normalizeSalary({ budget: 90000, currency: 'USD', text: 'Salary: 90000 USD per year', type: 'job' }).normalizedUsdMax).toBe(7500);
     // A gig budget is a total, never a yearly salary.
     expect(normalizeSalary({ budget: 30000, currency: 'USD', type: 'gig' }).normalizedUsdMax).toBe(30000);
@@ -82,6 +89,8 @@ describe('anchored salary extraction from free text', () => {
     expect(extractAnchoredSalary('Бюджет проекта 80 000 ₽')).toEqual({ min: 80000, max: 80000 });
     expect(extractAnchoredSalary('от 200 000 руб. в месяц')).toEqual({ min: 200000, max: 200000 });
     expect(extractAnchoredSalary('Rate is $3000 - $5000 per month')).toEqual({ min: 3000, max: 5000 });
+    expect(extractAnchoredSalary('Compensation: $259,300 - $350,800 USD')).toEqual({ min: 259300, max: 350800 });
+    expect(extractAnchoredSalary('Annual base $350,800')).toEqual({ min: 350800, max: 350800 });
     expect(extractAnchoredSalary('Ставка 2500 ₸/час')).toEqual({ min: 2500, max: 2500 });
   });
 

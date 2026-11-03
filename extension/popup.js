@@ -445,12 +445,16 @@ async function estimateMarket() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const e = await res.json();
     const nodes = [];
-    if (!e.rub || e.basis === 'none') {
+    if ((!e.rub && !e.usd) || e.basis === 'none') {
       nodes.push(marketLine('market-note', t('tooFewBudgets')));
     } else {
+      const pageCur = page?.jobPosting?.currency;
+      const isUsd = pageCur === 'USD' || (e.usd && !pageCur && !title.match(/[а-яё]/i));
+      const range = (isUsd && e.usd) ? e.usd : (e.rub || e.usd);
+      const curCode = (isUsd && e.usd) ? 'USD' : 'RUB';
       const per = e.period === 'month' ? t('perMonth') : t('perProject');
-      nodes.push(marketLine('market-median', `≈ ${formatMoney(e.rub.median, 'RUB')}${per}`));
-      nodes.push(marketLine('market-range', t('middleHalf', [formatMoney(e.rub.p25, 'RUB'), formatMoney(e.rub.p75, 'RUB')])));
+      nodes.push(marketLine('market-median', `≈ ${formatMoney(range.median, curCode)}${per}`));
+      nodes.push(marketLine('market-range', t('middleHalf', [formatMoney(range.p25, curCode), formatMoney(range.p75, curCode)])));
       const what = e.type === 'job' ? t('ofJobs') : t('ofGigs');
       const basis = e.basis === 'type'
         ? t('basisType', [what, String(e.count)])

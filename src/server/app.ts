@@ -2381,7 +2381,7 @@ export function createApp(runtime: Runtime): Hono {
       category: asString(body.category),
       city: asString(body.city),
       budget: asNumber(body.budget),
-      currency: asString(body.currency) ?? 'RUB',
+      currency: asString(body.currency),
       skills: Array.isArray(body.skills)
         ? (body.skills as string[]).map((s) => String(s).trim()).filter(Boolean)
         : typeof body.skills === 'string'

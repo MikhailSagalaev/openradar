@@ -34,4 +34,19 @@ describe('market estimate', () => {
   it('reports no estimate with too few priced leads', () => {
     expect(estimateMarket({ title: 'Дизайнер', type: 'job' }, leads)).toMatchObject({ basis: 'none', count: 0 });
   });
+
+  it('filters out corrupt sub-100 USD job salaries from market estimation', () => {
+    const directorLeads = [
+      lead('d1', 'Director, Revenue Operations', 14000, 'job'),
+      lead('d2', 'Sr. Director, Revenue Operations', 20000, 'job'),
+      lead('d3', 'Revenue Operations Lead', 22000, 'job'),
+      lead('bad1', 'Director, Revenue Operations', 3, 'job'), // corrupt parsed amount
+      lead('bad2', 'Director, Revenue Operations', 21, 'job'), // corrupt parsed amount
+    ];
+    const est = estimateMarket({ title: 'Director, Revenue Operations', type: 'job' }, directorLeads);
+    expect(est.basis).toBe('similar');
+    expect(est.count).toBe(3);
+    expect(est.usd?.median).toBe(20000);
+    expect(est.usd?.p25).toBeGreaterThanOrEqual(14000);
+  });
 });

@@ -48,7 +48,27 @@ describe('prepareRawLead', () => {
       source,
       TEST_NOW,
     );
+    expect(prepared.contacts.length).toBeGreaterThanOrEqual(1);
     expect(prepared.text).toContain('ivanov@example.com');
     expect(prepared.text).toContain('+7 999 123-45-67');
+  });
+
+  it('correctly attributes USD currency for international posts even if raw.currency defaults to RUB', () => {
+    const groqJob = prepareRawLead(
+      {
+        sourceId: source.id,
+        title: 'Director, Revenue Operations',
+        text: 'Groq is hiring. Compensation: $259,300 - $350,800 USD per year. Location: San Francisco Bay Area.',
+        url: 'https://jobs.gem.com/groq/am9icG9zdDrP39BVN-uB851o61lWhY_o',
+        currency: 'RUB', // default sent by client
+      },
+      source,
+      TEST_NOW,
+    );
+    expect(groqJob.type).toBe('job');
+    expect(groqJob.currency).toBe('USD');
+    expect(groqJob.budget).toBe(350800);
+    expect(groqJob.normalizedUsdMin).toBe(21608);
+    expect(groqJob.normalizedUsdMax).toBe(29233);
   });
 });

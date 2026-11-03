@@ -184,21 +184,23 @@ export function parseSalaryRange(text: string): { min?: number; max?: number } {
     if (!Number.isNaN(max)) return { max };
   }
 
-  // Single number with currency sign or marker
-  const singleMatch = clean.match(/(\d[\d\s.,]*\d|\d+)\s*(?:₽|руб|usd|\$|eur|€|kzt|byn|uah|pln|zł|gbp|£|chf|cad|aud)(?![a-z])/i);
+  // Single number with currency sign or marker or standalone amount in salary field
+  const singleMatch = clean.match(/(\d[\d\s.,]*\d|\d+)/);
   if (singleMatch && singleMatch[1]) {
     const val = parseFloat(singleMatch[1].replace(/[\s,]+/g, ''));
-    if (!Number.isNaN(val)) return { min: val, max: val };
+    if (!Number.isNaN(val) && val >= 100 && val <= 50_000_000) return { min: val, max: val };
   }
 
   return {};
 }
 
 const CURRENCY_UNIT = String.raw`₽|руб(?:лей|ля|ль|\.|,)?|р\.|usd|\$|eur|€|kzt|₸|byn|uah|₴|тенге|грн|pln|zł|gbp|£|chf|cad|aud`;
+const AMOUNT_PATTERN = String.raw`\d[\d\s,]{0,14}`;
 
 function parseAmount(raw: string | undefined): number | undefined {
   if (!raw) return undefined;
-  const value = Number.parseFloat(raw.replace(/[\s,]+/g, ''));
+  const cleaned = raw.trim().replace(/^[,.\s]+|[,.\s]+$/g, '');
+  const value = Number.parseFloat(cleaned.replace(/[\s,]+/g, ''));
   if (!Number.isFinite(value)) return undefined;
   // Filter out years, small counts and absurd numbers
   if (value < 100 || value > 50_000_000) return undefined;
@@ -214,39 +216,39 @@ export function extractAnchoredSalary(text: string): { min?: number; max?: numbe
   const source = normalizeMoneyText(text.replace(/\u00a0/g, ' '));
 
   // "от 150 000 до 250 000 руб", "150 000 - 250 000 руб"
-  const range = new RegExp(`(\\d[\\d ]{0,11})\\s*(?:-|—|–|до)\\s*(\\d[\\d ]{0,11})\\s*(?:${CURRENCY_UNIT})(?![a-z])`, 'i').exec(source);
+  const range = new RegExp(`(${AMOUNT_PATTERN})\\s*(?:-|—|–|до)\\s*(${AMOUNT_PATTERN})\\s*(?:${CURRENCY_UNIT})(?![a-z])`, 'i').exec(source);
   if (range?.[1] && range[2]) {
     const min = parseAmount(range[1]);
     const max = parseAmount(range[2]);
     if (min !== undefined && max !== undefined) return { min, max };
   }
 
-  // "$3000 - $5000"
-  const symbolRange = /[$€₸₴]\s*(\d[\d ]{0,11})\s*(?:-|—|–)\s*[$€₸₴]?\s*(\d[\d ]{0,11})/i.exec(source);
-  if (symbolRange?.[1] && symbolRange[2]) {
-    const min = parseAmount(symbolRange[1]);
-    const max = parseAmount(symbolRange[2]);
+  // "$3000 - $5000", "$259,300 - $350,800"
+  const symbolRange = new RegExp(`([$€₸₴])\\s*(${AMOUNT_PATTERN})\\s*(?:-|—|–)\\s*[$€₸₴]?\\s*(${AMOUNT_PATTERN})`, 'i').exec(source);
+  if (symbolRange?.[2] && symbolRange[3]) {
+    const min = parseAmount(symbolRange[2]);
+    const max = parseAmount(symbolRange[3]);
     if (min !== undefined && max !== undefined) return { min, max };
   }
 
   // Marker word anchors the amount even without a currency unit: "оклад 150 000"
-  const marked = /(?:оклад|зарплат[а-я]*|вилка|ставка)\s*(?:от\s*)?(\d[\d ]{0,11})/i.exec(source);
+  const marked = new RegExp(`(?:оклад|зарплат[а-я]*|вилка|ставка)\\s*(?:от\\s*)?(${AMOUNT_PATTERN})`, 'i').exec(source);
   if (marked?.[1]) {
     const value = parseAmount(marked[1]);
     if (value !== undefined) return { min: value, max: value };
   }
 
-  // Currency unit anchors the amount: "150 000 руб", "от 200 000 руб"
-  const unitAfter = new RegExp(`(\\d[\\d ]{0,11})\\s*(?:${CURRENCY_UNIT})(?![a-z])`, 'i').exec(source);
+  // Currency unit anchors the amount: "150 000 руб", "от 200 000 руб", "350,800 USD"
+  const unitAfter = new RegExp(`(${AMOUNT_PATTERN})\\s*(?:${CURRENCY_UNIT})(?![a-z])`, 'i').exec(source);
   if (unitAfter?.[1]) {
     const value = parseAmount(unitAfter[1]);
     if (value !== undefined) return { min: value, max: value };
   }
 
-  // Symbol before the amount: "$5000", "€3000"
-  const unitBefore = /[$€₸₴]\s*(\d[\d ]{0,11})/i.exec(source);
-  if (unitBefore?.[1]) {
-    const value = parseAmount(unitBefore[1]);
+  // Symbol before the amount: "$5000", "€3000", "$350,800"
+  const unitBefore = new RegExp(`([$€₸₴])\\s*(${AMOUNT_PATTERN})`, 'i').exec(source);
+  if (unitBefore?.[2]) {
+    const value = parseAmount(unitBefore[2]);
     if (value !== undefined) return { min: value, max: value };
   }
 
@@ -280,8 +282,10 @@ export function normalizeSalary(input: {
     // Free text is only mined for salaries anchored to a currency/marker;
     // otherwise "3 - 5 лет опыта" would become a salary range.
     const anchored = extractAnchoredSalary(input.text ?? '');
-    if (anchored.min !== undefined) min = anchored.min;
-    if (anchored.max !== undefined) max = anchored.max;
+    if (anchored.min !== undefined && (input.budget === undefined || (anchored.max !== undefined && anchored.min !== anchored.max))) {
+      min = anchored.min;
+      max = anchored.max ?? anchored.min;
+    }
   }
 
   // Salaries are normalised per month. International boards (Jobicy, RemoteOK) publish
