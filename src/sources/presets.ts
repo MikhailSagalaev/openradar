@@ -104,6 +104,24 @@ export const SOURCE_PRESETS: SourcePreset[] = [
     },
   },
   {
+    id: 'freelancer',
+    kind: 'rss',
+    title: 'Freelancer.com — Все проекты и заказы',
+    description: 'Официальный RSS-фид открытых проектов и задач международной биржи Freelancer.com',
+    config: {
+      url: 'https://www.freelancer.com/rss/all.xml',
+    },
+  },
+  {
+    id: 'nodesk',
+    kind: 'rss',
+    title: 'NoDesk — Remote IT Jobs',
+    description: 'Официальный RSS-фид удалённых вакансий для разработчиков и IT-специалистов',
+    config: {
+      url: 'https://nodesk.co/remote-jobs/index.xml',
+    },
+  },
+  {
     id: 'jobicy',
     kind: 'rss',
     title: 'Jobicy — Все вакансии',
@@ -317,6 +335,8 @@ export const SOURCE_PRESETS: SourcePreset[] = [
         'babbel=Babbel',
         'outschool=Outschool',
         'dune=Dune',
+        'manychat=ManyChat',
+        'dodo=Dodo Brands',
       ],
     },
   },
