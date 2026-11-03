@@ -121,6 +121,9 @@ export interface Report {
     routine: TaskTransformationItem[];
     emerging: TaskTransformationItem[];
     netShiftPct: number;
+    routineMedian?: number;
+    emergingMedian?: number;
+    totalMatched?: number;
   };
   bumpChart?: {
     quarters: BumpSnapshot[];
@@ -164,141 +167,323 @@ export function dist(values: number[]): Dist {
 }
 
 function computeCartaCapital(records: ResearchRecord[]): CartaCapitalRow[] {
+  if (!records.length) return [];
   const groups = new Map<string, { n: number; capital: number }>();
   let totalPosts = 0;
   let totalCapital = 0;
 
   for (const r of records) {
     totalPosts++;
-    const cat = r.ai ? 'AI-агенты, RAG & n8n/Make'
-      : r.role === 'backend' ? 'Backend & Highload (Go/Python)'
-      : r.role === 'frontend' ? 'Frontend & TMA (React/Vue)'
-      : r.role === 'design' ? 'UI/UX & Продуктовый дизайн'
-      : r.role === 'marketing' ? 'Маркетинг и копирайтинг'
-      : roleDef(r.role)?.label ?? 'Другие специализации';
-
-    const cur = groups.get(cat) ?? { n: 0, capital: 0 };
+    const label = roleDef(r.role)?.label ?? OTHER_ROLE.label;
+    const cur = groups.get(label) ?? { n: 0, capital: 0 };
     cur.n++;
     const pay = r.pay ?? 0;
     if (pay > 0) {
       cur.capital += pay;
       totalCapital += pay;
     }
-    groups.set(cat, cur);
+    groups.set(label, cur);
   }
 
-  if (totalPosts === 0) return [];
-  const safeTotalCapital = Math.max(1, totalCapital);
-
-  return Array.from(groups, ([label, g]) => ({
+  const sorted = Array.from(groups, ([label, g]) => ({
     label,
     n: g.n,
-    nShare: Math.round((g.n / totalPosts) * 1000) / 10,
     capitalRub: g.capital,
-    capitalShare: Math.round((g.capital / safeTotalCapital) * 1000) / 10,
-  })).sort((a, b) => b.capitalShare - a.capitalShare || b.n - a.n);
+  })).sort((a, b) => b.capitalRub - a.capitalRub || b.n - a.n);
+
+  let displayed: Array<{ label: string; n: number; capitalRub: number }> = [];
+  if (sorted.length <= 5) {
+    displayed = sorted;
+  } else {
+    displayed = sorted.slice(0, 5);
+    const remainder = sorted.slice(5);
+    const remN = remainder.reduce((s, r) => s + r.n, 0);
+    const remCap = remainder.reduce((s, r) => s + r.capitalRub, 0);
+    displayed.push({
+      label: 'Другие направления',
+      n: remN,
+      capitalRub: remCap,
+    });
+  }
+
+  let sumNShare = 0;
+  let sumCapShare = 0;
+
+  return displayed.map((row, idx) => {
+    const isLast = idx === displayed.length - 1;
+    let nShare: number;
+    let capitalShare: number;
+
+    if (!isLast) {
+      nShare = Math.round((row.n / totalPosts) * 1000) / 10;
+      sumNShare += nShare;
+      capitalShare = totalCapital > 0 ? Math.round((row.capitalRub / totalCapital) * 1000) / 10 : 0;
+      sumCapShare += capitalShare;
+    } else {
+      nShare = Math.round((100.0 - sumNShare) * 10) / 10;
+      capitalShare = totalCapital > 0 ? Math.round((100.0 - sumCapShare) * 10) / 10 : 0;
+    }
+
+    return {
+      label: row.label,
+      n: row.n,
+      nShare,
+      capitalRub: row.capitalRub,
+      capitalShare,
+    };
+  });
 }
 
 function computeTaskTransformation(records: ResearchRecord[]) {
-  const routineCounts = new Map<string, number>();
-  const emergingCounts = new Map<string, { n: number; pays: number[] }>();
+  const routineDefs = [
+    { key: 'copywriting', label: 'Базовый копирайтинг и рерайт текстов', rx: /копирайт|рерайт|статьи|написание текста|контент|writer/i, roles: ['content'] },
+    { key: 'html', label: 'Шаблонная вёрстка и типовые сайты', rx: /верстк|html|css|лендинг|tilda|тильд/i, roles: ['web'] },
+    { key: 'translation', label: 'Типовой перевод документации и статей', rx: /перевод|translat/i, roles: ['translation'] },
+    { key: 'banner', label: 'Типовые баннеры, креативы и карточки', rx: /баннер|карточк|креатив|обложк/i, roles: ['design', 'marketplaces'] },
+  ];
+
+  const emergingDefs = [
+    { key: 'agents', label: 'Интеграция AI-агентов, RAG & n8n/Make', rx: /ai[- ]?агент|rag\b|n8n|make\.com|автоматизаци[яи] llm|langchain|llamaindex/i, roles: ['ai'] },
+    { key: 'vibe', label: 'Рефакторинг кода после AI (Cursor/Lovable)', rx: /cursor|lovable|v0\.dev|вайб[- ]?кодинг|доработать mvp/i, roles: [] },
+    { key: 'lora', label: 'Обучение LoRA и ComfyUI пайплайны', rx: /comfyui|lora|stable diffusion|flux/i, roles: [] },
+    { key: 'tma', label: 'Telegram Mini Apps и AI-боты', rx: /tma\b|mini[- ]?app|telegram-бот|чат-бот/i, roles: ['bots'] },
+  ];
+
+  const routineStats = new Map<string, { n: number; pays: number[] }>();
+  for (const d of routineDefs) routineStats.set(d.key, { n: 0, pays: [] });
+
+  const emergingStats = new Map<string, { n: number; pays: number[] }>();
+  for (const d of emergingDefs) emergingStats.set(d.key, { n: 0, pays: [] });
+
+  const allRoutinePays: number[] = [];
+  const allEmergingPays: number[] = [];
+  let totalMatched = 0;
 
   for (const r of records) {
     const text = `${r.role} ${r.skills.join(' ')}`;
-    const cl = classifyTaskTransformation(text);
-    if (cl.type === 'routine' && cl.label) {
-      routineCounts.set(cl.label, (routineCounts.get(cl.label) ?? 0) + 1);
-    } else if (cl.type === 'emerging' && cl.label) {
-      const cur = emergingCounts.get(cl.label) ?? { n: 0, pays: [] };
-      cur.n++;
-      if (r.pay && r.pay > 0) cur.pays.push(r.pay);
-      emergingCounts.set(cl.label, cur);
+    let matchedEmerging = false;
+
+    for (const d of emergingDefs) {
+      if (d.rx.test(text) || (d.roles.includes(r.role) && (r.ai || d.roles.length > 0))) {
+        const cur = emergingStats.get(d.key)!;
+        cur.n++;
+        if (r.pay && r.pay > 0) {
+          cur.pays.push(r.pay);
+          allEmergingPays.push(r.pay);
+        }
+        matchedEmerging = true;
+        totalMatched++;
+        break;
+      }
+    }
+
+    if (!matchedEmerging) {
+      for (const d of routineDefs) {
+        if (d.rx.test(text) || d.roles.includes(r.role)) {
+          const cur = routineStats.get(d.key)!;
+          cur.n++;
+          if (r.pay && r.pay > 0) {
+            cur.pays.push(r.pay);
+            allRoutinePays.push(r.pay);
+          }
+          totalMatched++;
+          break;
+        }
+      }
     }
   }
 
-  const routine: TaskTransformationItem[] = [
-    { label: 'Базовый копирайтинг и рерайт текстов', n: routineCounts.get('Базовый копирайтинг и рерайт текстов') ?? 340, changePct: -42 },
-    { label: 'Шаблонная вёрстка лендингов и типовых блоков', n: routineCounts.get('Шаблонная вёрстка лендингов и типовых блоков') ?? 410, changePct: -28 },
-    { label: 'Типовой перевод технической документации и статей', n: routineCounts.get('Типовой перевод технической документации и статей') ?? 190, changePct: -35 },
-  ];
+  const routineMed = allRoutinePays.length ? dist(allRoutinePays).median : undefined;
+  const emergingMed = allEmergingPays.length ? dist(allEmergingPays).median : undefined;
 
-  const emerging: TaskTransformationItem[] = [
-    { label: 'Интеграция AI-агентов, RAG & n8n/Make', n: emergingCounts.get('Интеграция AI-агентов, RAG & автоматизация пайплайнов (n8n/Make)')?.n ?? 520, changePct: 310, medianPay: 180000 },
-    { label: 'Рефакторинг и доработка кода после AI-генераторов', n: emergingCounts.get('Рефакторинг и доработка кода после AI-генераторов (Cursor/Lovable)')?.n ?? 380, changePct: 240, medianPay: 95000 },
-    { label: 'Обучение LoRA и генеративные пайплайны ComfyUI', n: emergingCounts.get('Обучение LoRA и генеративные пайплайны ComfyUI')?.n ?? 260, changePct: 180, medianPay: 140000 },
-  ];
+  const allPays = records.filter((r) => r.pay && r.pay > 0).map((r) => r.pay!);
+  const overallMed = allPays.length ? dist(allPays).median : 100000;
+  const baseline = routineMed ?? overallMed ?? 100000;
+
+  const routine: TaskTransformationItem[] = routineDefs.map((d) => {
+    const st = routineStats.get(d.key)!;
+    const med = st.pays.length ? dist(st.pays).median : undefined;
+    const changePct = med && overallMed ? Math.round(((med - overallMed) / overallMed) * 100) : 0;
+    return {
+      label: d.label,
+      n: st.n,
+      changePct,
+      medianPay: med,
+    };
+  });
+
+  const emerging: TaskTransformationItem[] = emergingDefs.map((d) => {
+    const st = emergingStats.get(d.key)!;
+    const med = st.pays.length ? dist(st.pays).median : undefined;
+    const changePct = med && baseline ? Math.round(((med - baseline) / baseline) * 100) : 0;
+    return {
+      label: d.label,
+      n: st.n,
+      changePct: Math.max(0, changePct),
+      medianPay: med,
+    };
+  });
+
+  const netShiftPct = routineMed && emergingMed && routineMed > 0
+    ? Math.round(((emergingMed - routineMed) / routineMed) * 100)
+    : 0;
 
   return {
     routine,
     emerging,
-    netShiftPct: 18.4,
+    netShiftPct,
+    routineMedian: routineMed,
+    emergingMedian: emergingMed,
+    totalMatched,
   };
 }
 
-function computeBumpChart(_records: ResearchRecord[]) {
-  const quarters: BumpSnapshot[] = [
-    { period: 'Q1 2025', ranks: [
-      { name: 'TypeScript / React', rank: 1, n: 1200 },
-      { name: 'Python & AI Agents', rank: 2, n: 1100 },
-      { name: 'Golang Backend', rank: 3, n: 850 },
-      { name: 'PHP & 1C / CMS', rank: 4, n: 700 },
-      { name: 'Telegram Mini Apps', rank: 5, n: 420 },
-    ]},
-    { period: 'Q3 2025', ranks: [
-      { name: 'Python & AI Agents', rank: 1, n: 1450 },
-      { name: 'TypeScript / React', rank: 2, n: 1300 },
-      { name: 'Golang Backend', rank: 3, n: 920 },
-      { name: 'Telegram Mini Apps', rank: 4, n: 810 },
-      { name: 'PHP & 1C / CMS', rank: 5, n: 680 },
-    ]},
-    { period: 'Q1 2026', ranks: [
-      { name: 'Python & AI Agents', rank: 1, n: 1890 },
-      { name: 'Telegram Mini Apps', rank: 2, n: 1620 },
-      { name: 'TypeScript / React', rank: 3, n: 1410 },
-      { name: 'Golang Backend', rank: 4, n: 1050 },
-      { name: 'PHP & 1C / CMS', rank: 5, n: 620 },
-    ]},
-    { period: 'Q2 2026 (Live)', ranks: [
-      { name: 'Python & AI Agents', rank: 1, n: 2140 },
-      { name: 'Telegram Mini Apps', rank: 2, n: 1950 },
-      { name: 'TypeScript / React', rank: 3, n: 1530 },
-      { name: 'Golang Backend', rank: 4, n: 1120 },
-      { name: 'PHP & 1C / CMS', rank: 5, n: 590 },
-    ]},
+function computeBumpChart(records: ResearchRecord[]): { quarters: BumpSnapshot[]; months: BumpSnapshot[] } {
+  const overallRoleCounts = new Map<string, number>();
+  for (const r of records) {
+    const slug = r.role;
+    if (slug && slug !== OTHER_ROLE.slug) {
+      overallRoleCounts.set(slug, (overallRoleCounts.get(slug) ?? 0) + 1);
+    }
+  }
+  const topSlugs = [...overallRoleCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map((e) => e[0]);
+
+  const fallbackSlugs = ['backend', 'frontend', 'ai', 'design', 'qa'];
+  for (const s of fallbackSlugs) {
+    if (topSlugs.length < 5 && !topSlugs.includes(s)) {
+      topSlugs.push(s);
+    }
+  }
+
+  // --- Mode 1: Weekly intervals ---
+  const weeksMap = new Map<string, ResearchRecord[]>();
+  for (const r of records) {
+    const w = mondayOf(r.date);
+    const list = weeksMap.get(w) ?? [];
+    list.push(r);
+    weeksMap.set(w, list);
+  }
+  const sortedWeeks = [...weeksMap.keys()].sort();
+
+  let weeklyPeriods: Array<{ label: string; records: ResearchRecord[] }> = [];
+  if (sortedWeeks.length >= 4) {
+    const chosen = sortedWeeks.slice(-4);
+    weeklyPeriods = chosen.map((w, idx) => {
+      const isLast = idx === chosen.length - 1;
+      return {
+        label: `${w.slice(8, 10)}.${w.slice(5, 7)}${isLast ? ' (Live)' : ''}`,
+        records: weeksMap.get(w) ?? [],
+      };
+    });
+  } else {
+    const sortedRecords = [...records].sort((a, b) => a.date.localeCompare(b.date));
+    const n = sortedRecords.length;
+    if (n === 0) {
+      weeklyPeriods = [
+        { label: 'Неделя 1', records: [] },
+        { label: 'Неделя 2', records: [] },
+        { label: 'Неделя 3', records: [] },
+        { label: 'Неделя 4 (Live)', records: [] },
+      ];
+    } else {
+      const bounds = [0, Math.floor(n / 4), Math.floor(n / 2), Math.floor((3 * n) / 4), n];
+      weeklyPeriods = [0, 1, 2, 3].map((i) => {
+        const slice = sortedRecords.slice(bounds[i], bounds[i + 1]);
+        const d1 = slice[0]?.date.slice(5) ?? '';
+        const d2 = slice[slice.length - 1]?.date.slice(5) ?? '';
+        const isLast = i === 3;
+        const label = d1 && d2 && d1 !== d2 ? `${d1}–${d2}${isLast ? ' (Live)' : ''}` : `Неделя ${i + 1}${isLast ? ' (Live)' : ''}`;
+        return { label, records: slice };
+      });
+    }
+  }
+
+  const quarters: BumpSnapshot[] = weeklyPeriods.map((p) => {
+    const counts = topSlugs.map((slug) => ({
+      slug,
+      name: roleDef(slug)?.label ?? slug,
+      n: p.records.filter((r) => r.role === slug).length,
+      overallN: overallRoleCounts.get(slug) ?? 0,
+    }));
+    counts.sort((a, b) => b.n - a.n || b.overallN - a.overallN || a.slug.localeCompare(b.slug));
+    return {
+      period: p.label,
+      ranks: counts.map((item, idx) => ({
+        name: item.name,
+        rank: idx + 1,
+        n: item.n,
+      })),
+    };
+  });
+
+  // --- Mode 2: Market day-of-week rhythm ---
+  const dayGroups: [string, (day: number) => boolean][] = [
+    ['Пн (Старт)', (day) => day === 1],
+    ['Вт–Ср (Пик)', (day) => day === 2 || day === 3],
+    ['Чт–Пт (Спад)', (day) => day === 4 || day === 5],
+    ['Сб–Вс (Уикенд)', (day) => day === 6 || day === 0],
   ];
 
-  const months: BumpSnapshot[] = [
-    { period: 'Ноя 25', ranks: [
-      { name: 'Python & AI Agents', rank: 1, n: 620 },
-      { name: 'TypeScript / React', rank: 2, n: 510 },
-      { name: 'Telegram Mini Apps', rank: 3, n: 480 },
-      { name: 'Golang Backend', rank: 4, n: 340 },
-      { name: 'PHP & 1C / CMS', rank: 5, n: 210 },
-    ]},
-    { period: 'Янв 26', ranks: [
-      { name: 'Python & AI Agents', rank: 1, n: 690 },
-      { name: 'Telegram Mini Apps', rank: 2, n: 580 },
-      { name: 'TypeScript / React', rank: 3, n: 530 },
-      { name: 'Golang Backend', rank: 4, n: 360 },
-      { name: 'PHP & 1C / CMS', rank: 5, n: 200 },
-    ]},
-    { period: 'Мар 26', ranks: [
-      { name: 'Python & AI Agents', rank: 1, n: 780 },
-      { name: 'Telegram Mini Apps', rank: 2, n: 690 },
-      { name: 'TypeScript / React', rank: 3, n: 540 },
-      { name: 'Golang Backend', rank: 4, n: 390 },
-      { name: 'PHP & 1C / CMS', rank: 5, n: 195 },
-    ]},
-    { period: 'Апр 26 (Live)', ranks: [
-      { name: 'Python & AI Agents', rank: 1, n: 840 },
-      { name: 'Telegram Mini Apps', rank: 2, n: 760 },
-      { name: 'TypeScript / React', rank: 3, n: 560 },
-      { name: 'Golang Backend', rank: 4, n: 410 },
-      { name: 'PHP & 1C / CMS', rank: 5, n: 190 },
-    ]},
-  ];
+  const months: BumpSnapshot[] = dayGroups.map(([label, pred]) => {
+    const groupRecords = records.filter((r) => {
+      const day = new Date(`${r.date}T12:00:00Z`).getUTCDay();
+      return pred(day);
+    });
+    const counts = topSlugs.map((slug) => ({
+      slug,
+      name: roleDef(slug)?.label ?? slug,
+      n: groupRecords.filter((r) => r.role === slug).length,
+      overallN: overallRoleCounts.get(slug) ?? 0,
+    }));
+    counts.sort((a, b) => b.n - a.n || b.overallN - a.overallN || a.slug.localeCompare(b.slug));
+    return {
+      period: label,
+      ranks: counts.map((item, idx) => ({
+        name: item.name,
+        rank: idx + 1,
+        n: item.n,
+      })),
+    };
+  });
 
   return { quarters, months };
+}
+
+function computeEditorialInsight(records: ResearchRecord[], carta: CartaCapitalRow[], period: Report['period']) {
+  if (!carta.length) {
+    return {
+      fact: 'Рынок труда формируется балансом инженерных и продуктовых специализаций.',
+      contrast: 'Распределение капитала зависит от уровня сложности задач.',
+      conclusion: 'Ключевые бюджеты сосредоточены в специализированных направлениях разработки.',
+      quote: `По данным openradar, структура рынка труда отражает концентрацию капитала в ключевых направлениях (${period.phrase}, выборка: ${records.length} публикаций).`,
+    };
+  }
+
+  const topVol = [...carta].sort((a, b) => b.n - a.n)[0]!;
+  const topCap = carta[0]!;
+
+  if (topVol.label === topCap.label) {
+    return {
+      fact: `Направление «${topVol.label}» лидирует по объёму объявлений (${formatShare(topVol.nShare)} от общего потока).`,
+      contrast: `Оно же аккумулирует крупнейшую долю контрактного капитала рынка (${formatShare(topCap.capitalShare)}).`,
+      conclusion: 'Спрос работодателей и денежная масса в текущей выборке максимально согласованы.',
+      quote: `По данным openradar, направление «${topVol.label}» формирует ${formatShare(topVol.nShare)} объявлений и ${formatShare(topCap.capitalShare)} совокупного бюджета (${period.phrase}, выборка: ${records.length} публикаций).`,
+    };
+  }
+
+  const top2 = carta.slice(0, 2);
+  const sumTop2Cap = Math.round(top2.reduce((s, r) => s + r.capitalShare, 0) * 10) / 10;
+  const top2Names = top2.map((r) => r.label).join(' и ');
+
+  return {
+    fact: `Направление «${topVol.label}» лидирует по числу вакансий и заказов (${formatShare(topVol.nShare)} от общего потока).`,
+    contrast: `Однако наибольшую долю контрактного капитала (${formatShare(sumTop2Cap)}) аккумулируют ${top2Names}.`,
+    conclusion: 'Массовый поток задач формирует численный объём, тогда как основная покупательная способность сконцентрирована в инженерных специализациях.',
+    quote: `По данным openradar, более ${formatShare(sumTop2Cap)} совокупного бюджета рынка сосредоточено в направлениях ${top2Names}, несмотря на долю «${topVol.label}» в объёме (${period.phrase}, выборка: ${records.length} публикаций).`,
+  };
 }
 
 function sliceBy(records: ResearchRecord[], key: (r: ResearchRecord) => string | undefined, label: (k: string) => string, paid: (r: ResearchRecord) => boolean, order?: string[]): Slice[] {
@@ -414,6 +599,11 @@ export function buildReport(
     .filter((detail) => detail.pay.median !== undefined)
     .sort((a, b) => b.withPay - a.withPay);
 
+  const cartaCapital = computeCartaCapital(records);
+  const taskTransformation = computeTaskTransformation(records);
+  const bumpChart = computeBumpChart(records);
+  const editorialInsight = computeEditorialInsight(records, cartaCapital, period);
+
   const report: Report = {
     version: REPORT_VERSION,
     kind,
@@ -465,15 +655,10 @@ export function buildReport(
       hourly: dist(gigs.filter((r) => r.payPeriod === 'hour').map((r) => r.pay!)),
     },
     findings: [],
-    cartaCapital: computeCartaCapital(records),
-    taskTransformation: computeTaskTransformation(records),
-    bumpChart: computeBumpChart(records),
-    editorialInsight: {
-      fact: 'Дизайн и базовый копирайтинг формируют свыше 33% всех объявлений на фрилансе.',
-      contrast: 'Однако более 54% всей совокупной денежной массы аккумулируют AI-агенты и распределенный бэкенд.',
-      conclusion: 'Мелкие типовые задачи создают видимость потока, тогда как реальная покупательная способность сконцентрирована в комплексных проектах.',
-      quote: `По данным openradar, более 54% контрактного капитала сосредоточено в AI-агентах и распределенном бэкенде, несмотря на преобладание дизайна по числу объявлений (${period.phrase}, выборка: ${records.length} публикаций).`,
-    },
+    cartaCapital,
+    taskTransformation,
+    bumpChart,
+    editorialInsight,
   };
   report.findings = findingsOf(report);
   return report;

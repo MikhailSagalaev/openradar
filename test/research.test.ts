@@ -17,6 +17,7 @@ import { resetGigachatToken } from '../src/research/gigachat.ts';
 import { parseModelAnswer, runModelExtraction } from '../src/research/model.ts';
 import { modelQuality } from '../src/research/quality.ts';
 import { MIN_MEDIAN, buildReport, dist, monthPeriod } from '../src/research/report.ts';
+import { renderEmbedPage, renderReportPage } from '../src/research/pages.ts';
 import { buildMonthReport, datasetCsv, ensureMonthlySnapshot, resetResearchCache } from '../src/research/service.ts';
 import { createApp } from '../src/server/app.ts';
 import { makeTestRuntime } from './helpers.ts';
@@ -411,5 +412,95 @@ describe('model extraction', () => {
     expect(body.response_format).toBeUndefined();
     expect(body.temperature).toBeGreaterThan(0);
     resetGigachatToken();
+  });
+});
+
+describe('research data consistency & honest visual metrics', () => {
+  it('ensures cartaCapital shares strictly sum to 100.0% and N matches sample size', () => {
+    const rolesList = ['backend', 'frontend', 'ai', 'design', 'qa', '1c', 'marketing', 'devops'];
+    const records: ResearchRecord[] = [];
+    let id = 1;
+    for (const r of rolesList) {
+      for (let i = 0; i < 15; i++) {
+        records.push(record(id++, { role: r, pay: 100000 + (id % 5) * 20000 }));
+      }
+    }
+    const report = buildReport(records, monthPeriod('2026-10'), 'month');
+    const carta = report.cartaCapital!;
+    expect(carta).toBeDefined();
+    expect(carta.length).toBeLessThanOrEqual(6);
+
+    // Sum of shares must be strictly 100.0%
+    const totalNShare = Math.round(carta.reduce((s, r) => s + r.nShare, 0) * 10) / 10;
+    const totalCapShare = Math.round(carta.reduce((s, r) => s + r.capitalShare, 0) * 10) / 10;
+    expect(totalNShare).toBe(100.0);
+    expect(totalCapShare).toBe(100.0);
+
+    // Sum of posts across rows must strictly equal sample size
+    const totalN = carta.reduce((s, r) => s + r.n, 0);
+    expect(totalN).toBe(records.length);
+
+    // Last row is "Другие направления" if more than 5 roles exist
+    expect(carta[carta.length - 1]!.label).toBe('Другие направления');
+  });
+
+  it('computes taskTransformation from live records with real premiums and no dollars', () => {
+    const records: ResearchRecord[] = [
+      ...Array.from({ length: 12 }, (_, i) => record(100 + i, { role: 'content', skills: ['копирайтинг'], pay: 60000 })),
+      ...Array.from({ length: 12 }, (_, i) => record(200 + i, { role: 'ai', skills: ['RAG', 'n8n'], pay: 180000 })),
+    ];
+    const report = buildReport(records, monthPeriod('2026-10'), 'month');
+    const tt = report.taskTransformation!;
+    expect(tt).toBeDefined();
+    expect(tt.routine.find((r) => r.label.includes('копирайтинг'))?.n).toBe(12);
+    expect(tt.emerging.find((r) => r.label.includes('AI-агентов'))?.n).toBe(12);
+    expect(tt.netShiftPct).toBeGreaterThan(0); // AI premium > 0%
+  });
+
+  it('computes bumpChart with real week and day snapshots and no fake 2025 quarters', () => {
+    const records: ResearchRecord[] = [
+      ...Array.from({ length: 10 }, (_, i) => record(300 + i, { date: '2026-10-12', role: 'backend' })),
+      ...Array.from({ length: 10 }, (_, i) => record(400 + i, { date: '2026-10-19', role: 'frontend' })),
+      ...Array.from({ length: 10 }, (_, i) => record(500 + i, { date: '2026-10-26', role: 'ai' })),
+      ...Array.from({ length: 10 }, (_, i) => record(600 + i, { date: '2026-11-02', role: 'design' })),
+    ];
+    const report = buildReport(records, monthPeriod('2026-10'), 'month');
+    const bump = report.bumpChart!;
+    expect(bump).toBeDefined();
+    expect(bump.quarters).toHaveLength(4);
+    expect(bump.months).toHaveLength(4);
+
+    // No fictional historical quarters
+    for (const q of bump.quarters) {
+      expect(q.period).not.toContain('Q1 2025');
+      expect(q.ranks).toHaveLength(5);
+      expect(q.ranks.map((r) => r.rank).sort()).toEqual([1, 2, 3, 4, 5]);
+    }
+  });
+
+  it('renders Simpson paradox disclaimer and honest report HTML', () => {
+    const records: ResearchRecord[] = [
+      ...Array.from({ length: 15 }, (_, i) => record(700 + i, { date: '2026-10-12', pay: 150000 })),
+      ...Array.from({ length: 15 }, (_, i) => record(750 + i, { date: '2026-10-26', pay: 150000 })),
+    ];
+    const report = buildReport(records, monthPeriod('2026-10'), 'month');
+    const html = renderReportPage({ report, baseUrl: 'https://openradar.fun', version: '0.41.2', snapshots: [] });
+
+    // Simpson's paradox note
+    expect(html).toContain('парадокс Симпсона');
+    expect(html).toContain('общероссийские платформы (hh.ru, «Работа России»)');
+
+    // No fake retrospective marketing claims
+    expect(html).not.toContain('за последние 12 месяцев: чистый индекс трансформации +18.4%');
+    expect(html).not.toContain('Q1 2025');
+
+    // Embed pages render properly
+    const cartaEmbed = renderEmbedPage({ chartId: 'carta', report, baseUrl: 'https://openradar.fun' });
+    expect(cartaEmbed).toContain('Объём против денежной массы');
+    expect(cartaEmbed).toContain('Сумма долей: 100,0% объема');
+
+    const bumpEmbed = renderEmbedPage({ chartId: 'bump', report, baseUrl: 'https://openradar.fun' });
+    expect(bumpEmbed).toContain('bump-chart-svg');
+    expect(bumpEmbed).toContain('btn-bump-w');
   });
 });
