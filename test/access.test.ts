@@ -71,7 +71,8 @@ describe('radar/2 access tiers (hub mode)', () => {
     const api = (await (await app.request('/api/leads')).json()) as Array<Record<string, unknown>>;
     expect(api).toHaveLength(1);
     expect(JSON.stringify(api)).not.toContain('plumber_boss');
-    expect(JSON.stringify(api)).not.toContain('999');
+    // The phone itself, not a bare '999': timestamps from Date.now() may contain it.
+    expect(JSON.stringify(api)).not.toMatch(/999 123|79991234567|123-45-67/);
 
     const page = await (await app.request('/leads/old-lead')).text();
     expect(page).not.toContain('plumber_boss');
