@@ -7,6 +7,8 @@ export async function fetchText(
   ctx: PollContext,
   initialUrl: string,
   extraHeaders?: Record<string, string>,
+  /** Body ceiling; the default fits any page or feed, a few APIs need more. */
+  maxBytes?: number,
 ): Promise<string> {
   if (ctx.proxyUrl) {
     return fetchTextViaProxy(initialUrl, {
@@ -14,6 +16,7 @@ export async function fetchText(
       userAgent: ctx.userAgent,
       timeoutMs: ctx.timeoutMs,
       headers: extraHeaders,
+      maxBytes,
     });
   }
 
@@ -58,7 +61,7 @@ export async function fetchText(
         throw new Error(`HTTP ${response.status} for ${currentUrl}`);
       }
 
-      return await readTextLimited(response);
+      return await readTextLimited(response, maxBytes);
     }
 
     throw new Error(`Too many redirects (max ${maxRedirects})`);

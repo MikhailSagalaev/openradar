@@ -20,23 +20,68 @@ export const gigachatFetch: typeof fetch = (input, init) =>
     const req = request(url, { method: init?.method ?? 'GET', headers, ca: CA, signal: init?.signal ?? undefined }, (res) => {
       const chunks: Buffer[] = [];
       res.on('data', (chunk: Buffer) => chunks.push(chunk));
-      res.on('end', () => resolve(new Response(Buffer.concat(chunks), { status: res.statusCode ?? 502 })));
+      res.on('end', () => {
+        const responseHeaders = new Headers();
+        for (const [name, value] of Object.entries(res.headers)) {
+          if (typeof value === 'string') responseHeaders.set(name, value);
+        }
+        resolve(new Response(Buffer.concat(chunks), { status: res.statusCode ?? 502, headers: responseHeaders }));
+      });
       res.on('error', reject);
     });
     req.on('error', reject);
     req.end(typeof init?.body === 'string' ? init.body : undefined);
   });
 
+/**
+ * GigaChat said «too many requests» (HTTP 429) for the token or a chat call. The batch stops
+ * on it instead of spending every queued post on the same refusal.
+ */
+export class GigachatBusyError extends Error {
+  constructor(readonly what: 'token' | 'chat', readonly retryAfterMs: number) {
+    super(`GigaChat ${what}: HTTP 429, retry in ${Math.round(retryAfterMs / 1000)} s`);
+  }
+}
+
 let token: { key: string; value: string; expiresAt: number } | undefined;
+/** One token request at a time: parallel callers wait for the same answer. */
+let pending: Promise<string> | undefined;
+let busyUntil = 0;
 
 export function resetGigachatToken(): void {
   token = undefined;
+  pending = undefined;
+  busyUntil = 0;
+}
+
+/** Retry-After in seconds, or a minute when GigaChat does not say. */
+export function retryAfterMs(response: Response): number {
+  const seconds = Number(response.headers.get('retry-after'));
+  return Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds, 3600) * 1000 : 60_000;
+}
+
+/** After a 429 nothing is sent until the pause is over. */
+export function markGigachatBusy(ms: number): void {
+  busyUntil = Math.max(busyUntil, Date.now() + ms);
+}
+
+export function gigachatBusyFor(): number {
+  return Math.max(0, busyUntil - Date.now());
 }
 
 /** The access token, reused until a minute before it expires. */
 export async function gigachatToken(env: Env, fetchImpl: typeof fetch, signal?: AbortSignal): Promise<string> {
   const key = env.GIGACHAT_AUTH_KEY ?? '';
   if (token && token.key === key && token.expiresAt - 60_000 > Date.now()) return token.value;
+  const wait = gigachatBusyFor();
+  if (wait > 0) throw new GigachatBusyError('token', wait);
+  pending ??= requestToken(env, key, fetchImpl, signal).finally(() => {
+    pending = undefined;
+  });
+  return pending;
+}
+
+async function requestToken(env: Env, key: string, fetchImpl: typeof fetch, signal?: AbortSignal): Promise<string> {
   const response = await fetchImpl(env.GIGACHAT_OAUTH_URL, {
     method: 'POST',
     signal,
@@ -48,6 +93,11 @@ export async function gigachatToken(env: Env, fetchImpl: typeof fetch, signal?: 
     },
     body: `scope=${encodeURIComponent(env.GIGACHAT_SCOPE)}`,
   });
+  if (response.status === 429) {
+    const ms = retryAfterMs(response);
+    markGigachatBusy(ms);
+    throw new GigachatBusyError('token', ms);
+  }
   if (!response.ok) throw new Error(`GigaChat token: HTTP ${response.status}`);
   const answer = (await response.json()) as { access_token?: string; expires_at?: number };
   if (!answer.access_token) throw new Error('GigaChat token: no access_token');

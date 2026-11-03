@@ -813,7 +813,22 @@ export class MemoryStore implements Store {
   async deleteTelegramAccount(id: string, userId: number): Promise<boolean> {
     const account = this.telegramAccounts.get(id);
     if (!account || account.userId !== userId) return false;
+    // ON DELETE CASCADE in Postgres.
+    for (const [sourceId, source] of this.userSourcesMap) if (source.accountId === id) this.userSourcesMap.delete(sourceId);
     return this.telegramAccounts.delete(id);
+  }
+
+  async setTelegramAccountStatus(id: string, status: UserTelegramAccountRecord['status']): Promise<void> {
+    const account = this.telegramAccounts.get(id);
+    if (account) this.telegramAccounts.set(id, { ...account, status, updatedAt: new Date().toISOString() });
+  }
+
+  async listDueUserSources(beforeIso: string, limit: number): Promise<UserSourceRecord[]> {
+    return [...this.userSourcesMap.values()]
+      .filter((s) => s.enabled && this.telegramAccounts.get(s.accountId)?.status === 'active')
+      .filter((s) => !s.lastPolledAt || s.lastPolledAt < beforeIso)
+      .sort((a, b) => (a.lastPolledAt ?? '').localeCompare(b.lastPolledAt ?? ''))
+      .slice(0, limit);
   }
 
   async createUserSource(input: UserSourceInput): Promise<UserSourceRecord> {
@@ -829,6 +844,8 @@ export class MemoryStore implements Store {
       shareToNetwork: input.shareToNetwork !== false,
       enabled: input.enabled !== false,
       lastPolledAt: null,
+      lastError: null,
+      lastCount: 0,
       createdAt: now,
       updatedAt: now,
     };

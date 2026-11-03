@@ -1,6 +1,6 @@
 {
   "name": "radar",
-  "version": "0.41.3",
+  "version": "0.42.0",
   "private": true,
   "description": "Self-hosted lead pipeline for public order sources",
   "license": "AGPL-3.0-only",
@@ -43,6 +43,7 @@
     "pg": "^8.13.1",
     "rss-parser": "^3.13.0",
     "undici": "^8.12.3",
+    "uqr": "0.1.3",
     "zod": "^4.6.7"
   },
   "devDependencies": {

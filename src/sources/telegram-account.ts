@@ -203,7 +203,7 @@ export function messageToRawLead(message: AccountMessage, source: SourceRecord):
   };
 }
 
-function toAccountMessage(m: {
+export function toAccountMessage(m: {
   id: number;
   text: string;
   date: Date;

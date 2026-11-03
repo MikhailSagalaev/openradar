@@ -63,6 +63,15 @@ describe('ATS source adapter', () => {
     expect(leads[0]!.title).not.toMatch(/^\s/);
   });
 
+  it('reads a board above the general 10 MB ceiling (OpenAI on Ashby is about 14 MB)', async () => {
+    const board = JSON.parse(fixture('ats-ashby.json')) as { jobs: Array<Record<string, unknown>> };
+    const padding = 'x'.repeat(12 * 1024 * 1024);
+    board.jobs[0]!.descriptionPlain = `${String(board.jobs[0]!.descriptionPlain ?? '')} ${padding}`;
+    const source = makeSource({ kind: 'ats', config: { provider: 'ashby', companies: ['openai=OpenAI'], maxAgeDays: 730 } });
+    const leads = await adapter.poll!(source, served({ 'api.ashbyhq.com/posting-api/job-board/openai': JSON.stringify(board) }));
+    expect(leads).toHaveLength(2);
+  });
+
   it('goes round the company list a few at a time and survives a missing board', async () => {
     const source = makeSource({ id: 'ats-round-robin', kind: 'ats', config: { provider: 'greenhouse', companies: 'gitlab, gone, bad/slug, other', perPoll: 2, maxAgeDays: 365 } });
     expect(companiesOf(source).map((c) => c.slug)).toEqual(['gitlab', 'gone', 'other']);

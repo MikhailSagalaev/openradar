@@ -38,6 +38,7 @@ export interface ProxiedTextOptions {
   timeoutMs: number;
   headers?: Record<string, string>;
   maxRedirects?: number;
+  maxBytes?: number;
 }
 
 /**
@@ -83,7 +84,7 @@ export async function fetchTextViaProxy(
       throw new Error(`HTTP ${response.status} for ${currentUrl}`);
     }
 
-    return await readTextLimited(response);
+    return await readTextLimited(response, options.maxBytes);
   }
 
   throw new Error(`Too many redirects (max ${maxRedirects})`);

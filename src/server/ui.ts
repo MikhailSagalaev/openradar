@@ -1693,6 +1693,20 @@ legend {
 .profile-points.neg { color: var(--danger, #b42318); }
 .profile-status.credited { color: var(--ok, #127a3a); }
 .profile-status.hidden { color: var(--danger, #b42318); }
+.tg-explain { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--surface); margin-bottom: 12px; }
+.tg-explain ul { margin: 6px 0 0; padding-left: 18px; }
+.tg-accounts { list-style: none; padding: 0; margin: 0 0 12px; }
+.tg-account { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.tg-account .profile-status { margin-left: 6px; }
+.tg-connect { margin-bottom: 14px; }
+.tg-qr { margin-top: 12px; display: grid; gap: 8px; justify-items: start; }
+.tg-qr[hidden], .tg-qr [hidden] { display: none; }
+.tg-qr img { background: #fff; border-radius: 8px; border: 1px solid var(--line); max-width: 100%; height: auto; }
+.tg-qr ol { margin: 0; padding-left: 18px; }
+.tg-source-form { display: grid; gap: 8px; max-width: 520px; margin-top: 8px; }
+.tg-source-form label { display: grid; gap: 4px; font-size: 13px; }
+.tg-source-form h3 { margin: 6px 0 0; font-size: 15px; }
+.notice-inline { color: var(--muted); margin-top: 2px; }
 .catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
 .catalog-card { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .catalog-card-body { min-width: 0; }
@@ -3827,6 +3841,11 @@ export interface ProfilePageData {
     /** Result of the last action: created, deleted, limit, bad_url… */
     notice?: string;
   };
+  /** Members' own Telegram accounts and sources; set only when RADAR_USER_TELEGRAM is on. */
+  telegram?: {
+    accounts: Array<{ id: string; tgUserId: number; tgUsername: string | null; displayName: string | null; status: string }>;
+    sources: Array<{ id: string; title: string; folder: string | null; chats: string[]; lastPolledAt: string | null; lastCount: number; lastError: string | null }>;
+  };
   /** The personal token an AI agent uses on /mcp. */
   agent?: {
     hasToken: boolean;
@@ -3835,6 +3854,158 @@ export interface ProfilePageData {
     mcpUrl: string;
     revoked?: boolean;
   };
+}
+
+/** Members' own Telegram: accounts linked by QR and the folders or chats read from them. */
+function renderUserTelegram(data: NonNullable<ProfilePageData['telegram']>, lang: SupportedLang): string {
+  const ru = lang === 'ru';
+  const when = (iso: string | null): string => (iso ? formatRelative(iso, lang) : (ru ? 'ещё не читали' : 'not read yet'));
+  const accounts = data.accounts.map((a) => `<li class="tg-account">
+      <span><strong>${escapeHtml(a.displayName ?? String(a.tgUserId))}</strong>${a.tgUsername ? ` <span class="muted">@${escapeHtml(a.tgUsername)}</span>` : ''}
+      ${a.status === 'active'
+        ? `<span class="profile-status credited">${ru ? 'подключён' : 'linked'}</span>`
+        : `<span class="profile-status hidden">${ru ? 'сессия отозвана — подключите заново' : 'session revoked — link again'}</span>`}</span>
+      <button class="btn ghost small" type="button" data-tg-unlink="${escapeHtml(a.id)}">${ru ? 'Отключить' : 'Unlink'}</button>
+    </li>`).join('');
+  const sources = data.sources.map((s) => {
+    const what = [s.folder ? `${ru ? 'папка' : 'folder'} «${escapeHtml(s.folder)}»` : '', s.chats.length ? escapeHtml(s.chats.join(', ')) : ''].filter(Boolean).join(' · ');
+    return `<tr>
+      <td><strong>${escapeHtml(s.title)}</strong><div class="muted small">${what}</div>${s.lastError ? `<div class="small notice-inline">${escapeHtml(s.lastError)}</div>` : ''}</td>
+      <td class="small">${s.lastPolledAt ? `${s.lastCount} ${ru ? plural(s.lastCount, ['пост', 'поста', 'постов']) : 'posts'}` : ''}<div class="muted">${when(s.lastPolledAt)}</div></td>
+      <td><button class="btn ghost small" type="button" data-tg-source-delete="${escapeHtml(s.id)}">${ru ? 'Удалить' : 'Delete'}</button></td>
+    </tr>`;
+  }).join('');
+  const active = data.accounts.filter((a) => a.status === 'active');
+  const form = active.length ? `<form class="tg-source-form" data-tg-source-form>
+      <h3>${ru ? 'Откуда читать' : 'What to read'}</h3>
+      ${active.length > 1 ? `<label>${ru ? 'Аккаунт' : 'Account'} <select name="accountId">${active.map((a) => `<option value="${escapeHtml(a.id)}">${escapeHtml(a.displayName ?? String(a.tgUserId))}</option>`).join('')}</select></label>` : `<input type="hidden" name="accountId" value="${escapeHtml(active[0]!.id)}">`}
+      <label>${ru ? 'Название' : 'Name'} <input name="title" required maxlength="200" placeholder="${ru ? 'Каналы с заказами' : 'Job channels'}"></label>
+      <label>${ru ? 'Папка в Telegram' : 'Telegram folder'} <input name="folder" maxlength="200" placeholder="${ru ? 'например, Работа' : 'e.g. Work'}"></label>
+      <label>${ru ? 'Или чаты, по одному в строке' : 'Or chats, one per line'} <textarea name="chats" rows="3" placeholder="@remote_jobs&#10;https://t.me/freelance_orders"></textarea></label>
+      <p class="muted small">${ru ? 'Нужна папка или хотя бы один чат. Читаем раз в 15 минут.' : 'A folder or at least one chat. Read every 15 minutes.'}</p>
+      <button class="btn" type="submit">${ru ? 'Добавить источник' : 'Add source'}</button>
+      <span class="small" data-tg-source-status></span>
+    </form>` : '';
+  return `<h2 id="telegram-sources">${ru ? 'Telegram-источники' : 'Telegram sources'}</h2>
+  <div class="tg-explain small">
+    <p>${ru
+      ? 'Подключите свой Telegram, и openradar будет каждые 15 минут читать выбранную папку или каналы и добавлять найденные заказы в общую ленту от вашего имени — за них начисляются очки.'
+      : 'Link your Telegram and openradar reads the folder or channels you pick every 15 minutes and adds the orders it finds to the shared feed in your name, for points.'}</p>
+    <ul>
+      <li>${ru ? 'Читаются <strong>только публичные</strong> каналы и группы — с адресом вида @name. Закрытые чаты и переписка с людьми не читаются никогда.' : 'Only <strong>public</strong> channels and groups (with an @name) are read. Private chats and conversations with people are never read.'}</li>
+      <li>${ru ? 'Сервер получает доступ к аккаунту: сессия хранится зашифрованной (AES-256-GCM) и расшифровывается только на время чтения. Пишет он ничего не будет.' : 'The server gets access to the account: the session is stored encrypted (AES-256-GCM) and decrypted only while reading. It never writes anything.'}</li>
+      <li>${ru ? '«Отключить» завершает сессию в самом Telegram и удаляет её отсюда. Её же видно и можно закрыть в Telegram: Настройки → Устройства.' : 'Unlink ends the session in Telegram itself and deletes it here. It is also listed in Telegram: Settings → Devices.'}</li>
+    </ul>
+  </div>
+  ${accounts ? `<ul class="tg-accounts">${accounts}</ul>` : ''}
+  <div class="tg-connect" data-tg-connect>
+    <button class="btn ${accounts ? 'ghost' : ''}" type="button" data-tg-start>${accounts ? (ru ? 'Подключить ещё аккаунт' : 'Link another account') : (ru ? 'Подключить Telegram' : 'Link Telegram')}</button>
+    <div class="tg-qr" data-tg-qr hidden>
+      <img data-tg-qr-img alt="${ru ? 'QR-код для входа в Telegram' : 'Telegram login QR code'}" width="220" height="220">
+      <ol class="small">
+        <li>${ru ? 'Откройте Telegram на телефоне' : 'Open Telegram on your phone'}</li>
+        <li>${ru ? 'Настройки → Устройства → Подключить устройство' : 'Settings → Devices → Link Desktop Device'}</li>
+        <li>${ru ? 'Наведите камеру на этот код' : 'Point the camera at this code'}</li>
+      </ol>
+      <form data-tg-password hidden>
+        <label>${ru ? 'Облачный пароль Telegram (двухэтапная проверка)' : 'Telegram cloud password (two-step verification)'} <input type="password" name="password" autocomplete="off" required></label>
+        <button class="btn small" type="submit">${ru ? 'Продолжить' : 'Continue'}</button>
+      </form>
+      <p class="small" data-tg-state></p>
+      <button class="btn ghost small" type="button" data-tg-cancel>${ru ? 'Отмена' : 'Cancel'}</button>
+    </div>
+  </div>
+  ${sources ? `<table class="profile-table">${sources}</table>` : ''}
+  ${form}
+  <script>${userTelegramScript(lang)}</script>`;
+}
+
+function userTelegramScript(lang: SupportedLang): string {
+  const ru = lang === 'ru';
+  const text = {
+    waiting: ru ? 'Ждём сканирования…' : 'Waiting for the scan…',
+    scanned: ru ? 'Код отсканирован, входим…' : 'Scanned, signing in…',
+    password: ru ? 'На аккаунте включена двухэтапная проверка: введите облачный пароль.' : 'Two-step verification is on: enter the cloud password.',
+    done: ru ? 'Готово! Обновляем страницу…' : 'Done! Reloading…',
+    expired: ru ? 'Код устарел. Нажмите «Подключить» ещё раз.' : 'The code expired. Press Link again.',
+    error: ru ? 'Не получилось войти. Попробуйте ещё раз.' : 'Sign-in failed. Try again.',
+    unavailable: ru ? 'Подключение сейчас недоступно.' : 'Linking is not available right now.',
+    confirmUnlink: ru ? 'Отключить аккаунт? Сессия завершится в Telegram, источники этого аккаунта удалятся.' : 'Unlink? The session ends in Telegram and its sources are deleted.',
+    confirmDelete: ru ? 'Удалить источник?' : 'Delete the source?',
+    need: ru ? 'Укажите папку или хотя бы один чат.' : 'Give a folder or at least one chat.',
+    failed: ru ? 'Не сохранилось, проверьте поля.' : 'Not saved, check the fields.',
+  };
+  return `(() => {
+  const T = ${JSON.stringify(text)};
+  const root = document.querySelector('[data-tg-connect]');
+  if (!root) return;
+  const qr = root.querySelector('[data-tg-qr]');
+  const img = root.querySelector('[data-tg-qr-img]');
+  const state = root.querySelector('[data-tg-state]');
+  const pwd = root.querySelector('[data-tg-password]');
+  const start = root.querySelector('[data-tg-start]');
+  let id = null, timer = null, shown = '';
+  const json = (url, method, body) => fetch(url, { method, headers: { 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, credentials: 'same-origin' });
+  const stop = () => { if (timer) clearInterval(timer); timer = null; };
+  const show = (s) => { state.textContent = s; };
+  const poll = async () => {
+    if (!id) return;
+    const res = await fetch('/api/tg/auth/status/' + id, { credentials: 'same-origin' });
+    if (!res.ok) { stop(); show(T.expired); return; }
+    const st = await res.json();
+    if (st.qrUrl && st.qrUrl !== shown) { shown = st.qrUrl; img.src = '/api/tg/auth/qr/' + id + '?v=' + Date.now(); }
+    if (st.status === 'waiting_qr') show(T.waiting);
+    else if (st.status === 'scanned') show(T.scanned);
+    else if (st.status === 'waiting_password') { pwd.hidden = false; show(st.error || T.password); }
+    else if (st.status === 'authenticated') { stop(); show(T.done); setTimeout(() => location.reload(), 800); }
+    else if (st.status === 'expired') { stop(); show(T.expired); start.hidden = false; }
+    else if (st.status === 'error') { stop(); show(st.error || T.error); start.hidden = false; }
+  };
+  start.addEventListener('click', async () => {
+    start.disabled = true;
+    const res = await json('/api/tg/auth/start', 'POST');
+    start.disabled = false;
+    if (!res.ok) { qr.hidden = false; img.hidden = true; show(T.unavailable); return; }
+    const data = await res.json();
+    id = data.authSessionId; shown = data.qrUrl;
+    img.src = '/api/tg/auth/qr/' + id + '?v=' + Date.now();
+    qr.hidden = false; img.hidden = false; start.hidden = true; pwd.hidden = true; show(T.waiting);
+    stop(); timer = setInterval(poll, 2000);
+  });
+  pwd.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = pwd.querySelector('input');
+    await json('/api/tg/auth/password', 'POST', { authSessionId: id, password: input.value });
+    input.value = ''; pwd.hidden = true; show(T.scanned);
+  });
+  root.querySelector('[data-tg-cancel]').addEventListener('click', async () => {
+    stop();
+    if (id) await json('/api/tg/auth/cancel', 'POST', { authSessionId: id });
+    id = null; qr.hidden = true; start.hidden = false;
+  });
+  document.querySelectorAll('[data-tg-unlink]').forEach((b) => b.addEventListener('click', async () => {
+    if (!confirm(T.confirmUnlink)) return;
+    b.disabled = true;
+    await json('/api/tg/accounts/' + b.dataset.tgUnlink, 'DELETE');
+    location.reload();
+  }));
+  document.querySelectorAll('[data-tg-source-delete]').forEach((b) => b.addEventListener('click', async () => {
+    if (!confirm(T.confirmDelete)) return;
+    await json('/api/user-sources/' + b.dataset.tgSourceDelete, 'DELETE');
+    location.reload();
+  }));
+  const form = document.querySelector('[data-tg-source-form]');
+  if (form) form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = new FormData(form);
+    const chats = String(f.get('chats') || '').split(/[\\s,]+/).map((c) => c.trim()).filter(Boolean);
+    const folder = String(f.get('folder') || '').trim();
+    const status = form.querySelector('[data-tg-source-status]');
+    if (!folder && !chats.length) { status.textContent = T.need; return; }
+    const res = await json('/api/user-sources', 'POST', { accountId: f.get('accountId'), title: f.get('title'), folder, chats });
+    if (res.ok) location.reload(); else status.textContent = T.failed;
+  });
+})();`;
 }
 
 function renderAgentToken(data: NonNullable<ProfilePageData['agent']>, lang: SupportedLang): string {
@@ -4003,6 +4174,7 @@ export function renderProfilePage(data: ProfilePageData): string {
   ${progress}
   <p class="profile-tier">${ru ? 'Уровень' : 'Tier'}: <strong>${escapeHtml(names[data.tier])}</strong>${data.hubMode && data.tier !== 'admin' ? ` · ${ru ? 'задержка ленты' : 'feed delay'}: <strong>${escapeHtml(delay(data.delays[data.tier]))}</strong>` : ''}</p>
   ${data.subscriptions ? renderSubscriptions(data.subscriptions, lang) : ''}
+  ${data.telegram ? renderUserTelegram(data.telegram, lang) : ''}
   ${data.agent ? renderAgentToken(data.agent, lang) : ''}
   ${activity}
   ${table}

@@ -147,6 +147,10 @@ export interface UserSourceRecord {
   shareToNetwork: boolean;
   enabled: boolean;
   lastPolledAt: string | null;
+  /** Why the last read failed, or which chats it skipped; null when it went fine. */
+  lastError: string | null;
+  /** Posts the last read found. */
+  lastCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -437,6 +441,9 @@ export interface Store extends HubStore {
   listTelegramAccounts?(userId: number): Promise<UserTelegramAccountRecord[]>;
   getTelegramAccount?(id: string, userId?: number): Promise<UserTelegramAccountRecord | null>;
   deleteTelegramAccount?(id: string, userId: number): Promise<boolean>;
+  setTelegramAccountStatus?(id: string, status: UserTelegramAccountRecord['status']): Promise<void>;
+  /** Enabled personal sources of active accounts not read since `beforeIso`, least recent first. */
+  listDueUserSources?(beforeIso: string, limit: number): Promise<UserSourceRecord[]>;
 
   createUserSource?(input: UserSourceInput): Promise<UserSourceRecord>;
   listUserSources?(userId: number): Promise<UserSourceRecord[]>;
