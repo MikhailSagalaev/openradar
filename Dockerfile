@@ -1,10 +1,11 @@
 # Multi-stage unprivileged Dockerfile for Radar
 FROM node:26-trixie-slim AS build
 WORKDIR /app
-RUN corepack enable
-# Corepack and pnpm download over TLS with Node's defaults; TLS 1.2 keeps the handshake in
+# npm and pnpm download over TLS with Node's defaults; TLS 1.2 keeps the handshake in
 # one packet where networks drop the larger post-quantum one (see src/net/tls.ts).
 ENV NODE_OPTIONS=--tls-max-v1.2
+# Node 25 and later ship without corepack: pnpm comes from npm, the version of packageManager.
+RUN npm install -g pnpm@12.16.1
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY tsconfig.json tsconfig.build.json ./
@@ -15,7 +16,7 @@ FROM node:26-trixie-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 ENV RADAR_BIND=0.0.0.0
-RUN corepack enable
+RUN NODE_OPTIONS=--tls-max-v1.2 npm install -g pnpm@12.16.1
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN NODE_OPTIONS=--tls-max-v1.2 pnpm install --prod --frozen-lockfile
 COPY --from=build /app/dist ./dist

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.43.1
+
+- The image builds again: Node 25 and later ship without corepack, so `corepack enable` failed and 0.43.0 never deployed. pnpm 12.16.1 now comes from npm.
+
 ## 0.43.0
 
 - **PostgreSQL 18.** `docker-compose.yml` runs `pgvector/pgvector:pg18-trixie` on a new volume `radar_pgdata18`. `deploy-server.sh` moves the data over with `scripts/pg-upgrade.sh`: a dump of the running 17, a restore into 18, and the old volume `radar_pgdata` left untouched for a rollback. **Without deploy-server.sh, run once before `docker compose up`:** `bash scripts/pg-upgrade.sh` (while the old `radar_postgres` is still running). See docs/BACKUP_AND_RESTORE.md.
