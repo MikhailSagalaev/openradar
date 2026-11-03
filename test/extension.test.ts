@@ -117,6 +117,16 @@ describe('extension content script JobPosting extractor', () => {
     expect(data.detectedType).toBe('gig');
   });
 
+  it('keeps an explicitly fully remote job remote despite a mention of onsite', () => {
+    const posting = { '@context': 'https://schema.org', '@type': 'JobPosting', title: 'Backend engineer', description: 'Fully remote team, no onsite visits required.', hiringOrganization: { name: 'Acme' } };
+    const doc = {
+      querySelectorAll: (s: string) => (s === 'script[type="application/ld+json"]' ? [{ textContent: JSON.stringify(posting) }] : []),
+      location: { href: 'https://example.com/jobs/1' },
+      title: 'Backend engineer',
+    };
+    expect(extractJobPosting(doc).isRemote).toBe(true);
+  });
+
   it('handles array of job locations and recognizes onsite transition', () => {
     const mockJsonLd = {
       '@context': 'https://schema.org',

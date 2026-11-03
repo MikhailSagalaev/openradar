@@ -22,6 +22,20 @@ REF="${RADAR_REF:-origin/main}"
 git fetch -q --tags --force origin main
 git reset --hard "$REF"
 
+# A release tag deploys only when its version files say the same version: 0.40.3 and 0.42.1
+# were tagged with a red CI and reported the previous version on /health.
+case "$REF" in
+  v[0-9]*)
+    WANT="${REF#v}"
+    if ! grep -q "\"version\": \"$WANT\"" package.json \
+      || ! grep -q "\"version\": \"$WANT\"" server.json \
+      || ! grep -q "VERSION = '$WANT'" src/version.ts; then
+      echo "Тег $REF: package.json, server.json и src/version.ts не согласны с версией $WANT, деплой остановлен." >&2
+      exit 1
+    fi
+    ;;
+esac
+
 # 2. Создаем production .env если его нет или дополняем обязательными секретами
 if [ ! -f .env ]; then
   echo "Создаем .env файл конфигурации со случайными надежными секретами..."
