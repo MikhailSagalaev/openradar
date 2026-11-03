@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.42.1
+
+- US/international salary parsing: comma thousands separators (`$259,300 - $350,800`) are parsed accurately instead of truncating at the comma.
+- Currency detection: when jobs explicitly specify USD/EUR/GBP, the currency is preserved as USD/EUR rather than falling back to default RUB.
+- Market pay estimate (`/api/market`): excludes corrupt sub-$300 monthly job salaries and normalizes hourly rates (168h), preventing contaminated median estimates.
+- Browser extension (0.12.1): detects multi-location hubs (e.g. Dallas, San Francisco, New York), recognizes onsite/hybrid jobs with transition periods instead of blindly labeling them remote, and displays market estimates in USD for foreign jobs.
+
 ## 0.42.0
 
 - Members read their own Telegram into the feed. On `/me`, «Telegram-источники»: link the account by QR (Telegram → Settings → Devices → Link Desktop Device; the cloud password when two-step verification is on), then name a Telegram folder or a list of chats. Every 15 minutes the hub reads them and adds the orders it finds to the shared feed, credited to the member for points. Behind `RADAR_USER_TELEGRAM=true`.
