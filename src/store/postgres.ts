@@ -2004,7 +2004,7 @@ export class PostgresStore implements Store {
     );
   }
 
-  async listLeadsForResearch(options: { from: string; to: string; limit: number; before?: { createdAt: string; id: string } }): Promise<Lead[]> {
+  async listLeadsForResearch(options: { from: string; to: string; limit: number; afterId?: string }): Promise<Lead[]> {
     const result = await this.pool.query(
       // Company career pages are many and long, and only their head matters to the report.
       `SELECT id, source_id, external_id, url, canonical_url, title,
@@ -2017,11 +2017,12 @@ export class PostgresStore implements Store {
          FROM leads
         WHERE COALESCE(published_at, created_at) >= $1::timestamptz AND COALESCE(published_at, created_at) < $2::timestamptz
           AND state NOT IN ('hidden_junk', 'hidden_scam') AND status NOT IN ('rejected', 'failed')
-          -- The cursor comes back in milliseconds, so the order is by milliseconds too.
-          AND ($4::timestamptz IS NULL OR (date_trunc('milliseconds', created_at), id) < ($4::timestamptz, $5::text))
-        ORDER BY date_trunc('milliseconds', created_at) DESC, id DESC
+          -- Pages follow the primary key: all pages together walk the table once, where an
+          -- order by date would sort the whole period again for every page.
+          AND ($4::text IS NULL OR id > $4::text)
+        ORDER BY id
         LIMIT $3`,
-      [options.from, options.to, options.limit, options.before?.createdAt ?? null, options.before?.id ?? null],
+      [options.from, options.to, options.limit, options.afterId ?? null],
     );
     return result.rows.map((r) => this.rowToLead(r));
   }

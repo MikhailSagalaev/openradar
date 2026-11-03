@@ -390,8 +390,8 @@ export interface Store extends HubStore {
    */
   saveLeadFacts?(id: string, facts: PageFacts, fill: LeadFactsFill): Promise<void>;
   /** Leads published in [from, to) for the market report: text cut to its head, junk and scam left out. */
-  /** Newest first; `before` continues a page from the last lead of the previous one. */
-  listLeadsForResearch?(options: { from: string; to: string; limit: number; before?: { createdAt: string; id: string } }): Promise<Lead[]>;
+  /** In id order; `afterId` continues from the last lead of the previous page. */
+  listLeadsForResearch?(options: { from: string; to: string; limit: number; afterId?: string }): Promise<Lead[]>;
   /** Replaces the daily counts of one day (YYYY-MM-DD). */
   saveResearchDaily?(day: string, rows: ResearchDailyRow[]): Promise<void>;
   listResearchDaily?(from: string, to: string): Promise<ResearchDailyRow[]>;
