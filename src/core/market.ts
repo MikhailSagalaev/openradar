@@ -91,7 +91,7 @@ export function estimateMarket(query: MarketQuery, leads: Lead[]): MarketEstimat
     })
     .filter((item): item is { lead: Lead; usd: number } => {
       if (typeof item.usd !== 'number' || !Number.isFinite(item.usd) || item.usd <= 0) return false;
-      if (query.type === 'job' && item.usd < 100) return false;
+      if (query.type === 'job' && item.usd < 300) return false;
       return true;
     });
 

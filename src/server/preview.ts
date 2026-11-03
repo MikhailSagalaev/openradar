@@ -82,6 +82,9 @@ function extractCompany(org: unknown): string {
 
 function extractCity(loc: unknown): string {
   if (!loc) return '';
+  if (Array.isArray(loc)) {
+    return loc.map(extractCity).filter(Boolean).slice(0, 3).join(', ');
+  }
   if (typeof loc === 'string') return loc.trim();
   if (typeof loc === 'object' && loc !== null) {
     const l = loc as Record<string, unknown>;
@@ -100,6 +103,9 @@ function extractRemote(posting: Record<string, unknown>): boolean {
   if (posting.jobLocationType === 'TELECOMMUTE') return true;
   if (posting.applicantLocationRequirements) return true;
   const combined = `${posting.title || ''} ${posting.description || ''}`.toLowerCase();
+  if (/transition\s+to\s+onsite|on-site|onsite|гибрид|hybrid|no\s+remote|not\s+remote/i.test(combined)) {
+    return false;
+  }
   return combined.includes('удаленн') || combined.includes('remote') || combined.includes('telecommute');
 }
 
