@@ -17,15 +17,15 @@ const MIN_MONTH_JOBS = 300;
 export async function researchRecords(store: Store, from: string, to: string, options: DeriveOptions = {}, pageSize = PAGE): Promise<ResearchRecord[]> {
   if (!store.listLeadsForResearch) return [];
   const records: ResearchRecord[] = [];
-  let before: { createdAt: string; id: string } | undefined;
+  let afterId: string | undefined;
   while (records.length < MAX_LEADS) {
-    const page = await store.listLeadsForResearch({ from, to, limit: pageSize, before });
+    const page = await store.listLeadsForResearch({ from, to, limit: pageSize, afterId });
     for (const lead of page) records.push(deriveRecord(lead, options));
     if (page.length < pageSize) break;
-    const last = page.at(-1)!;
-    before = { createdAt: last.createdAt, id: last.id };
+    afterId = page.at(-1)!.id;
   }
-  return records;
+  // Newest first, as the dataset and the ties of the report expect.
+  return records.sort((a, b) => b.date.localeCompare(a.date) || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
 }
 
 let cached: { at: number; report: Report; records: ResearchRecord[] } | undefined;

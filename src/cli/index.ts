@@ -447,7 +447,8 @@ function buildProgram(): Command {
     .command('presets')
     .description('List or add pre-configured freelance and order sources')
     .option('--add', 'Add all preset sources into the database')
-    .action(async (options: { add?: boolean }) => {
+    .option('--only <ids>', 'With --add: only these preset ids, comma-separated')
+    .action(async (options: { add?: boolean; only?: string }) => {
       await withRuntime(async (runtime) => {
         if (!options.add) {
           console.log('Доступные предустановленные источники:');
@@ -457,8 +458,12 @@ function buildProgram(): Command {
           return;
         }
         const existing = await runtime.store.listSources();
+        const only = options.only ? new Set(options.only.split(',').map((id) => id.trim()).filter(Boolean)) : undefined;
+        const unknown = [...(only ?? [])].filter((id) => !SOURCE_PRESETS.some((p) => p.id === id));
+        if (unknown.length) fail(`unknown preset: ${unknown.join(', ')}`);
         let added = 0;
         for (const preset of SOURCE_PRESETS) {
+          if (only && !only.has(preset.id)) continue;
           const already = existing.some(
             (s) =>
               s.title === preset.title ||

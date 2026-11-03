@@ -369,17 +369,17 @@ export class MemoryStore implements Store {
     }
   }
 
-  async listLeadsForResearch(options: { from: string; to: string; limit: number; before?: { createdAt: string; id: string } }): Promise<Lead[]> {
-    const before = options.before;
+  async listLeadsForResearch(options: { from: string; to: string; limit: number; afterId?: string }): Promise<Lead[]> {
+    const afterId = options.afterId;
     return Array.from(this.leads.values())
       .filter((l) => {
         const at = l.publishedAt ?? l.createdAt;
         return at >= options.from && at < options.to
           && l.state !== 'hidden_junk' && l.state !== 'hidden_scam'
           && l.status !== 'rejected' && l.status !== 'failed'
-          && (!before || l.createdAt < before.createdAt || (l.createdAt === before.createdAt && l.id < before.id));
+          && (!afterId || l.id > afterId);
       })
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
       .slice(0, options.limit)
       .map((l) => ({ ...l, text: l.text.slice(0, 3000) }));
   }

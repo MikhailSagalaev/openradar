@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.43.2
+
+- Research pages follow the primary key: a page takes 30 ms instead of 370, because an order by date sorted the whole period again for every page; the live report built in 6 s after a restart. The records still come out newest day first.
+- `radar source presets --add --only geekjob,ats-workable` adds just the named presets; `--add` alone still adds every missing one.
+
 ## 0.43.1
 
 - The image builds again: Node 25 and later ship without corepack, so `corepack enable` failed and 0.43.0 never deployed. pnpm 12.16.1 now comes from npm.

@@ -5,7 +5,7 @@ import { researchRecords } from '../src/research/service.ts';
 import { createTestStore } from './helpers.ts';
 
 describe('research reads posts a page at a time', () => {
-  it('returns every post of the period once, also when several share a creation time', async () => {
+  it('returns every post of the period once, newest day first', async () => {
     const store = createTestStore();
     const source = await store.createSource({ kind: 'rss', title: 'Feed' });
     const run = randomUUID().replace(/-/g, '');
