@@ -457,6 +457,34 @@ describe('research data consistency & honest visual metrics', () => {
     expect(tt.netShiftPct).toBeGreaterThan(0); // AI premium > 0%
   });
 
+  it('keeps the sign of a negative premium and shows no percent without enough paid posts', () => {
+    const cheaper: ResearchRecord[] = [
+      ...Array.from({ length: 12 }, (_, i) => record(700 + i, { role: 'content', skills: ['копирайтинг'], pay: 100000 })),
+      ...Array.from({ length: 12 }, (_, i) => record(800 + i, { role: 'ai', skills: ['n8n'], pay: 80000 })),
+    ];
+    const tt = buildReport(cheaper, monthPeriod('2026-10'), 'month').taskTransformation!;
+    expect(tt.netShiftPct).toBe(-20);
+    expect(tt.emerging.find((r) => r.label.includes('AI-агентов'))?.changePct).toBe(-20);
+
+    const thin: ResearchRecord[] = [
+      ...Array.from({ length: 3 }, (_, i) => record(900 + i, { role: 'content', skills: ['копирайтинг'], pay: 60000 })),
+      ...Array.from({ length: 3 }, (_, i) => record(950 + i, { role: 'ai', skills: ['n8n'], pay: 180000 })),
+    ];
+    const few = buildReport(thin, monthPeriod('2026-10'), 'month').taskTransformation!;
+    expect(few.netShiftPct).toBeUndefined();
+    expect(few.emerging.every((r) => r.changePct === undefined)).toBe(true);
+  });
+
+  it('counts influx and floral as neither image models nor template coding', () => {
+    const records: ResearchRecord[] = [
+      record(1000, { role: 'backend', skills: ['InfluxDB'] }),
+      record(1001, { role: 'web', skills: ['React', 'HTML', 'CSS'] }),
+    ];
+    const tt = buildReport(records, monthPeriod('2026-10'), 'month').taskTransformation!;
+    expect(tt.emerging.find((r) => r.label.includes('LoRA'))?.n).toBe(0);
+    expect(tt.routine.find((r) => r.label.includes('вёрстка'))?.n).toBe(0);
+  });
+
   it('computes bumpChart with real week and day snapshots and no fake 2025 quarters', () => {
     const records: ResearchRecord[] = [
       ...Array.from({ length: 10 }, (_, i) => record(300 + i, { date: '2026-10-12', role: 'backend' })),

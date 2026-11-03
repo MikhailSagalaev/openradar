@@ -10,9 +10,6 @@ export function deriveUserSessionKey(masterSecret: string, userId: string | numb
   if (!masterSecret || masterSecret.length < 16) {
     throw new Error('RADAR_WEB_KEY_SECRET must be at least 16 characters long');
   }
-  if (process.env.NODE_ENV === 'production' && masterSecret === 'openradar-telegram-key-secret-fallback') {
-    throw new Error('Refusing to use insecure hardcoded fallback secret in production');
-  }
   const derived = crypto.hkdfSync(
     'sha256',
     Buffer.from(masterSecret, 'utf8'),

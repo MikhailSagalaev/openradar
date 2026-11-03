@@ -347,6 +347,9 @@ export interface Store extends HubStore {
   listHashTitledLeads?(limit: number): Promise<Lead[]>;
   /** Retitles a stored lead and rebuilds its dedup key; the old title goes to metadata. */
   updateLeadTitle?(id: string, title: string, titleKey: string, previousTitle: string): Promise<boolean>;
+  /** Id, title and dedup key of stored leads with id above `afterId`, by id — the rekey pass's pages. */
+  listTitleKeys?(afterId: string | null, limit: number): Promise<Array<{ id: string; title: string; titleKey: string }>>;
+  updateLeadTitleKey?(id: string, titleKey: string): Promise<void>;
   /** Stores the quality stage's verdict: the corrected type and the flags (metadata.qualityFlags). */
   updateLeadQuality?(id: string, type: LeadType, flags: string[]): Promise<void>;
   updateLeadState?(id: string, state: LeadState): Promise<void>;

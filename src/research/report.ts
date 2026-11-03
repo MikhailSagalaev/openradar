@@ -32,7 +32,8 @@ export interface CartaCapitalRow {
 export interface TaskTransformationItem {
   label: string;
   n: number;
-  changePct: number;
+  /** Against the base median; absent when either side has fewer than MIN_MEDIAN paid posts. */
+  changePct?: number;
   medianPay?: number;
 }
 
@@ -120,7 +121,7 @@ export interface Report {
   taskTransformation?: {
     routine: TaskTransformationItem[];
     emerging: TaskTransformationItem[];
-    netShiftPct: number;
+    netShiftPct?: number;
     routineMedian?: number;
     emergingMedian?: number;
     totalMatched?: number;
@@ -237,16 +238,18 @@ function computeCartaCapital(records: ResearchRecord[]): CartaCapitalRow[] {
 function computeTaskTransformation(records: ResearchRecord[]) {
   const routineDefs = [
     { key: 'copywriting', label: 'Базовый копирайтинг и рерайт текстов', rx: /копирайт|рерайт|статьи|написание текста|контент|writer/i, roles: ['content'] },
-    { key: 'html', label: 'Шаблонная вёрстка и типовые сайты', rx: /верстк|html|css|лендинг|tilda|тильд/i, roles: ['web'] },
+    // Not the whole `web` role and not html/css skills: every frontend developer has those.
+    { key: 'html', label: 'Шаблонная вёрстка и типовые сайты', rx: /верстк|лендинг|tilda|тильд/i, roles: [] },
     { key: 'translation', label: 'Типовой перевод документации и статей', rx: /перевод|translat/i, roles: ['translation'] },
     { key: 'banner', label: 'Типовые баннеры, креативы и карточки', rx: /баннер|карточк|креатив|обложк/i, roles: ['design', 'marketplaces'] },
   ];
 
   const emergingDefs = [
-    { key: 'agents', label: 'Интеграция AI-агентов, RAG & n8n/Make', rx: /ai[- ]?агент|rag\b|n8n|make\.com|автоматизаци[яи] llm|langchain|llamaindex/i, roles: ['ai'] },
-    { key: 'vibe', label: 'Рефакторинг кода после AI (Cursor/Lovable)', rx: /cursor|lovable|v0\.dev|вайб[- ]?кодинг|доработать mvp/i, roles: [] },
-    { key: 'lora', label: 'Обучение LoRA и ComfyUI пайплайны', rx: /comfyui|lora|stable diffusion|flux/i, roles: [] },
-    { key: 'tma', label: 'Telegram Mini Apps и AI-боты', rx: /tma\b|mini[- ]?app|telegram-бот|чат-бот/i, roles: ['bots'] },
+    // Whole words only: a bare `flux` matched «influx», `lora` matched «floral».
+    { key: 'agents', label: 'Интеграция AI-агентов, RAG & n8n/Make', rx: /(?<![\p{L}\p{N}])(?:ai[- ]?агент\p{L}*|rag|n8n|make\.com|автоматизаци[яи] llm|langchain|llamaindex)(?![\p{L}\p{N}])/iu, roles: ['ai'] },
+    { key: 'vibe', label: 'Рефакторинг кода после AI (Cursor/Lovable)', rx: /(?<![\p{L}\p{N}])(?:cursor|lovable|v0\.dev|вайб[- ]?кодинг\p{L}*|доработать mvp)(?![\p{L}\p{N}])/iu, roles: [] },
+    { key: 'lora', label: 'Обучение LoRA и ComfyUI пайплайны', rx: /(?<![\p{L}\p{N}])(?:comfyui|lora|stable diffusion|flux)(?![\p{L}\p{N}])/iu, roles: [] },
+    { key: 'tma', label: 'Telegram Mini Apps и AI-боты', rx: /(?<![\p{L}\p{N}])(?:tma|mini[- ]?apps?|telegram-бот\p{L}*|чат-бот\p{L}*)(?![\p{L}\p{N}])/iu, roles: ['bots'] },
   ];
 
   const routineStats = new Map<string, { n: number; pays: number[] }>();
@@ -264,7 +267,7 @@ function computeTaskTransformation(records: ResearchRecord[]) {
     let matchedEmerging = false;
 
     for (const d of emergingDefs) {
-      if (d.rx.test(text) || (d.roles.includes(r.role) && (r.ai || d.roles.length > 0))) {
+      if (d.rx.test(text) || d.roles.includes(r.role)) {
         const cur = emergingStats.get(d.key)!;
         cur.n++;
         if (r.pay && r.pay > 0) {
@@ -296,18 +299,20 @@ function computeTaskTransformation(records: ResearchRecord[]) {
   const routineMed = allRoutinePays.length ? dist(allRoutinePays).median : undefined;
   const emergingMed = allEmergingPays.length ? dist(allEmergingPays).median : undefined;
 
+  // No invented baseline: without enough paid posts a comparison is simply not shown.
   const allPays = records.filter((r) => r.pay && r.pay > 0).map((r) => r.pay!);
-  const overallMed = allPays.length ? dist(allPays).median : 100000;
-  const baseline = routineMed ?? overallMed ?? 100000;
+  const overallMed = allPays.length ? dist(allPays).median : undefined;
+  const baseline = routineMed ?? overallMed;
+  const pct = (value: number | undefined, base: number | undefined): number | undefined =>
+    value && base ? Math.round(((value - base) / base) * 100) : undefined;
 
   const routine: TaskTransformationItem[] = routineDefs.map((d) => {
     const st = routineStats.get(d.key)!;
     const med = st.pays.length ? dist(st.pays).median : undefined;
-    const changePct = med && overallMed ? Math.round(((med - overallMed) / overallMed) * 100) : 0;
     return {
       label: d.label,
       n: st.n,
-      changePct,
+      changePct: pct(med, overallMed),
       medianPay: med,
     };
   });
@@ -315,18 +320,16 @@ function computeTaskTransformation(records: ResearchRecord[]) {
   const emerging: TaskTransformationItem[] = emergingDefs.map((d) => {
     const st = emergingStats.get(d.key)!;
     const med = st.pays.length ? dist(st.pays).median : undefined;
-    const changePct = med && baseline ? Math.round(((med - baseline) / baseline) * 100) : 0;
+    // A negative premium is a finding too; it is shown with its sign.
     return {
       label: d.label,
       n: st.n,
-      changePct: Math.max(0, changePct),
+      changePct: pct(med, baseline),
       medianPay: med,
     };
   });
 
-  const netShiftPct = routineMed && emergingMed && routineMed > 0
-    ? Math.round(((emergingMed - routineMed) / routineMed) * 100)
-    : 0;
+  const netShiftPct = pct(emergingMed, routineMed);
 
   return {
     routine,

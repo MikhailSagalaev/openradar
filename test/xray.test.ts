@@ -37,6 +37,18 @@ describe('xray core module', () => {
   });
 
   describe('categorizePersonas', () => {
+    it('reads Russian titles, not only Latin ones', () => {
+      const cases: Array<[string, string]> = [
+        ['Тестировщик', 'qa'],
+        ['Дизайнер интерфейсов', 'design'],
+        ['Аналитик данных', 'data_ml'],
+        ['Инженер инфраструктуры', 'infrastructure'],
+        ['Фронтенд-разработчик', 'frontend'],
+        ['Продакт-менеджер', 'product'],
+      ];
+      for (const [title, category] of cases) expect(categorizePersonas(title).category, title).toBe(category);
+    });
+
     it('categorizes Go / Golang backend', () => {
       const res = categorizePersonas('Senior Go Developer', ['Kafka', 'PostgreSQL']);
       expect(res.category).toBe('golang');

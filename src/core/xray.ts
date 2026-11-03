@@ -115,12 +115,15 @@ export function categorizePersonas(title?: string, skills: string[] = []): Perso
   const skillsText = skills.join(' ').toLowerCase();
   const haystack = `${titleText} ${skillsText}`.trim();
 
+  // Word edges are Unicode lookarounds: \b only knows ASCII letters, so it never fires
+  // around «Тестировщик» or «Дизайнер». Russian stems take any ending.
+
   // Functional specializations take precedence over generic language skills
   // (e.g. QA Automation in Python -> QA Lead, not Python Lead)
 
   // 1. QA / Testing
-  if (/\b(?:qa|тестиров|quality assurance|sdet|test lead|автотест)\b/i.test(titleText) ||
-      (/\b(?:qa|sdet|quality assurance)\b/i.test(skillsText) && !/\b(?:backend|frontend)\b/i.test(titleText))) {
+  if (/(?<![\p{L}\p{N}])(?:qa|тестиров\p{L}*|quality assurance|sdet|test lead|автотест\p{L}*)(?![\p{L}\p{N}])/iu.test(titleText) ||
+      (/(?<![\p{L}\p{N}])(?:qa|sdet|quality assurance)(?![\p{L}\p{N}])/iu.test(skillsText) && !/(?<![\p{L}\p{N}])(?:backend|frontend)(?![\p{L}\p{N}])/iu.test(titleText))) {
     return {
       category: 'qa',
       personas: ['QA Lead', 'Head of QA', 'Test Lead', 'Quality Lead', 'Engineering Manager'],
@@ -128,8 +131,8 @@ export function categorizePersonas(title?: string, skills: string[] = []): Perso
   }
 
   // 2. Infrastructure / DevOps / SRE
-  if (/\b(?:devops|sre|infrastructure|platform|инфраструктур|sysadmin|сисадмин)\b/i.test(titleText) ||
-      /\b(?:devops|sre|kubernetes|k8s|terraform)\b/i.test(skillsText) && !/\b(?:backend|frontend)\b/i.test(titleText)) {
+  if (/(?<![\p{L}\p{N}])(?:devops|sre|infrastructure|platform|инфраструктур\p{L}*|sysadmin|сисадмин\p{L}*)(?![\p{L}\p{N}])/iu.test(titleText) ||
+      /(?<![\p{L}\p{N}])(?:devops|sre|kubernetes|k8s|terraform)(?![\p{L}\p{N}])/iu.test(skillsText) && !/(?<![\p{L}\p{N}])(?:backend|frontend)(?![\p{L}\p{N}])/iu.test(titleText)) {
     return {
       category: 'infrastructure',
       personas: ['Head of Infrastructure', 'DevOps Lead', 'SRE Lead', 'Platform Lead', 'VP of Engineering', 'CTO'],
@@ -137,8 +140,8 @@ export function categorizePersonas(title?: string, skills: string[] = []): Perso
   }
 
   // 3. Design
-  if (/\b(?:design[a-z]*|дизайн[а-я]*|ui\/ux|ux|figma|product design)\b/i.test(titleText) ||
-      /\b(?:figma|ui\/ux|sketch)\b/i.test(skillsText)) {
+  if (/(?<![\p{L}\p{N}])(?:design[a-z]*|дизайн[а-я]*|ui\/ux|ux|figma|product design)(?![\p{L}\p{N}])/iu.test(titleText) ||
+      /(?<![\p{L}\p{N}])(?:figma|ui\/ux|sketch)(?![\p{L}\p{N}])/iu.test(skillsText)) {
     return {
       category: 'design',
       personas: ['Design Director', 'Head of Design', 'Lead Product Designer', 'Chief Design Officer', 'Art Director'],
@@ -146,7 +149,7 @@ export function categorizePersonas(title?: string, skills: string[] = []): Perso
   }
 
   // 4. Product
-  if (/\b(?:product manager|продакт|head of product|cpo|project manager)\b/i.test(titleText)) {
+  if (/(?<![\p{L}\p{N}])(?:product manager|продакт\p{L}*|head of product|cpo|project manager)(?![\p{L}\p{N}])/iu.test(titleText)) {
     return {
       category: 'product',
       personas: ['Chief Product Officer', 'CPO', 'Head of Product', 'Lead Product Manager', 'VP of Product'],
@@ -154,8 +157,8 @@ export function categorizePersonas(title?: string, skills: string[] = []): Perso
   }
 
   // 5. Data / ML / AI
-  if (/\b(?:data|ml|ai|machine learning|nlp|cv|computer vision|аналитик|analytics|bi)\b/i.test(titleText) ||
-      /\b(?:pytorch|tensorflow|machine learning|data science)\b/i.test(skillsText)) {
+  if (/(?<![\p{L}\p{N}])(?:data|ml|ai|machine learning|nlp|cv|computer vision|аналитик\p{L}*|analytics|bi)(?![\p{L}\p{N}])/iu.test(titleText) ||
+      /(?<![\p{L}\p{N}])(?:pytorch|tensorflow|machine learning|data science)(?![\p{L}\p{N}])/iu.test(skillsText)) {
     return {
       category: 'data_ml',
       personas: ['Head of Data', 'Lead Data Scientist', 'ML Lead', 'Chief Data Officer', 'Head of AI', 'Analytics Lead'],
@@ -163,8 +166,8 @@ export function categorizePersonas(title?: string, skills: string[] = []): Perso
   }
 
   // 6. Mobile
-  if (/\b(?:mobile|ios|android|flutter|swift|swiftui|react native)\b/i.test(titleText) ||
-      /\b(?:ios|android|flutter|swift|swiftui)\b/i.test(skillsText)) {
+  if (/(?<![\p{L}\p{N}])(?:mobile|ios|android|flutter|swift|swiftui|react native)(?![\p{L}\p{N}])/iu.test(titleText) ||
+      /(?<![\p{L}\p{N}])(?:ios|android|flutter|swift|swiftui)(?![\p{L}\p{N}])/iu.test(skillsText)) {
     return {
       category: 'mobile',
       personas: ['Mobile Lead', 'iOS Lead', 'Android Lead', 'Head of Mobile', 'Team Lead', 'Engineering Manager', 'CTO'],
@@ -172,8 +175,8 @@ export function categorizePersonas(title?: string, skills: string[] = []): Perso
   }
 
   // 7. Frontend / Web
-  if (/\b(?:frontend|фронтенд|web)\b/i.test(titleText) ||
-      (/\b(?:react|vue|angular|svelte|nextjs)\b/i.test(haystack) && !/\b(?:backend|python|golang|java)\b/i.test(titleText))) {
+  if (/(?<![\p{L}\p{N}])(?:frontend|фронтенд\p{L}*|web)(?![\p{L}\p{N}])/iu.test(titleText) ||
+      (/(?<![\p{L}\p{N}])(?:react|vue|angular|svelte|nextjs)(?![\p{L}\p{N}])/iu.test(haystack) && !/(?<![\p{L}\p{N}])(?:backend|python|golang|java)(?![\p{L}\p{N}])/iu.test(titleText))) {
     return {
       category: 'frontend',
       personas: ['Frontend Lead', 'Head of Frontend', 'Lead Frontend', 'Team Lead', 'Engineering Manager', 'CTO'],
@@ -181,7 +184,7 @@ export function categorizePersonas(title?: string, skills: string[] = []): Perso
   }
 
   // 8. Go / Golang
-  if (/\b(?:golang|go)\b/i.test(haystack)) {
+  if (/(?<![\p{L}\p{N}])(?:golang|go)(?![\p{L}\p{N}])/iu.test(haystack)) {
     return {
       category: 'golang',
       personas: ['Go Lead', 'Golang Lead', 'Backend Lead', 'Team Lead', 'Head of Backend', 'Engineering Manager', 'CTO'],
@@ -189,7 +192,7 @@ export function categorizePersonas(title?: string, skills: string[] = []): Perso
   }
 
   // 9. Python
-  if (/\b(?:python|django|fastapi|flask)\b/i.test(haystack)) {
+  if (/(?<![\p{L}\p{N}])(?:python|django|fastapi|flask)(?![\p{L}\p{N}])/iu.test(haystack)) {
     return {
       category: 'python',
       personas: ['Python Lead', 'Backend Lead', 'Team Lead', 'Head of Backend', 'Engineering Manager', 'CTO'],
@@ -197,7 +200,7 @@ export function categorizePersonas(title?: string, skills: string[] = []): Perso
   }
 
   // 10. JVM / Java / Kotlin
-  if (/\b(?:java|kotlin|spring|jvm)\b/i.test(haystack)) {
+  if (/(?<![\p{L}\p{N}])(?:java|kotlin|spring|jvm)(?![\p{L}\p{N}])/iu.test(haystack)) {
     return {
       category: 'jvm',
       personas: ['Java Lead', 'Kotlin Lead', 'Backend Lead', 'Team Lead', 'Head of Backend', 'Engineering Manager', 'CTO'],

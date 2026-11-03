@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { TelegramClient } from '@mtcute/node';
 import type { Store, UserTelegramAccountRecord } from '../core/store.ts';
-import { encryptTelegramSession } from '../core/crypto-session.ts';
+import { decryptTelegramSession, encryptTelegramSession } from '../core/crypto-session.ts';
 
 export type TelegramAuthStatus =
   | 'waiting_qr'
@@ -11,7 +11,7 @@ export type TelegramAuthStatus =
   | 'error'
   | 'expired';
 
-export type PublicTelegramAccountRecord = Omit<UserTelegramAccountRecord, 'sessionEncrypted' | 'iv' | 'tag'>;
+export type PublicTelegramAccountRecord = Omit<UserTelegramAccountRecord, 'sessionEncrypted' | 'iv' | 'tag' | 'phone'>;
 
 export interface TelegramAuthSessionState {
   authSessionId: string;
@@ -55,18 +55,16 @@ export class TelegramAuthService {
 
   constructor(options: TelegramAuthServiceOptions) {
     this.store = options.store;
-    const secret =
-      options.masterSecret ||
-      process.env.RADAR_WEB_KEY_SECRET ||
-      process.env.RADAR_SESSION_SECRET;
-
-    if (process.env.NODE_ENV === 'production' && (!secret || secret.length < 16)) {
+    // No built-in fallback key in any mode: the service only exists when the feature is on
+    // (RADAR_USER_TELEGRAM), and then a real secret is required.
+    const secret = options.masterSecret || process.env.RADAR_WEB_KEY_SECRET;
+    if (!secret || secret.length < 16) {
       throw new Error(
-        'RADAR_WEB_KEY_SECRET must be configured with at least 16 characters in production to enable Telegram account connections.'
+        'RADAR_WEB_KEY_SECRET must be configured with at least 16 characters to enable Telegram account connections.'
       );
     }
 
-    this.masterSecret = secret || 'openradar-telegram-key-secret-fallback';
+    this.masterSecret = secret;
     this.defaultApiId = options.defaultApiId ?? (process.env.RADAR_TELEGRAM_API_ID ? Number(process.env.RADAR_TELEGRAM_API_ID) : undefined);
     this.defaultApiHash = options.defaultApiHash ?? process.env.RADAR_TELEGRAM_API_HASH?.trim();
     this.ttlMs = options.ttlMs ?? 180_000; // 3 minutes TTL
@@ -90,6 +88,11 @@ export class TelegramAuthService {
       );
     }
 
+    // One QR login per person at a time: each holds an MTProto connection for minutes.
+    for (const [id, other] of this.sessions) {
+      if (other.state.userId === userId && !isFinal(other.state.status)) this.expireSession(id);
+    }
+
     const authSessionId = randomUUID();
     const now = Date.now();
     const expiresAt = now + this.ttlMs;
@@ -111,23 +114,11 @@ export class TelegramAuthService {
 
     // Timeout cleaner: auto-expire after TTL
     entry.timer = setTimeout(() => {
-      this.expireSession(authSessionId);
+      if (isFinal(entry.state.status)) this.forgetLater(authSessionId);
+      else this.expireSession(authSessionId);
     }, this.ttlMs);
 
-    // Instantiate client
-    let client: TelegramClient;
-    if (this.createClientFn) {
-      client = await this.createClientFn(apiId, apiHash);
-    } else {
-      const { MemoryStorage, TelegramClient: Client, proxyTransportFromUrl } = await import('@mtcute/node');
-      const proxy = process.env.RADAR_TELEGRAM_PROXY?.trim();
-      client = new Client({
-        apiId,
-        apiHash,
-        storage: new MemoryStorage(),
-        ...(proxy ? { transport: proxyTransportFromUrl(proxy) } : {}),
-      });
-    }
+    const client = await this.newClient(apiId, apiHash);
     entry.client = client;
 
     // We wait for the initial QR URL to resolve startAuth()
@@ -184,7 +175,8 @@ export class TelegramAuthService {
             tgUserId,
             tgUsername: user.username ?? null,
             displayName,
-            phone: (user as any).phone ?? null,
+            // The phone number is not needed to read chats and is not kept.
+            phone: null,
             sessionEncrypted: encrypted.session_encrypted,
             iv: encrypted.iv,
             tag: encrypted.tag,
@@ -198,7 +190,6 @@ export class TelegramAuthService {
             tgUserId: rawAccount.tgUserId,
             tgUsername: rawAccount.tgUsername,
             displayName: rawAccount.displayName,
-            phone: rawAccount.phone,
             status: rawAccount.status,
             lastPolledAt: rawAccount.lastPolledAt,
             createdAt: rawAccount.createdAt,
@@ -212,8 +203,10 @@ export class TelegramAuthService {
         if (abortController.signal.aborted) {
           state.status = 'expired';
         } else {
+          // Details stay in the log; the status page gets a fixed text.
+          console.error('[tg-auth] QR login failed:', err instanceof Error ? err.message : err);
           state.status = 'error';
-          state.error = err instanceof Error ? err.message : String(err);
+          state.error = 'Telegram login failed. Please try again.';
         }
         if (!initialQrReceived) {
           initialReject(err);
@@ -287,6 +280,54 @@ export class TelegramAuthService {
     this.expireSession(authSessionId);
   }
 
+  /**
+   * Ends the stored Telegram session on Telegram's side (it disappears from the person's
+   * active sessions) before the row is deleted. A session that is already dead counts as revoked.
+   */
+  async revokeAccount(accountId: string, userId: number): Promise<boolean> {
+    const account = await this.store.getTelegramAccount?.(accountId, userId);
+    if (!account) return false;
+    const apiId = this.defaultApiId;
+    const apiHash = this.defaultApiHash;
+    if (!apiId || !apiHash) return false;
+    let client: TelegramClient | undefined;
+    try {
+      const session = decryptTelegramSession(
+        { session_encrypted: account.sessionEncrypted, iv: account.iv, tag: account.tag },
+        this.masterSecret,
+        userId,
+      );
+      client = await this.newClient(apiId, apiHash);
+      await client.importSession(session);
+      await client.logOut();
+      return true;
+    } catch (err) {
+      console.error('[tg-auth] could not revoke Telegram session:', err instanceof Error ? err.message : err);
+      return false;
+    } finally {
+      await client?.destroy().catch(() => {});
+    }
+  }
+
+  private async newClient(apiId: number, apiHash: string): Promise<TelegramClient> {
+    if (this.createClientFn) return this.createClientFn(apiId, apiHash);
+    const { MemoryStorage, TelegramClient: Client, proxyTransportFromUrl } = await import('@mtcute/node');
+    const proxy = process.env.RADAR_TELEGRAM_PROXY?.trim();
+    return new Client({
+      apiId,
+      apiHash,
+      storage: new MemoryStorage(),
+      ...(proxy ? { transport: proxyTransportFromUrl(proxy) } : {}),
+    });
+  }
+
+  /** Keep a finished state for a minute so the poller can read it, then drop it. */
+  private forgetLater(authSessionId: string): void {
+    setTimeout(() => {
+      this.sessions.delete(authSessionId);
+    }, 60_000);
+  }
+
   private expireSession(authSessionId: string): void {
     const entry = this.sessions.get(authSessionId);
     if (!entry) return;
@@ -310,9 +351,10 @@ export class TelegramAuthService {
       entry.client = undefined;
     }
 
-    // Keep state available in map for a minute so poller can see 'expired', then delete
-    setTimeout(() => {
-      this.sessions.delete(authSessionId);
-    }, 60_000);
+    this.forgetLater(authSessionId);
   }
+}
+
+function isFinal(status: TelegramAuthStatus): boolean {
+  return status === 'authenticated' || status === 'error' || status === 'expired';
 }

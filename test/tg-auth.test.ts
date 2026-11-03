@@ -162,3 +162,92 @@ describe('TelegramAuthService', () => {
     }
   });
 });
+
+describe('TelegramAuthService hardening', () => {
+  const masterSecret = '0123456789abcdef0123456789abcdef';
+  const userId = 7;
+
+  function pendingClient(onAbort?: () => void): any {
+    return {
+      signInQr: vi.fn(async (params: any) => {
+        params.abortSignal.addEventListener('abort', () => onAbort?.());
+        setTimeout(() => params.onUrlUpdated('tg://login?token=t', new Date(Date.now() + 60_000)), 5);
+        return new Promise(() => {});
+      }),
+      destroy: vi.fn(async () => {}),
+    };
+  }
+
+  it('refuses to start without a real secret in any mode', () => {
+    expect(() => new TelegramAuthService({ store: new MemoryStore(), masterSecret: '' })).toThrow('RADAR_WEB_KEY_SECRET');
+  });
+
+  it('keeps one QR login per person: a new one ends the previous', async () => {
+    let aborted = 0;
+    const service = new TelegramAuthService({
+      store: new MemoryStore(), masterSecret, defaultApiId: 1, defaultApiHash: 'h',
+      createClient: async () => pendingClient(() => { aborted += 1; }),
+    });
+    const first = await service.startAuth(userId);
+    const second = await service.startAuth(userId);
+    expect(aborted).toBe(1);
+    expect(service.getAuthStatus(first.authSessionId, userId)?.status).toBe('expired');
+    expect(service.getAuthStatus(second.authSessionId, userId)?.status).toBe('waiting_qr');
+  });
+
+  it('does not keep the phone and does not turn a finished login into expired', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const store = new MemoryStore();
+      const client: any = {
+        signInQr: vi.fn(async (params: any) => {
+          params.onUrlUpdated('tg://login?token=t', new Date(Date.now() + 60_000));
+          return { id: 5n, username: 'u', firstName: 'U', phone: '+79990000000' };
+        }),
+        exportSession: vi.fn(async () => 'session'),
+        destroy: vi.fn(async () => {}),
+      };
+      const service = new TelegramAuthService({
+        store, masterSecret, defaultApiId: 1, defaultApiHash: 'h', ttlMs: 1_000, createClient: async () => client,
+      });
+      const { authSessionId } = await service.startAuth(userId);
+      await vi.advanceTimersByTimeAsync(10);
+      expect(service.getAuthStatus(authSessionId, userId)?.status).toBe('authenticated');
+      expect((await store.listTelegramAccounts(userId))[0]!.phone).toBeNull();
+      expect((service.getAuthStatus(authSessionId, userId)?.accountRecord as any)?.phone).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(1_500);
+      expect(service.getAuthStatus(authSessionId, userId)?.status).toBe('authenticated');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('logs the stored session out at Telegram when the account is removed', async () => {
+    const store = new MemoryStore();
+    const login: any = {
+      signInQr: vi.fn(async (params: any) => {
+        params.onUrlUpdated('tg://login?token=t', new Date(Date.now() + 60_000));
+        return { id: 6n, username: 'v', firstName: 'V' };
+      }),
+      exportSession: vi.fn(async () => 'stored-session'),
+      destroy: vi.fn(async () => {}),
+    };
+    const revoker: any = {
+      importSession: vi.fn(async () => {}),
+      logOut: vi.fn(async () => ({})),
+      destroy: vi.fn(async () => {}),
+    };
+    const clients = [login, revoker];
+    const service = new TelegramAuthService({
+      store, masterSecret, defaultApiId: 1, defaultApiHash: 'h', createClient: async () => clients.shift(),
+    });
+    await service.startAuth(userId);
+    await new Promise((r) => setTimeout(r, 10));
+    const account = (await store.listTelegramAccounts(userId))[0]!;
+    expect(await service.revokeAccount(account.id, userId)).toBe(true);
+    expect(revoker.importSession).toHaveBeenCalledWith('stored-session');
+    expect(revoker.logOut).toHaveBeenCalled();
+    expect(revoker.destroy).toHaveBeenCalled();
+    expect(await service.revokeAccount(account.id, userId + 1)).toBe(false);
+  });
+});

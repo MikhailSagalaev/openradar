@@ -170,11 +170,15 @@ function renderCartaSection(rows?: Report['cartaCapital'], baseUrl = ''): string
 </section>`;
 }
 
+const signedPct = (value: number): string => (value > 0 ? `+${value}%` : `${value}%`);
+
 function renderTaskTransformationSection(data?: Report['taskTransformation'], baseUrl = ''): string {
   if (!data) return '';
   const embedCode = `<iframe src="${baseUrl}/embed/task-transformation" width="100%" height="420" frameborder="0"></iframe>`;
-  const shiftText = data.netShiftPct >= 0 ? `+${data.netShiftPct}%` : `${data.netShiftPct}%`;
-  const subTitle = `Синхронный срез рынка: премия за AI-компетенции ${shiftText} к базовой оплате${data.totalMatched ? ` (выборка: ${num(data.totalMatched)} публикаций)` : ''}`;
+  const sample = data.totalMatched ? ` (выборка: ${num(data.totalMatched)} публикаций)` : '';
+  const subTitle = data.netShiftPct === undefined
+    ? `Синхронный срез рынка: для сравнения оплаты пока мало публикаций с суммой${sample}`
+    : `Синхронный срез рынка: AI-компетенции ${signedPct(data.netShiftPct)} к базовой оплате${sample}`;
 
   return `<section class="rs-section">
   <div class="rs-section-head">
@@ -193,7 +197,7 @@ function renderTaskTransformationSection(data?: Report['taskTransformation'], ba
       <ul class="rs-transform-list">
         ${data.routine.map((item) => `<li>
           <span>${escapeHtml(item.label)} <span class="muted small">(n = ${num(item.n)})</span></span>
-          <span class="rs-mono rs-diff-down">${item.medianPay ? formatRub(item.medianPay) : (item.changePct ? `${item.changePct}%` : '—')}</span>
+          <span class="rs-mono rs-diff-down">${item.medianPay ? formatRub(item.medianPay) : '—'}</span>
         </li>`).join('')}
       </ul>
     </div>
@@ -205,7 +209,7 @@ function renderTaskTransformationSection(data?: Report['taskTransformation'], ba
       <ul class="rs-transform-list">
         ${data.emerging.map((item) => `<li>
           <span>${escapeHtml(item.label)} <span class="muted small">(n = ${num(item.n)})</span></span>
-          <span class="rs-mono rs-diff-up">${item.medianPay ? formatRub(item.medianPay) : ''}${item.changePct ? ` · +${item.changePct}%` : ''}</span>
+          <span class="rs-mono ${item.changePct !== undefined && item.changePct < 0 ? 'rs-diff-down' : 'rs-diff-up'}">${item.medianPay ? formatRub(item.medianPay) : '—'}${item.changePct !== undefined ? ` · ${signedPct(item.changePct)}` : ''}</span>
         </li>`).join('')}
       </ul>
     </div>
