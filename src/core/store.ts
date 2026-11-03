@@ -324,6 +324,16 @@ export interface LeadFactsFill {
   author?: string;
 }
 
+export interface LeadSighting {
+  leadId: string;
+  url: string;
+  sourceId: string;
+  /** Which merge rule found it: url, title, title_company, contact, similar. */
+  method: string;
+  similarity: number;
+  seenAt?: string;
+}
+
 export interface Store extends HubStore {
   init?(): Promise<void>;
   listSources(): Promise<SourceRecord[]>;
@@ -344,6 +354,19 @@ export interface Store extends HubStore {
   findLeadByCanonicalUrl(canonicalUrl: string): Promise<Lead | null>;
   /** Id, creation time and MinHash sketch of leads created since `sinceIso`, oldest first. */
   listRecentSketches(sinceIso: string, limit: number): Promise<Array<{ id: string; createdAt: string; minhash: string }>>;
+  /** Leads with this title key since `sinceIso`, newest first: the title-and-company rule compares their employers. */
+  listRecentByTitleKey?(titleKey: string, sinceIso: string, limit: number): Promise<Lead[]>;
+  /** MinHash LSH bands of a stored lead (migration 027), the shared near-duplicate index. */
+  saveLeadBands?(leadId: string, bands: string[], createdAt: string): Promise<void>;
+  /** Leads since `sinceIso` sharing at least one band, with their sketches. */
+  findBandCandidates?(bands: string[], sinceIso: string, limit: number): Promise<Array<{ id: string; minhash: string }>>;
+  /** Drops bands of leads created before `beforeIso`; returns how many rows went. */
+  pruneLeadBands?(beforeIso: string): Promise<number>;
+  /** True once any band is stored: the index needs no backfill. */
+  hasLeadBands?(): Promise<boolean>;
+  /** A copy of a stored lead seen at another address or source (migration 027). */
+  addLeadSighting?(sighting: LeadSighting): Promise<void>;
+  listLeadSightings?(leadId: string): Promise<LeadSighting[]>;
   updateLeadStatus(id: string, status: LeadStatus, deliveredAt?: string, scoreDelta?: number): Promise<void>;
   /** Sets a recomputed base score; the stored score is the base plus the community vote adjustment. */
   updateLeadScore?(id: string, baseScore: number): Promise<number | undefined>;
@@ -367,7 +390,8 @@ export interface Store extends HubStore {
    */
   saveLeadFacts?(id: string, facts: PageFacts, fill: LeadFactsFill): Promise<void>;
   /** Leads published in [from, to) for the market report: text cut to its head, junk and scam left out. */
-  listLeadsForResearch?(options: { from: string; to: string; limit: number }): Promise<Lead[]>;
+  /** Newest first; `before` continues a page from the last lead of the previous one. */
+  listLeadsForResearch?(options: { from: string; to: string; limit: number; before?: { createdAt: string; id: string } }): Promise<Lead[]>;
   /** Replaces the daily counts of one day (YYYY-MM-DD). */
   saveResearchDaily?(day: string, rows: ResearchDailyRow[]): Promise<void>;
   listResearchDaily?(from: string, to: string): Promise<ResearchDailyRow[]>;

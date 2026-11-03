@@ -8,6 +8,7 @@ import { imapSource } from './imap.ts';
 import { kworkSource } from './kwork.ts';
 import { remoteokSource } from './remoteok.ts';
 import { remotiveSource } from './remotive.ts';
+import { workingNomadsSource } from './workingnomads.ts';
 import { arbeitnowSource } from './arbeitnow.ts';
 import { rssSource } from './rss.ts';
 import { telegramSource } from './telegram.ts';
@@ -44,6 +45,7 @@ export function createSourceRegistry(): SourceRegistry {
     .register(hhSource)
     .register(remoteokSource)
     .register(remotiveSource)
+    .register(workingNomadsSource)
     .register(arbeitnowSource)
     .register(hnSource)
     .register(adzunaSource)

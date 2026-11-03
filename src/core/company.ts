@@ -1,0 +1,43 @@
+/**
+ * The employer of a vacancy as a comparable key. Aggregators and company ATS pages carry the
+ * same vacancy under different addresses and texts; the title alone does not join them
+ * («IT Support Engineer» is open at dozens of companies), the title and the employer do.
+ */
+
+/** Hosts whose address names the company: the first path segment or the subdomain. */
+const COMPANY_IN_URL: Array<[RegExp, number]> = [
+  [/^https?:\/\/(?:www\.)?himalayas\.app\/companies\/([^/?#]+)/i, 1],
+  [/^https?:\/\/(?:job-boards(?:\.eu)?|boards(?:\.eu)?)\.greenhouse\.io\/([^/?#]+)/i, 1],
+  [/^https?:\/\/jobs\.ashbyhq\.com\/([^/?#]+)/i, 1],
+  [/^https?:\/\/jobs\.(?:eu\.)?lever\.co\/([^/?#]+)/i, 1],
+  [/^https?:\/\/apply\.workable\.com\/([^/?#]+)/i, 1],
+  [/^https?:\/\/jobs\.smartrecruiters\.com\/([^/?#]+)/i, 1],
+  [/^https?:\/\/([^./]+)\.recruitee\.com\//i, 1],
+  [/^https?:\/\/([^./]+)\.jobs\.personio\.(?:de|com)\//i, 1],
+  [/^https?:\/\/([^./]+)\.teamtailor\.com\//i, 1],
+];
+
+// \b is ASCII-only even with the u flag, so the boundaries are written out for Cyrillic.
+const LEGAL_FORMS = /(?<![\p{L}\p{N}])(?:inc|llc|ltd|limited|gmbh|ag|sa|sas|bv|plc|corp|corporation|co|ооо|оао|зао|пао|ао|ип)(?![\p{L}\p{N}])\.?/giu;
+
+export function normalizeCompany(name: string): string | undefined {
+  const key = name
+    .toLowerCase()
+    .replace(/&/g, ' ')
+    .replace(LEGAL_FORMS, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, '');
+  return key.length >= 2 ? key : undefined;
+}
+
+/** The company key of a lead: from its address on boards that name the company, else its author. */
+export function companyKeyOf(lead: { url?: string; author?: string }): string | undefined {
+  if (lead.url) {
+    for (const [re, group] of COMPANY_IN_URL) {
+      const slug = re.exec(lead.url)?.[group];
+      if (slug) return normalizeCompany(decodeURIComponent(slug).replace(/[-_]+/g, ' '));
+    }
+  }
+  // Telegram and free-text boards put a person or a channel here, not an employer.
+  if (lead.author && !/^@|^https?:/i.test(lead.author)) return normalizeCompany(lead.author);
+  return undefined;
+}

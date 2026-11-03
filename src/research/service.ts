@@ -6,16 +6,26 @@ import type { Store } from '../core/store.ts';
 import { deriveRecord, type DeriveOptions, type ResearchRecord } from './derive.ts';
 import { MONTHS_GEN, buildReport, livePeriod, monthPeriod, REPORT_VERSION, type Report } from './report.ts';
 
-const MAX_LEADS = 200_000;
+/** Posts are read and derived a page at a time, so only one page of full texts is in memory. */
+const PAGE = 2_000;
+const MAX_LEADS = 500_000;
 const LIVE_DAYS = 30;
 const CACHE_MS = 15 * 60_000;
 /** A month with fewer vacancies than this gets no report of its own. */
 const MIN_MONTH_JOBS = 300;
 
-export async function researchRecords(store: Store, from: string, to: string, options: DeriveOptions = {}): Promise<ResearchRecord[]> {
+export async function researchRecords(store: Store, from: string, to: string, options: DeriveOptions = {}, pageSize = PAGE): Promise<ResearchRecord[]> {
   if (!store.listLeadsForResearch) return [];
-  const leads = await store.listLeadsForResearch({ from, to, limit: MAX_LEADS });
-  return leads.map((lead) => deriveRecord(lead, options));
+  const records: ResearchRecord[] = [];
+  let before: { createdAt: string; id: string } | undefined;
+  while (records.length < MAX_LEADS) {
+    const page = await store.listLeadsForResearch({ from, to, limit: pageSize, before });
+    for (const lead of page) records.push(deriveRecord(lead, options));
+    if (page.length < pageSize) break;
+    const last = page.at(-1)!;
+    before = { createdAt: last.createdAt, id: last.id };
+  }
+  return records;
 }
 
 let cached: { at: number; report: Report; records: ResearchRecord[] } | undefined;

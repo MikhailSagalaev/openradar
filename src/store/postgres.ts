@@ -41,7 +41,7 @@ import type {
   UserSourceInput,
   UserSourceRecord,
 } from '../core/store.ts';
-import type { LeadFactsFill, ResearchDailyRow } from '../core/store.ts';
+import type { LeadFactsFill, LeadSighting, ResearchDailyRow } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
 import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
 import { BROKEN_AFTER, countFailedInRow } from '../core/source-health.ts';
@@ -1084,6 +1084,67 @@ export class PostgresStore implements Store {
     return res.rows[0] ? this.rowToLead(res.rows[0]) : null;
   }
 
+  async listRecentByTitleKey(titleKey: string, sinceIso: string, limit: number): Promise<Lead[]> {
+    const res = await this.pool.query(
+      `SELECT * FROM leads WHERE title_key = $1::text AND created_at >= $2::timestamptz ORDER BY created_at DESC LIMIT $3`,
+      [titleKey, sinceIso, limit],
+    );
+    return res.rows.map((r) => this.rowToLead(r));
+  }
+
+  async saveLeadBands(leadId: string, bands: string[], createdAt: string): Promise<void> {
+    if (!bands.length) return;
+    await this.pool.query(
+      `INSERT INTO lead_minhash_bands (band, lead_id, created_at)
+         SELECT band, $2::text, $3::timestamptz FROM unnest($1::text[]) AS band
+       ON CONFLICT DO NOTHING`,
+      [bands, leadId, createdAt],
+    );
+  }
+
+  async findBandCandidates(bands: string[], sinceIso: string, limit: number): Promise<Array<{ id: string; minhash: string }>> {
+    if (!bands.length) return [];
+    const res = await this.pool.query(
+      `SELECT l.id, l.minhash_sketch FROM leads l
+         WHERE l.id IN (SELECT DISTINCT lead_id FROM lead_minhash_bands WHERE band = ANY($1::text[]) AND created_at >= $2::timestamptz LIMIT $3)
+           AND l.minhash_sketch IS NOT NULL`,
+      [bands, sinceIso, limit],
+    );
+    return res.rows.map((r) => ({
+      id: r.id,
+      minhash: Buffer.isBuffer(r.minhash_sketch) ? r.minhash_sketch.toString('base64url') : String(r.minhash_sketch),
+    }));
+  }
+
+  async pruneLeadBands(beforeIso: string): Promise<number> {
+    const res = await this.pool.query(`DELETE FROM lead_minhash_bands WHERE created_at < $1::timestamptz`, [beforeIso]);
+    return res.rowCount ?? 0;
+  }
+
+  async hasLeadBands(): Promise<boolean> {
+    const res = await this.pool.query(`SELECT EXISTS (SELECT 1 FROM lead_minhash_bands) AS has`);
+    return Boolean(res.rows[0]?.has);
+  }
+
+  async addLeadSighting(sighting: LeadSighting): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO lead_sightings (lead_id, url, source_id, method, similarity) VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (lead_id, url) DO NOTHING`,
+      [sighting.leadId, sighting.url, sighting.sourceId, sighting.method, sighting.similarity],
+    );
+  }
+
+  async listLeadSightings(leadId: string): Promise<LeadSighting[]> {
+    const res = await this.pool.query(
+      `SELECT lead_id, url, source_id, method, similarity, seen_at FROM lead_sightings WHERE lead_id = $1 ORDER BY seen_at ASC`,
+      [leadId],
+    );
+    return res.rows.map((r) => ({
+      leadId: r.lead_id, url: r.url, sourceId: r.source_id, method: r.method,
+      similarity: Number(r.similarity), seenAt: new Date(r.seen_at).toISOString(),
+    }));
+  }
+
   async listRecentSketches(sinceIso: string, limit: number): Promise<Array<{ id: string; createdAt: string; minhash: string }>> {
     const res = await this.pool.query(
       `SELECT id, created_at, minhash_sketch FROM (
@@ -1943,7 +2004,7 @@ export class PostgresStore implements Store {
     );
   }
 
-  async listLeadsForResearch(options: { from: string; to: string; limit: number }): Promise<Lead[]> {
+  async listLeadsForResearch(options: { from: string; to: string; limit: number; before?: { createdAt: string; id: string } }): Promise<Lead[]> {
     const result = await this.pool.query(
       // Company career pages are many and long, and only their head matters to the report.
       `SELECT id, source_id, external_id, url, canonical_url, title,
@@ -1956,9 +2017,11 @@ export class PostgresStore implements Store {
          FROM leads
         WHERE COALESCE(published_at, created_at) >= $1::timestamptz AND COALESCE(published_at, created_at) < $2::timestamptz
           AND state NOT IN ('hidden_junk', 'hidden_scam') AND status NOT IN ('rejected', 'failed')
-        ORDER BY created_at DESC
+          -- The cursor comes back in milliseconds, so the order is by milliseconds too.
+          AND ($4::timestamptz IS NULL OR (date_trunc('milliseconds', created_at), id) < ($4::timestamptz, $5::text))
+        ORDER BY date_trunc('milliseconds', created_at) DESC, id DESC
         LIMIT $3`,
-      [options.from, options.to, options.limit],
+      [options.from, options.to, options.limit, options.before?.createdAt ?? null, options.before?.id ?? null],
     );
     return result.rows.map((r) => this.rowToLead(r));
   }

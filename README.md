@@ -54,7 +54,7 @@ Rating comes from confirmed leads you saw first (×1.5 for private channels and 
 
 ## Quick start
 
-Node.js 22.19+ and pnpm 11+:
+Node.js 22.19+ (the image and CI use 26 LTS) and pnpm 12+:
 
 ```bash
 git clone https://github.com/MikhailSagalaev/openradar.git
@@ -65,7 +65,7 @@ pnpm dev serve
 
 `serve` prints a one-off admin token. Open `http://127.0.0.1:8787`, sign in with it, go to **Источники** → **Каталог площадок** and connect boards one by one or all at once (**Подключить все**): they are polled right away and the first leads appear within seconds.
 
-Without `DATABASE_URL` the node keeps everything in memory. For a persistent node, use PostgreSQL 17 through Docker:
+Without `DATABASE_URL` the node keeps everything in memory. For a persistent node, use PostgreSQL 18 through Docker:
 
 ```bash
 pnpm init:env           # writes .env with fresh random secrets

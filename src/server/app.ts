@@ -19,6 +19,7 @@ import { feedMaxAge } from '../pipeline/liveness.ts';
 import type { Runtime } from '../runtime.ts';
 import { SOURCE_PRESETS, presetSource } from '../sources/presets.ts';
 import { IMAP_PASSWORD_ENV_RE } from '../sources/imap.ts';
+import { ATS_PROVIDERS } from '../sources/ats.ts';
 import { DEFAULT_SESSION_ENV, TELEGRAM_SESSION_ENV_RE } from '../sources/telegram-account.ts';
 import { VERSION } from '../version.ts';
 import { githubOAuthConfigured, startGitHubOAuth, handleGitHubCallback } from './auth.ts';
@@ -696,7 +697,7 @@ function buildSourceConfig(
 
   if (kind === 'ats') {
     const provider = formString(body, 'provider');
-    if (!['greenhouse', 'lever', 'ashby'].includes(provider)) return { config, error: 'Выберите систему найма: Greenhouse, Lever или Ashby.' };
+    if (!(ATS_PROVIDERS as string[]).includes(provider)) return { config, error: 'Выберите систему найма: Greenhouse, Lever, Ashby, Workable, Recruitee или SmartRecruiters.' };
     const companies = parseList(formString(body, 'companies'));
     if (!companies.length) return { config, error: 'Укажите хотя бы одну компанию.' };
     if (companies.length > 300) return { config, error: 'Не больше 300 компаний в одном источнике.' };
@@ -1869,9 +1870,11 @@ export function createApp(runtime: Runtime): Hono {
       skill: lead.skills?.[0],
       ...filterOptions({ sort: 'score', remote: false }),
     })).filter((item) => item.id !== lead.id).slice(0, 4);
+    const sightings = (await runtime.store.listLeadSightings?.(lead.id)) ?? [];
     return c.html(
       renderLeadPage({
         similar,
+        sightings,
         lead,
         source: source ?? undefined,
         version: VERSION,

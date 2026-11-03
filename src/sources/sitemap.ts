@@ -77,6 +77,7 @@ ${markup}` : markup;
 
 /** Pages already read, per source: each poll goes on to newer ones. */
 const seen = new Map<string, Set<string>>();
+const SEEN_MAX = 20_000;
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -110,6 +111,8 @@ export const sitemapSource: SourceAdapter = {
     for (const [i, page] of queue.entries()) {
       if (i > 0 && delayMs) await sleep(delayMs);
       done.add(page.url);
+      // Old pages fall out of the newest-first queue anyway: keep the set from growing forever.
+      if (done.size > SEEN_MAX) done.delete(done.values().next().value!);
       try {
         const lead = leadFromPage(source, page.url, page.key, await fetchText(ctx, page.url));
         const posted = lead?.publishedAt ? Date.parse(lead.publishedAt) : NaN;

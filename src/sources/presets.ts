@@ -95,6 +95,15 @@ export const SOURCE_PRESETS: SourcePreset[] = [
     },
   },
   {
+    id: 'geekjob',
+    kind: 'rss',
+    title: 'GeekJob — IT-вакансии',
+    description: 'Официальный RSS GeekJob: вакансии разработчиков, аналитиков, дизайнеров с грейдом и форматом работы',
+    config: {
+      url: 'https://geekjob.ru/vacancies/rss',
+    },
+  },
+  {
     id: 'freelancehunt',
     kind: 'rss',
     title: 'Freelancehunt — Все проекты',
@@ -204,6 +213,106 @@ export const SOURCE_PRESETS: SourcePreset[] = [
     description: 'RSS-фид RemoteWorker — удалённые вакансии Великобритании и Европы',
     config: {
       url: 'https://remoteworker.co.uk/feeds/all.xml',
+    },
+  },
+  {
+    id: 'landing-jobs',
+    kind: 'rss',
+    title: 'Landing.jobs — Вакансии Европы',
+    description: 'Atom-лента Landing.jobs: IT-вакансии Португалии и Европы, удалённые и в офисе',
+    config: {
+      url: 'https://landing.jobs/feed',
+    },
+  },
+  {
+    id: 'python-jobs',
+    kind: 'rss',
+    title: 'Python.org — Python Job Board',
+    description: 'Официальная доска вакансий Python Software Foundation',
+    config: {
+      url: 'https://www.python.org/jobs/feed/rss/',
+    },
+  },
+  {
+    id: 'golang-projects',
+    kind: 'rss',
+    title: 'Golang Projects — Go-вакансии',
+    description: 'RSS Golang Projects: вакансии для Go-разработчиков, много удалённых',
+    config: {
+      url: 'https://www.golangprojects.com/rss.xml',
+    },
+  },
+  {
+    id: 'larajobs',
+    kind: 'rss',
+    title: 'LaraJobs — Laravel и PHP',
+    description: 'RSS LaraJobs: вакансии для Laravel- и PHP-разработчиков',
+    config: {
+      url: 'https://larajobs.com/feed',
+    },
+  },
+  {
+    id: 'rails-jobs',
+    kind: 'rss',
+    title: 'Ruby on Rails Jobs',
+    description: 'Официальная доска вакансий Ruby on Rails',
+    config: {
+      url: 'https://jobs.rubyonrails.org/jobs.rss',
+    },
+  },
+  {
+    id: 'elixir-jobs',
+    kind: 'rss',
+    title: 'Elixir Jobs',
+    description: 'RSS Elixir Jobs: вакансии для Elixir- и Erlang-разработчиков',
+    config: {
+      url: 'https://elixirjobs.net/rss',
+    },
+  },
+  {
+    id: 'hn-jobs',
+    kind: 'rss',
+    title: 'Hacker News — Вакансии стартапов YC',
+    description: 'RSS hnrss.org: раздел вакансий Hacker News, в основном стартапы Y Combinator',
+    config: {
+      url: 'https://hnrss.org/jobs',
+    },
+  },
+  {
+    id: 'dribbble-jobs',
+    kind: 'rss',
+    title: 'Dribbble — Вакансии дизайнеров',
+    description: 'RSS доски вакансий Dribbble: продуктовые, UI/UX и графические дизайнеры',
+    config: {
+      url: 'https://dribbble.com/jobs.rss',
+    },
+  },
+  {
+    id: 'cryptocurrencyjobs',
+    kind: 'rss',
+    title: 'Cryptocurrency Jobs — Web3 вакансии',
+    description: 'RSS Cryptocurrency Jobs: вакансии криптовалютных и блокчейн-компаний',
+    config: {
+      url: 'https://cryptocurrencyjobs.co/index.xml',
+    },
+  },
+  {
+    id: 'realworkfromanywhere',
+    kind: 'rss',
+    title: 'Real Work From Anywhere — Удалённо из любой страны',
+    description: 'RSS вакансий, открытых для кандидатов из любой страны',
+    config: {
+      url: 'https://www.realworkfromanywhere.com/rss.xml',
+    },
+  },
+  {
+    id: 'workingnomads',
+    kind: 'workingnomads',
+    title: 'Working Nomads — Удалённые вакансии',
+    description: 'Открытый API Working Nomads: удалённые вакансии с компанией, категорией и тегами. Из российских сетей ответ обрывается, поэтому через прокси',
+    config: {
+      url: 'https://www.workingnomads.com/api/exposed_jobs/',
+      proxy: true,
     },
   },
   {
@@ -356,6 +465,30 @@ export const SOURCE_PRESETS: SourcePreset[] = [
         'toptal=Toptal',
         'offchainlabs=Offchain Labs',
       ],
+    },
+  },
+  {
+    id: 'ats-workable',
+    kind: 'ats',
+    title: 'Карьерные страницы компаний — Workable',
+    description: 'Публичный API системы найма Workable: вакансии компаний с их карьерных страниц, без ключа',
+    config: {
+      provider: 'workable',
+      perPoll: 3,
+      maxAgeDays: 30,
+      companies: ['huggingface=Hugging Face', 'modash=Modash', 'blueground=Blueground'],
+    },
+  },
+  {
+    id: 'ats-recruitee',
+    kind: 'ats',
+    title: 'Карьерные страницы компаний — Recruitee',
+    description: 'Публичный API системы найма Recruitee: вакансии компаний с их карьерных страниц, без ключа',
+    config: {
+      provider: 'recruitee',
+      perPoll: 3,
+      maxAgeDays: 30,
+      companies: ['tether=Tether', 'bunq=bunq', 'centreon=Centreon'],
     },
   },
   {

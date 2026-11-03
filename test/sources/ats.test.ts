@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { normalizeSalary } from '../../src/core/salary.ts';
+import { companyKeyOf } from '../../src/core/company.ts';
 import { companiesOf, nextBatch } from '../../src/sources/ats.ts';
 import { createSourceRegistry } from '../../src/sources/index.ts';
 import { makeSource, pollContext } from '../helpers.ts';
@@ -88,6 +89,36 @@ describe('ATS source adapter', () => {
     const ctx = { ...served({ 'boards-api.greenhouse.io': fixture('ats-greenhouse.json') }), now: () => new Date('2026-08-20T12:00:00Z') };
     const leads = await adapter.poll!(source, ctx);
     expect(leads.map((l) => l.publishedAt)).toEqual(['2026-08-19T16:52:27-04:00']);
+  });
+
+  it('reads Workable accounts with descriptions and a company address for dedup', async () => {
+    const source = makeSource({ kind: 'ats', config: { provider: 'workable', companies: ['huggingface'], maxAgeDays: 365 } });
+    const urls: string[] = [];
+    const leads = await adapter.poll!(source, served({ 'apply.workable.com/api/v1/widget/accounts/huggingface': fixture('ats-workable.json') }, urls));
+    expect(urls[0]).toBe('https://apply.workable.com/api/v1/widget/accounts/huggingface?details=true');
+    expect(leads).toHaveLength(2);
+    expect(leads[0]).toMatchObject({ type: 'job', author: 'Hugging Face', city: 'Онлайн', isRemote: true });
+    expect(leads[0]!.url).toMatch(/^https:\/\/apply\.workable\.com\/huggingface\/j\/[0-9A-F]+\/$/);
+    expect(companyKeyOf(leads[0]!)).toBe('huggingface');
+    expect(leads[0]!.text).not.toMatch(/<p>/);
+  });
+
+  it('reads Recruitee offers with their UTC dates', async () => {
+    const source = makeSource({ kind: 'ats', config: { provider: 'recruitee', companies: ['bunq'], maxAgeDays: 365 } });
+    const leads = await adapter.poll!(source, served({ 'bunq.recruitee.com/api/offers': fixture('ats-recruitee.json') }));
+    expect(leads).toHaveLength(2);
+    expect(leads[0]).toMatchObject({ author: 'bunq', city: 'Vienna', isRemote: false, publishedAt: '2026-10-30T16:32:58Z' });
+    expect(leads[0]!.url).toBe('https://bunq.recruitee.com/o/aml-manager-austria');
+    expect(leads[0]!.externalId).toMatch(/^recruitee:bunq:\d+$/);
+  });
+
+  it('reads SmartRecruiters listings, which carry no description', async () => {
+    const source = makeSource({ kind: 'ats', config: { provider: 'smartrecruiters', companies: ['ubisoft2=Ubisoft'], maxAgeDays: 365 } });
+    const leads = await adapter.poll!(source, served({ 'api.smartrecruiters.com/v1/companies/ubisoft2/postings': fixture('ats-smartrecruiters.json') }));
+    expect(leads).toHaveLength(2);
+    expect(leads[0]).toMatchObject({ author: 'Ubisoft', city: 'Saguenay', isRemote: false });
+    expect(leads[0]!.url).toMatch(/^https:\/\/jobs\.smartrecruiters\.com\/Ubisoft2\/\d+$/);
+    expect(leads[0]!.text).toContain('Location: Saguenay, QC, Canada');
   });
 
   it('asks for a provider and companies', async () => {

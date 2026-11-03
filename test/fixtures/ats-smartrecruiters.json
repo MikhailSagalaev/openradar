@@ -1,0 +1,69 @@
+{
+ "offset": 0,
+ "limit": 2,
+ "totalFound": 297,
+ "content": [
+  {
+   "id": "744000159401680",
+   "name": "User Interface Artist",
+   "releasedDate": "2026-11-03T14:28:23.152Z",
+   "company": {
+    "identifier": "Ubisoft2",
+    "name": "Ubisoft"
+   },
+   "location": {
+    "city": "Saguenay",
+    "region": "QC",
+    "country": "ca",
+    "remote": false,
+    "hybrid": false,
+    "latitude": "48.4276054",
+    "longitude": "-71.0600102",
+    "fullLocation": "Saguenay, QC, Canada"
+   },
+   "function": {
+    "id": "art_creative",
+    "label": "Art/Creative"
+   },
+   "typeOfEmployment": {
+    "id": "permanent",
+    "label": "Full-time"
+   },
+   "experienceLevel": {
+    "id": "mid_senior_level",
+    "label": "Mid-Senior Level"
+   }
+  },
+  {
+   "id": "744000159399400",
+   "name": "Artiste d’interface utilisateur·trice",
+   "releasedDate": "2026-11-03T14:27:28.273Z",
+   "company": {
+    "identifier": "Ubisoft2",
+    "name": "Ubisoft"
+   },
+   "location": {
+    "city": "Saguenay",
+    "region": "QC",
+    "country": "ca",
+    "remote": false,
+    "hybrid": false,
+    "latitude": "48.4276054",
+    "longitude": "-71.0600102",
+    "fullLocation": "Saguenay, QC, Canada"
+   },
+   "function": {
+    "id": "art_creative",
+    "label": "Art/Creative"
+   },
+   "typeOfEmployment": {
+    "id": "permanent",
+    "label": "Full-time"
+   },
+   "experienceLevel": {
+    "id": "mid_senior_level",
+    "label": "Mid-Senior Level"
+   }
+  }
+ ]
+}

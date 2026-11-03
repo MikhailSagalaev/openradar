@@ -186,9 +186,10 @@ export function registerV2Routes(app: Hono, runtime: Runtime, h: V2Helpers): voi
     if (viewer instanceof Response) return viewer;
     const lead = await runtime.store.getLead(c.req.param('id') ?? '');
     if (!lead || !viewerCanSeeLead(viewer, lead, runtime.access)) return c.json({ error: 'not_found' }, 404);
-    const [observations, signals] = await Promise.all([
+    const [observations, signals, sightings] = await Promise.all([
       runtime.store.listObservations(lead.id),
       runtime.store.listSignals(lead.id),
+      runtime.store.listLeadSightings?.(lead.id) ?? [],
     ]);
     const counts = { useful: 0, junk: 0, scam: 0, closed: 0 };
     for (const s of signals) counts[s.signal] += 1;
@@ -207,6 +208,8 @@ export function registerV2Routes(app: Hono, runtime: Runtime, h: V2Helpers): voi
         receivedAt: o.receivedAt,
       })),
       signals: counts,
+      // The same post seen at other addresses: boards, aggregators, company pages.
+      sightings: sightings.map((s) => ({ url: s.url, method: s.method, seenAt: s.seenAt })),
     });
   });
 
