@@ -39,6 +39,15 @@ export const SOURCE_PRESETS: SourcePreset[] = [
     },
   },
   {
+    id: 'workspace-vacancies',
+    kind: 'rss',
+    title: 'Workspace — Вакансии IT и Digital',
+    description: 'Официальный RSS-фид вакансий digital-агентств и студий: разработка, дизайн, маркетинг',
+    config: {
+      url: 'https://workspace.ru/vacancies/rss/',
+    },
+  },
+  {
     id: 'kwork-all',
     kind: 'kwork',
     title: 'Kwork — Все заказы',

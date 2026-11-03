@@ -2,7 +2,9 @@ import { config as loadDotenv } from 'dotenv';
 import { z } from 'zod';
 import type { Env } from './core/types.ts';
 
-loadDotenv({ quiet: true });
+if (process.env.NODE_ENV !== 'test' && !process.env.VITEST) {
+  loadDotenv({ quiet: true });
+}
 
 const optionalString = z
   .string()

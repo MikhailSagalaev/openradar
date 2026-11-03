@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { SOURCE_PRESETS } from '../../src/sources/presets.ts';
 
 describe('source presets', () => {
+  it('includes workspace-vacancies preset with valid rss url', () => {
+    const ws = SOURCE_PRESETS.find((p) => p.id === 'workspace-vacancies');
+    expect(ws).toBeDefined();
+    expect(ws?.kind).toBe('rss');
+    expect(ws?.config.url).toBe('https://workspace.ru/vacancies/rss/');
+  });
+
   it('keep regular expressions intact', () => {
     const getmatch = SOURCE_PRESETS.find((p) => p.id === 'getmatch')!;
     const pattern = new RegExp(String(getmatch.config.pattern));
