@@ -93,6 +93,13 @@ export function normalizeMoneyText(text: string, options: { keepNotPay?: boolean
 /** Pay per day or per shift: the amount is followed by «в день», «за смену», «/day». */
 const DAILY_RATE = /(?:[₽$€£₸₴]|руб[а-я.]*|р\.|usd|eur|\d)\s*(?:\/|в|за|per|a)\s*(?:день|смену|сутки|day|shift)(?![\p{L}])/iu;
 
+/** The amounts a post names per day: a day mentioned next to one sum says nothing of another. */
+function dayAmounts(text: string): number[] {
+  const found = normalizeMoneyText(text).matchAll(/(\d{1,3}(?:[\s,]\d{3})+|\d+)\s*(?:[₽$€£₸₴]|руб[а-я.]*|р\.?|usd|eur)?\s*(?:\/|в|за|per|a)\s*(?:день|смену|сутки|day|shift)(?![\p{L}])/giu);
+  const before = normalizeMoneyText(text).matchAll(/(?:в|за|per)\s*(?:день|смену|сутки|day|shift)\s*[-–—:]\s*(\d{1,3}(?:[\s,]\d{3})+|\d+)/giu);
+  return [...found, ...before].map((m) => Number(m[1]!.replace(/[\s,]/g, '')));
+}
+
 /** Working days in a month, to compare a day rate with monthly pay. */
 const WORKING_DAYS_PER_MONTH = 21;
 
@@ -324,7 +331,8 @@ export function normalizeSalary(input: {
   // Bounds by period (the JobSpy rule): an «hourly» rate of $500+ is a monthly or yearly figure
   // under a wrong label, and a day rate over $1500 is not one.
   if (period === 'hourly' && top > 500) period = input.type === 'job' ? 'monthly' : 'fixed';
-  const perDay = daily && top > 0 && top <= 1500;
+  // «5/2 – 119 600 ₽, в день – 5200 ₽»: the sum read is the month's, only the other one is per day.
+  const perDay = daily && top > 0 && top <= 1500 && dayAmounts(combinedText).some((amount) => amount === max || amount === min);
   if (perDay) {
     // «3 000 ₽ за смену» is about 63 000 ₽ a month: compared with salaries, not with them as is.
     usdMin = usdMin === undefined ? undefined : usdMin * WORKING_DAYS_PER_MONTH;

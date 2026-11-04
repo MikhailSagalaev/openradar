@@ -218,8 +218,8 @@ const TECH_SKILL_PATTERNS: Array<[RegExp, string]> = [
   [/юрист|юридическ|lawyer/i, 'Юриспруденция'],
   [/репетитор|преподава|tutor|teacher/i, 'Обучение'],
   [/фотограф|ретуш|фотосесси/i, 'Фото'],
-  [/менеджер\S*\s+по\s+продаж|холодн\S*\s+звон|sales\s+(?:manager|representative)/i, 'Продажи'],
-  [/поддержк\S*\s+(?:клиент|пользоват)|customer\s+support|оператор\S*\s+(?:чата|колл)/i, 'Поддержка'],
+  [/менеджер\S*\s+(?:по\s+)?(?:активн\S*\s+)?продаж|отдел\S*\s+продаж|холодн\S*\s+звон|\bsales\b|account\s+(?:executive|manager)|business\s+development/i, 'Продажи'],
+  [/поддержк\S*\s+(?:клиент|пользоват)|техподдержк|техническ\S*\s+поддержк|customer\s+(?:support|success)|support\s+(?:engineer|specialist)|оператор\S*\s+(?:чата|колл)/i, 'Поддержка'],
   [/\bangular\b/i, 'Angular'],
   [/\bnext\.?js\b/i, 'Next.js'],
   [/\bfastapi\b/i, 'FastAPI'],
@@ -245,6 +245,19 @@ const TECH_SKILL_PATTERNS: Array<[RegExp, string]> = [
   [/\bcomfy\s?ui\b/i, 'ComfyUI'],
   [/\bLoRA\b|\bLORA\b/, 'LoRA'],
   [/\bstable\s+diffusion\b/i, 'Stable Diffusion'],
+  // Trades, for posts that name no tool: «Тестировщик», «Маркетолог», «Recruiter».
+  [/тестировщик|тестировани|\bqa\b|\bsdet\b|автотест/i, 'Тестирование'],
+  [/\bdevops\b|\bsre\b|девопс/i, 'DevOps'],
+  [/системн\S*\s+администратор|сисадмин|system\s+administrator/i, 'Администрирование'],
+  [/\bml\b|machine\s+learning|машинн\S*\s+обучен|data\s+scien/i, 'ML'],
+  [/ux\/ui|ui\/ux|\bux\b|ui[- ]дизайн|product\s+designer|продуктов\S*\s+дизайн/i, 'UI/UX'],
+  [/дизайнер|designer|графическ\S*\s+дизайн|graphic\s+design/i, 'Дизайн'],
+  [/рекрутер|recruiter|recruiting|sourcer|сорсер|подбор\S*\s+персонал|talent\s+acquisition|\bhr\b/i, 'Рекрутинг'],
+  [/аналитик|analyst|\banalytics\b/i, 'Аналитика'],
+  [/project\s+manager|проджект|руководител\S*\s+проект|менеджер\S*\s+проект/i, 'Управление проектами'],
+  [/product\s+(?:manager|owner)|продакт|менеджер\S*\s+продукт/i, 'Продакт-менеджмент'],
+  [/маркетолог|marketing|маркетинг/i, 'Маркетинг'],
+  [/разработчик|программист|\bdeveloper\b|software\s+engineer/i, 'Разработка'],
 ];
 
 export function extractTechSkills(input: string, max = 8): string[] {

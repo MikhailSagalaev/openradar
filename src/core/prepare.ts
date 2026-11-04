@@ -41,8 +41,14 @@ export function isGigBoardUrl(url: string | undefined): boolean {
  */
 const FREELANCER_CEILING_USD = 10_000;
 
-export function overBoardCeiling(url: string | undefined, usd: number | undefined): boolean {
-  return Boolean(url && usd !== undefined && usd > FREELANCER_CEILING_USD && /^https?:\/\/(?:www\.)?freelancer\.com\//i.test(url));
+/** A share of future profit names no pay, whatever budget tier the post carries. */
+const PROFIT_SHARE = /profit[- ]shar|revenue[- ]shar|commission[- ]only|equity[- ]only/i;
+
+/** True when a sum on a post offers nothing real: the top tiers of Freelancer.com, a share of profit. */
+export function payNotOffered(lead: { url?: string; title: string }, usd: number | undefined): boolean {
+  if (usd === undefined) return false;
+  if (PROFIT_SHARE.test(lead.title)) return true;
+  return Boolean(lead.url && usd > FREELANCER_CEILING_USD && /^https?:\/\/(?:www\.)?freelancer\.com\//i.test(lead.url));
 }
 const JOB_PATH_RE = /\/(?:jobs?|vacanc(?:y|ies)|careers?|positions?)\b/i;
 
@@ -104,7 +110,7 @@ export function prepareRawLead(
     currency,
     type,
   });
-  const implausible = salaryInfo.implausible === true || overBoardCeiling(url, salaryInfo.normalizedUsdMax ?? salaryInfo.normalizedUsdMin);
+  const implausible = salaryInfo.implausible === true || payNotOffered({ url, title }, salaryInfo.normalizedUsdMax ?? salaryInfo.normalizedUsdMin);
   if (implausible) budget = undefined;
 
   const publishedAtDate = parsePublishedAt(raw.publishedAt, now);

@@ -1872,6 +1872,8 @@ export function createApp(runtime: Runtime): Hono {
       type: lead.type,
       skill: lead.skills?.[0],
       ...filterOptions({ sort: 'score', remote: false }),
+      // A Russian card lists Russian work: one shared skill does not make an English post similar.
+      language: /[а-яё]/i.test(lead.title) ? 'ru' : 'en',
     })).filter((item) => item.id !== lead.id).slice(0, 4);
     const sightings = ((await runtime.store.listLeadSightings?.(lead.id)) ?? []).filter((s) => s.url !== lead.url);
     return c.html(
