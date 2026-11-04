@@ -1,6 +1,6 @@
 # Multi-stage unprivileged Dockerfile for Radar
-# Node 24 LTS, not 26: on 26.13 reading an answer above about 6.5 MB over HTTPS hangs and later
-# requests to the host hang with it, with any TLS settings; 24 reads the same boards in a second.
+# Node 24 LTS, not 26: Node 26 bundles undici 8, whose fetch hangs on HTTPS answers of several
+# megabytes (see CHANGELOG 0.44.7). The undici package is held at 7 for the same reason.
 FROM node:24-trixie-slim AS build
 WORKDIR /app
 # npm and pnpm download over TLS with Node's defaults; TLS 1.2 keeps the handshake in
