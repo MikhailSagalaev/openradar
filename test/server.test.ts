@@ -252,7 +252,7 @@ describe('http server', () => {
     const sources = await runtime.store.listSources();
     expect(sources.length).toBeGreaterThan(0);
 
-    await expect.poll(async () => (await runtime.store.listRuns(50)).length).toBe(sources.length);
+    await expect.poll(async () => (await runtime.store.listRuns(sources.length)).length).toBe(sources.length);
     expect(requested.length).toBeGreaterThan(0);
   });
 
