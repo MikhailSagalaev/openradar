@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.44.6
+
+- ATS sources take `config.timeoutMs` (up to 120 s). From the hub's network answers of api.ashbyhq.com now freeze at about 20 KB, curl included, while Tor delivers them slowly: a 5 MB board takes over 20 s, past the general 15 s limit. The hub's Ashby source runs with `proxy: true`, `timeoutMs: 60000` and `perPoll: 3`.
+
 ## 0.44.5
 
 - Profile. Accounts and sources are lists with line icons; the form for a new source opens from «Добавить источник», and the explanation folds away once an account is linked. The two Telegram buttons no longer read the same: «Получать подписки в Telegram» names the bot, «Подключить аккаунт Telegram» links an account for reading.

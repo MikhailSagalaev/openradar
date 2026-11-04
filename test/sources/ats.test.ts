@@ -103,6 +103,21 @@ describe('ATS source adapter', () => {
     expect(urls.filter((u) => u.includes('/gone/'))).toHaveLength(1);
   });
 
+  it('gives a source its own longer timeout, within a ceiling', async () => {
+    const seen: number[] = [];
+    const ctx = { ...served({}), timeoutMs: 15_000 };
+    const spy = (timeoutMs: unknown) => makeSource({ id: `ats-t${String(timeoutMs)}`, kind: 'ats', config: { provider: 'greenhouse', companies: ['gitlab'], timeoutMs } });
+    const realSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = ((fn: () => void, ms?: number) => { seen.push(ms ?? 0); return realSetTimeout(fn, 0); }) as typeof setTimeout;
+    try {
+      await adapter.poll!(spy(60_000), { ...ctx, fetchImpl: async () => new Response('{"jobs":[]}', { status: 200 }) });
+      await adapter.poll!(spy(900_000), { ...ctx, fetchImpl: async () => new Response('{"jobs":[]}', { status: 200 }) });
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+    }
+    expect(seen).toEqual(expect.arrayContaining([60_000, 120_000]));
+  });
+
   it('gives a board up after three stalled answers and goes on', async () => {
     const source = makeSource({ id: 'ats-stuck', kind: 'ats', config: { provider: 'greenhouse', companies: ['gitlab'], maxAgeDays: 365 } });
     let calls = 0;
