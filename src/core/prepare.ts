@@ -37,9 +37,11 @@ export function isGigBoardUrl(url: string | undefined): boolean {
 const JOB_PATH_RE = /\/(?:jobs?|vacanc(?:y|ies)|careers?|positions?)\b/i;
 
 function detectLeadType(raw: RawLead, title: string, url?: string): LeadType {
+  // A board's kind beats what an adapter says: the RSS adapter calls every post an order.
   if (isGigBoardUrl(url)) return 'gig';
+  if (isJobBoardUrl(url)) return 'job';
   if (raw.type === 'job' || raw.type === 'gig') return raw.type;
-  if (url && (JOB_BOARD_URL.test(url) || JOB_PATH_RE.test(url))) return 'job';
+  if (url && JOB_PATH_RE.test(url)) return 'job';
   return JOB_HINT.test(`${title} ${url ?? ''}`) ? 'job' : 'gig';
 }
 
