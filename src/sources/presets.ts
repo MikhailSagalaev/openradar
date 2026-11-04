@@ -514,4 +514,203 @@ export const SOURCE_PRESETS: SourcePreset[] = [
       limit: 50,
     },
   },
+  // --- RU-батч 1 (2026-11-04): hh по ролям через RSS (API за WAF), нишевые RSS, публичные TG-каналы ---
+  {
+    id: 'hh-product',
+    kind: 'rss',
+    title: 'HeadHunter — Продакт-менеджеры',
+    description: 'RSS поиска hh.ru по роли «Менеджер продукта»: вакансии продукта всех отраслей',
+    config: {
+      url: 'https://hh.ru/search/vacancy/rss?professional_role=73&order_by=publication_time',
+    },
+  },
+  {
+    id: 'hh-project',
+    kind: 'rss',
+    title: 'HeadHunter — Проджект-менеджеры',
+    description: 'RSS поиска hh.ru по роли «Руководитель проектов»: управление проектами во всех отраслях',
+    config: {
+      url: 'https://hh.ru/search/vacancy/rss?professional_role=107&order_by=publication_time',
+    },
+  },
+  {
+    id: 'hh-analytics',
+    kind: 'rss',
+    title: 'HeadHunter — Аналитики',
+    description: 'RSS поиска hh.ru по аналитическим ролям: аналитик, системный, бизнес-, BI- и продуктовый аналитик',
+    config: {
+      url: 'https://hh.ru/search/vacancy/rss?professional_role=10&professional_role=148&professional_role=150&professional_role=156&professional_role=164&order_by=publication_time',
+    },
+  },
+  {
+    id: 'hh-design',
+    kind: 'rss',
+    title: 'HeadHunter — Дизайнеры',
+    description: 'RSS поиска hh.ru по ролям «Дизайнер, художник», «Гейм-дизайнер» и «Арт-директор»',
+    config: {
+      url: 'https://hh.ru/search/vacancy/rss?professional_role=34&professional_role=25&professional_role=12&order_by=publication_time',
+    },
+  },
+  {
+    id: 'hh-qa',
+    kind: 'rss',
+    title: 'HeadHunter — Тестировщики (QA)',
+    description: 'RSS поиска hh.ru по роли «Тестировщик»: ручное и автоматизированное тестирование',
+    config: {
+      url: 'https://hh.ru/search/vacancy/rss?professional_role=124&order_by=publication_time',
+    },
+  },
+  {
+    id: 'hh-devops',
+    kind: 'rss',
+    title: 'HeadHunter — DevOps и администрирование',
+    description: 'RSS поиска hh.ru по ролям DevOps-инженер, системный администратор, сетевой и системный инженер',
+    config: {
+      url: 'https://hh.ru/search/vacancy/rss?professional_role=160&professional_role=113&professional_role=112&professional_role=114&order_by=publication_time',
+    },
+  },
+  {
+    id: 'hh-marketing',
+    kind: 'rss',
+    title: 'HeadHunter — Маркетинг и реклама',
+    description: 'RSS поиска hh.ru по маркетинговым ролям: интернет-маркетолог, SMM, маркетолог-аналитик, маркетплейсы',
+    config: {
+      url: 'https://hh.ru/search/vacancy/rss?professional_role=68&professional_role=3&professional_role=163&professional_role=170&professional_role=182&order_by=publication_time',
+    },
+  },
+  {
+    id: 'hh-support',
+    kind: 'rss',
+    title: 'HeadHunter — Техподдержка',
+    description: 'RSS поиска hh.ru по роли «Специалист технической поддержки»',
+    config: {
+      url: 'https://hh.ru/search/vacancy/rss?professional_role=121&order_by=publication_time',
+    },
+  },
+  {
+    id: 'hh-sales',
+    kind: 'rss',
+    title: 'HeadHunter — Продажи',
+    description: 'RSS поиска hh.ru по ролям продаж: менеджер по продажам, руководитель и координатор отдела продаж',
+    config: {
+      url: 'https://hh.ru/search/vacancy/rss?professional_role=70&professional_role=106&professional_role=54&order_by=publication_time',
+    },
+  },
+  {
+    id: 'hh-infosec',
+    kind: 'rss',
+    title: 'HeadHunter — Информационная безопасность',
+    description: 'RSS поиска hh.ru по ролям ИБ: специалист по информационной безопасности и службы безопасности',
+    config: {
+      url: 'https://hh.ru/search/vacancy/rss?professional_role=116&professional_role=120&order_by=publication_time',
+    },
+  },
+  {
+    id: 'hh-1c',
+    kind: 'rss',
+    title: 'HeadHunter — 1С',
+    description: 'RSS поиска hh.ru по запросу «1С»: программисты, консультанты и аналитики 1С',
+    config: {
+      url: 'https://hh.ru/search/vacancy/rss?text=1%D0%A1&order_by=publication_time',
+    },
+  },
+  {
+    id: 'pawetta',
+    kind: 'rss',
+    title: 'Pawetta — Digital-вакансии',
+    description: 'Официальный RSS pawetta.ru: вакансии digital, маркетинга и дизайна',
+    config: {
+      url: 'https://pawetta.ru/feed/',
+    },
+  },
+  {
+    id: 'tg-forproducts',
+    kind: 'telegram',
+    title: 'Telegram — @forproducts: вакансии продукта',
+    description: 'Публичный TG-канал о вакансиях продакт-менеджеров и product owner-ов',
+    config: {
+      channel: 'forproducts',
+    },
+  },
+  {
+    id: 'tg-hireproproduct',
+    kind: 'telegram',
+    title: 'Telegram — @hireproproduct: продукт',
+    description: 'Публичный TG-канал с вакансиями продуктовых менеджеров',
+    config: {
+      channel: 'hireproproduct',
+    },
+  },
+  {
+    id: 'tg-product-design-jobs',
+    kind: 'telegram',
+    title: 'Telegram — @product_design_jobs: продуктовый дизайн',
+    description: 'Публичный TG-канал с вакансиями продуктовых и UX/UI-дизайнеров',
+    config: {
+      channel: 'product_design_jobs',
+    },
+  },
+  {
+    id: 'tg-motion-design-jobs',
+    kind: 'telegram',
+    title: 'Telegram — @motion_design_jobs: motion-дизайн',
+    description: 'Публичный TG-канал с вакансиями motion-дизайнеров и аниматоров',
+    config: {
+      channel: 'motion_design_jobs',
+    },
+  },
+  {
+    id: 'tg-juno-jobs',
+    kind: 'telegram',
+    title: 'Telegram — @juno_jobs: джуны и стажировки',
+    description: 'Публичный TG-канал с junior-вакансиями и стажировками для начинающих',
+    config: {
+      channel: 'juno_jobs',
+    },
+  },
+  {
+    id: 'tg-jobs-juniors-remote',
+    kind: 'telegram',
+    title: 'Telegram — @jobs_juniors_remote: удалёнка для джунов',
+    description: 'Публичный TG-канал с удалёнными junior-вакансиями',
+    config: {
+      channel: 'jobs_juniors_remote',
+    },
+  },
+  {
+    id: 'tg-job4analyst-junior',
+    kind: 'telegram',
+    title: 'Telegram — @job4analyst_junior: аналитики без опыта',
+    description: 'Публичный TG-канал с вакансиями и стажировками для начинающих аналитиков',
+    config: {
+      channel: 'job4analyst_junior',
+    },
+  },
+  {
+    id: 'tg-stagirovky',
+    kind: 'telegram',
+    title: 'Telegram — @stagirovky: стажировки',
+    description: 'Публичный TG-канал со стажировками и программами для студентов',
+    config: {
+      channel: 'stagirovky',
+    },
+  },
+  {
+    id: 'tg-startup-job-russia',
+    kind: 'telegram',
+    title: 'Telegram — @startup_job_russia: стартапы',
+    description: 'Публичный TG-канал с вакансиями в российских стартапах',
+    config: {
+      channel: 'startup_job_russia',
+    },
+  },
+  {
+    id: 'tg-vacancysmm',
+    kind: 'telegram',
+    title: 'Telegram — @vacancysmm: SMM и маркетинг',
+    description: 'Публичный TG-канал с вакансиями в SMM, контенте и маркетинге',
+    config: {
+      channel: 'vacancysmm',
+    },
+  },
 ];
