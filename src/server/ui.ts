@@ -3093,6 +3093,14 @@ function safeHttpUrl(url: string | undefined): string | undefined {
   return undefined;
 }
 
+/** «184 800–302 500 $ в год» from a stored range; one sum alone is left to formatBudget. */
+function salaryRange(lead: Lead, lang: SupportedLang): string | undefined {
+  const match = /^(\d+)[–-](\d+)\s+([A-Z]{3})(\s+per year)?/.exec(lead.rawSalary ?? '');
+  if (!match) return undefined;
+  const year = match[4] ? (lang === 'en' ? ' a year' : ' в год') : '';
+  return `${new Intl.NumberFormat('ru-RU').format(Number(match[1]))}–${formatBudget(Number(match[2]), match[3])}${year}`;
+}
+
 /** One link per board, by host: «hh.ru, career.habr.com». */
 function alsoPublished(sightings: Array<{ url: string }> | undefined, label: string): string {
   const byHost = new Map<string, string>();
@@ -3173,11 +3181,11 @@ document.getElementById('share-lead')?.addEventListener('click', async (event) =
       </div>`
     : '';
 
-  const salaryDisplay = typeof lead.budget === 'number'
+  const salaryDisplay = salaryRange(lead, lang) ?? (typeof lead.budget === 'number'
     ? formatBudget(lead.budget, lead.currency)
-    : lead.rawSalary ? escapeHtml(lead.rawSalary) : '—';
+    : lead.rawSalary ? escapeHtml(lead.rawSalary) : '—');
   const usdEstimate = (lead.normalizedUsdMin
-    ? ` <span class="muted small">(≈ $${lead.normalizedUsdMin}${lead.normalizedUsdMax && lead.normalizedUsdMax !== lead.normalizedUsdMin ? `–$${lead.normalizedUsdMax}` : ''})</span>`
+    ? ` <span class="muted small">(≈ $${lead.normalizedUsdMin}${lead.normalizedUsdMax && lead.normalizedUsdMax !== lead.normalizedUsdMin ? `–$${lead.normalizedUsdMax}` : ''}${lead.type === 'job' && lead.paymentPeriod === 'monthly' ? (lang === 'en' ? ' a month' : ' в месяц') : ''})</span>`
     : '') + (salaryLooksWrong(lead) ? `<div class="small text-warn">${escapeHtml(t.salaryCheckHint)}</div>` : '');
 
   const adminControls = isAdminSession

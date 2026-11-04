@@ -263,12 +263,13 @@ export function detectCompany(lead: Pick<Lead, 'author' | 'text' | 'type'>, fact
 
 // ---------- Pay ----------
 
-const NUM = String.raw`(\d{1,3}(?:[   ]\d{3})+|\d+(?:[.,]\d+)?)\s*(к|k|тыс\.?|тысяч)?`;
+const NUM = String.raw`(\d{1,3}(?:[   ,]\d{3})+|\d+(?:[.,]\d+)?)\s*(к|k|тыс\.?|тысяч)?`;
 const UNIT = String.raw`(₽|руб\p{L}*\.?|р\.|rub|\$|usd|долл\p{L}*|€|eur|евро|₸|тенге|kzt|byn|грн|uah)`;
 
 function toNumber(raw: string | undefined, thousands?: string): number | undefined {
   if (!raw) return undefined;
-  const value = Number.parseFloat(raw.replace(/[   ]/g, '').replace(',', '.'));
+  // «184,800» is a thousands comma, «1,5 тыс» a decimal one.
+  const value = Number.parseFloat(raw.replace(/[   ]/g, '').replace(/,(?=\d{3}(?!\d))/g, '').replace(',', '.'));
   if (!Number.isFinite(value) || value <= 0) return undefined;
   return Math.round(thousands ? value * 1000 : value);
 }
@@ -304,7 +305,7 @@ export function parsePayText(text: string, type: LeadType): Pay | undefined {
       min: toNumber(m[1], m[2] ?? m[4]), max: toNumber(m[3], m[4]), currency: currencyOf(m[5]!), period: periodNear(source, m.index + m[0].length, type), origin: 'text',
     })],
     // «$3000 - $5000»
-    [/([$€])\s*(\d[\d ]{0,9}\d|\d)\s*(k)?\s*(?:-|–|—)\s*[$€]?\s*(\d[\d ]{0,9}\d|\d)\s*(k)?/iu, (m) => ({
+    [/([$€])\s*(\d{1,3}(?:,\d{3})+|\d[\d ]{0,9}\d|\d)\s*(k)?\s*(?:-|–|—)\s*[$€]?\s*(\d{1,3}(?:,\d{3})+|\d[\d ]{0,9}\d|\d)\s*(k)?/iu, (m) => ({
       min: toNumber(m[2], m[3] ?? m[5]), max: toNumber(m[4], m[5]), currency: currencyOf(m[1]!), period: periodNear(source, m.index + m[0].length, type), origin: 'text',
     })],
     // «от 290 000 ₽»
@@ -321,7 +322,7 @@ export function parsePayText(text: string, type: LeadType): Pay | undefined {
       return { min: value, max: value, currency: currencyOf(m[3]!), period: periodNear(source, m.index + m[0].length, type), origin: 'text' };
     }],
     // «$5000»
-    [/([$€])\s*(\d[\d ]{0,9}\d|\d)\s*(k)?/iu, (m) => {
+    [/([$€])\s*(\d{1,3}(?:,\d{3})+|\d[\d ]{0,9}\d|\d)\s*(k)?/iu, (m) => {
       const value = toNumber(m[2], m[3]);
       return { min: value, max: value, currency: currencyOf(m[1]!), period: periodNear(source, m.index + m[0].length, type), origin: 'text' };
     }],

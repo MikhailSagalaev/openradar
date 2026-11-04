@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.44.2
+
+- Profile: an administrator who signed in with GitHub lost the Telegram, saved searches and agent token sections, because the admin viewer carried no user id. They are back.
+- Remote work. «Remote until the office opens» is office work even when the markup says TELECOMMUTE; `applicantLocationRequirements` alone no longer means remote. The extension trusts the work mode the page prints («In office», «Hybrid», «Remote»). A link preview and a vacancy without a word about it are no longer assumed remote.
+- Pay. Overlapping levels of one vacancy make one range: «Engineer: $184,800 - $250,000, Sr. Engineer: $223,600 - $302,500» is 184 800–302 500 $ a year, shown with its period. Research reads thousands written with a comma, which turned «$184,800» into $184.
+- Skills. Kubernetes, Terraform, Ansible, Kafka, Redis, Rust, AWS, GCP, Azure and Linux join the dictionary. «Node management» is not Node.js, the English word «go» is not Golang, and «translate» is not a translation order.
+- Extension 0.12.2: boards without JobPosting markup, such as Gem, are read from the page (title, employer, place, work mode, pay), and pay printed on the page fills what the markup leaves out, so the market estimate shows in the vacancy's currency.
+
 ## 0.44.1
 
 - ATS boards are read up to three times when an answer stalls. From Russian networks a foreign answer may freeze after its first 16 KB on some requests, curl included, which left whole hourly runs of Greenhouse and Ashby empty. An HTTP error is the board's real answer and is not retried.

@@ -80,16 +80,91 @@ function extractCity(loc) {
   return '';
 }
 
+const FULLY_REMOTE = /fully\s+remote|100%\s+remote|remote[- ]first|полностью\s+удал/i;
+const OFFICE_BOUND = /transition\s+to\s+on-?site|in[- ]office|hybrid|гибрид|no\s+remote|not\s+remote/i;
+
+// The same rules as remoteOfPosting in src/core/extract.ts.
 function extractRemote(posting) {
-  if (posting.jobLocationType === 'TELECOMMUTE') return true;
-  if (posting.applicantLocationRequirements) return true;
-  const combined = `${posting.title || ''} ${posting.description || ''}`.toLowerCase();
-  // An explicit fully remote wins over a passing "no onsite visits".
-  if (/fully\s+remote|100%\s+remote|remote[- ]first|полностью\s+удал/i.test(combined)) return true;
-  if (/transition\s+to\s+onsite|on-site|onsite|гибрид|hybrid|no\s+remote|not\s+remote/i.test(combined)) {
-    return false;
+  const combined = `${posting.title || ''} ${posting.description || ''}`;
+  if (FULLY_REMOTE.test(combined)) return true;
+  // «Remote until the office opens» is office work, whatever the markup says.
+  if (OFFICE_BOUND.test(combined)) return false;
+  const types = Array.isArray(posting.jobLocationType) ? posting.jobLocationType : [posting.jobLocationType];
+  if (types.includes('TELECOMMUTE')) return true;
+  if (/on-?site/i.test(combined)) return false;
+  return /удал[её]нн|remote|telecommute/i.test(combined);
+}
+
+/** The first lines of the page: boards print the place and the work mode under the title. */
+function headLines(doc) {
+  const text = doc?.body?.innerText || '';
+  return text.split('\n').map((line) => line.trim()).filter(Boolean).slice(0, 15);
+}
+
+/** A short line that is only a work mode: «In office», «Hybrid», «Remote», «Удалённо». */
+function workModeOf(lines) {
+  for (const line of lines) {
+    if (line.length > 24) continue;
+    if (/^(?:in[- ]office|on-?site|office|hybrid|гибрид|офис|в офисе)$/i.test(line)) return false;
+    if (/^(?:fully\s+)?remote$|^удал[её]нн\S*(?:\s+работа)?$/i.test(line)) return true;
   }
-  return combined.includes('удаленн') || combined.includes('remote') || combined.includes('telecommute');
+  return undefined;
+}
+
+/** «Dallas-Fort Worth Area • San Francisco Bay Area» under the title. */
+function placeLineOf(lines) {
+  const line = lines.find((item) => item.length < 160 && /\s[•·|]\s/.test(item) && !/https?:|©/.test(item));
+  if (!line) return '';
+  return line.split(/\s[•·|]\s/).map((part) => part.replace(/\s+Area$/i, '').trim()).filter(Boolean).slice(0, 3).join(', ');
+}
+
+/** Pay written in the text: all overlapping ranges of a vacancy make one, as on the hub. */
+function moneyInText(text) {
+  const signs = { $: 'USD', '€': 'EUR', '£': 'GBP' };
+  let found;
+  for (const m of String(text || '').matchAll(/([$€£])\s?(\d{1,3}(?:,\d{3})+|\d{4,7})\s*(?:-|–|—|to)\s*[$€£]?\s?(\d{1,3}(?:,\d{3})+|\d{4,7})/g)) {
+    const min = Number(m[2].replace(/,/g, ''));
+    const max = Number(m[3].replace(/,/g, ''));
+    if (!found) found = { budget: min, salaryMax: max, currency: signs[m[1]] };
+    else if (min <= found.salaryMax && max >= found.budget) {
+      found = { ...found, budget: Math.min(found.budget, min), salaryMax: Math.max(found.salaryMax, max) };
+    }
+  }
+  return found;
+}
+
+const JOB_PAGE = /jobs\.gem\.com\/|greenhouse\.io\/|jobs\.lever\.co\/|jobs\.ashbyhq\.com\/|apply\.workable\.com\/|\.recruitee\.com\/|\/careers?\/|\/jobs?\/|\/vacanc/i;
+
+function companyFromUrl(url) {
+  const slug = /(?:jobs\.gem\.com|greenhouse\.io|jobs\.lever\.co|jobs\.ashbyhq\.com|apply\.workable\.com)\/([^/?#]+)/i.exec(url)?.[1];
+  return slug ? slug.replace(/[-_]+/g, ' ').replace(/^\p{L}/u, (c) => c.toUpperCase()) : '';
+}
+
+/** Boards like Gem have no JobPosting markup: the page itself is read. */
+function jobFromPage(doc) {
+  const url = doc?.location?.href || '';
+  if (!JOB_PAGE.test(url)) return null;
+  const meta = (name) => doc.querySelector?.(`meta[property="${name}"]`)?.getAttribute?.('content')
+    || doc.querySelector?.(`meta[name="${name}"]`)?.getAttribute?.('content') || '';
+  const title = meta('og:title') || doc.title || '';
+  const body = doc.body?.innerText || '';
+  const description = meta('og:description') || meta('description') || body.slice(0, 8000);
+  if (!title || !description) return null;
+  const lines = headLines(doc);
+  const money = moneyInText(body) || moneyInText(description);
+  return {
+    type: 'job',
+    title: title.trim(),
+    description: cleanText(description),
+    company: meta('og:site_name') || companyFromUrl(url),
+    city: placeLineOf(lines),
+    isRemote: workModeOf(lines) ?? extractRemote({ title, description: body || description }),
+    budget: money?.budget,
+    salaryMax: money?.salaryMax,
+    currency: money?.currency,
+    skills: [],
+    url,
+  };
 }
 
 function extractSalary(salary) {
@@ -122,17 +197,22 @@ function extractSkills(posting) {
 }
 
 function normalizeJobPosting(posting, doc) {
-  const { budget, salaryMax, currency } = extractSalary(posting.baseSalary);
+  const salary = extractSalary(posting.baseSalary);
+  const lines = headLines(doc);
+  const description = cleanText(posting.description || '');
+  // Markup often leaves pay out while the page prints it.
+  const money = salary.budget === undefined ? moneyInText(doc?.body?.innerText) || moneyInText(description) : undefined;
   return {
     type: 'job',
     title: String(posting.title || posting.name || '').trim(),
-    description: cleanText(posting.description || ''),
+    description,
     company: extractCompany(posting.hiringOrganization),
-    city: extractCity(posting.jobLocation),
-    isRemote: extractRemote(posting),
-    budget,
-    salaryMax,
-    currency,
+    city: extractCity(posting.jobLocation) || placeLineOf(lines),
+    // What the page shows the reader beats the markup.
+    isRemote: workModeOf(lines) ?? extractRemote(posting),
+    budget: salary.budget ?? money?.budget,
+    salaryMax: salary.salaryMax ?? money?.salaryMax,
+    currency: salary.currency ?? money?.currency,
     skills: extractSkills(posting),
     url: posting.url || (doc?.location?.href ?? ''),
   };
@@ -154,7 +234,7 @@ function extractJobPosting(doc = typeof document !== 'undefined' ? document : nu
       // Ignore JSON parse errors in invalid tags
     }
   }
-  return null;
+  return jobFromPage(doc);
 }
 
 function extractPageData(doc = typeof document !== 'undefined' ? document : null) {
@@ -211,5 +291,6 @@ if (typeof module !== 'undefined' && module.exports) {
     extractJobPosting,
     extractPageData,
     normalizeJobPosting,
+    moneyInText,
   };
 }

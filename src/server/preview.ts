@@ -1,6 +1,6 @@
 import * as cheerio from 'cheerio';
 import type { LeadType } from '../core/types.ts';
-import { cleanTitle, extractBudgetAndCurrency, extractCity as extractCityFromText } from '../core/extract.ts';
+import { cleanTitle, extractBudgetAndCurrency, extractCity as extractCityFromText, remoteFromText, remoteOfPosting } from '../core/extract.ts';
 
 export interface LeadPreview {
   type: LeadType;
@@ -100,15 +100,7 @@ function extractCity(loc: unknown): string {
 }
 
 function extractRemote(posting: Record<string, unknown>): boolean {
-  if (posting.jobLocationType === 'TELECOMMUTE') return true;
-  if (posting.applicantLocationRequirements) return true;
-  const combined = `${posting.title || ''} ${posting.description || ''}`.toLowerCase();
-  // An explicit fully remote wins over a passing "no onsite visits".
-  if (/fully\s+remote|100%\s+remote|remote[- ]first|полностью\s+удал/i.test(combined)) return true;
-  if (/transition\s+to\s+onsite|on-site|onsite|гибрид|hybrid|no\s+remote|not\s+remote/i.test(combined)) {
-    return false;
-  }
-  return combined.includes('удаленн') || combined.includes('remote') || combined.includes('telecommute');
+  return remoteOfPosting(posting.jobLocationType, `${posting.title || ''} ${posting.description || ''}`);
 }
 
 function extractSalary(salary: unknown): { budget?: number; salaryMax?: number; currency: string } {
@@ -265,6 +257,6 @@ export function extractPreviewFromHtml(html: string, url: string): LeadPreview {
     currency: extractedMoney.currency,
     skills: fallbackSkills,
     url,
-    isRemote: true,
+    isRemote: remoteFromText(`${rawTitle}\n${rawDesc}`) ?? !isJob,
   };
 }
