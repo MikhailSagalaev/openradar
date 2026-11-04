@@ -22,6 +22,7 @@ export const IT_SKILLS = [
   '1С', 'Python', 'JavaScript', 'TypeScript', 'React', 'Vue', 'Node.js', 'PHP', 'Golang', 'Java', 'Kotlin',
   'Swift', 'C++', 'C#', '.NET', 'Django', 'Laravel', 'WordPress', 'WooCommerce', 'Битрикс', 'OpenCart', 'Tilda',
   'SQL', 'PostgreSQL', 'MySQL', 'MongoDB', 'Docker', 'Flutter', 'Unity', 'Telegram Bot',
+  'Angular', 'Next.js', 'FastAPI', 'Spring', 'ClickHouse', 'Kubernetes', 'Linux', 'Разработка', 'Тестирование', 'DevOps', 'Администрирование', 'ML',
   'IT', 'Engineering', 'Software Development', 'System and Network Administration',
 ] as const;
 

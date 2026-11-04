@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.45.6
+
+- A day rate multiplies only the sum named per day: «5/2 – 119 600 ₽, в день – 5200 ₽» stood at the top of the orders at $31 000.
+- A share of profit in the title («50% Profit Sharing») shows no sum.
+- Skills: trades count when a post names no tool («Тестировщик», «Маркетолог», «Recruiter»), and sales and support match more wordings. The IT filter knows the new technical ones.
+- «Похожие» on a card stay in its language.
+- `requality --money` decodes entities in stored titles.
+
 ## 0.45.5
 
 - The revenue of past launches is not pay: «опыт запусков от 5 млн рублей» and «с нуля до 500 000 €» topped the orders by budget.

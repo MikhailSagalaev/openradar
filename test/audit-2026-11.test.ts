@@ -85,6 +85,23 @@ describe('the ceiling', () => {
   });
 });
 
+describe('day rates', () => {
+  it('multiplies only the sum named per day', () => {
+    const text = 'Оплата без задержек: 5/2 – 119 600 ₽ 2/2 – 78 000 ₽ в день– 5200 ₽';
+    expect(normalizeSalary({ text, budget: 119600, currency: 'RUB', type: 'gig' }).normalizedUsdMax).toBe(Math.round(119600 / 80.56));
+    const shift = normalizeSalary({ text: '3 000 ₽ за смену', budget: 3000, currency: 'RUB', type: 'job' });
+    expect(shift.normalizedUsdMax).toBe(Math.round((3000 / 80.56) * 21));
+  });
+});
+
+describe('profit share', () => {
+  it('names no pay, on any board', () => {
+    const source = { id: 's', kind: 'rss', config: {} } as SourceRecord;
+    const lead = prepareRawLead({ sourceId: 's', title: 'Etsy Business Partner Required – 50% Profit Sharing', text: 'Budget: $5000 - $10000 USD', url: 'https://www.freelancer.com/projects/x' }, source, new Date());
+    expect(lead.budget).toBeUndefined();
+  });
+});
+
 describe('Freelancer.com budget tiers', () => {
   const source = { id: 's', kind: 'rss', config: {} } as SourceRecord;
   const read = (url: string, text: string) => prepareRawLead({ sourceId: 's', title: 'Promo design', text, url }, source, new Date());
@@ -265,7 +282,8 @@ describe('skills', () => {
   it('a brand is not a trade', () => {
     expect(extractTechSkills('Аналитик данных (Авито Путешествия)')).not.toContain('Авито');
     expect(extractTechSkills('Старший C#-разработчик в Ozon')).not.toContain('Маркетплейсы');
-    expect(extractTechSkills('Лендинг: ссылка на Авито и скриншоты отзывов с Ozon')).toEqual([]);
+    expect(extractTechSkills('Лендинг: ссылка на Авито и скриншоты отзывов с Ozon')).not.toEqual(expect.arrayContaining(['Авито']));
+    expect(extractTechSkills('Лендинг: ссылка на Авито и скриншоты отзывов с Ozon')).not.toContain('Маркетплейсы');
     expect(extractTechSkills('Благо есть GPT, который поможет оформить ТЗ')).toEqual([]);
   });
 
@@ -273,6 +291,13 @@ describe('skills', () => {
     expect(extractTechSkills('Продвижение объявлений на Авито')).toContain('Авито');
     expect(extractTechSkills('Карточки товаров на Wildberries')).toContain('Маркетплейсы');
     expect(extractTechSkills('Бот на базе GPT-4')).toContain('GPT');
+  });
+
+  it('names the trade of a post without tools', () => {
+    expect(extractTechSkills('Тестировщик ПО')).toContain('Тестирование');
+    expect(extractTechSkills('Маркетолог в команду')).toContain('Маркетинг');
+    expect(extractTechSkills('Technical Recruiter')).toContain('Рекрутинг');
+    expect(extractTechSkills('Sales Development Representative')).toContain('Продажи');
   });
 
   it('knows the tools of the new tasks', () => {
@@ -354,6 +379,12 @@ describe('repair of stored leads', () => {
     const { store, id } = await stored({ type: 'gig', url: 'https://www.freelancer.com/projects/x', title: 'Promo design', text: 'Budget: $50000 - $100000 USD', budget: 100000, currency: 'USD', rawSalary: '50000–100000 USD', normalizedUsdMax: 100000 }, 'rss');
     await rescoreLeads(store, { money: true });
     expect((await store.getLead(id))?.normalizedUsdMax).toBeUndefined();
+  });
+
+  it('decodes a stored title', async () => {
+    const { store, id } = await stored({ type: 'gig', title: 'Contenido y gesti&oacute;n en redes', text: 'Redes sociales' }, 'rss');
+    await rescoreLeads(store, { money: true });
+    expect((await store.getLead(id))?.title).toBe('Contenido y gestión en redes');
   });
 
   it('drops a skill that came from a mention', async () => {

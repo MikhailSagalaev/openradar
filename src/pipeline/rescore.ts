@@ -1,10 +1,11 @@
 import { extractBudgetAndCurrency } from '../core/extract.ts';
-import { overBoardCeiling, prepareRawLead } from '../core/prepare.ts';
+import { titleKeyOf } from '../core/fingerprint.ts';
+import { payNotOffered, prepareRawLead } from '../core/prepare.ts';
 import { assessQuality, offersNoPay, qualityFlagsOf, type QualityFlag } from '../core/quality.ts';
 import { scoreLead } from '../core/rules.ts';
 import { normalizeSalary } from '../core/salary.ts';
 import type { LeadMoney, Store } from '../core/store.ts';
-import { extractTechSkills } from '../core/text.ts';
+import { decodeHtmlEntities, extractTechSkills } from '../core/text.ts';
 import type { Lead, LeadType, SourceRecord } from '../core/types.ts';
 
 /** Leads read per store call: the stores cap a listing at 5000. */
@@ -44,7 +45,7 @@ function moneyOf(lead: Lead, type: LeadType, flags: QualityFlag[], source: Sourc
   const generated = GENERATED_SALARY.test(lead.rawSalary ?? '');
   const rawSalary = generated && (fromText || / per year$/.test(lead.rawSalary!)) ? undefined : lead.rawSalary;
   const info = normalizeSalary({ text: post, rawSalary, budget, currency, type });
-  if (info.implausible || overBoardCeiling(lead.url, info.normalizedUsdMax ?? info.normalizedUsdMin)) return { skills };
+  if (info.implausible || payNotOffered(lead, info.normalizedUsdMax ?? info.normalizedUsdMin)) return { skills };
   return { budget, currency: info.currency, paymentPeriod: info.paymentPeriod, rawSalary: info.rawSalary, normalizedUsdMin: info.normalizedUsdMin, normalizedUsdMax: info.normalizedUsdMax, skills };
 }
 
@@ -117,6 +118,10 @@ export async function rescoreLeads(
     if (store.updateLeadQuality && (quality.type !== (lead.type ?? 'gig') || before.join() !== quality.flags.join())) {
       await store.updateLeadQuality(lead.id, quality.type, quality.flags);
       requalified += 1;
+    }
+    if (options.money && store.updateLeadTitle && /&[a-z]+;/i.test(lead.title)) {
+      const title = decodeHtmlEntities(lead.title);
+      if (title !== lead.title) await store.updateLeadTitle(lead.id, title, titleKeyOf(title), lead.title);
     }
     if (options.money && store.updateLeadMoney) {
       const money = moneyOf(lead, quality.type, quality.flags, source);
