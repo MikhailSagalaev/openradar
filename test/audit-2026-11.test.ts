@@ -39,6 +39,7 @@ describe('sums that are not pay', () => {
     expect(money('сделаем запуск на 1.500.000₽+ чистой прибыли').budget).toBeUndefined();
     expect(money('Средняя зарплата в IT за год выросла на 17,7%, до 235 тыс. ₽').budget).toBeUndefined();
     expect(money('затем подписка за $39/мес').budget).toBeUndefined();
+    expect(money('Аудитория СНГ, чек $2000–4000').budget).toBeUndefined();
     expect(money('Atari потратила до 25 миллионов долларов на права фильма').budget).toBeUndefined();
     expect(money('We raised $781M in Series D').budget).toBeUndefined();
   });
@@ -133,6 +134,15 @@ describe('vacancy or order', () => {
   it('keeps everything on a freelance exchange an order', () => {
     const source = { id: 's', kind: 'rss', config: {} } as SourceRecord;
     expect(prepareRawLead({ sourceId: 's', type: 'job', title: 'Вакансия фрилансера', text: 'x', url: 'https://kwork.ru/projects/1' }, source, new Date()).type).toBe('gig');
+  });
+
+  it('a job board beats the type an adapter gave', () => {
+    const source = { id: 's', kind: 'rss', config: {} } as SourceRecord;
+    expect(prepareRawLead({ sourceId: 's', type: 'gig', title: 'Director of Development', text: 'x', url: 'https://himalayas.app/companies/a/jobs/b' }, source, new Date()).type).toBe('job');
+  });
+
+  it('reads «заработная плата» as a vacancy sign', () => {
+    expect(detectPostType({ type: 'gig', title: 'Ищем копирайтера', text: 'Что предстоит делать: статьи. Заработная плата от 100000 рублей' }, telegram)).toBe('job');
   });
 
   it('keeps job boards vacancies in research', () => {

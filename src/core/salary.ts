@@ -37,7 +37,7 @@ const NUM = String.raw`\d+(?:[.,]\d+)?`;
 const MULT = String.raw`(?:(?<=\d)[кk]|\s?(?:тыс(?:яч[а-я]*|\.)?|млн\.?|миллион[а-я]*|mln))(?![\p{L}])`;
 const CURRENCY_NEAR = String.raw`\s*(?:[₽$€£₸₴]|руб|р\.|eur|usd|pln|zł|kzt|uah|byn|грн|тенге|евро|долл)`;
 
-const NOT_PAY_WORDS = String.raw`оборот[а-я]*|выручк[а-я]*|капитализац[а-я]*|инвестици[а-я]*|средн[а-я]*\s+чек[а-я]*|подписк[а-я]*|revenue|turnover|arr|deal\s+sizes?|valuation|raised|funding|subscription|stipend|(?:signing|sign-on|joining|relocation|referral)\s+bonus|(?:travel|learning|training|education|equipment|wellness|home\s+office|conference)\s+(?:budget|allowance)`;
+const NOT_PAY_WORDS = String.raw`оборот[а-я]*|выручк[а-я]*|капитализац[а-я]*|инвестици[а-я]*|(?:средн[а-я]*\s+)?чек[а-я]*|подписк[а-я]*|revenue|turnover|arr|deal\s+sizes?|valuation|raised|funding|subscription|stipend|(?:signing|sign-on|joining|relocation|referral)\s+bonus|(?:travel|learning|training|education|equipment|wellness|home\s+office|conference)\s+(?:budget|allowance)`;
 const NOT_PAY_BEFORE = new RegExp(`(?:^|[^\\p{L}])(?:${NOT_PAY_WORDS})(?![\\p{L}])[^.\\n\\d]{0,25}[$€£₽]?\\s?\\d[\\d\\s.,]*(?:[кk]|\\s?(?:тыс|млн|mln))?(?:\\s*(?:[-–—]|до|to)\\s*[$€£₽]?\\s?\\d[\\d\\s.,]*(?:[кk]|\\s?(?:тыс|млн|mln))?)?`, 'giu');
 const NOT_PAY_AFTER = new RegExp(`\\d(?:[\\d\\s.,]*\\d)?(?:[кk]|\\s?(?:тыс\\.?|млн\\.?|mln))?\\s*(?:[₽$€£]|руб[а-я.]*|usd|eur)?\\s{0,3}(?:(?:annual|yearly|monthly|ежегодн[а-я]*)\\s+)?(?:${NOT_PAY_WORDS})(?![\\p{L}])`, 'giu');
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.45.2
+
+- A job board's posts are vacancies whatever the adapter says: the RSS adapter called them orders, so about 3 000 Himalayas posts a week and their yearly pay stood among the orders, on top of «Сначала дорогие».
+- «Заработная плата» marks a vacancy; a client's «чек $2000–4000» is not pay.
+
 ## 0.45.1
 
 - `radar requality` and `rescore` walk a long window by date. The stores cap an offset at 10 000, so past about 15 000 leads the command went over the same pages again and reported them as checked.

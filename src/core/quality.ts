@@ -37,7 +37,7 @@ const COMPANY_INTRO: RegExp[] = [
 /** Words that say «this is a staff position», each counted once. */
 const VACANCY_SIGNALS: RegExp[] = [
   // «Зарплата:» needs no word boundary: channels glue it to the title («Fullstack-разработчикЗарплата: 120 000»).
-  /зарплат[а-я]*\s*[:—–-]|(?:^|[^\p{L}])(?:з\/п|зп|вилка|доход)\s*[:—–-]/iu,
+  /зарплат[а-я]*\s*[:—–-]|заработн[а-я]*\s+плат|(?:^|[^\p{L}])(?:з\/п|зп|вилка|доход)\s*[:—–-]/iu,
   /(?:^|[^\p{L}])без\s+опыта(?![\p{L}])/iu,
   /(?:^|[^\p{L}])оклад/iu,
   /на\s+руки|до\s+вычета\s+налогов|(?:^|[^\p{L}])гросс|(?:^|[^\p{L}])gross(?![\p{L}])/iu,
