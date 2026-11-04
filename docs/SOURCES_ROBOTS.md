@@ -1,6 +1,6 @@
 # Источники и robots.txt
 
-Проверено 2026-11-03 командой `radar robots --markdown` с User-Agent `RadarBot/0.12.0 (+https://github.com/MikhailSagalaev/openradar)` (RFC 9309).
+Проверено 2026-11-04 командой `radar robots --markdown` с User-Agent `RadarBot/0.12.0 (+https://github.com/MikhailSagalaev/openradar)` (RFC 9309).
 
 Правило: защиту сайтов не обходим. Если robots.txt запрещает адрес, который опрашивает источник,
 источник откладывают или переводят на разрешённый адрес (официальный API, RSS). Решение по каждому
