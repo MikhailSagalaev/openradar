@@ -83,6 +83,26 @@ describe('the ceiling', () => {
   });
 });
 
+describe('Freelancer.com budget tiers', () => {
+  const source = { id: 's', kind: 'rss', config: {} } as SourceRecord;
+  const read = (url: string, text: string) => prepareRawLead({ sourceId: 's', title: 'Promo design', text, url }, source, new Date());
+
+  it('shows no sum above the ceiling', () => {
+    const lead = read('https://www.freelancer.com/projects/design/x', 'Budget: $50000 - $100000 USD');
+    expect(lead.budget).toBeUndefined();
+    expect(lead.normalizedUsdMax).toBeUndefined();
+  });
+
+  it('keeps sums up to it, and the same sum elsewhere', () => {
+    expect(read('https://www.freelancer.com/projects/design/x', 'Budget: $5000 - $10000 USD').budget).toBe(10000);
+    expect(read('https://t.me/x/1', 'Бюджет $50000').budget).toBe(50000);
+  });
+
+  it('research does not read the tier back from the text', () => {
+    expect(deriveRecord(lead({ type: 'gig', url: 'https://www.freelancer.com/projects/x', text: 'Budget: $50000 - $100000 USD' })).pay).toBeUndefined();
+  });
+});
+
 describe('ads, services and roundups', () => {
   it('flags a marked webinar that mentions candidates without experience', () => {
     const text = '40% IT-вакансий открыты для кандидатов без опыта. Средняя зарплата в IT выросла. Поговорим на бесплатном вебинаре Хекслета. #реклама';
@@ -326,6 +346,12 @@ describe('repair of stored leads', () => {
     const { store, id } = await stored({ type: 'gig', title: 'Контент-менеджер', text, budget: 900000, currency: 'RUB', rawSalary: '900000 RUB', normalizedUsdMax: 11172 });
     await rescoreLeads(store, { money: true });
     expect((await store.getLead(id))?.budget).toBeUndefined();
+  });
+
+  it('clears a Freelancer.com tier above the ceiling', async () => {
+    const { store, id } = await stored({ type: 'gig', url: 'https://www.freelancer.com/projects/x', title: 'Promo design', text: 'Budget: $50000 - $100000 USD', budget: 100000, currency: 'USD', rawSalary: '50000–100000 USD', normalizedUsdMax: 100000 }, 'rss');
+    await rescoreLeads(store, { money: true });
+    expect((await store.getLead(id))?.normalizedUsdMax).toBeUndefined();
   });
 
   it('drops a skill that came from a mention', async () => {

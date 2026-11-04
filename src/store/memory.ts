@@ -356,7 +356,9 @@ export class MemoryStore implements Store {
 
   async updateLeadMoney(id: string, money: LeadMoney): Promise<void> {
     const lead = this.leads.get(id);
-    if (lead) Object.assign(lead, { ...money, currency: money.currency ?? lead.currency });
+    if (!lead) return;
+    const { budget, rawSalary, normalizedUsdMin, normalizedUsdMax, skills } = money;
+    Object.assign(lead, { budget, rawSalary, normalizedUsdMin, normalizedUsdMax, skills, currency: money.currency ?? lead.currency, paymentPeriod: money.paymentPeriod ?? lead.paymentPeriod });
   }
 
   async updateLeadState(id: string, state: LeadState): Promise<void> {

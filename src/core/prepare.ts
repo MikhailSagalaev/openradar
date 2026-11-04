@@ -34,6 +34,16 @@ export function isJobBoardUrl(url: string | undefined): boolean {
 export function isGigBoardUrl(url: string | undefined): boolean {
   return Boolean(url && GIG_BOARD_URL.test(url));
 }
+
+/**
+ * Freelancer.com clients pick a budget tier from a list, and the top tiers go to anything:
+ * «Seblak Promo Instagram Design» at $50 000–100 000. Above this the tier says nothing.
+ */
+const FREELANCER_CEILING_USD = 10_000;
+
+export function overBoardCeiling(url: string | undefined, usd: number | undefined): boolean {
+  return Boolean(url && usd !== undefined && usd > FREELANCER_CEILING_USD && /^https?:\/\/(?:www\.)?freelancer\.com\//i.test(url));
+}
 const JOB_PATH_RE = /\/(?:jobs?|vacanc(?:y|ies)|careers?|positions?)\b/i;
 
 function detectLeadType(raw: RawLead, title: string, url?: string): LeadType {
@@ -94,7 +104,7 @@ export function prepareRawLead(
     currency,
     type,
   });
-  const implausible = salaryInfo.implausible === true;
+  const implausible = salaryInfo.implausible === true || overBoardCeiling(url, salaryInfo.normalizedUsdMax ?? salaryInfo.normalizedUsdMin);
   if (implausible) budget = undefined;
 
   const publishedAtDate = parsePublishedAt(raw.publishedAt, now);

@@ -358,7 +358,7 @@ const TEXT_CEILING = 1_000_000;
 /** On boards with a budget field a larger sum in the text is the client's ad spend or turnover. */
 const TEXT_ORDER_CEILING = 150_000;
 /** Boards with a budget field of their own: it beats any sum in the description. */
-const BUDGET_BOARDS = /^https?:\/\/(?:www\.)?(?:kwork\.ru|fl\.ru|freelancehunt\.com)\//i;
+const BUDGET_BOARDS = /^https?:\/\/(?:www\.)?(?:kwork\.ru|fl\.ru|freelancehunt\.com|freelancer\.com)\//i;
 
 interface NormalizedPay {
   min?: number;
