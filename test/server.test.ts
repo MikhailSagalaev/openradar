@@ -848,6 +848,14 @@ describe('http server', () => {
     expect((await createApp(byLogin).request('/admin', { headers: { cookie: `radar_session=${loginSession}` } })).status).toBe(200);
   });
 
+  it('keeps the Telegram section in the profile of a GitHub administrator', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true, RADAR_ADMIN_GITHUB: '583231', RADAR_USER_TELEGRAM: true, RADAR_WEB_KEY_SECRET: '0123456789abcdef0123456789abcdef' });
+    const session = await makeUserSession(runtime, 'octocat');
+    const html = await (await createApp(runtime).request('/me', { headers: { cookie: `radar_session=${session}` } })).text();
+    expect(html).toContain('Telegram-источники');
+    expect(html).toContain('id="subscriptions"');
+  });
+
   it('shows the signed-in account on research and catalog pages, in both languages', async () => {
     const runtime = makeRuntime({ RADAR_PUBLIC_READ: true });
     const app = createApp(runtime);

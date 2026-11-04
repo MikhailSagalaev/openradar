@@ -225,13 +225,17 @@ export function extractAnchoredSalary(text: string): { min?: number; max?: numbe
     if (min !== undefined && max !== undefined) return { min, max };
   }
 
-  // "$3000 - $5000", "$259,300 - $350,800"
-  const symbolRange = new RegExp(`([$€₸₴])\\s*(${AMOUNT_PATTERN})\\s*(?:-|—|–)\\s*[$€₸₴]?\\s*(${AMOUNT_PATTERN})`, 'i').exec(source);
-  if (symbolRange?.[2] && symbolRange[3]) {
-    const min = parseAmount(symbolRange[2]);
-    const max = parseAmount(symbolRange[3]);
-    if (min !== undefined && max !== undefined) return { min, max };
+  // "$3000 - $5000", "$259,300 - $350,800". Levels of one vacancy overlap and make one range:
+  // "Engineer: $184,800 - $250,000, Sr. Engineer: $223,600 - $302,500"; a bonus does not join.
+  let tiers: { min: number; max: number } | undefined;
+  for (const m of source.matchAll(new RegExp(`([$€₸₴])\\s*(${AMOUNT_PATTERN})\\s*(?:-|—|–)\\s*[$€₸₴]?\\s*(${AMOUNT_PATTERN})`, 'gi'))) {
+    const min = parseAmount(m[2]);
+    const max = parseAmount(m[3]);
+    if (min === undefined || max === undefined) continue;
+    if (!tiers) tiers = { min, max };
+    else if (min <= tiers.max && max >= tiers.min) tiers = { min: Math.min(tiers.min, min), max: Math.max(tiers.max, max) };
   }
+  if (tiers) return tiers;
 
   // Marker word anchors the amount even without a currency unit: "оклад 150 000"
   const marked = new RegExp(`(?:оклад|зарплат[а-я]*|вилка|ставка)\\s*(?:от\\s*)?(${AMOUNT_PATTERN})`, 'i').exec(source);
@@ -322,7 +326,8 @@ export function normalizeSalary(input: {
 
   // A bare «170000–200000 USD» that the floor heuristic read as annual must say so:
   // without the marker it displays as a monthly figure.
-  let rawSalary = input.rawSalary || (input.budget ? `${input.budget} ${currency}` : undefined);
+  const range = min !== undefined && max !== undefined && min !== max ? `${min}–${max} ${currency}` : undefined;
+  let rawSalary = input.rawSalary || range || (input.budget ? `${input.budget} ${currency}` : undefined);
   if (yearly && rawSalary && !/per\s+year|\/\s*(?:yr|year)|annual|в\s+год/i.test(rawSalary)) {
     rawSalary = `${rawSalary} per year`;
   }

@@ -243,3 +243,26 @@ export function cleanTitle(rawTitle: string, fallbackText = ''): string {
   return truncate(title, 120).replace(/[\s.,;:!?-]+$/u, '');
 }
 
+const FULLY_REMOTE = /fully\s+remote|100%\s+remote|remote[- ]first|полностью\s+удал/i;
+/** Says where the work happens, whatever the page's markup claims. */
+const OFFICE_BOUND = /transition\s+to\s+on-?site|in[- ]office|hybrid|гибрид|no\s+remote|not\s+remote/i;
+const REMOTE_WORD = /удал[её]нн|remote|telecommute/i;
+
+/**
+ * What a post's text says about remote work; undefined when it says nothing. An explicit
+ * fully remote wins over a passing «no onsite visits», and «remote until the office opens»
+ * is office work.
+ */
+export function remoteFromText(text: string): boolean | undefined {
+  if (FULLY_REMOTE.test(text)) return true;
+  if (OFFICE_BOUND.test(text) || /on-?site/i.test(text)) return false;
+  return REMOTE_WORD.test(text) ? true : undefined;
+}
+
+/** schema.org marks remote jobs TELECOMMUTE; a post tied to an office overrules the mark. */
+export function remoteOfPosting(jobLocationType: unknown, text: string): boolean {
+  if (FULLY_REMOTE.test(text)) return true;
+  if (OFFICE_BOUND.test(text)) return false;
+  const types = Array.isArray(jobLocationType) ? jobLocationType : [jobLocationType];
+  return types.includes('TELECOMMUTE') || remoteFromText(text) === true;
+}

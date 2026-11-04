@@ -20,6 +20,7 @@ import type { Runtime } from '../runtime.ts';
 import { SOURCE_PRESETS, presetSource } from '../sources/presets.ts';
 import { IMAP_PASSWORD_ENV_RE } from '../sources/imap.ts';
 import { ATS_PROVIDERS } from '../sources/ats.ts';
+import { remoteFromText } from '../core/extract.ts';
 import { DEFAULT_SESSION_ENV, TELEGRAM_SESSION_ENV_RE } from '../sources/telegram-account.ts';
 import { VERSION } from '../version.ts';
 import { githubOAuthConfigured, startGitHubOAuth, handleGitHubCallback } from './auth.ts';
@@ -278,7 +279,8 @@ function invalidProxyUrl(config: Record<string, unknown>): string | null {
  * is a guest. In hub mode the tier sets the feed delay; guests never see contacts.
  */
 async function viewerFromRequest(c: Context, runtime: Runtime): Promise<Viewer> {
-  if (await isAdmin(c, runtime)) return { tier: 'admin' };
+  // A GitHub administrator is still a user: the profile keeps their subscriptions and Telegram.
+  if (await isAdmin(c, runtime)) return { tier: 'admin', userId: (await currentUser(c, runtime))?.id };
   const moderators = parseModerators(runtime.env.RADAR_MODERATORS);
   const nostr = await nostrAuthOf(c, runtime);
   if (nostr.pubkey && nostr.participant) {
@@ -2390,7 +2392,8 @@ export function createApp(runtime: Runtime): Hono {
         : typeof body.skills === 'string'
         ? (body.skills as string).split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean)
         : undefined,
-      isRemote: typeof body.isRemote === 'boolean' ? body.isRemote : true,
+      // An order is remote unless it says otherwise; a vacancy has to say so.
+      isRemote: typeof body.isRemote === 'boolean' ? body.isRemote : (remoteFromText(`${title ?? ''}\n${text ?? ''}`) ?? type === 'gig'),
       externalId: url ? `url:${url}` : `manual:${Date.now()}`,
       raw: body,
     };
