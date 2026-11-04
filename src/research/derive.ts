@@ -349,11 +349,12 @@ const BOUNDS: Record<'month' | 'hour' | 'project', [number, number]> = {
 };
 
 /**
- * Pay read out of free text goes no higher than this a month. The top of the Russian market
- * sits under it; above it stood a commission, a typed-in joke and a Tashkent salary in sums.
+ * Pay read out of free text goes no higher than this, a month or an order. The top of the
+ * Russian market sits under it; above it stood a commission, a typed-in joke and a Tashkent
+ * salary in sums. One such post could lead a whole direction in the sum of budgets.
  * Pay from a board's own markup keeps the wide bound.
  */
-const TEXT_MONTH_CEILING = 1_000_000;
+const TEXT_CEILING = 1_000_000;
 /** On boards with a budget field a larger sum in the text is the client's ad spend or turnover. */
 const TEXT_ORDER_CEILING = 150_000;
 /** Boards with a budget field of their own: it beats any sum in the description. */
@@ -385,13 +386,13 @@ export function normalizePay(pay: Pay, type: LeadType, rates: Record<string, num
   if (period === 'month' && pay.period !== 'year' && pay.currency !== 'RUB' && (max ?? min ?? 0) > BOUNDS.month[1] / 2) {
     return normalizePay({ ...pay, period: 'year' }, type, rates);
   }
-  if (pay.origin === 'text' && period === 'month' && max !== undefined && max > TEXT_MONTH_CEILING && min !== undefined && min <= TEXT_MONTH_CEILING) {
+  if (pay.origin === 'text' && period === 'month' && max !== undefined && max > TEXT_CEILING && min !== undefined && min <= TEXT_CEILING) {
     // «от 400 000 до 5 000 000»: the lower bound is the offer, the upper one a boast.
     return { min, max: undefined, point: min, period };
   }
   const point = min !== undefined && max !== undefined ? Math.round((min + max) / 2) : (min ?? max)!;
   const [low, high] = BOUNDS[period];
-  if (point < low || point > (pay.origin === 'text' && period === 'month' ? TEXT_MONTH_CEILING : high)) return undefined;
+  if (point < low || point > (pay.origin === 'text' && period !== 'hour' ? TEXT_CEILING : high)) return undefined;
   return { min, max, point, period };
 }
 
