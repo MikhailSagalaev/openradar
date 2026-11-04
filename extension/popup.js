@@ -222,7 +222,7 @@ function initXRay(page) {
     return;
   }
 
-  const plan = window.openRadarXRay.buildXRayPlan(company, role, skills);
+  const plan = window.openRadarXRay.buildXRayPlan(company, role, skills, uiLanguage());
   fields.xrayTarget.textContent = plan.cleanCompany || plan.company;
   fields.xrayButtons.innerHTML = '';
 

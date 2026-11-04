@@ -167,7 +167,19 @@ function buildPersonaDisjunction(personas) {
   return `(${personas.map((p) => `"${p}"`).join(' OR ')})`;
 }
 
-function buildOutreachTemplate(company, roleTitle) {
+const DORK_TITLES = {
+  ru: { linkedin: 'LinkedIn: Тимлиды и CTO', telegram: 'Telegram: Чаты и спикеры', habr: 'Хабр: Авторы статей', github: 'GitHub: Разработчики' },
+  en: { linkedin: 'LinkedIn: team leads and CTOs', telegram: 'Telegram: chats and speakers', habr: 'Habr: article authors', github: 'GitHub: developers' },
+};
+
+function buildOutreachTemplate(company, roleTitle, lang = 'ru') {
+  if (lang === 'en') {
+    return (
+      `Hi! I saw that ${company} is growing and looking for ${roleTitle?.trim() || 'people for your open role'}.\n` +
+      `My main stack: [...]. Recently I did similar work: [...].\n` +
+      `Would it make sense to talk with the team directly? I can send a short CV and code samples.`
+    );
+  }
   const roleName = roleTitle?.trim() || 'вашу открытую позицию';
   return (
     `Привет! Видел, что вы развиваете ${company} и ищете людей на ${roleName}.\n` +
@@ -176,7 +188,7 @@ function buildOutreachTemplate(company, roleTitle) {
   );
 }
 
-function buildXRayPlan(company, role, skills = []) {
+function buildXRayPlan(company, role, skills = [], lang = 'ru') {
   const clean = cleanCompanyName(company);
   const { category, personas } = categorizePersonas(role, skills);
 
@@ -184,7 +196,9 @@ function buildXRayPlan(company, role, skills = []) {
   const companyTerm = clean ? `"${clean}"` : '';
 
   const linkedinQuery = `site:linkedin.com/in/ ${companyTerm} ${personaGroup}`.trim();
-  const telegramQuery = `site:t.me ${companyTerm} ("lead" OR "head" OR "team" OR "tech" OR "dev" OR "чат" OR "команда")`.trim();
+  const titles = DORK_TITLES[lang] ?? DORK_TITLES.en;
+  const telegramWords = lang === 'ru' ? ' OR "чат" OR "команда"' : '';
+  const telegramQuery = `site:t.me ${companyTerm} ("lead" OR "head" OR "team" OR "tech" OR "dev"${telegramWords})`.trim();
   const habrQuery = `site:habr.com ${companyTerm} ("лид" OR "руководитель" OR "CTO" OR "тимлид" OR "автор")`.trim();
   const githubQuery = `site:github.com ${companyTerm} ("lead" OR "team" OR "engineering")`.trim();
 
@@ -193,32 +207,32 @@ function buildXRayPlan(company, role, skills = []) {
     cleanCompany: clean,
     category,
     personas,
-    outreachTemplate: buildOutreachTemplate(clean || company, role),
+    outreachTemplate: buildOutreachTemplate(clean || company, role, lang),
     dorks: [
       {
         id: 'linkedin',
-        title: 'LinkedIn: Тимлиды и CTO',
+        title: titles.linkedin,
         query: linkedinQuery,
         url: searchUrl('google', linkedinQuery),
         icon: '👔',
       },
       {
         id: 'telegram',
-        title: 'Telegram: Чаты и спикеры',
+        title: titles.telegram,
         query: telegramQuery,
         url: searchUrl('google', telegramQuery),
         icon: '✈️',
       },
       {
         id: 'habr',
-        title: 'Хабр: Авторы статей',
+        title: titles.habr,
         query: habrQuery,
         url: searchUrl('google', habrQuery),
         icon: '📝',
       },
       {
         id: 'github',
-        title: 'GitHub: Разработчики',
+        title: titles.github,
         query: githubQuery,
         url: searchUrl('google', githubQuery),
         icon: '🐙',

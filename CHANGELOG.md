@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.44.4
+
+- **Back to Node 24 LTS** in the image and CI. On Node 26.13 an HTTPS answer above about 6.5 MB hangs and later requests to the host hang with it, with any TLS settings; Node 24 with the same OpenSSL and network reads those boards in a second. This is why large Greenhouse boards (Anthropic, Databricks, Stripe) gave nothing since 0.43.0. The cause given in 0.44.1 covered only the rarer stalls that curl sees too; its retries stay for them.
+- Extension 0.12.3: X-Ray links and the outreach pitch follow the interface language, they were always in Russian. Browsers in other languages get English, not Russian.
+
 ## 0.44.3
 
 - Sources: 22 new RU ones. HeadHunter joins the report's roles through its RSS search — product, project, analytics, design, QA, DevOps, marketing, support, sales, information security and 1С — because the API preset stays behind the WAF and the RSS does not. Multi-role searches take several professional_role codes in one feed.

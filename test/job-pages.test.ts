@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { remoteFromText, remoteOfPosting } from '../src/core/extract.ts';
 import { prepareRawLead } from '../src/core/prepare.ts';
@@ -8,6 +9,8 @@ import { parsePayText } from '../src/research/derive.ts';
 import { extractPreviewFromHtml } from '../src/server/preview.ts';
 // @ts-ignore
 import { extractJobPosting, moneyInText } from '../extension/content.js';
+// @ts-ignore
+import { buildXRayPlan } from '../extension/xray.js';
 
 /** A real page: jobs.gem.com/groq, Kubernetes Platform Engineer, November 2026. */
 const GEM_TEXT = `Location: This role will be based in one of our three hiring hubs: the Dallas, San Francisco, or New York City area. You'll have the flexibility to work remotely while we establish our local Groq office, with the expectation that this role will transition to onsite once the office opens.
@@ -112,5 +115,24 @@ describe('extension on boards like Gem', () => {
   it('leaves ordinary pages alone and reads a plain money range', () => {
     expect(extractJobPosting(page('https://example.com/blog/post', 'Text'))).toBeNull();
     expect(moneyInText('€60,000 – €80,000 a year')).toEqual({ budget: 60000, salaryMax: 80000, currency: 'EUR' });
+  });
+});
+
+describe('extension in English', () => {
+  const messages = (lang: string): Record<string, { message: string }> =>
+    JSON.parse(readFileSync(new URL(`../extension/_locales/${lang}/messages.json`, import.meta.url), 'utf8'));
+
+  it('has every string in both languages and English for all others', () => {
+    const en = messages('en');
+    expect(Object.keys(en).sort()).toEqual(Object.keys(messages('ru')).sort());
+    expect(Object.values(en).filter((m) => /[а-яё]/i.test(m.message))).toEqual([]);
+    expect(JSON.parse(readFileSync(new URL('../extension/manifest.json', import.meta.url), 'utf8')).default_locale).toBe('en');
+  });
+
+  it('writes X-Ray in the language of the interface', () => {
+    const en = buildXRayPlan('Groq', 'Kubernetes Platform Engineer', [], 'en');
+    expect(JSON.stringify([en.outreachTemplate, en.dorks.map((d: { title: string }) => d.title)])).not.toMatch(/[а-яё]/i);
+    expect(en.dorks.find((d: { id: string }) => d.id === 'telegram').query).not.toMatch(/[а-яё]/i);
+    expect(buildXRayPlan('Groq', 'Инженер', []).outreachTemplate).toContain('Привет');
   });
 });

@@ -53,7 +53,7 @@ openradar — открытая база вакансий и заказов дл�
 
 ## Быстрый старт
 
-Нужны Node.js 22.19+ (образ и CI — 26 LTS) и pnpm 12+:
+Нужны Node.js 22.19+ (образ и CI — 24 LTS) и pnpm 12+:
 
 ```bash
 git clone https://github.com/MikhailSagalaev/openradar.git

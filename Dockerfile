@@ -1,10 +1,12 @@
 # Multi-stage unprivileged Dockerfile for Radar
-FROM node:26-trixie-slim AS build
+# Node 24 LTS, not 26: on 26.13 reading an answer above about 6.5 MB over HTTPS hangs and later
+# requests to the host hang with it, with any TLS settings; 24 reads the same boards in a second.
+FROM node:24-trixie-slim AS build
 WORKDIR /app
 # npm and pnpm download over TLS with Node's defaults; TLS 1.2 keeps the handshake in
 # one packet where networks drop the larger post-quantum one (see src/net/tls.ts).
 ENV NODE_OPTIONS=--tls-max-v1.2
-# Node 25 and later ship without corepack: pnpm comes from npm, the version of packageManager.
+# Corepack is leaving Node: pnpm comes from npm, the version of packageManager.
 RUN npm install -g pnpm@12.16.1
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
@@ -12,7 +14,7 @@ COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
 RUN pnpm build
 
-FROM node:26-trixie-slim AS runtime
+FROM node:24-trixie-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 ENV RADAR_BIND=0.0.0.0
