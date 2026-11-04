@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.45.4
+
+- Freelancer.com: a budget above $10 000 shows no sum. Clients pick a tier from a list, and a promo design at $50 000–100 000 topped «Сначала дорогие».
+
 ## 0.45.3
 
 - Research: an order's sum read from free text stops at 1 000 000 ₽, as a month's pay does. One Telegram post with 5 000 000 ₽ made «Видео и анимация» the leader by the sum of budgets.

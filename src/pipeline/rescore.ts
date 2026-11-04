@@ -1,5 +1,5 @@
 import { extractBudgetAndCurrency } from '../core/extract.ts';
-import { prepareRawLead } from '../core/prepare.ts';
+import { overBoardCeiling, prepareRawLead } from '../core/prepare.ts';
 import { assessQuality, offersNoPay, qualityFlagsOf, type QualityFlag } from '../core/quality.ts';
 import { scoreLead } from '../core/rules.ts';
 import { normalizeSalary } from '../core/salary.ts';
@@ -44,7 +44,7 @@ function moneyOf(lead: Lead, type: LeadType, flags: QualityFlag[], source: Sourc
   const generated = GENERATED_SALARY.test(lead.rawSalary ?? '');
   const rawSalary = generated && (fromText || / per year$/.test(lead.rawSalary!)) ? undefined : lead.rawSalary;
   const info = normalizeSalary({ text: post, rawSalary, budget, currency, type });
-  if (info.implausible) return { skills };
+  if (info.implausible || overBoardCeiling(lead.url, info.normalizedUsdMax ?? info.normalizedUsdMin)) return { skills };
   return { budget, currency: info.currency, paymentPeriod: info.paymentPeriod, rawSalary: info.rawSalary, normalizedUsdMin: info.normalizedUsdMin, normalizedUsdMax: info.normalizedUsdMax, skills };
 }
 
