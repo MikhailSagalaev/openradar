@@ -324,6 +324,25 @@ const ENDPOINTS: Record<AtsProvider, (slug: string) => string> = {
  */
 const ATS_MAX_BYTES = 40 * 1024 * 1024;
 
+/** Tries per board: a stalled answer usually comes through on a new connection. */
+const BOARD_ATTEMPTS = 3;
+const BROKEN_ANSWER = /abort|terminated|timed? ?out|fetch failed|socket|ECONNRESET/i;
+
+/**
+ * From Russian networks a foreign answer may freeze after its first 16 KB, on some requests
+ * and not others, with curl too: the same board then reads in a second. An HTTP error is
+ * the board's real answer and is not retried.
+ */
+async function fetchBoard(ctx: PollContext, url: string): Promise<string> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fetchText(ctx, url, { Accept: 'application/json' }, ATS_MAX_BYTES);
+    } catch (error) {
+      if (attempt >= BOARD_ATTEMPTS || !BROKEN_ANSWER.test(error instanceof Error ? error.message : String(error))) throw error;
+    }
+  }
+}
+
 const PARSERS: Record<AtsProvider, (source: SourceRecord, slug: string, name: string | undefined, json: string) => RawLead[]> = {
   greenhouse: fromGreenhouse,
   lever: fromLever,
@@ -358,7 +377,7 @@ export const atsSource: SourceAdapter = {
     const leads: RawLead[] = [];
     for (const { slug, name } of nextBatch(source.id, companies, perPoll)) {
       try {
-        const json = await fetchText(ctx, ENDPOINTS[provider](slug), { Accept: 'application/json' }, ATS_MAX_BYTES);
+        const json = await fetchBoard(ctx, ENDPOINTS[provider](slug));
         const found = PARSERS[provider](source, slug, name, json)
           .filter((lead) => !lead.publishedAt || new Date(lead.publishedAt).toISOString() >= since)
           .sort((a, b) => (b.publishedAt ?? '').localeCompare(a.publishedAt ?? ''))

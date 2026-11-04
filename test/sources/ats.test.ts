@@ -84,6 +84,33 @@ describe('ATS source adapter', () => {
     expect(nextBatch('empty', [], 3)).toEqual([]);
   });
 
+  it('reads a board again when its answer stalls, and leaves an HTTP error alone', async () => {
+    const source = makeSource({ id: 'ats-stall', kind: 'ats', config: { provider: 'greenhouse', companies: ['gitlab', 'gone'], perPoll: 2, maxAgeDays: 365 } });
+    const urls: string[] = [];
+    let stalls = 2;
+    const ctx = {
+      ...served({}),
+      fetchImpl: async (input: RequestInfo | URL) => {
+        const url = input.toString();
+        urls.push(url);
+        if (url.includes('/gone/')) return new Response('not found', { status: 404 });
+        if (stalls-- > 0) throw new DOMException('This operation was aborted', 'AbortError');
+        return new Response(fixture('ats-greenhouse.json'), { status: 200 });
+      },
+    };
+    expect(await adapter.poll!(source, ctx)).toHaveLength(2);
+    expect(urls.filter((u) => u.includes('/gitlab/'))).toHaveLength(3);
+    expect(urls.filter((u) => u.includes('/gone/'))).toHaveLength(1);
+  });
+
+  it('gives a board up after three stalled answers and goes on', async () => {
+    const source = makeSource({ id: 'ats-stuck', kind: 'ats', config: { provider: 'greenhouse', companies: ['gitlab'], maxAgeDays: 365 } });
+    let calls = 0;
+    const ctx = { ...served({}), fetchImpl: async () => { calls++; throw new DOMException('This operation was aborted', 'AbortError'); } };
+    expect(await adapter.poll!(source, ctx)).toEqual([]);
+    expect(calls).toBe(3);
+  });
+
   it('keeps only postings of the last maxAgeDays', async () => {
     const source = makeSource({ id: 'ats-age', kind: 'ats', config: { provider: 'greenhouse', companies: ['gitlab'], maxAgeDays: 1 } });
     const ctx = { ...served({ 'boards-api.greenhouse.io': fixture('ats-greenhouse.json') }), now: () => new Date('2026-08-20T12:00:00Z') };

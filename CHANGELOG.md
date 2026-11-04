@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.44.1
+
+- ATS boards are read up to three times when an answer stalls. From Russian networks a foreign answer may freeze after its first 16 KB on some requests, curl included, which left whole hourly runs of Greenhouse and Ashby empty. An HTTP error is the board's real answer and is not retried.
+
 ## 0.44.0
 
 An audit of the research on live data found figures that were wrong or misleading. Report and index are now version 2; the October 2026 report stays frozen under version 1 and says so.
