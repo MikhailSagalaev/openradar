@@ -45,4 +45,25 @@ describe('rescore', () => {
     expect((await rescoreLeads(store, { pageSize: 2, limit: 3 })).checked).toBe(3);
     await store.close();
   });
+
+  it('walks by date: the stores cap an offset, so a long window never relies on one', async () => {
+    const store = createTestStore();
+    const source = await store.createSource({ kind: 'rss', title: 'Feed' });
+    for (let i = 0; i < 7; i += 1) {
+      await store.insertLead({
+        sourceId: source.id, title: `Нужен дизайнер ${i}`, text: 'Логотип для кофейни',
+        id: `l${i}`, externalId: `l${i}`, titleKey: `l${i}`, fingerprint: `fp-${i}`,
+        status: 'new', score: 50, reasons: [], createdAt: new Date(Date.UTC(2026, 9, 20, 10, i)).toISOString(),
+      });
+    }
+    const list = store.listLeads.bind(store);
+    const offsets: Array<number | undefined> = [];
+    store.listLeads = (options) => {
+      offsets.push(options?.offset);
+      return list(options);
+    };
+    expect((await rescoreLeads(store, { pageSize: 3 })).checked).toBe(7);
+    expect(offsets.every((offset) => !offset)).toBe(true);
+    await store.close();
+  });
 });

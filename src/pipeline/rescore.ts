@@ -61,14 +61,26 @@ export async function rescoreLeads(
   const now = options.now ?? new Date();
   const limit = options.limit ?? 5000;
   const createdAfter = options.days ? new Date(now.getTime() - options.days * 24 * 3600 * 1000).toISOString() : undefined;
-  // The store returns at most 5000 leads a call; a long window is read page by page, newest first.
-  const leads: Lead[] = [];
-  while (leads.length < limit) {
-    const want = Math.min(options.pageSize ?? RESCORE_PAGE, limit - leads.length);
-    const page = await store.listLeads({ limit: want, createdAfter, offset: leads.length });
-    leads.push(...page);
-    if (page.length < want) break;
+  // The store returns at most 5000 leads a call and caps an offset at 10 000, so a long window
+  // is walked by date, newest first. The next page starts a millisecond above the last lead,
+  // since the database keeps finer time than a Lead does; repeats are skipped by id. A page of
+  // nothing but repeats means many leads share one instant: a wider page gets past them.
+  let pageSize = options.pageSize ?? RESCORE_PAGE;
+  const byId = new Map<string, Lead>();
+  let createdBefore: string | undefined;
+  while (byId.size < limit) {
+    const page = await store.listLeads({ limit: pageSize, createdAfter, createdBefore });
+    const known = byId.size;
+    for (const lead of page) byId.set(lead.id, lead);
+    if (page.length < pageSize) break;
+    if (byId.size === known) {
+      if (pageSize >= RESCORE_PAGE) throw new Error(`More than ${RESCORE_PAGE} leads at ${createdBefore}: cannot walk past them`);
+      pageSize = Math.min(pageSize * 2, RESCORE_PAGE);
+      continue;
+    }
+    createdBefore = new Date(Date.parse(page.at(-1)!.createdAt) + 1).toISOString();
   }
+  const leads = [...byId.values()].slice(0, limit);
   const sources = new Map<string, SourceRecord | null>();
   let changed = 0;
   let requalified = 0;

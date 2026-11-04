@@ -664,10 +664,6 @@ export class PostgresStore implements Store {
     if (feedOnly) {
       // Leads rejected by the pipeline rules stay with the operator, not in the public feed.
       conditions.push(`state = 'active'`, `status <> 'rejected'`);
-      if (options.createdBefore) {
-        conditions.push(`created_at <= $${idx++}::timestamptz`);
-        params.push(options.createdBefore);
-      }
       if (options.maxAgeDays) {
         conditions.push(
           `created_at >= NOW() - make_interval(days => CASE WHEN type = 'job' THEN $${idx}::int ELSE $${idx + 1}::int END)`,
@@ -680,6 +676,10 @@ export class PostgresStore implements Store {
         params.push(options.after.createdAt, options.after.id);
         idx += 2;
       }
+    }
+    if (options.createdBefore) {
+      conditions.push(`created_at <= $${idx++}::timestamptz`);
+      params.push(options.createdBefore);
     }
     if (options.status) {
       conditions.push(`status = $${idx++}`);

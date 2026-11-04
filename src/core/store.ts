@@ -41,6 +41,8 @@ export const SCORE_DECAY_PER_HOUR = 1 / 6;
 
 export interface ListLeadsOptions {
   limit?: number;
+  /** Only leads first seen at or before this instant (tier delay, walking a long window). */
+  createdBefore?: string;
   status?: LeadStatus;
   sourceId?: string;
   query?: string;
@@ -178,8 +180,6 @@ export interface UserVoteResult {
 }
 
 export interface FeedOptions extends ListLeadsOptions {
-  /** Only leads first seen at or before this instant (tier delay). */
-  createdBefore?: string;
   /** Leads older than this many days drop out of the feed: orders and vacancies expire. */
   maxAgeDays?: { gig: number; job: number };
   /** Cursor: only leads after this (created_at, id) pair, oldest first. */
