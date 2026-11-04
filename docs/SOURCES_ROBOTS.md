@@ -9,8 +9,8 @@
 | Источник | Тип | Доступ | Включён | Адрес | robots.txt |
 | --- | --- | --- | --- | --- | --- |
 | FL.ru — Все заказы | rss | official | да | `https://www.fl.ru/rss/all.xml` | **запрещено** (`Disallow: */rss/*`) |
-| Kwork — Все заказы | kwork | public | да | `https://kwork.ru/projects` | разрешено |
 | Хабр Карьера — Вакансии и заказы | rss | official | да | `https://career.habr.com/vacancies/rss` | разрешено |
+| Kwork — Все заказы | kwork | public | да | `https://kwork.ru/projects` | разрешено |
 | We Work Remotely — Все вакансии | rss | official | да | `https://weworkremotely.com/remote-jobs.rss` | разрешено (`Allow: /`) |
 | Работа России — Удалённая работа | trudvsem | official | да | `https://opendata.trudvsem.ru/api/v1/vacancies` | **запрещено** (`Disallow: /`) |
 | HeadHunter — IT-вакансии | rss | official | да | `https://hh.ru/search/vacancy/rss?text=%D1%80%D0%B0%D0%B7%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D1%87%D0%B8%D0%BA&professional_role=96&order_by=publication_time` | **запрещено** (`Disallow: *?*`) |
@@ -26,8 +26,8 @@
 | Jobspresso — Отобранные вакансии | rss | official | да | `https://jobspresso.co/feed/` | разрешено |
 | CryptoJobsList — Web3 вакансии | rss | official | да | `https://api.cryptojobslist.com/jobs.rss` | разрешено (`Allow: /`) |
 | RemoteWorker UK — Все вакансии | rss | official | да | `https://remoteworker.co.uk/feeds/all.xml` | разрешено (`Allow: /`) |
-| Карьерные страницы компаний — Greenhouse | ats | official | да | публичный API карьерных страниц компаний (Greenhouse) | не применяется |
 | Карьерные страницы компаний — Ashby | ats | official | да | публичный API карьерных страниц компаний (Ashby) | не применяется |
+| Карьерные страницы компаний — Greenhouse | ats | official | да | публичный API карьерных страниц компаний (Greenhouse) | не применяется |
 | Карьерные страницы компаний — Lever | ats | official | да | публичный API карьерных страниц компаний (Lever) | не применяется |
 | Telegram — Хабр Карьера | telegram | public | да | `https://t.me/s/habr_career` | разрешено — robots.txt: HTTP 404 |
 | Telegram — Game Development Jobs | telegram | public | да | `https://t.me/s/devjobs` | разрешено — robots.txt: HTTP 404 |
@@ -85,6 +85,28 @@
 | Telegram — Remote Jobs RU | telegram | public | да | `https://t.me/s/remote_jobs_ru` | разрешено — robots.txt: HTTP 404 |
 | Telegram — Freelance Таверна | telegram | public | да | `https://t.me/s/freelancetaverna` | разрешено — robots.txt: HTTP 404 |
 | Telegram — WorkASAP: удалённая работа | telegram | public | да | `https://t.me/s/workasap` | разрешено — robots.txt: HTTP 404 |
+| HeadHunter — Продакт-менеджеры | rss | official | да | `https://hh.ru/search/vacancy/rss?professional_role=73&order_by=publication_time` | **запрещено** (`Disallow: *?*`) |
+| HeadHunter — Проджект-менеджеры | rss | official | да | `https://hh.ru/search/vacancy/rss?professional_role=107&order_by=publication_time` | **запрещено** (`Disallow: *?*`) |
+| HeadHunter — Аналитики | rss | official | да | `https://hh.ru/search/vacancy/rss?professional_role=10&professional_role=148&professional_role=150&professional_role=156&professional_role=164&order_by=publication_time` | **запрещено** (`Disallow: *?*`) |
+| HeadHunter — Дизайнеры | rss | official | да | `https://hh.ru/search/vacancy/rss?professional_role=34&professional_role=25&professional_role=12&order_by=publication_time` | **запрещено** (`Disallow: *?*`) |
+| HeadHunter — Тестировщики (QA) | rss | official | да | `https://hh.ru/search/vacancy/rss?professional_role=124&order_by=publication_time` | **запрещено** (`Disallow: *?*`) |
+| HeadHunter — DevOps и администрирование | rss | official | да | `https://hh.ru/search/vacancy/rss?professional_role=160&professional_role=113&professional_role=112&professional_role=114&order_by=publication_time` | **запрещено** (`Disallow: *?*`) |
+| HeadHunter — Маркетинг и реклама | rss | official | да | `https://hh.ru/search/vacancy/rss?professional_role=68&professional_role=3&professional_role=163&professional_role=170&professional_role=182&order_by=publication_time` | **запрещено** (`Disallow: *?*`) |
+| HeadHunter — Техподдержка | rss | official | да | `https://hh.ru/search/vacancy/rss?professional_role=121&order_by=publication_time` | **запрещено** (`Disallow: *?*`) |
+| HeadHunter — Продажи | rss | official | да | `https://hh.ru/search/vacancy/rss?professional_role=70&professional_role=106&professional_role=54&order_by=publication_time` | **запрещено** (`Disallow: *?*`) |
+| HeadHunter — Информационная безопасность | rss | official | да | `https://hh.ru/search/vacancy/rss?professional_role=116&professional_role=120&order_by=publication_time` | **запрещено** (`Disallow: *?*`) |
+| HeadHunter — 1С | rss | official | да | `https://hh.ru/search/vacancy/rss?text=1%D0%A1&order_by=publication_time` | **запрещено** (`Disallow: *?*`) |
+| Pawetta — Digital-вакансии | rss | official | да | `https://pawetta.ru/feed/` | **запрещено** (`Disallow: */feed`) |
+| Telegram — @forproducts: вакансии продукта | telegram | public | да | `https://t.me/s/forproducts` | разрешено — robots.txt: HTTP 404 |
+| Telegram — @hireproproduct: продукт | telegram | public | да | `https://t.me/s/hireproproduct` | разрешено — robots.txt: HTTP 404 |
+| Telegram — @product_design_jobs: продуктовый дизайн | telegram | public | да | `https://t.me/s/product_design_jobs` | разрешено — robots.txt: HTTP 404 |
+| Telegram — @motion_design_jobs: motion-дизайн | telegram | public | да | `https://t.me/s/motion_design_jobs` | разрешено — robots.txt: HTTP 404 |
+| Telegram — @juno_jobs: джуны и стажировки | telegram | public | да | `https://t.me/s/juno_jobs` | разрешено — robots.txt: HTTP 404 |
+| Telegram — @jobs_juniors_remote: удалёнка для джунов | telegram | public | да | `https://t.me/s/jobs_juniors_remote` | разрешено — robots.txt: HTTP 404 |
+| Telegram — @job4analyst_junior: аналитики без опыта | telegram | public | да | `https://t.me/s/job4analyst_junior` | разрешено — robots.txt: HTTP 404 |
+| Telegram — @stagirovky: стажировки | telegram | public | да | `https://t.me/s/stagirovky` | разрешено — robots.txt: HTTP 404 |
+| Telegram — @startup_job_russia: стартапы | telegram | public | да | `https://t.me/s/startup_job_russia` | разрешено — robots.txt: HTTP 404 |
+| Telegram — @vacancysmm: SMM и маркетинг | telegram | public | да | `https://t.me/s/vacancysmm` | разрешено — robots.txt: HTTP 404 |
 
 ## Решения
 
@@ -97,4 +119,16 @@
 - **HeadHunter — DevOps, SRE и K8s** — robots.txt запрещает `Disallow: *?*`. Решение: _ждёт решения оператора_.
 - **HeadHunter — Data Science, ML и AI** — robots.txt запрещает `Disallow: *?*`. Решение: _ждёт решения оператора_.
 - **HeadHunter — Дизайн, UI/UX и графика** — robots.txt запрещает `Disallow: *?*`. Решение: _ждёт решения оператора_.
+- **HeadHunter — Продакт-менеджеры** — robots.txt запрещает `Disallow: *?*`. Решение: _ждёт решения оператора_.
+- **HeadHunter — Проджект-менеджеры** — robots.txt запрещает `Disallow: *?*`. Решение: _ждёт решения оператора_.
+- **HeadHunter — Аналитики** — robots.txt запрещает `Disallow: *?*`. Решение: _ждёт решения оператора_.
+- **HeadHunter — Дизайнеры** — robots.txt запрещает `Disallow: *?*`. Решение: _ждёт решения оператора_.
+- **HeadHunter — Тестировщики (QA)** — robots.txt запрещает `Disallow: *?*`. Решение: _ждёт решения оператора_.
+- **HeadHunter — DevOps и администрирование** — robots.txt запрещает `Disallow: *?*`. Решение: _ждёт решения оператора_.
+- **HeadHunter — Маркетинг и реклама** — robots.txt запрещает `Disallow: *?*`. Решение: _ждёт решения оператора_.
+- **HeadHunter — Техподдержка** — robots.txt запрещает `Disallow: *?*`. Решение: _ждёт решения оператора_.
+- **HeadHunter — Продажи** — robots.txt запрещает `Disallow: *?*`. Решение: _ждёт решения оператора_.
+- **HeadHunter — Информационная безопасность** — robots.txt запрещает `Disallow: *?*`. Решение: _ждёт решения оператора_.
+- **HeadHunter — 1С** — robots.txt запрещает `Disallow: *?*`. Решение: _ждёт решения оператора_.
+- **Pawetta — Digital-вакансии** — robots.txt запрещает `Disallow: */feed`. Решение: _ждёт решения оператора_.
 
