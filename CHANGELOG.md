@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.44.0
+
+An audit of the research on live data found figures that were wrong or misleading. Report and index are now version 2; the October 2026 report stays frozen under version 1 and says so.
+
+- **The openradar index.** The panel is a set of feeds, not of platforms: five hh.ru feeds added on 3 November had joined it and tripled the hh count for that day. A post counts when a panel feed saw it, so a new source changes nothing even when it meets the post first. Old vacancies raised in search no longer count as new: on hh.ru and Habr Career the vacancy number tells them apart (about 45% of the «new» hh vacancies of the first week were over a week old). The panel starts on 30 October and the base moves to 9 November – 6 December, four whole weeks after these rules. Migration 028 empties `research_daily`; the app rebuilds it.
+- **Orders** cover the Russian-language market only, like vacancies: Freelancer.com and other English-language orders inflated the median budget from about 3 500 ₽ to 4 950 ₽. An order paid by the month is no longer a project budget.
+- **«Money mass» and the AI premium** added monthly salaries to project budgets across markets; two thirds of the sum was foreign salaries. Both now use Russian-language project budgets alone, and the wording no longer claims a market budget or a premium for a skill.
+- **Bank of Russia rates.** Pay converts at the official rate on the first day of the month of publication (`research_fx`), not at a fixed USD = 92 ₽. The fallback table is the rate of 1 November 2026. The feed and `/api/market` keep their own constants for now.
+- **Intervals and fair comparisons.** Medians carry a 95% interval from order statistics, shown on the charts. Gaps for remote work, AI mentions and Moscow are measured at the same role and seniority (remote: +60% plainly, about +8% matched). «Pays the most» is claimed only when the leader's interval stands clear of the next one. Reports add a median for IT roles, medians by board, and how sums were written.
+- **Duplicates.** A vacancy joins by title only at the same employer, and the employer is read from the post text too: the hh.ru feed has no author field, so different employers' «Программист 1С» could merge. Another feed reading the same page is recorded in `lead_sightings`, whose key gains `source_id`.
+- **Role rules.** «Финансовый директор» no longer lands in marketing, nor occupational safety in information security. `t.me` and `telegram`, and the national Arbeitnow sites, each count as one platform.
+- **Checking accuracy.** `radar research sample --n 300 --out gold.csv` writes posts to label by hand and `radar research gold gold.csv` scores the rules and the model against them. This decides `RADAR_EXTRACT_APPLY`; `research check` stays a rough comparison.
+- `docs/RESEARCH_METHODOLOGY.md` is rewritten to what the code does: it described a quality index, daily exchange rates and other things that were never built. Their unused code in `src/research/methodology.ts` is gone. The public methodology pages are updated.
+
 ## 0.43.4
 
 - RSS feeds with a bare «&» (`R&D`, `?a=1&b=2` in a link) are read: the strict XML parser dropped the whole feed, so GeekJob and Real Work From Anywhere gave nothing. Entities and CDATA are left as they are.

@@ -29,8 +29,15 @@ export function normalizeCompany(name: string): string | undefined {
   return key.length >= 2 ? key : undefined;
 }
 
-/** The company key of a lead: from its address on boards that name the company, else its author. */
-export function companyKeyOf(lead: { url?: string; author?: string }): string | undefined {
+/** Feeds that name the employer only in the text: hh.ru, Habr Career, company boards. */
+const COMPANY_IN_TEXT = [
+  /Вакансия компании:\s*([^\n]{2,80})/u,
+  /Компания «([^»]{2,80})»/u,
+  /^(?:Компания|Company):\s*([^\n]{2,80})/mu,
+];
+
+/** The company key of a lead: from its address on boards that name the company, else its author or text. */
+export function companyKeyOf(lead: { url?: string; author?: string; text?: string }): string | undefined {
   if (lead.url) {
     for (const [re, group] of COMPANY_IN_URL) {
       const slug = re.exec(lead.url)?.[group];
@@ -39,5 +46,9 @@ export function companyKeyOf(lead: { url?: string; author?: string }): string | 
   }
   // Telegram and free-text boards put a person or a channel here, not an employer.
   if (lead.author && !/^@|^https?:/i.test(lead.author)) return normalizeCompany(lead.author);
+  for (const re of COMPANY_IN_TEXT) {
+    const name = lead.text ? re.exec(lead.text)?.[1] : undefined;
+    if (name) return normalizeCompany(name);
+  }
   return undefined;
 }

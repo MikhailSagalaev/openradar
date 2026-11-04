@@ -1518,11 +1518,13 @@ a:focus-visible, button:focus-visible, summary:focus-visible, input[type=checkbo
 .rs-band { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--emerald) 35%, transparent); border-radius: 9999px; }
 .rs-fill { position: absolute; left: 0; top: 0; bottom: 0; background: color-mix(in srgb, var(--emerald) 55%, transparent); border-radius: 9999px; }
 .rs-dot { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; background: var(--emerald); border: 2px solid var(--bg); border-radius: 50%; box-sizing: border-box; }
+.rs-ci { position: absolute; top: 50%; height: 2px; margin-top: -1px; background: var(--ink); border-radius: 1px; }
 .rs-val { text-align: right; font-size: 13px; white-space: nowrap; }
 .rs-val b { display: block; color: var(--ink); }
 .rs-n { font-size: 11.5px; color: var(--muted); }
 .rs-legend { font-size: 12px; color: var(--muted); margin-top: 8px; }
-.rs-dot-key, .rs-band-key { display: inline-block; vertical-align: middle; margin: 0 4px 0 8px; }
+.rs-dot-key, .rs-band-key, .rs-ci-key { display: inline-block; vertical-align: middle; margin: 0 4px 0 8px; }
+.rs-ci-key { width: 22px; height: 2px; background: var(--ink); }
 .rs-dot-key { width: 9px; height: 9px; border-radius: 50%; background: var(--emerald); }
 .rs-band-key { width: 22px; height: 9px; border-radius: 9999px; background: color-mix(in srgb, var(--emerald) 35%, transparent); }
 .rs-hist { display: flex; align-items: flex-end; gap: 4px; height: 180px; margin-top: 12px; }

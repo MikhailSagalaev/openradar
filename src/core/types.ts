@@ -187,6 +187,8 @@ export interface Viewer {
 }
 
 export interface Lead extends RawLead {
+  /** Research only: the other sources that saw this post (lead_sightings). */
+  seenBy?: string[];
   id: string;
   canonicalUrl?: string;
   fingerprint: string;

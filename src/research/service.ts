@@ -4,6 +4,7 @@
  */
 import type { Store } from '../core/store.ts';
 import { deriveRecord, type DeriveOptions, type ResearchRecord } from './derive.ts';
+import { ratesOf } from './fx.ts';
 import { MONTHS_GEN, buildReport, livePeriod, monthPeriod, REPORT_VERSION, type Report } from './report.ts';
 
 /** Posts are read and derived a page at a time, so only one page of full texts is in memory. */
@@ -17,10 +18,11 @@ const MIN_MONTH_JOBS = 300;
 export async function researchRecords(store: Store, from: string, to: string, options: DeriveOptions = {}, pageSize = PAGE): Promise<ResearchRecord[]> {
   if (!store.listLeadsForResearch) return [];
   const records: ResearchRecord[] = [];
+  const derive = { ...options, fx: options.fx ?? (await store.listFxRates?.()) };
   let afterId: string | undefined;
   while (records.length < MAX_LEADS) {
     const page = await store.listLeadsForResearch({ from, to, limit: pageSize, afterId });
-    for (const lead of page) records.push(deriveRecord(lead, options));
+    for (const lead of page) records.push(deriveRecord(lead, derive));
     if (page.length < pageSize) break;
     afterId = page.at(-1)!.id;
   }
@@ -33,6 +35,10 @@ let cached: { at: number; report: Report; records: ResearchRecord[] } | undefine
 export function resetResearchCache(): void {
   cached = undefined;
   building = undefined;
+}
+
+function withRates(report: Report, fx: Record<string, Record<string, number>> | undefined, at: string): Report {
+  return { ...report, fx: ratesOf(at.slice(0, 7), fx) };
 }
 
 /** The build under way: callers wait for one build, never start a second. */
@@ -64,7 +70,7 @@ async function buildLive(store: Store, now: Date, options: DeriveOptions): Promi
     period.label = clamped.label;
     period.from = `${first}T00:00:00.000Z`;
   }
-  const report = buildReport(records, period, 'live', now);
+  const report = withRates(buildReport(records, period, 'live', now), await store.listFxRates?.(), period.to);
   cached = { at: now.getTime(), report, records };
   return cached;
 }
@@ -87,7 +93,7 @@ export async function buildMonthReport(store: Store, slug: string, now: Date = n
     period.label = `${period.label} (с ${day(first)} ${month})`;
     period.phrase = `с ${day(first)} по ${last.getUTCDate()} ${month} ${last.getUTCFullYear()} года`;
   }
-  return buildReport(records, period, 'month', now);
+  return withRates(buildReport(records, period, 'month', now), await store.listFxRates?.(), new Date(Date.parse(period.to) - 86_400_000).toISOString());
 }
 
 /** Saves last month's report once; returns the period when a new snapshot was made. */

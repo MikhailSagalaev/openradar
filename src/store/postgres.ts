@@ -1129,7 +1129,7 @@ export class PostgresStore implements Store {
   async addLeadSighting(sighting: LeadSighting): Promise<void> {
     await this.pool.query(
       `INSERT INTO lead_sightings (lead_id, url, source_id, method, similarity) VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (lead_id, url) DO NOTHING`,
+       ON CONFLICT (lead_id, url, source_id) DO NOTHING`,
       [sighting.leadId, sighting.url, sighting.sourceId, sighting.method, sighting.similarity],
     );
   }
@@ -1143,6 +1143,18 @@ export class PostgresStore implements Store {
       leadId: r.lead_id, url: r.url, sourceId: r.source_id, method: r.method,
       similarity: Number(r.similarity), seenAt: new Date(r.seen_at).toISOString(),
     }));
+  }
+
+  async listFxRates(): Promise<Record<string, Record<string, number>>> {
+    const res = await this.pool.query(`SELECT month, rates FROM research_fx`);
+    return Object.fromEntries(res.rows.map((r) => [r.month as string, r.rates as Record<string, number>]));
+  }
+
+  async saveFxRates(month: string, rates: Record<string, number>): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO research_fx (month, rates) VALUES ($1, $2::jsonb) ON CONFLICT (month) DO UPDATE SET rates = EXCLUDED.rates`,
+      [month, JSON.stringify(rates)],
+    );
   }
 
   async listRecentSketches(sinceIso: string, limit: number): Promise<Array<{ id: string; createdAt: string; minhash: string }>> {
@@ -2013,7 +2025,8 @@ export class PostgresStore implements Store {
               title_key, status, score, reasons_json, created_at, delivered_at, type, raw_salary, payment_period,
               normalized_usd_min, normalized_usd_max, state, contacts_json, source_platform, source_channel,
               source_channel_title, source_visibility, source_message_id, confirmed_at,
-              votes_up, votes_down, votes_scam, votes_closed
+              votes_up, votes_down, votes_scam, votes_closed,
+              (SELECT array_agg(DISTINCT s.source_id) FROM lead_sightings s WHERE s.lead_id = leads.id) AS seen_by
          FROM leads
         WHERE COALESCE(published_at, created_at) >= $1::timestamptz AND COALESCE(published_at, created_at) < $2::timestamptz
           AND state NOT IN ('hidden_junk', 'hidden_scam') AND status NOT IN ('rejected', 'failed')
@@ -2024,7 +2037,7 @@ export class PostgresStore implements Store {
         LIMIT $3`,
       [options.from, options.to, options.limit, options.afterId ?? null],
     );
-    return result.rows.map((r) => this.rowToLead(r));
+    return result.rows.map((r) => ({ ...this.rowToLead(r), seenBy: (r.seen_by as string[] | null) ?? [] }));
   }
 
   async listLeadsForModel(options: { limit: number; since: string; version: number; withPayFirst?: boolean }): Promise<Array<Pick<Lead, 'id' | 'title' | 'text' | 'type'>>> {
@@ -2068,9 +2081,9 @@ export class PostgresStore implements Store {
       await client.query('DELETE FROM research_daily WHERE day = $1::date', [day]);
       if (rows.length) {
         await client.query(
-          `INSERT INTO research_daily (day, type, platform, role, scope, n)
-           SELECT $1::date, r.type, r.platform, r.role, r.scope, r.n
-             FROM jsonb_to_recordset($2::jsonb) AS r(type text, platform text, role text, scope text, n int)`,
+          `INSERT INTO research_daily (day, type, platform, role, scope, n, panel_n)
+           SELECT $1::date, r.type, r.platform, r.role, r.scope, r.n, COALESCE(r."panelN", 0)
+             FROM jsonb_to_recordset($2::jsonb) AS r(type text, platform text, role text, scope text, n int, "panelN" int)`,
           [day, JSON.stringify(rows)],
         );
       }
@@ -2085,11 +2098,11 @@ export class PostgresStore implements Store {
 
   async listResearchDaily(from: string, to: string): Promise<ResearchDailyRow[]> {
     const result = await this.pool.query(
-      `SELECT to_char(day, 'YYYY-MM-DD') AS day, type, platform, role, scope, n FROM research_daily
+      `SELECT to_char(day, 'YYYY-MM-DD') AS day, type, platform, role, scope, n, panel_n FROM research_daily
         WHERE day >= $1::date AND day < $2::date ORDER BY day`,
       [from, to],
     );
-    return result.rows.map((r) => ({ day: r.day, type: r.type, platform: r.platform, role: r.role, scope: r.scope, n: Number(r.n) }));
+    return result.rows.map((r) => ({ day: r.day, type: r.type, platform: r.platform, role: r.role, scope: r.scope, n: Number(r.n), panelN: Number(r.panel_n) }));
   }
 
   async lastResearchDay(): Promise<string | undefined> {

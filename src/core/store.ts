@@ -306,6 +306,8 @@ export interface HubStore {
 /** Pay and employer taken from the page when the post itself had none. */
 /** Posts of one day by type, platform, role and market scope (the index's raw material). */
 export interface ResearchDailyRow {
+  /** Of `n`, the fresh posts seen by the index's fixed feeds. */
+  panelN?: number;
   day: string;
   type: string;
   platform: string;
@@ -367,6 +369,9 @@ export interface Store extends HubStore {
   /** A copy of a stored lead seen at another address or source (migration 027). */
   addLeadSighting?(sighting: LeadSighting): Promise<void>;
   listLeadSightings?(leadId: string): Promise<LeadSighting[]>;
+  /** Bank of Russia rates by month (migration 028). */
+  listFxRates?(): Promise<Record<string, Record<string, number>>>;
+  saveFxRates?(month: string, rates: Record<string, number>): Promise<void>;
   updateLeadStatus(id: string, status: LeadStatus, deliveredAt?: string, scoreDelta?: number): Promise<void>;
   /** Sets a recomputed base score; the stored score is the base plus the community vote adjustment. */
   updateLeadScore?(id: string, baseScore: number): Promise<number | undefined>;

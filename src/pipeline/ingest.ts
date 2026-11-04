@@ -59,7 +59,7 @@ export const TITLE_COMPANY_WINDOW_MS = 30 * 24 * 3600 * 1000;
  * The same vacancy at another address: an aggregator's copy of an ATS page, or the other way
  * round. Generic titles are open at many companies, so the employer has to agree too.
  */
-async function findSameVacancy(prepared: { titleKey: string; url?: string; author?: string }, now: Date, deps: IngestDeps): Promise<Lead | null> {
+async function findSameVacancy(prepared: { titleKey: string; url?: string; author?: string; text?: string }, now: Date, deps: IngestDeps): Promise<Lead | null> {
   const company = companyKeyOf(prepared);
   if (!company || !deps.store.listRecentByTitleKey) return null;
   const since = new Date(now.getTime() - TITLE_COMPANY_WINDOW_MS).toISOString();
@@ -72,7 +72,8 @@ async function findSameVacancy(prepared: { titleKey: string; url?: string; autho
 /** Keeps where else a stored lead was published; a re-read of the same page adds nothing. */
 async function recordSighting(outcome: IngestOutcome, url: string | undefined, source: SourceRecord, deps: IngestDeps): Promise<IngestOutcome> {
   const lead = outcome.lead;
-  if (!lead || !url || !deps.store.addLeadSighting || url === lead.url) return outcome;
+  // Another feed seeing the same page matters too: the index counts what its panel feeds saw.
+  if (!lead || !url || !deps.store.addLeadSighting || (url === lead.url && source.id === lead.sourceId)) return outcome;
   const method = (outcome.reasons?.[0] ?? 'duplicate:unknown').replace(/^duplicate:/, '');
   try {
     await deps.store.addLeadSighting({ leadId: lead.id, url, sourceId: source.id, method, similarity: 1 });
@@ -115,15 +116,17 @@ export async function ingestRawLead(
 
   if (prepared.canonicalUrl) {
     const byUrl = await deps.store.findLeadByCanonicalUrl(prepared.canonicalUrl);
-    if (byUrl) return { status: 'duplicate', lead: byUrl, reasons: ['duplicate:url'] };
+    if (byUrl) return recordSighting({ status: 'duplicate', lead: byUrl, reasons: ['duplicate:url'] }, prepared.url, source, deps);
   }
 
   const since = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
   const byTitle = await deps.store.findRecentByTitleKey(prepared.titleKey, prepared.city, since);
-  // «IT Support Engineer» at two named companies is two vacancies, even on the same day.
+  // «Программист 1С» is open at many companies on any day: a vacancy joins by title only at the
+  // same employer. An order has no employer to compare, so its title decides unless they differ.
   const company = companyKeyOf(prepared);
   const otherCompany = byTitle ? companyKeyOf(byTitle) : undefined;
-  if (byTitle && !(company && otherCompany && company !== otherCompany)) return recordSighting(duplicateLead(byTitle, prepared.fingerprint), prepared.url, source, deps);
+  const sameEmployer = prepared.type === 'job' ? Boolean(company) && company === otherCompany : !(company && otherCompany && company !== otherCompany);
+  if (byTitle && sameEmployer) return recordSighting(duplicateLead(byTitle, prepared.fingerprint), prepared.url, source, deps);
 
   if (prepared.type === 'job') {
     const sameVacancy = await findSameVacancy(prepared, now, deps);

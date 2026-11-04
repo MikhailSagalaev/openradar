@@ -61,8 +61,12 @@ describe('pay in the text', () => {
     expect(parsePayText('Ставка 1 500 ₽ в час', 'gig')).toMatchObject({ min: 1500, period: 'hour' });
     expect(parsePayText('Обновить магазин - 1000UAH', 'gig')).toMatchObject({ min: 1000, currency: 'UAH', period: 'project' });
 
-    // Yearly dollars become roubles per month at the reference rate.
-    expect(normalizePay({ min: 120000, max: 120000, currency: 'USD', period: 'year', origin: 'page' }, 'job')).toMatchObject({ point: 920000, period: 'month' });
+    // Yearly dollars become roubles per month at the rate given, the reference one by default.
+    expect(normalizePay({ min: 120000, max: 120000, currency: 'USD', period: 'year', origin: 'page' }, 'job', { USD: 90 })).toMatchObject({ point: 900000, period: 'month' });
+    expect(normalizePay({ min: 120000, max: 120000, currency: 'USD', period: 'year', origin: 'page' }, 'job')).toMatchObject({ point: 805600, period: 'month' });
+    // An order paid by the month is not a project budget.
+    expect(normalizePay({ min: 60000, max: 60000, currency: 'RUB', period: 'month', origin: 'text' }, 'gig')).toMatchObject({ period: 'month' });
+    expect(parsePayText('Ведение соцсетей, 60 000 ₽ в месяц', 'gig')).toMatchObject({ period: 'month' });
     // A typo or a phone number is not a salary.
     expect(normalizePay({ min: 500, max: 500, currency: 'RUB', period: 'month', origin: 'text' }, 'job')).toBeUndefined();
   });
@@ -161,7 +165,53 @@ function record(i: number, overrides: Partial<ResearchRecord> = {}): ResearchRec
   };
 }
 
+function gig(i: number, overrides: Partial<ResearchRecord> = {}): ResearchRecord {
+  return record(i, { type: 'gig', payPeriod: 'project', pay: 10000, company: undefined, ...overrides });
+}
+
 describe('report', () => {
+  it('gives the median an interval that narrows with the sample', () => {
+    const values = (n: number): number[] => Array.from({ length: n }, (_, i) => 100000 + i * 1000);
+    const small = dist(values(20));
+    const large = dist(values(400));
+    expect(small.ciLow).toBeLessThan(small.median!);
+    expect(small.ciHigh).toBeGreaterThan(small.median!);
+    // The share of the sample the interval spans halves as the sample quadruples.
+    expect((large.ciHigh! - large.ciLow!) / 400).toBeLessThan((small.ciHigh! - small.ciLow!) / 20);
+  });
+
+  it('keeps English-language orders out of the order figures', () => {
+    const records = [
+      ...Array.from({ length: 20 }, (_, i) => gig(i, { pay: 3000 })),
+      ...Array.from({ length: 20 }, (_, i) => gig(100 + i, { pay: 90000, scope: 'intl' })),
+    ];
+    const report = buildReport(records, monthPeriod('2026-10'), 'month');
+    expect(report.gigs.budget).toMatchObject({ n: 20, median: 3000 });
+    expect(report.totals).toMatchObject({ gigs: 20, intlGigs: 20 });
+  });
+
+  it('compares remote and office at the same role and grade', () => {
+    // Remote vacancies are senior here: the plain gap is large, the matched one small.
+    const records = [
+      ...Array.from({ length: 30 }, (_, i) => record(i, { remote: true, grade: 'senior', pay: 310000 })),
+      ...Array.from({ length: 30 }, (_, i) => record(100 + i, { remote: false, grade: 'senior', pay: 300000 })),
+      ...Array.from({ length: 90 }, (_, i) => record(200 + i, { remote: false, grade: 'junior', pay: 100000 })),
+    ];
+    const report = buildReport(records, monthPeriod('2026-10'), 'month');
+    expect(report.jobs.remote.remote.median! / report.jobs.remote.office.median!).toBeGreaterThan(2);
+    expect(report.jobs.remote.adjusted).toMatchObject({ pct: 3, n: 30 });
+    expect(report.findings.find((f) => f.text.startsWith('Удалённую'))!.quote).toContain('при той же роли и уровне разница +3%');
+  });
+
+  it('claims the top role only when its interval stands clear', () => {
+    const roles = (slug: string, base: number, from: number): ResearchRecord[] =>
+      Array.from({ length: 40 }, (_, i) => record(from + i, { role: slug, pay: base + i * 1000 }));
+    const close = buildReport([...roles('ml', 300000, 0), ...roles('devops', 298000, 100), ...roles('qa', 100000, 200)], monthPeriod('2026-10'), 'month');
+    expect(close.findings.some((f) => f.text.startsWith('Среди самых высоких'))).toBe(true);
+    const clear = buildReport([...roles('ml', 500000, 0), ...roles('devops', 200000, 100), ...roles('qa', 100000, 200)], monthPeriod('2026-10'), 'month');
+    expect(clear.findings.some((f) => f.text.startsWith('Больше всего'))).toBe(true);
+  });
+
   it('hides figures below the sample threshold', () => {
     expect(dist([1, 2, 3])).toEqual({ n: 3 });
     expect(dist(Array.from({ length: MIN_MEDIAN }, (_, i) => 100000 + i * 1000)).median).toBeDefined();
@@ -237,7 +287,7 @@ describe('research pages', () => {
     expect(index).toContain('<h1>Индекс openradar</h1>');
     expect(index).toContain('hh.ru, career.habr.com');
     const indexJson = await (await app.request('/research/index.json')).json() as { version: number; base: { provisional: boolean } };
-    expect(indexJson.version).toBe(1);
+    expect(indexJson.version).toBe(2);
     expect((await app.request('/research/index.csv')).headers.get('content-type')).toContain('text/csv');
   });
 
@@ -442,16 +492,17 @@ describe('model extraction', () => {
 });
 
 describe('research data consistency & honest visual metrics', () => {
-  it('ensures cartaCapital shares strictly sum to 100.0% and N matches sample size', () => {
+  it('builds order shares from Russian-language project budgets alone', () => {
     const rolesList = ['backend', 'frontend', 'ai', 'design', 'qa', '1c', 'marketing', 'devops'];
     const records: ResearchRecord[] = [];
     let id = 1;
     for (const r of rolesList) {
       for (let i = 0; i < 15; i++) {
-        records.push(record(id++, { role: r, pay: 100000 + (id % 5) * 20000 }));
+        records.push(gig(id++, { role: r, pay: 100000 + (id % 5) * 20000 }));
       }
     }
-    const report = buildReport(records, monthPeriod('2026-10'), 'month');
+    // Salaries and English-language orders are other streams: they must not enter the sums.
+    const report = buildReport([...records, record(9000, { pay: 9_000_000 }), gig(9001, { scope: 'intl', pay: 9_000_000 })], monthPeriod('2026-10'), 'month');
     const carta = report.cartaCapital!;
     expect(carta).toBeDefined();
     expect(carta.length).toBeLessThanOrEqual(6);
@@ -472,8 +523,8 @@ describe('research data consistency & honest visual metrics', () => {
 
   it('computes taskTransformation from live records with real premiums and no dollars', () => {
     const records: ResearchRecord[] = [
-      ...Array.from({ length: 12 }, (_, i) => record(100 + i, { role: 'content', skills: ['копирайтинг'], pay: 60000 })),
-      ...Array.from({ length: 12 }, (_, i) => record(200 + i, { role: 'ai', skills: ['RAG', 'n8n'], pay: 180000 })),
+      ...Array.from({ length: 12 }, (_, i) => gig(100 + i, { role: 'content', skills: ['копирайтинг'], pay: 60000 })),
+      ...Array.from({ length: 12 }, (_, i) => gig(200 + i, { role: 'ai', skills: ['RAG', 'n8n'], pay: 180000 })),
     ];
     const report = buildReport(records, monthPeriod('2026-10'), 'month');
     const tt = report.taskTransformation!;
@@ -485,16 +536,16 @@ describe('research data consistency & honest visual metrics', () => {
 
   it('keeps the sign of a negative premium and shows no percent without enough paid posts', () => {
     const cheaper: ResearchRecord[] = [
-      ...Array.from({ length: 12 }, (_, i) => record(700 + i, { role: 'content', skills: ['копирайтинг'], pay: 100000 })),
-      ...Array.from({ length: 12 }, (_, i) => record(800 + i, { role: 'ai', skills: ['n8n'], pay: 80000 })),
+      ...Array.from({ length: 12 }, (_, i) => gig(700 + i, { role: 'content', skills: ['копирайтинг'], pay: 100000 })),
+      ...Array.from({ length: 12 }, (_, i) => gig(800 + i, { role: 'ai', skills: ['n8n'], pay: 80000 })),
     ];
     const tt = buildReport(cheaper, monthPeriod('2026-10'), 'month').taskTransformation!;
     expect(tt.netShiftPct).toBe(-20);
     expect(tt.emerging.find((r) => r.label.includes('AI-агентов'))?.changePct).toBe(-20);
 
     const thin: ResearchRecord[] = [
-      ...Array.from({ length: 3 }, (_, i) => record(900 + i, { role: 'content', skills: ['копирайтинг'], pay: 60000 })),
-      ...Array.from({ length: 3 }, (_, i) => record(950 + i, { role: 'ai', skills: ['n8n'], pay: 180000 })),
+      ...Array.from({ length: 3 }, (_, i) => gig(900 + i, { role: 'content', skills: ['копирайтинг'], pay: 60000 })),
+      ...Array.from({ length: 3 }, (_, i) => gig(950 + i, { role: 'ai', skills: ['n8n'], pay: 180000 })),
     ];
     const few = buildReport(thin, monthPeriod('2026-10'), 'month').taskTransformation!;
     expect(few.netShiftPct).toBeUndefined();
@@ -503,8 +554,8 @@ describe('research data consistency & honest visual metrics', () => {
 
   it('counts influx and floral as neither image models nor template coding', () => {
     const records: ResearchRecord[] = [
-      record(1000, { role: 'backend', skills: ['InfluxDB'] }),
-      record(1001, { role: 'web', skills: ['React', 'HTML', 'CSS'] }),
+      gig(1000, { role: 'backend', skills: ['InfluxDB'] }),
+      gig(1001, { role: 'web', skills: ['React', 'HTML', 'CSS'] }),
     ];
     const tt = buildReport(records, monthPeriod('2026-10'), 'month').taskTransformation!;
     expect(tt.emerging.find((r) => r.label.includes('LoRA'))?.n).toBe(0);
@@ -532,17 +583,17 @@ describe('research data consistency & honest visual metrics', () => {
     }
   });
 
-  it('renders Simpson paradox disclaimer and honest report HTML', () => {
+  it('warns that weeks differ in sample and renders the embeds', () => {
     const records: ResearchRecord[] = [
       ...Array.from({ length: 15 }, (_, i) => record(700 + i, { date: '2026-10-12', pay: 150000 })),
       ...Array.from({ length: 15 }, (_, i) => record(750 + i, { date: '2026-10-26', pay: 150000 })),
+      ...Array.from({ length: 40 }, (_, i) => gig(790 + i, { role: i % 2 ? 'web' : 'design', pay: 20000 + i * 1000 })),
     ];
     const report = buildReport(records, monthPeriod('2026-10'), 'month');
     const html = renderReportPage({ report, baseUrl: 'https://openradar.fun', version: '0.41.2', snapshots: [] });
 
-    // Simpson's paradox note
-    expect(html).toContain('парадокс Симпсона');
-    expect(html).toContain('общероссийские платформы (hh.ru, «Работа России»)');
+    expect(html).toContain('Состав выборки менялся');
+    expect(html).not.toContain('капитал');
 
     // No fake retrospective marketing claims
     expect(html).not.toContain('за последние 12 месяцев: чистый индекс трансформации +18.4%');
@@ -550,8 +601,8 @@ describe('research data consistency & honest visual metrics', () => {
 
     // Embed pages render properly
     const cartaEmbed = renderEmbedPage({ chartId: 'carta', report, baseUrl: 'https://openradar.fun' });
-    expect(cartaEmbed).toContain('Объём против денежной массы');
-    expect(cartaEmbed).toContain('Сумма долей: 100,0% объема');
+    expect(cartaEmbed).toContain('число против суммы бюджетов');
+    expect(cartaEmbed).toContain('заказов с бюджетом');
 
     const bumpEmbed = renderEmbedPage({ chartId: 'bump', report, baseUrl: 'https://openradar.fun' });
     expect(bumpEmbed).toContain('bump-chart-svg');

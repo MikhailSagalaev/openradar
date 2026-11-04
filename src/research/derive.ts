@@ -8,18 +8,22 @@ import { extractTechSkills, normalizeWhitespace } from '../core/text.ts';
 import type { Lead, LeadType } from '../core/types.ts';
 import type { PageFacts, PageSalary } from './facts.ts';
 import type { ModelFacts, StoredModelFacts } from './model.ts';
+import { ratesOf } from './fx.ts';
 
-/** Reference rates to roubles; the methodology page prints them. */
+/**
+ * Rates to roubles when a month has none saved: the Bank of Russia on 1 November 2026.
+ * Research converts at the rates of the month a post was published (fx.ts).
+ */
 export const RUB_PER: Record<string, number> = {
   RUB: 1,
   RUR: 1,
-  USD: 92,
-  USDT: 92,
-  EUR: 99,
-  GBP: 118,
-  KZT: 0.19,
-  BYN: 28,
-  UAH: 2.2,
+  USD: 80.56,
+  USDT: 80.56,
+  EUR: 89.66,
+  GBP: 107.75,
+  KZT: 0.178,
+  BYN: 27.34,
+  UAH: 1.77,
 };
 
 export type Market = 'ru' | 'intl';
@@ -69,6 +73,11 @@ export interface ResearchRecord {
   excluded?: boolean;
   /** Russian-language posts make the main report; the rest are the international section. */
   scope: 'ru' | 'intl';
+  /** Which feeds saw the post: the index counts its fixed panel. */
+  sourceId?: string;
+  seenBy?: string[];
+  /** The board's running number, which tells a new vacancy from an old one raised in search. */
+  number?: { board: string; id: number };
 }
 
 // ---------- Roles ----------
@@ -93,7 +102,7 @@ export const ROLES: RoleDef[] = [
   { slug: '1c', label: 'Программист 1С', plural: 'программисты 1С', types: ['job', 'gig'],
     pattern: rx(`${W}1\\s?[сc]${E}`) },
   { slug: 'security', label: 'Информационная безопасность', plural: 'специалисты по ИБ', types: ['job'],
-    pattern: rx(`безопасн|security|pentest|пентест|appsec|devsecops|${W}soc${E}|${W}иб${E}|siem`) },
+    pattern: rx(`(?<!техник\\p{L}*\\s)(?<!пожарн\\p{L}*\\s)(?<!промышленн\\p{L}*\\s)(?<!экономическ\\p{L}*\\s)безопасн|security|pentest|пентест|appsec|devsecops|${W}soc${E}|${W}иб${E}|siem`) },
   { slug: 'qa', label: 'Тестировщик (QA)', plural: 'тестировщики', types: ['job', 'gig'],
     pattern: rx(`тестиров|${W}qa${E}|sdet|автотест|test engineer|quality assurance`) },
   { slug: 'devops', label: 'DevOps и SRE', plural: 'DevOps-инженеры', types: ['job'],
@@ -135,7 +144,7 @@ export const ROLES: RoleDef[] = [
   { slug: 'support', label: 'Техподдержка', plural: 'специалисты техподдержки', types: ['job'],
     pattern: rx(`поддержк|support|helpdesk|service desk|оператор`) },
   { slug: 'marketing', label: 'Маркетинг и реклама', plural: 'маркетологи', types: ['job', 'gig'],
-    pattern: rx(`маркетолог|marketing|маркетинг|${W}smm|${W}seo${E}|таргет|директ|реклам|продвижен|авито`) },
+    pattern: rx(`маркетолог|marketing|маркетинг|${W}smm|${W}seo${E}|таргет|директолог|яндекс[. ]директ|реклам|продвижен|авито`) },
   { slug: 'content', label: 'Тексты и контент', plural: 'авторы и контент-менеджеры', types: ['job', 'gig'],
     pattern: rx(`копирайт|рерайт|текст|стать|контент|редактор|писател|copywriter|writer|editor`) },
   { slug: 'sales', label: 'Продажи', plural: 'менеджеры по продажам', types: ['job'],
@@ -278,6 +287,7 @@ function periodNear(text: string, index: number, type: LeadType): Pay['period'] 
   const tail = text.slice(index, index + 60).toLowerCase();
   if (/(?:в|за|\/)\s*час|per hour|\/\s*h(?:r|our)?\b|hourly/.test(tail)) return 'hour';
   if (/(?:в|за|\/)\s*год|per year|annual|\/\s*y(?:ea)?r\b/.test(tail)) return 'year';
+  if (/(?:в|за|\/)\s*мес|per month|ежемесячн/.test(tail)) return 'month';
   return type === 'job' ? 'month' : 'project';
 }
 
@@ -347,13 +357,14 @@ interface NormalizedPay {
   period: 'month' | 'hour' | 'project';
 }
 
-export function normalizePay(pay: Pay, type: LeadType): NormalizedPay | undefined {
-  const rate = RUB_PER[pay.currency.toUpperCase()];
+export function normalizePay(pay: Pay, type: LeadType, rates: Record<string, number> = RUB_PER): NormalizedPay | undefined {
+  const rate = rates[pay.currency.toUpperCase()];
   if (!rate) return undefined;
   let factor = rate;
   let period: NormalizedPay['period'];
   if (pay.period === 'hour') period = 'hour';
-  else if (type === 'gig') period = 'project';
+  // An order paid by the month is a retainer: it stays out of the project budgets.
+  else if (type === 'gig' && pay.period === 'project') period = 'project';
   else {
     period = 'month';
     if (pay.period === 'year') factor = rate / 12;
@@ -363,7 +374,7 @@ export function normalizePay(pay: Pay, type: LeadType): NormalizedPay | undefine
   // A vacancy «monthly» figure above the ceiling with no year marker is a yearly salary
   // from an international board (Jobicy, RemoteOK).
   if (period === 'month' && pay.period !== 'year' && pay.currency !== 'RUB' && (max ?? min ?? 0) > BOUNDS.month[1] / 2) {
-    return normalizePay({ ...pay, period: 'year' }, type);
+    return normalizePay({ ...pay, period: 'year' }, type, rates);
   }
   const point = min !== undefined && max !== undefined ? Math.round((min + max) / 2) : (min ?? max)!;
   const [low, high] = BOUNDS[period];
@@ -386,7 +397,10 @@ function regionOf(city: string | undefined): ResearchRecord['region'] {
 function platformOf(url: string | undefined, fallback: string): string {
   if (!url) return fallback;
   try {
-    return new URL(url).hostname.replace(/^www\./, '');
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    // One board under several names: public channels and the national sites of Arbeitnow.
+    if (host === 't.me') return 'telegram';
+    return /^arbeitnow\.[a-z.]+$/.test(host) ? 'arbeitnow.com' : host;
   } catch {
     return fallback;
   }
@@ -421,6 +435,16 @@ export function scopeOf(title: string, text: string): 'ru' | 'intl' {
 export interface DeriveOptions {
   /** Use the model's answers; off while their quality is being checked. */
   useModel?: boolean;
+  /** Bank of Russia rates by month, «2026-11». */
+  fx?: Record<string, Record<string, number>>;
+}
+
+/** The running number of a vacancy on boards that number them in order. */
+export function boardNumber(url: string | undefined): { board: string; id: number } | undefined {
+  const hh = url?.match(/hh\.ru\/vacancy\/(\d+)/);
+  if (hh) return { board: 'hh', id: Number(hh[1]) };
+  const habr = url?.match(/career\.habr\.com\/vacancies\/(\d+)/);
+  return habr ? { board: 'habr', id: Number(habr[1]) } : undefined;
 }
 
 export function deriveRecord(lead: Lead, options: DeriveOptions = {}): ResearchRecord {
@@ -440,14 +464,18 @@ export function deriveRecord(lead: Lead, options: DeriveOptions = {}): ResearchR
     ?? (typeof lead.budget === 'number' && lead.budget > 0
       ? { min: lead.budget, max: lead.budget, currency: lead.currency ?? 'RUB', period: lead.paymentPeriod === 'hourly' ? 'hour' as const : type === 'job' ? 'month' as const : 'project' as const, origin: 'budget' as const }
       : fromModel);
-  const normalized = pay ? normalizePay(pay, type) : undefined;
+  const date = (lead.publishedAt ?? lead.createdAt).slice(0, 10);
+  const normalized = pay ? normalizePay(pay, type, ratesOf(date.slice(0, 7), options.fx)) : undefined;
   const currency = pay?.currency.toUpperCase();
   const developer = ['backend', 'fullstack', 'frontend', 'mobile', 'data-engineer', 'ml', 'qa', 'gamedev', 'embedded'].includes(role);
   const city = lead.city ?? head.match(/Регион:\s*([^\n]{2,40})/u)?.[1] ?? head.match(/\.\s*([А-ЯЁ][а-яё-]+(?: [А-ЯЁ][а-яё-]+)?) \(Россия\)/u)?.[1] ?? model?.city;
 
   return {
     id: lead.id,
-    date: (lead.publishedAt ?? lead.createdAt).slice(0, 10),
+    sourceId: lead.sourceId,
+    seenBy: lead.seenBy,
+    number: boardNumber(lead.url),
+    date,
     type,
     platform: lead.sourceRef?.platform === 'telegram' ? 'telegram' : platformOf(lead.url, lead.sourceRef?.platform ?? 'other'),
     role,

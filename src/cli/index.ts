@@ -951,7 +951,7 @@ function buildProgram(): Command {
 
   research
     .command('check')
-    .description('Compare the model with the rules where both answer: is it good enough to count?')
+    .description('Compare the model with the rules where both answer: a rough check, research gold decides')
     .option('--days <n>', 'Posts of the last N days', '30')
     .action(async (options: { days: string }) => {
       const { modelQuality, share, APPLY_AGREEMENT } = await import('../research/quality.ts');
@@ -965,10 +965,44 @@ function buildProgram(): Command {
         console.log(`Модель добавит: направление ${q.gain.role}, уровень ${q.gain.grade}, оплату ${q.gain.pay}`);
         for (const d of q.disagreements) console.log(`  ${d.field}: правила ${d.rules} / модель ${d.model} — ${d.title}`);
         console.log(q.ready
-          ? `Готово: совпадение ≥ ${APPLY_AGREEMENT * 100}% на направлении и оплате. Можно включить RADAR_EXTRACT_APPLY=true.`
-          : `Пока не включать: нужно ≥ ${APPLY_AGREEMENT * 100}% совпадения на направлении и оплате, по 30+ сравнений (для оплаты: research extract --calibrate).`);
+          ? `Совпадение с правилами ≥ ${APPLY_AGREEMENT * 100}%. Решение о RADAR_EXTRACT_APPLY принимается по ручной разметке: research gold.`
+          : `Совпадение с правилами ниже ${APPLY_AGREEMENT * 100}% или мало сравнений. Правила тоже ошибаются: точность покажет ручная разметка (research sample, research gold).`);
         console.log(`Сейчас в цифрах: ${runtime.env.RADAR_EXTRACT_APPLY ? 'ответы модели используются' : 'ответы модели не используются'}.`);
       });
+    });
+
+  research
+    .command('sample')
+    .description('Write a CSV of posts to label by hand, in equal shares by platform and type')
+    .option('--n <n>', 'Posts', '300')
+    .option('--days <n>', 'Posts of the last N days', '30')
+    .requiredOption('--out <file>', 'CSV file')
+    .action(async (options: { n: string; days: string; out: string }) => {
+      const { goldCsv, goldSample } = await import('../research/gold.ts');
+      await withRuntime(async (runtime) => {
+        const from = new Date(Date.now() - Math.max(1, Number(options.days) || 30) * 86_400_000).toISOString();
+        const leads = (await runtime.store.listLeadsForResearch?.({ from, to: new Date().toISOString(), limit: 100_000 })) ?? [];
+        const sample = goldSample(leads, Math.max(1, Number(options.n) || 300));
+        writeFileSync(options.out, goldCsv(sample));
+        console.log(`Записано постов: ${sample.length}. Заполните gold_is_post (1 или 0), gold_role (слаг направления), gold_pay (рубли) и gold_period (month, hour, project).`);
+      });
+    });
+
+  research
+    .command('gold <file>')
+    .description('Score the rules and the model against a CSV labelled by hand')
+    .action(async (file: string) => {
+      const { parseCsv, scoreGold } = await import('../research/gold.ts');
+      const { APPLY_AGREEMENT } = await import('../research/quality.ts');
+      const score = scoreGold(parseCsv(readFileSync(file, 'utf8')));
+      const pct = (s: { n: number; right: number }): string => (s.n ? `${Math.round((s.right / s.n) * 100)}% (n = ${s.n})` : 'нет данных');
+      console.log(`Размечено: ${score.n}, не вакансии и не заказы: ${score.notPosts}`);
+      console.log(`Правила: направление ${pct(score.rules.role)}, оплата ${pct(score.rules.pay)}`);
+      console.log(`Модель: направление ${pct(score.model.role)}, оплата ${pct(score.model.pay)}`);
+      const good = (s: { n: number; right: number }): boolean => s.n >= 30 && s.right / s.n >= APPLY_AGREEMENT;
+      console.log(good(score.model.role) && good(score.model.pay)
+        ? `Модель прошла порог ${APPLY_AGREEMENT * 100}%: можно включить RADAR_EXTRACT_APPLY=true.`
+        : `Модель не прошла порог ${APPLY_AGREEMENT * 100}% на 30+ постах: RADAR_EXTRACT_APPLY не включать.`);
     });
 
   research
