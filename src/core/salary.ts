@@ -49,7 +49,7 @@ const BIG_FOREIGN_MONEY = /[$€£]\s?\d+(?:[.,]\d+)?\s?(?:m|mn|mln|b|bn|million
  * profit of a launch, a market statistic. Every figure in it is out: «бюджетах от $20 тыс.,
  * желательно от $50 тыс.» names two.
  */
-const NOT_PAY_SENTENCE = /реклам[а-я]*\s+бюджет|бюджет[а-я]*\s+(?:на\s+)?(?:реклам|трафик|маркетинг|продвижен)|ad\s*spend|(?:ad|ads|media|marketing|paid)\s+budgets?|открут|(?:управлени[а-я]*|управлял[а-я]*|вед[её]т[а-я]*|вел[а-я]*)\s+бюджет|manag[a-z]*\s+(?:[a-z$]+\s+){0,2}budgets?|чист[а-я]*\s+прибыл|net\s+profit|запуск[а-я]*\s+на\s+\d|\d\s*(?:млн|тыс)?[\s.]*(?:₽|руб[а-я.]*)?\s*[-–—]\s*запуск|средн[а-я]*\s+зарплат[а-я]*\s+(?:в|по|на\s+рынке)|average\s+salary\s+(?:in|for)/iu;
+const NOT_PAY_SENTENCE = /реклам[а-я]*\s+бюджет|бюджет[а-я]*\s+(?:на\s+)?(?:реклам|трафик|маркетинг|продвижен)|ad\s*spend|(?:ad|ads|media|marketing|paid)\s+budgets?|открут|(?:управлени[а-я]*|управлял[а-я]*|вед[её]т[а-я]*|вел[а-я]*)\s+бюджет|manag[a-z]*\s+(?:[a-z$]+\s+){0,2}budgets?|чист[а-я]*\s+прибыл|net\s+profit|запуск[а-я]*\s+(?:на|от)\s+\d|опыт[а-я]*\s+(?:[а-я]+\s+)?запуск|\d\s*(?:млн|тыс)?[\s.]*(?:₽|руб[а-я.]*)?\s*[-–—]\s*запуск|средн[а-я]*\s+зарплат[а-я]*\s+(?:в|по|на\s+рынке)|average\s+salary\s+(?:in|for)/iu;
 
 function maskNotPaySentences(text: string): string {
   if (!NOT_PAY_SENTENCE.test(text)) return text;
