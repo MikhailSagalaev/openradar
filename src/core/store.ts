@@ -316,6 +316,16 @@ export interface ResearchDailyRow {
   n: number;
 }
 
+export interface LeadMoney {
+  budget?: number;
+  currency?: string;
+  paymentPeriod?: string;
+  rawSalary?: string;
+  normalizedUsdMin?: number;
+  normalizedUsdMax?: number;
+  skills: string[];
+}
+
 export interface LeadFactsFill {
   budget?: number;
   currency?: string;
@@ -384,6 +394,8 @@ export interface Store extends HubStore {
   updateLeadTitleKey?(id: string, titleKey: string): Promise<void>;
   /** Stores the quality stage's verdict: the corrected type and the flags (metadata.qualityFlags). */
   updateLeadQuality?(id: string, type: LeadType, flags: string[]): Promise<void>;
+  /** Stores pay and skills worked out again from the post's text; undefined fields are cleared. */
+  updateLeadMoney?(id: string, money: LeadMoney): Promise<void>;
   updateLeadState?(id: string, state: LeadState): Promise<void>;
   /** Active leads on these hosts whose page is due for a closed-post check, oldest check first. */
   listLeadsToCheck?(options: { hosts: string[]; limit: number; createdAfter: string; now?: Date }): Promise<Array<Pick<Lead, 'id' | 'url' | 'createdAt' | 'type'>>>;

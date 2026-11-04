@@ -568,13 +568,15 @@ function buildProgram(): Command {
     .description('Run the quality stage again on stored leads: type, flags and their penalty (votes are kept)')
     .option('--days <n>', 'Leads created in the last N days', '60')
     .option('--limit <n>', 'At most this many newest leads', '50000')
-    .action(async (options: { days: string; limit: string }) => {
+    .option('--money', 'Also read pay and skills again from the text and apply the current rates')
+    .action(async (options: { days: string; limit: string; money?: boolean }) => {
       await withRuntime(async (runtime) => {
         const summary = await rescoreLeads(runtime.store, {
           days: Number(options.days) || 60,
           limit: Number(options.limit) || 50000,
+          money: options.money,
         });
-        console.log(`Проверено: ${summary.checked}, тип или флаги изменились: ${summary.requalified}, рейтинг изменился: ${summary.changed}`);
+        console.log(`Проверено: ${summary.checked}, тип или флаги изменились: ${summary.requalified}, оплата или навыки: ${summary.repriced}, рейтинг изменился: ${summary.changed}`);
       });
     });
 

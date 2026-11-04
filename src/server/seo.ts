@@ -12,6 +12,8 @@ export interface CatalogEntry {
   /** A paragraph under the list: what the page collects and who it is for. */
   about: string;
   q?: string;
+  /** Exact skill instead of a word search: «бот» is also inside «работа». */
+  skill?: string;
   type?: LeadType;
 }
 
@@ -68,7 +70,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     intro: 'Разработка ботов и автоматизация мессенджеров — новые заказы каждые пять минут.',
     about:
       'Боты для записи клиентов, приёма оплат, рассылок, воронок продаж и поддержки, мини-приложения в Telegram, боты для VK и WhatsApp. Многие такие заказы публикуются только в Telegram-каналах, поэтому openradar читает и биржи, и каналы.',
-    q: 'бот',
+    skill: 'Telegram Bot',
     type: 'gig',
   },
   {
@@ -352,7 +354,7 @@ function leadRow(lead: Lead, baseUrl: string): string {
   const meta = [
     lead.city,
     typeof lead.budget === 'number'
-      ? `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(lead.budget)} ₽`
+      ? `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(lead.budget)} ${!lead.currency || lead.currency === 'RUB' ? '₽' : lead.currency}`
       : undefined,
     lead.type === 'job' ? 'вакансия' : 'заказ',
   ]
@@ -370,6 +372,7 @@ function leadRow(lead: Lead, baseUrl: string): string {
 function feedHrefOf(entry: CatalogEntry): string {
   return `/feed.rss?${new URLSearchParams({
     ...(entry.q ? { q: entry.q } : {}),
+    ...(entry.skill ? { skill: entry.skill } : {}),
     ...(entry.type ? { type: entry.type } : {}),
   }).toString()}`;
 }

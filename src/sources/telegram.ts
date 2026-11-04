@@ -53,6 +53,8 @@ export const telegramSource: SourceAdapter = {
       const message = $(element).find('.tgme_widget_message');
       const textEl = $(element).find('.tgme_widget_message_text');
       textEl.find('br').replaceWith('\n');
+      // text() joins blocks with nothing between them: «рублейПредстоит».
+      textEl.find('p, div, li, blockquote, pre, h1, h2, h3, h4').after('\n');
       const text = textEl.text().trim();
       if (!text) return;
 

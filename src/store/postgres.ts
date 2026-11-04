@@ -41,7 +41,7 @@ import type {
   UserSourceInput,
   UserSourceRecord,
 } from '../core/store.ts';
-import type { LeadFactsFill, LeadSighting, ResearchDailyRow } from '../core/store.ts';
+import type { LeadFactsFill, LeadMoney, LeadSighting, ResearchDailyRow } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
 import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
 import { BROKEN_AFTER, countFailedInRow } from '../core/source-health.ts';
@@ -1979,6 +1979,15 @@ export class PostgresStore implements Store {
                               ELSE COALESCE(metadata_json, '{}'::jsonb) || jsonb_build_object('qualityFlags', $3::jsonb) END
        WHERE id = $1`,
       [id, type, JSON.stringify(flags)],
+    );
+  }
+
+  async updateLeadMoney(id: string, money: LeadMoney): Promise<void> {
+    await this.pool.query(
+      `UPDATE leads SET budget = $2, currency = COALESCE($3, currency), payment_period = COALESCE($4, payment_period),
+         raw_salary = $5, normalized_usd_min = $6, normalized_usd_max = $7, skills_json = $8::jsonb
+       WHERE id = $1`,
+      [id, money.budget ?? null, money.currency ?? null, money.paymentPeriod ?? null, money.rawSalary ?? null, money.normalizedUsdMin ?? null, money.normalizedUsdMax ?? null, JSON.stringify(money.skills)],
     );
   }
 

@@ -1,4 +1,4 @@
-import { budgetUsd, rubToUsd } from './salary.ts';
+import { MONTHLY_PAY_CEILING_USD, budgetUsd, rubToUsd } from './salary.ts';
 import type { Lead } from './types.ts';
 
 /**
@@ -60,11 +60,11 @@ export function setSalaryMedians(medians: SalaryMedians): void {
   currentMedians = medians;
 }
 
-/** True when a vacancy's monthly pay is below the floor or far below the median for its role. */
+/** True when a vacancy's monthly pay is above the ceiling, below the floor, or far below the median for its role. */
 export function salaryLooksWrong(lead: SalaryLead, medians: SalaryMedians = currentMedians): boolean {
   const usd = monthlyUsd(lead);
   if (usd === undefined) return false;
-  if (usd < rubToUsd(SALARY_FLOOR_RUB)) return true;
+  if (usd < rubToUsd(SALARY_FLOOR_RUB) || usd > MONTHLY_PAY_CEILING_USD) return true;
   const key = salaryRoleKey(lead);
   const median = (key && medians.get(key)) || medians.get('*');
   return median !== undefined && usd < median * SALARY_MEDIAN_SHARE;

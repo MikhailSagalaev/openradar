@@ -37,18 +37,20 @@ const COMPANY_INTRO: RegExp[] = [
 /** Words that say «this is a staff position», each counted once. */
 const VACANCY_SIGNALS: RegExp[] = [
   // «Зарплата:» needs no word boundary: channels glue it to the title («Fullstack-разработчикЗарплата: 120 000»).
-  /зарплата\s*:|(?:^|[^\p{L}])(?:з\/п|зп|вилка|доход)\s*:/iu,
+  /зарплат[а-я]*\s*[:—–-]|(?:^|[^\p{L}])(?:з\/п|зп|вилка|доход)\s*[:—–-]/iu,
   /(?:^|[^\p{L}])без\s+опыта(?![\p{L}])/iu,
   /(?:^|[^\p{L}])оклад/iu,
   /на\s+руки|до\s+вычета\s+налогов|(?:^|[^\p{L}])гросс|(?:^|[^\p{L}])gross(?![\p{L}])/iu,
   /[₽$€]\s*(?:в|за)\s+месяц|(?:в|за)\s+месяц[^\p{L}]{0,3}(?:на\s+руки|до\s+вычета)|(?:^|[^\p{L}])(?:per|a)\s+month/iu,
   /полн(?:ая|ую)\s+занятост|full[\s-]?time|(?:^|[^\p{L}\d])5\/2(?![\d])/iu,
   /опыт\s+работы\s*:|опыт\s+(?:от|более)\s+\d+\s+(?:год|лет)/iu,
-  /испытательн[а-я]*\s+срок|трудоустройств|оформлени[ея]\s+по\s+тк|(?:^|[^\p{L}])дмс(?![\p{L}])|соцпакет/iu,
+  /испытательн|трудоустройств|оформлени[ея]\s+по\s+тк|официальн[а-я]*\s+оформлени|(?:^|[^\p{L}])дмс(?![\p{L}])|соцпакет/iu,
+  // Yearly pay is a salary: nobody quotes an order by the year.
+  /[\dkк₽$€]\s*\/\s*(?:год|year|yr)(?![\p{L}])|\d\s*(?:₽|\$|€|руб[а-я.]*)\s+в\s+год(?![\p{L}])/iu,
   /#ваканси|(?:^|[^\p{L}])вакансия\s*:|(?:^|[^\p{L}])(?:hiring|vacancy)(?![\p{L}])/iu,
   /(?:^|[^\p{L}])о\s+нас\s*:|(?:^|[^\p{L}])о\s+компании\s*:|в\s+команд[уы](?![\p{L}])/iu,
   /(?:^|[^\p{L}])(?:junior|middle|senior|джун|мидл|сеньор|стаж[её]р)(?![\p{L}])/iu,
-  /(?:^|[^\p{L}])(?:обязанности|чем\s+предстоит\s+заниматься|(?:что\s+)?мы\s+предлагаем|условия\s*:|задачи\s*:)/iu,
+  /(?:^|[^\p{L}])(?:обязанности|(?:чем|что)\s+предстоит\s+(?:заниматься|делать)|(?:что\s+)?мы\s+предлагаем|условия\s*:|задачи\s*:)/iu,
   ...COMPANY_INTRO,
 ];
 
@@ -58,6 +60,15 @@ const GIG_SIGNALS =
 
 /** Russian law marks paid posts with an erid token and «Реклама»; employers pay for vacancy posts too. */
 const AD_MARKING = /(?:^|[^\p{L}])erid(?![\p{L}])|на\s+правах\s+рекламы|#реклама|(?:^|\n)\s*реклама\.?\s*(?:$|\n|ооо|ип)/iu;
+
+/** Promotion that no vacancy wording excuses: it is an ad even when it talks about candidates. */
+const PROMOTION = /о\s+рекламодателе|бесплатн[а-я]*\s+(?:вебинар|интенсив|мастер-класс)|записаться\s+на\s+(?:бесплатн|вебинар|интенсив|курс)/iu;
+
+/**
+ * Someone selling their services, not looking for a contractor: the tags chats use for it and
+ * an agency's price list. Works on raw text and on normalizeForMatch() output alike.
+ */
+export const SERVICE_OFFER = /(?:^|[^\p{L}\d_])#(?:услуг[аи]|предлагаю)(?![\p{L}])|наши\s+(?:тарифы|пакеты|услуги\s+и\s+цены)|(?:агентств[а-я]*|студи[а-я]*)\s+предлагает\s+(?:готов|услуг|пакет)|(?<![a-z])start(?![a-z])[^a-z]{0,40}\d[\s\S]{0,400}?(?<![a-z])(?:business|premium)(?![a-z])[^a-z]{0,40}\d/iu;
 
 /** Channel content that is never an offer of work: course sales, discounts, events, greetings to subscribers. */
 const CHANNEL_CONTENT: RegExp[] = [
@@ -87,13 +98,27 @@ const MLM: RegExp[] = [
 
 const OUTSTAFF = /аутстафф?|outstaff/iu;
 
+/** Channels that post vacancies and only vacancies: a post there is a job unless it says it is a task. */
+const JOB_CHANNELS = new Set([
+  'careerspace', 'datasciencejobs', 'designhunters', 'devjobs', 'foranalysts', 'forcpp', 'forcsharp', 'fordevops', 'forfrontend',
+  'forgamedev', 'forhr', 'forproducts', 'forpython', 'gamedevjobs', 'habr_career', 'hireproproduct', 'it_vakansii_jobs',
+  'job4analyst_junior', 'jobforjunior', 'jobs_juniors_remote', 'juno_jobs', 'marketing_jobs', 'motion_design_jobs',
+  'product_design_jobs', 'product_jobs', 'proglib_jobs', 'remote_jobs_ru', 'stagirovky', 'startup_job_russia', 'vacancysmm', 'vakansii_it',
+]);
+
+/** A title that names a position: a job channel's post without one and without vacancy words is its own content. */
+const POSITION_WORD = /разработчик|программист|developer|engineer|инженер|менеджер|manager|дизайнер|designer|аналитик|analyst|маркетолог|marketer|рекрутер|recruiter|специалист|specialist|редактор|копирайтер|тестировщик|стаж[её]р|intern|lead|head|директор|руководител|администратор|architect|архитектор|devops|(?:^|[^\p{L}])(?:hr|qa|ml|smm|seo)(?![\p{L}])/iu;
+
 function distinctMatches(text: string, patterns: RegExp[]): number {
   return patterns.filter((pattern) => pattern.test(text)).length;
 }
 
 /** How many separate vacancy entries a post lists, by its «Подробнее» links. */
 function listedOffers(text: string): number {
-  return text.match(/подробнее/giu)?.length ?? 0;
+  const links = text.match(/подробнее/giu)?.length ?? 0;
+  // A roundup without links: a line per position, each opening with its grade.
+  const grades = text.match(/(?:^|\n)\s*(?:junior|middle\+?|senior|lead|стаж[её]р|c-level)\s+[\p{L}]/giu)?.length ?? 0;
+  return Math.max(links, grades);
 }
 
 export interface QualityInput {
@@ -101,6 +126,15 @@ export interface QualityInput {
   title: string;
   text: string;
   budget?: number;
+  /** The channel of a post that came through a shared folder. */
+  channel?: string;
+}
+
+type QualitySource = Pick<SourceRecord, 'kind'> & { config?: SourceRecord['config'] };
+
+function isJobChannel(lead: QualityInput, source: QualitySource): boolean {
+  const channel = lead.channel ?? source.config?.channel;
+  return typeof channel === 'string' && JOB_CHANNELS.has(channel.replace(/^@/, '').toLowerCase());
 }
 
 export interface QualityAssessment {
@@ -115,17 +149,18 @@ export interface QualityAssessment {
  * and «Полная занятость» but no word «вакансия» in the title, so prepare() calls them gigs.
  * Two distinct vacancy signals and no sign of a one-off task make it a job.
  */
-export function detectPostType(lead: QualityInput, source: Pick<SourceRecord, 'kind'>): LeadType {
+export function detectPostType(lead: QualityInput, source: QualitySource): LeadType {
   if (!FREE_TEXT_KINDS.has(source.kind) || lead.type === 'job') return lead.type;
   const head = `${lead.title}\n${lead.text}`.slice(0, 1500);
   const vacancy = distinctMatches(head, VACANCY_SIGNALS);
   if (vacancy >= 3) return 'job';
   if (GIG_SIGNALS.test(head)) return lead.type;
+  if (isJobChannel(lead, source)) return 'job';
   // A post that opens with a role at an introduced company is a vacancy post of a job channel.
   return vacancy >= 2 || distinctMatches(head.slice(0, 300), COMPANY_INTRO) > 0 ? 'job' : lead.type;
 }
 
-export function assessQuality(lead: QualityInput, source: Pick<SourceRecord, 'kind'>): QualityAssessment {
+export function assessQuality(lead: QualityInput, source: QualitySource): QualityAssessment {
   const type = detectPostType(lead, source);
   const text = `${lead.title}\n${lead.text}`;
   const head = text.slice(0, 1500);
@@ -135,15 +170,26 @@ export function assessQuality(lead: QualityInput, source: Pick<SourceRecord, 'ki
   const hiring = HIRING.test(head);
   const gig = GIG_SIGNALS.test(head);
   const content = distinctMatches(text, CHANNEL_CONTENT) > 0 && vacancy < 3 && !hiring;
-  const marked = AD_MARKING.test(text) && vacancy === 0 && !hiring && !gig;
+  // An ad may say «без опыта» and «нужен» about its audience: only an opening that hires excuses the marking.
+  const hiringOpening = HIRING.test(head.slice(0, 200));
+  const marked = (AD_MARKING.test(text) || PROMOTION.test(text)) && vacancy < 3 && !hiringOpening;
   const editorial = EDITORIAL_TITLE.test(lead.title.trim()) && vacancy < 2 && !hiring && !gig && lead.budget === undefined;
-  if (content || marked || editorial) flags.push('channel_ad');
+  const roundup = DIGEST_HEADER.test(lead.title.trim()) || DIGEST_HEADER.test(text.slice(0, 400)) || listedOffers(text) >= 3;
+  // Job channels publish articles between vacancies, and a figure in one must not read as pay.
+  const channelStory = FREE_TEXT_KINDS.has(source.kind) && type === 'job' && vacancy === 0 && !hiring && !gig && !roundup && !POSITION_WORD.test(lead.title);
+  const services = SERVICE_OFFER.test(head);
+  if (content || marked || editorial || channelStory || services) flags.push('channel_ad');
 
-  if (!flags.includes('channel_ad') && (DIGEST_HEADER.test(lead.title.trim()) || listedOffers(text) >= 3)) flags.push('digest');
+  if (!flags.includes('channel_ad') && roundup) flags.push('digest');
   if (distinctMatches(head, MLM) > 0) flags.push('mlm');
   if (OUTSTAFF.test(head)) flags.push('outstaff');
 
   return { type, flags, penalty: flags.reduce((sum, flag) => sum + QUALITY_PENALTY[flag], 0) };
+}
+
+/** Flags saying the post is no single offer: any sum in it belongs to something else. */
+export function offersNoPay(flags: QualityFlag[]): boolean {
+  return flags.includes('channel_ad') || flags.includes('digest');
 }
 
 /** Flags stored on a lead (in its metadata), or none. */

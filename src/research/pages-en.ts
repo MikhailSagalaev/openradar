@@ -346,7 +346,9 @@ export function renderMethodologyPageEn(options: { baseUrl: string; version: str
     <li>Only sums next to a currency or words like «оклад», «зарплата» count: «3–5 years of experience» never becomes pay.</li>
     <li>A range gives its middle; a single bound («from ₽150,000») gives itself, which is not an exact sum, so reports show how sums were written and the median of full ranges alone. Yearly sums are divided by 12; hourly rates stay out of the monthly figures.</li>
     <li>Currencies are converted to roubles at the Bank of Russia rate on the first day of the month of publication.</li>
-    <li>Values below ₽12,000 or above ₽3,000,000 a month are parsing errors and dropped.</li>
+    <li>Values below ₽12,000 or above ₽3,000,000 a month are parsing errors and dropped. For a sum read from free text the upper limit is ₽1,000,000: above it stood commissions and stray numbers. A range whose top is over the limit gives its lower sum. Ad budgets, profit, bonuses, subscription prices and market statistics are not pay.</li>
+    <li>On exchanges with a budget field (Kwork, FL.ru, Freelancehunt) the sum comes from that field. A sum from the description counts only up to ₽150,000.</li>
+    <li>Ads, channel articles and vacancy roundups count in no figure: they hold no single offer of work.</li>
   </ul>
   <h2 id="index">The openradar index</h2>
   <p>The index shows how many new vacancies and orders appear each day against a base of 100. Only Russian-language posts seen by a fixed panel of feeds count: two hh.ru feeds, the main Habr Career feed, getmatch, «Работа России», Kwork, FL.ru and Freelancehunt. Vacancies raised in search are not new: on hh.ru and Habr Career a vacancy counts when its number is within about a week of the newest one. A day's value is the seven-day mean. The base is the mean daily count from 9 November to 6 December 2026; until 7 December it is provisional and covers every day since 30 October. The index is not seasonally adjusted and shows the panel, not the whole market. The last two days are recalculated as late posts arrive.</p>

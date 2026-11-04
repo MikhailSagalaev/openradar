@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { RUB_PER } from '../src/core/fx.ts';
 import {
   detectCurrency,
   detectPaymentPeriod,
@@ -51,8 +52,8 @@ describe('salary & currency normalization', () => {
       type: 'job',
     });
     expect(res.paymentPeriod).toBe('monthly');
-    expect(res.normalizedUsdMin).toBe(2000); // 184000 / 92
-    expect(res.normalizedUsdMax).toBe(3000); // 276000 / 92
+    expect(res.normalizedUsdMin).toBe(Math.round(184000 / RUB_PER.USD!));
+    expect(res.normalizedUsdMax).toBe(Math.round(276000 / RUB_PER.USD!));
   });
 
   it('handles foreign currencies in USD calculation', () => {
@@ -117,9 +118,9 @@ describe('anchored salary extraction from free text', () => {
 
   it('prefers anchored text salary over nothing and keeps explicit budget otherwise', () => {
     const anchored = normalizeSalary({ text: 'Оплата 90 000 руб за этап', type: 'gig' });
-    expect(anchored.normalizedUsdMin).toBe(Math.round(90000 / 92));
+    expect(anchored.normalizedUsdMin).toBe(Math.round(90000 / RUB_PER.USD!));
 
     const budgetOnly = normalizeSalary({ text: 'Опыт 3 - 5 лет', budget: 120000, type: 'gig' });
-    expect(budgetOnly.normalizedUsdMin).toBe(Math.round(120000 / 92));
+    expect(budgetOnly.normalizedUsdMin).toBe(Math.round(120000 / RUB_PER.USD!));
   });
 });

@@ -1,4 +1,5 @@
 import { createHmac, randomBytes } from 'node:crypto';
+import { salaryLooksWrong } from './salary-sanity.ts';
 import { escapeHtml, truncate } from './text.ts';
 import type { Lead, LeadType } from './types.ts';
 
@@ -118,6 +119,17 @@ export function signWebhook(secret: string, timestamp: string, body: string): st
   return `sha256=${createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex')}`;
 }
 
+/** Pay in a digest line, with its period; pay that looks wrong in the feed is not sent either. */
+function digestMoney(lead: Lead): string | undefined {
+  if (typeof lead.budget !== 'number' || salaryLooksWrong(lead)) return undefined;
+  const amount = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(lead.budget);
+  const currency = lead.currency === 'RUB' || !lead.currency ? '₽' : lead.currency;
+  const period = /per\s+year/i.test(lead.rawSalary ?? '') ? '/год'
+    : lead.paymentPeriod === 'hourly' ? '/час'
+      : lead.type === 'job' || lead.paymentPeriod === 'monthly' ? '/мес' : '';
+  return `${amount} ${currency}${period}`;
+}
+
 /** Telegram digest of one subscription (HTML parse mode). */
 export function formatSubscriptionDigest(
   subscription: Pick<SubscriptionRecord, 'name' | 'filters'>,
@@ -126,9 +138,7 @@ export function formatSubscriptionDigest(
   publicUrl: string,
 ): string {
   const lines = leads.map((lead) => {
-    const money = typeof lead.budget === 'number'
-      ? `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(lead.budget)} ${lead.currency === 'RUB' || !lead.currency ? '₽' : lead.currency}`
-      : undefined;
+    const money = digestMoney(lead);
     const meta = [lead.type === 'job' ? 'вакансия' : 'заказ', money].filter(Boolean).join(' · ');
     return `• <a href="${escapeHtml(`${publicUrl}/leads/${lead.id}`)}">${escapeHtml(truncate(lead.title, 90))}</a> — ${escapeHtml(meta)}`;
   });

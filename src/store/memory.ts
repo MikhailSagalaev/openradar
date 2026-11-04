@@ -25,7 +25,7 @@ import type {
   UserSourceInput,
   UserSourceRecord,
 } from '../core/store.ts';
-import type { LeadFactsFill, LeadSighting, ResearchDailyRow } from '../core/store.ts';
+import type { LeadFactsFill, LeadMoney, LeadSighting, ResearchDailyRow } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
 import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
 import { computeSalaryMedians } from '../core/salary-sanity.ts';
@@ -352,6 +352,11 @@ export class MemoryStore implements Store {
     if (flags.length) metadata.qualityFlags = flags;
     else delete metadata.qualityFlags;
     lead.metadata = metadata;
+  }
+
+  async updateLeadMoney(id: string, money: LeadMoney): Promise<void> {
+    const lead = this.leads.get(id);
+    if (lead) Object.assign(lead, { ...money, currency: money.currency ?? lead.currency });
   }
 
   async updateLeadState(id: string, state: LeadState): Promise<void> {

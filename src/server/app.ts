@@ -2151,6 +2151,14 @@ export function createApp(runtime: Runtime): Hono {
     return c.json(leads.map((lead) => toPublicLead(projectContacts(lead, viewer))));
   });
 
+  app.get('/api/leads/:id', feedLimit, async (c) => {
+    if (!await canRead(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
+    const viewer = await viewerFromRequest(c, runtime);
+    const stored = await runtime.store.getLead(c.req.param('id') as string);
+    if (!stored || !(viewerCanSeeLead(viewer, stored, runtime.access) || await broughtBy(viewer, stored.id))) return c.json({ error: 'not_found' }, 404);
+    return c.json(viewer.tier === 'admin' ? stored : toPublicLead(projectContacts(stored, viewer)));
+  });
+
   // Streamable HTTP without a server-sent stream: GET and DELETE answer 405, as the spec asks.
   app.on(['GET', 'DELETE'], '/mcp', (c) => c.body(null, 405, { allow: 'POST' }));
 
@@ -2898,7 +2906,10 @@ export function createApp(runtime: Runtime): Hono {
     const leads = (await feedFor(runtime, await viewerFromRequest(c, runtime), {
       limit: 30,
       query: entry.q,
+      skill: entry.skill,
       type: entry.type,
+      // These pages are Russian: an English post is on them only by a shared word.
+      language: 'ru',
     })).filter((lead) => lead.status !== 'rejected' && lead.status !== 'failed').slice(0, 20);
 
     return c.html(

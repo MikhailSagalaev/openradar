@@ -6,6 +6,7 @@
 
 import { createInterface } from 'node:readline';
 import { qualityFlagsOf } from '../core/quality.ts';
+import { salaryLooksWrong } from '../core/salary-sanity.ts';
 import { stripInvisible } from '../core/text.ts';
 import { savedFiltersFrom, type SavedFilters } from '../core/subscriptions.ts';
 import type { LeadSort, ListLeadsOptions } from '../core/store.ts';
@@ -279,6 +280,7 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend): Pr
         limit: filteredHere ? 500 : limit + 1,
       };
       let leads = await backend.listLeads(options);
+      if (options.minBudgetUsd || (Number.isFinite(minBudget) && minBudget > 0)) leads = leads.filter((lead) => !salaryLooksWrong(lead));
       if (Number.isFinite(minBudget) && minBudget > 0) {
         leads = leads.filter((lead) => (lead.budget ?? 0) >= minBudget);
       }
@@ -352,6 +354,7 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend): Pr
       const role = typeof args.role === 'string' ? args.role : undefined;
       const skills = Array.isArray(args.skills) ? args.skills.map(String) : undefined;
       const result = buildXRayResult({ company, role, skills });
+      if (!result.cleanCompany) return fail(id, -32602, `«${company}» is a channel or a placeholder, not an employer`);
       return text(id, result);
     }
 

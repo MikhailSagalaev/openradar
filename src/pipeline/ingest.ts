@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { prepareRawLead } from '../core/prepare.ts';
 import { applyRules } from '../core/rules.ts';
-import { assessQuality } from '../core/quality.ts';
+import { assessQuality, offersNoPay } from '../core/quality.ts';
 import { extractTechSkills } from '../core/text.ts';
 import { emitLeadCreated } from '../core/events.ts';
 import { estimateJaccardFromSketches } from '../core/fingerprint.ts';
@@ -145,10 +145,16 @@ export async function ingestRawLead(
 
   // The quality stage runs before the rules: the corrected type picks the pay ladder of the score.
   const quality = assessQuality(
-    { type: prepared.type ?? 'gig', title: prepared.title, text: prepared.text, budget: prepared.budget },
+    { type: prepared.type ?? 'gig', title: prepared.title, text: prepared.text, budget: prepared.budget, channel: prepared.sourceRef?.channel },
     source,
   );
   prepared.type = quality.type;
+  if (offersNoPay(quality.flags)) {
+    prepared.budget = undefined;
+    prepared.rawSalary = undefined;
+    prepared.normalizedUsdMin = undefined;
+    prepared.normalizedUsdMax = undefined;
+  }
   const rules = applyRules(prepared, source, now);
   let status: IngestOutcome['status'] = rules.accepted ? 'inserted' : 'rejected';
   const reasons = [...rules.reasons, ...quality.flags.map((flag) => `quality:${flag}`)];

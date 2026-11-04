@@ -29,6 +29,15 @@ export function normalizeCompany(name: string): string | undefined {
   return key.length >= 2 ? key : undefined;
 }
 
+/** Names of channels, boards and placeholders: where a post appeared, not who hires. */
+const OUTLET_NAME = /(?:^|[^\p{L}])(?:ваканси[а-я]*|работа\s+(?:в|для)|job\s+for|jobs?(?![\p{L}])|hiring|careerspace|хабр\s+карьер|компания\s+скрыта|it\s+job\s+hub|remote\s+jobs?|hn:|stagirovky|стажировк[а-я]*)/iu;
+
+/** True when a name in the author field is an outlet or a placeholder, not an employer. */
+export function isOutletName(name: string, channelTitle?: string): boolean {
+  if (/^(?:@|https?:)/i.test(name) || OUTLET_NAME.test(name)) return true;
+  return Boolean(channelTitle) && normalizeCompany(name) === normalizeCompany(channelTitle!);
+}
+
 /** Feeds that name the employer only in the text: hh.ru, Habr Career, company boards. */
 const COMPANY_IN_TEXT = [
   /Вакансия компании:\s*([^\n]{2,80})/u,

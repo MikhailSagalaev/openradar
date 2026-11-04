@@ -34,6 +34,9 @@ const UNIT_PERIOD: Record<string, PageSalary['period']> = {
   YEAR: 'year',
 };
 
+/** A day or week rate as a month of it: 21 working days, 4.33 weeks. */
+const PER_MONTH: Record<string, number> = { DAY: 21, WEEK: 4.33 };
+
 function asNumber(value: unknown): number | undefined {
   const n = typeof value === 'string' ? Number.parseFloat(value.replace(/[\s,]/g, '')) : typeof value === 'number' ? value : NaN;
   return Number.isFinite(n) && n > 0 ? Math.round(n) : undefined;
@@ -84,7 +87,8 @@ export function salaryOf(posting: Record<string, unknown>): PageSalary | undefin
   if (min === undefined && max === undefined) return undefined;
   const currency = String(base.currency ?? value.currency ?? 'RUB').toUpperCase().replace('RUR', 'RUB');
   const unit = String(value.unitText ?? base.unitText ?? 'MONTH').toUpperCase();
-  return { min, max, currency, period: UNIT_PERIOD[unit] ?? 'month' };
+  const scale = (value: number | undefined): number | undefined => (value === undefined ? undefined : Math.round(value * (PER_MONTH[unit] ?? 1)));
+  return { min: scale(min), max: scale(max), currency, period: UNIT_PERIOD[unit] ?? 'month' };
 }
 
 export function companyOf(posting: Record<string, unknown>): string | undefined {
