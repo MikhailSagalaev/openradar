@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.44.3
+
+- Sources: 22 new RU ones. HeadHunter joins the report's roles through its RSS search — product, project, analytics, design, QA, DevOps, marketing, support, sales, information security and 1С — because the API preset stays behind the WAF and the RSS does not. Multi-role searches take several professional_role codes in one feed.
+- Pawetta's digital feed and ten public Telegram channels: product managers, product and motion design, juniors, internships, startups, SMM. Channels without a public t.me preview (QA, Go, Java, .NET, mobile, 1С among them) wait for the account folder.
+
 ## 0.44.2
 
 - Profile: an administrator who signed in with GitHub lost the Telegram, saved searches and agent token sections, because the admin viewer carried no user id. They are back.
