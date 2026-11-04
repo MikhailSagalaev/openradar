@@ -54,7 +54,7 @@ Rating comes from confirmed leads you saw first (×1.5 for private channels and 
 
 ## Quick start
 
-Node.js 22.19+ (the image and CI use 26 LTS) and pnpm 12+:
+Node.js 22.19+ (the image and CI use 24 LTS) and pnpm 12+:
 
 ```bash
 git clone https://github.com/MikhailSagalaev/openradar.git
