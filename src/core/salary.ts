@@ -3,6 +3,8 @@
  * USD-normalised value for filtering and sorting across currencies.
  */
 
+import { RUB_PER, usdPer } from './fx.ts';
+
 export type PaymentPeriod = 'monthly' | 'hourly' | 'fixed';
 
 export interface SalaryInfo {
@@ -11,25 +13,11 @@ export interface SalaryInfo {
   normalizedUsdMin?: number;
   normalizedUsdMax?: number;
   currency: string;
+  /** No pay reaches this figure: the number is something else, so the lead shows none. */
+  implausible?: boolean;
 }
 
-// Baseline exchange rates against 1 USD (updated reference)
-const FX_TO_USD: Record<string, number> = {
-  USD: 1.0,
-  EUR: 1.08,
-  GBP: 1.28,
-  RUB: 1 / 92.0,
-  RUR: 1 / 92.0,
-  KZT: 1 / 480.0,
-  BYN: 1 / 3.25,
-  UAH: 1 / 41.5,
-  PLN: 1 / 4.05,
-  CHF: 1 / 0.88,
-  AUD: 1 / 1.52,
-  CAD: 1 / 1.36,
-  USDT: 1.0,
-  USDC: 1.0,
-};
+const FX_TO_USD: Record<string, number> = Object.fromEntries(Object.keys(RUB_PER).map((code) => [code, usdPer(code)!]));
 
 /** «150 000», with thin spaces, so every parser reads it as one amount. */
 function groupThousands(value: number): string {
@@ -49,21 +37,44 @@ const NUM = String.raw`\d+(?:[.,]\d+)?`;
 const MULT = String.raw`(?:(?<=\d)[кk]|\s?(?:тыс(?:яч[а-я]*|\.)?|млн\.?|миллион[а-я]*|mln))(?![\p{L}])`;
 const CURRENCY_NEAR = String.raw`\s*(?:[₽$€£₸₴]|руб|р\.|eur|usd|pln|zł|kzt|uah|byn|грн|тенге|евро|долл)`;
 
-const NOT_PAY_WORDS = String.raw`оборот[а-я]*|выручк[а-я]*|капитализац[а-я]*|инвестици[а-я]*|средн[а-я]*\s+чек[а-я]*|revenue|turnover|arr|deal\s+sizes?|valuation|raised|funding`;
+const NOT_PAY_WORDS = String.raw`оборот[а-я]*|выручк[а-я]*|капитализац[а-я]*|инвестици[а-я]*|средн[а-я]*\s+чек[а-я]*|подписк[а-я]*|revenue|turnover|arr|deal\s+sizes?|valuation|raised|funding|subscription|stipend|(?:signing|sign-on|joining|relocation|referral)\s+bonus|(?:travel|learning|training|education|equipment|wellness|home\s+office|conference)\s+(?:budget|allowance)`;
 const NOT_PAY_BEFORE = new RegExp(`(?:^|[^\\p{L}])(?:${NOT_PAY_WORDS})(?![\\p{L}])[^.\\n\\d]{0,25}[$€£₽]?\\s?\\d[\\d\\s.,]*(?:[кk]|\\s?(?:тыс|млн|mln))?(?:\\s*(?:[-–—]|до|to)\\s*[$€£₽]?\\s?\\d[\\d\\s.,]*(?:[кk]|\\s?(?:тыс|млн|mln))?)?`, 'giu');
-const NOT_PAY_AFTER = new RegExp(`\\d[\\d\\s.,]*(?:[кk]|\\s?(?:тыс\\.?|млн\\.?|mln))?\\s*(?:[₽$€£]|руб[а-я.]*|usd|eur)?\\s{0,3}(?:${NOT_PAY_WORDS})(?![\\p{L}])`, 'giu');
+const NOT_PAY_AFTER = new RegExp(`\\d(?:[\\d\\s.,]*\\d)?(?:[кk]|\\s?(?:тыс\\.?|млн\\.?|mln))?\\s*(?:[₽$€£]|руб[а-я.]*|usd|eur)?\\s{0,3}(?:(?:annual|yearly|monthly|ежегодн[а-я]*)\\s+)?(?:${NOT_PAY_WORDS})(?![\\p{L}])`, 'giu');
+
+/** «$781M», «$1.2 billion», «25 миллионов долларов»: a company's or a film's money, never pay. */
+const BIG_FOREIGN_MONEY = /[$€£]\s?\d+(?:[.,]\d+)?\s?(?:m|mn|mln|b|bn|million|billion|млн\.?|млрд\.?|миллион[а-я]*|миллиард[а-я]*)(?![\p{L}])|\d+(?:[.,]\d+)?\s*(?:млн\.?|млрд\.?|миллион[а-я]*|миллиард[а-я]*|million|billion)\s*(?:\$|€|£|usd|eur|долл[а-я]*|евро)/giu;
+
+/**
+ * A sentence about money that is not the reader's: the ad budget a marketer has handled, the
+ * profit of a launch, a market statistic. Every figure in it is out: «бюджетах от $20 тыс.,
+ * желательно от $50 тыс.» names two.
+ */
+const NOT_PAY_SENTENCE = /реклам[а-я]*\s+бюджет|бюджет[а-я]*\s+(?:на\s+)?(?:реклам|трафик|маркетинг|продвижен)|ad\s*spend|(?:ad|ads|media|marketing|paid)\s+budgets?|открут|(?:управлени[а-я]*|управлял[а-я]*|вед[её]т[а-я]*|вел[а-я]*)\s+бюджет|manag[a-z]*\s+(?:[a-z$]+\s+){0,2}budgets?|чист[а-я]*\s+прибыл|net\s+profit|запуск[а-я]*\s+на\s+\d|\d\s*(?:млн|тыс)?[\s.]*(?:₽|руб[а-я.]*)?\s*[-–—]\s*запуск|средн[а-я]*\s+зарплат[а-я]*\s+(?:в|по|на\s+рынке)|average\s+salary\s+(?:in|for)/iu;
+
+function maskNotPaySentences(text: string): string {
+  if (!NOT_PAY_SENTENCE.test(text)) return text;
+  return text
+    .split(/(\n|;|!|\?|•|\.(?=\s+\p{Lu}))/u)
+    .map((part) => (NOT_PAY_SENTENCE.test(part) ? part.replace(/\d/g, '#') : part))
+    .join('');
+}
+
+/** Figures that are not pay turn to #, so no parser reads them. */
+export function maskNotPay(text: string): string {
+  return maskNotPaySentences(text.replace(BIG_FOREIGN_MONEY, (m) => m.replace(/\d/g, '#')))
+    .replace(NOT_PAY_BEFORE, (m) => m.replace(/\d/g, '#'))
+    .replace(NOT_PAY_AFTER, (m) => m.replace(/\d/g, '#'));
+}
 
 /**
  * Rewrites shorthand amounts into plain ones before parsing: «150к» → «150 000»,
  * «300-500к» → «300 000-500 000», «1,5 млн» → «1 500 000», «45.000,00 ₽» → «45 000 ₽»,
  * «150 000,50» → «150 000». «401k» is a US retirement plan, not pay.
  */
-export function normalizeMoneyText(text: string): string {
-  return text
-    .replace(/401\s?\(?k\)?/gi, '401-plan')
-    // Money that is not pay: a CV's «6.5 млн рублей оборота», «средний чек 100–150 тыс», «deal size of $100k».
-    .replace(NOT_PAY_BEFORE, (m) => m.replace(/\d/g, '#'))
-    .replace(NOT_PAY_AFTER, (m) => m.replace(/\d/g, '#'))
+export function normalizeMoneyText(text: string, options: { keepNotPay?: boolean } = {}): string {
+  const plain = text.replace(/401\s?\(?k\)?/gi, '401-plan');
+  // Money that is not pay: a CV's «6.5 млн рублей оборота», «средний чек 100–150 тыс», «deal size of $100k».
+  return (options.keepNotPay ? plain : maskNotPay(plain))
     // A range with one multiplier at the end: «300-500к», «от 70 до 150 тыс».
     .replace(new RegExp(`(${NUM})(\\s*(?:[-–—]|до)\\s*)(${NUM})(${MULT})`, 'giu'), (_m, a: string, sep: string, b: string, word: string) => {
       const factor = multiplierOf(word.trim());
@@ -264,6 +275,14 @@ export function extractAnchoredSalary(text: string): { min?: number; max?: numbe
 /** A "monthly" salary above this many USD is a yearly figure (see normalizeSalary). */
 export const YEARLY_SALARY_FLOOR_USD = 25_000;
 
+/** Monthly pay above this is not pay: the top of the market, not an estimate of it. */
+export const MONTHLY_PAY_CEILING_USD = 35_000;
+/** The largest budget of one order: research takes 20 million roubles as its bound too. */
+const PROJECT_CEILING_USD = 250_000;
+
+/** A year marker next to an amount; «annual leave» elsewhere in the text says nothing about pay. */
+const YEARLY_MARKER = /(?:\d|[kкКK]|[₽$€£]|usd|eur|руб[а-я.]*)\s*(?:\/|per|в|a|за)\s*(?:year|yr|год)(?![\p{L}])|(?:^|[^\p{L}])annual(?:ly)?\s+(?:salary|pay|compensation|base)|(?:salary|compensation|pay)[^.\n]{0,60}(?:per\s+year|annual|\/\s*(?:yr|year))|годов[а-я]*\s+(?:оклад|доход)/iu;
+
 export function normalizeSalary(input: {
   text?: string;
   rawSalary?: string;
@@ -275,7 +294,7 @@ export function normalizeSalary(input: {
   let period = detectPaymentPeriod(combinedText, input.type ?? 'gig');
   const daily = period !== 'hourly' && DAILY_RATE.test(combinedText);
   const currency = (input.currency?.toUpperCase() || detectCurrency(combinedText)).trim();
-  const rate = FX_TO_USD[currency] ?? (1 / 92.0);
+  const rate = FX_TO_USD[currency] ?? FX_TO_USD.RUB!;
 
   let min = input.budget;
   let max = input.budget;
@@ -296,7 +315,7 @@ export function normalizeSalary(input: {
 
   // Salaries are normalised per month. International boards (Jobicy, RemoteOK) publish
   // yearly pay: an explicit year marker, or a monthly figure no job here reaches.
-  const yearlyMarker = /(?:per\s+year|\/\s*(?:yr|year)|annual|в\s+год|\/\s*год)/i.test(combinedText);
+  const yearlyMarker = YEARLY_MARKER.test(combinedText) || /per\s+year/i.test(input.rawSalary ?? '');
   const toUsd = (value: number | undefined): number | undefined =>
     typeof value === 'number' && Number.isFinite(value) && value > 0 ? value * rate : undefined;
   let usdMin = toUsd(min);
@@ -312,17 +331,22 @@ export function normalizeSalary(input: {
     usdMax = usdMax === undefined ? undefined : usdMax * WORKING_DAYS_PER_MONTH;
     period = 'monthly';
   }
+  const roubles = currency === 'RUB' || currency === 'RUR';
+  const over = (usdMax ?? usdMin ?? 0) > YEARLY_SALARY_FLOOR_USD;
+  // Russian boards state pay by the month, so a huge rouble figure is not a yearly one.
   const yearly =
     period !== 'hourly' &&
     !perDay &&
     (input.type === 'job' || period === 'monthly') &&
-    (yearlyMarker || (usdMax ?? usdMin ?? 0) > YEARLY_SALARY_FLOOR_USD);
+    (yearlyMarker || (over && !roubles));
   if (yearly) {
     usdMin = usdMin === undefined ? undefined : usdMin / 12;
     usdMax = usdMax === undefined ? undefined : usdMax / 12;
   }
   const normalizedUsdMin = usdMin === undefined ? undefined : Math.round(usdMin);
   const normalizedUsdMax = usdMax === undefined ? undefined : Math.round(usdMax);
+  const salaried = input.type === 'job' || period === 'monthly';
+  const implausible = period !== 'hourly' && (normalizedUsdMax ?? normalizedUsdMin ?? 0) > (salaried ? MONTHLY_PAY_CEILING_USD : PROJECT_CEILING_USD);
 
   // A bare «170000–200000 USD» that the floor heuristic read as annual must say so:
   // without the marker it displays as a monthly figure.
@@ -338,6 +362,7 @@ export function normalizeSalary(input: {
     normalizedUsdMin,
     normalizedUsdMax,
     currency,
+    ...(implausible ? { implausible } : {}),
   };
 }
 

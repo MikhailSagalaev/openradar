@@ -6,6 +6,8 @@
  * Telegram, Habr, and GitHub, bypassing generic gatekeepers and ATS filters.
  */
 
+import { isOutletName } from './company.ts';
+
 export interface XRayTarget {
   company: string;
   role?: string;
@@ -246,7 +248,8 @@ export function buildOutreachTemplate(company: string, roleTitle?: string): stri
  * Main entry point: builds all X-Ray dorks and metadata for a target vacancy.
  */
 export function buildXRayResult(target: XRayTarget): XRayResult {
-  const cleanCompany = cleanCompanyName(target.company);
+  // A channel's or a board's name in the author field finds its admins, not the hiring manager.
+  const cleanCompany = isOutletName(target.company) ? '' : cleanCompanyName(target.company);
   const { category, personas } = categorizePersonas(target.role, target.skills);
 
   const personaGroup = buildPersonaDisjunction(personas);
@@ -321,6 +324,6 @@ export function buildXRayResult(target: XRayTarget): XRayResult {
     roleCategory: category,
     personas,
     dorks,
-    outreachTemplate: buildOutreachTemplate(cleanCompany || target.company, target.role),
+    outreachTemplate: buildOutreachTemplate(cleanCompany || 'компанию', target.role),
   };
 }

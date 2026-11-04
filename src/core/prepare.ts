@@ -23,10 +23,21 @@ const MAX_TEXT_LENGTH = 20_000;
 const JOB_HINT = /ваканс|vacanc|career|hiring|в\s+штат|оклад|трудоустр|соискател/i;
 
 /** Boards that publish only vacancies: a post from them is a job whatever its title says. */
-const JOB_BOARD_URL = /^https?:\/\/(?:www\.)?(?:jobicy\.com|weworkremotely\.com|remoteok\.com|remotive\.com|arbeitnow\.com|himalayas\.app|getmatch\.ru|hh\.ru\/vacancy|career\.habr\.com\/vacancies|trudvsem\.ru|boards\.greenhouse\.io|jobs\.lever\.co|jobs\.ashbyhq\.com|jobs\.gem\.com)\b/i;
+const JOB_BOARD_URL = /^https?:\/\/(?:www\.)?(?:jobicy\.com|weworkremotely\.com|remoteok\.com|remotive\.com|arbeitnow\.com|himalayas\.app|getmatch\.ru|hh\.ru\/vacancy|career\.habr\.com\/vacancies|trudvsem\.ru|boards\.greenhouse\.io|job-boards\.greenhouse\.io|jobs\.lever\.co|jobs\.ashbyhq\.com|jobs\.gem\.com|remoteworker\.[a-z]+|nodesk\.co|cryptojobslist\.com|cryptocurrencyjobs\.co|landing\.jobs|golangprojects\.com|workingnomads\.com|jobspresso\.co|elixirjobs\.net)\b/i;
+/** Freelance exchanges: everything on them is an order, even an order to write a vacancy. */
+const GIG_BOARD_URL = /^https?:\/\/(?:www\.)?(?:kwork\.ru|fl\.ru|freelancehunt\.com\/project|freelancer\.com)\b/i;
+
+export function isJobBoardUrl(url: string | undefined): boolean {
+  return Boolean(url && JOB_BOARD_URL.test(url));
+}
+
+export function isGigBoardUrl(url: string | undefined): boolean {
+  return Boolean(url && GIG_BOARD_URL.test(url));
+}
 const JOB_PATH_RE = /\/(?:jobs?|vacanc(?:y|ies)|careers?|positions?)\b/i;
 
 function detectLeadType(raw: RawLead, title: string, url?: string): LeadType {
+  if (isGigBoardUrl(url)) return 'gig';
   if (raw.type === 'job' || raw.type === 'gig') return raw.type;
   if (url && (JOB_BOARD_URL.test(url) || JOB_PATH_RE.test(url))) return 'job';
   return JOB_HINT.test(`${title} ${url ?? ''}`) ? 'job' : 'gig';
@@ -58,7 +69,7 @@ export function prepareRawLead(
       ? raw.budget
       : undefined;
   const extractedMoney = extractBudgetAndCurrency(`${raw.title || ''}\n${normalizedText}`);
-  const budget = explicitBudget ?? extractedMoney.budget;
+  let budget = explicitBudget ?? extractedMoney.budget;
   const detected = detectCurrency(`${raw.title || ''}\n${normalizedText}`);
   let currency = cleanShortField(raw.currency, 8);
   if (!currency || (!explicitBudget && extractedMoney.currency)) {
@@ -81,6 +92,8 @@ export function prepareRawLead(
     currency,
     type,
   });
+  const implausible = salaryInfo.implausible === true;
+  if (implausible) budget = undefined;
 
   const publishedAtDate = parsePublishedAt(raw.publishedAt, now);
   const titleKey = titleKeyOf(title);
@@ -106,9 +119,9 @@ export function prepareRawLead(
     budget,
     currency: salaryInfo.currency,
     paymentPeriod: salaryInfo.paymentPeriod,
-    rawSalary: salaryInfo.rawSalary,
-    normalizedUsdMin: salaryInfo.normalizedUsdMin,
-    normalizedUsdMax: salaryInfo.normalizedUsdMax,
+    rawSalary: implausible ? undefined : salaryInfo.rawSalary,
+    normalizedUsdMin: implausible ? undefined : salaryInfo.normalizedUsdMin,
+    normalizedUsdMax: implausible ? undefined : salaryInfo.normalizedUsdMax,
     city,
     publishedAt: publishedAtDate.toISOString(),
     publishedAtDate,

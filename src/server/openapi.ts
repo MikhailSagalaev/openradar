@@ -77,7 +77,7 @@ export function renderOpenApi(baseUrl: string): Record<string, unknown> {
                     type: 'object',
                     required: ['basis', 'count', 'type', 'period', 'skills'],
                     properties: {
-                      basis: { type: 'string', enum: ['similar', 'skills', 'type', 'none'] },
+                      basis: { type: 'string', enum: ['similar', 'skills', 'none'] },
                       count: { type: 'integer' },
                       type: { type: 'string', enum: ['job', 'gig'] },
                       period: { type: 'string', enum: ['month', 'project'] },

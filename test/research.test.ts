@@ -558,8 +558,9 @@ describe('research data consistency & honest visual metrics', () => {
       gig(1001, { role: 'web', skills: ['React', 'HTML', 'CSS'] }),
     ];
     const tt = buildReport(records, monthPeriod('2026-10'), 'month').taskTransformation!;
-    expect(tt.emerging.find((r) => r.label.includes('LoRA'))?.n).toBe(0);
-    expect(tt.routine.find((r) => r.label.includes('вёрстка'))?.n).toBe(0);
+    // A row with no orders is not shown at all.
+    expect(tt.emerging.find((r) => r.label.includes('LoRA'))).toBeUndefined();
+    expect(tt.routine.find((r) => r.label.includes('вёрстка'))).toBeUndefined();
   });
 
   it('computes bumpChart with real week and day snapshots and no fake 2025 quarters', () => {

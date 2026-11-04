@@ -4,27 +4,18 @@
  * report is built, so a better rule applies to the whole history at once; published
  * monthly reports are frozen snapshots and do not move.
  */
+import { isOutletName } from '../core/company.ts';
+import { RUB_PER } from '../core/fx.ts';
+import { isGigBoardUrl, isJobBoardUrl } from '../core/prepare.ts';
+import { qualityFlagsOf, offersNoPay } from '../core/quality.ts';
+import { normalizeMoneyText } from '../core/salary.ts';
 import { extractTechSkills, normalizeWhitespace } from '../core/text.ts';
 import type { Lead, LeadType } from '../core/types.ts';
 import type { PageFacts, PageSalary } from './facts.ts';
 import type { ModelFacts, StoredModelFacts } from './model.ts';
 import { ratesOf } from './fx.ts';
 
-/**
- * Rates to roubles when a month has none saved: the Bank of Russia on 1 November 2026.
- * Research converts at the rates of the month a post was published (fx.ts).
- */
-export const RUB_PER: Record<string, number> = {
-  RUB: 1,
-  RUR: 1,
-  USD: 80.56,
-  USDT: 80.56,
-  EUR: 89.66,
-  GBP: 107.75,
-  KZT: 0.178,
-  BYN: 27.34,
-  UAH: 1.77,
-};
+export { RUB_PER };
 
 export type Market = 'ru' | 'intl';
 export type Grade = 'intern' | 'junior' | 'middle' | 'senior' | 'lead';
@@ -95,6 +86,17 @@ const W = String.raw`(?<![\p{L}\d])`; // start of a word
 const E = String.raw`(?![\p{L}])`; // end of a word
 const rx = (body: string): RegExp => new RegExp(body, 'iu');
 
+/**
+ * Someone who builds AI, as opposed to a marketer or a writer who uses it: «Маркетолог со
+ * знанием нейросетей» is a marketer. A vacancy gets the AI role at once only for these
+ * words; a bare mention counts after every profession has had its turn.
+ */
+const AI_ENGINEER = rx(`вайб|vibe|${W}llm${E}|prompt[- ]?engineer|промпт[- ]?инженер|genai|${W}ai[- ]?(?:engineer|инженер|разработчик|developer|агент|agent)|(?:инженер|разработчик|developer|engineer)\\p{L}*\\s+(?:по\\s+)?(?:ии|ai|нейросет)|n8n|${W}rag${E}|mlops`);
+
+/** A bare «Engineer» means software only after every profession has had its turn: «Sales Engineer» sells. */
+const ANY_ENGINEER = rx(`developer|engineer`);
+const NOT_SOFTWARE = rx(`process|civil|mechanical|electrical|hardware|manufactur|chemical|field|curriculum|relations|facilit|environment`);
+
 /** Ordered: the first match wins, so narrow roles go before broad ones. */
 export const ROLES: RoleDef[] = [
   { slug: 'ai', label: 'AI-инженер и вайб-кодинг', plural: 'AI-инженеры', types: ['job', 'gig'],
@@ -128,7 +130,7 @@ export const ROLES: RoleDef[] = [
   { slug: 'design', label: 'Дизайнер', plural: 'дизайнеры', types: ['job', 'gig'],
     pattern: rx(`дизайн|designer|${W}ui${E}|${W}ux${E}|figma|фигм|логотип|баннер|иллюстрац`) },
   { slug: 'gamedev', label: 'Разработчик игр', plural: 'разработчики игр', types: ['job', 'gig'],
-    pattern: rx(`unity|unreal|gamedev|геймдев|game developer|game designer|игров\\p{L}*`) },
+    pattern: rx(`${W}unity${E}|${W}unreal${E}|gamedev|геймдев|game developer|game designer|игров\\p{L}*`) },
   { slug: 'mobile', label: 'Мобильный разработчик', plural: 'мобильные разработчики', types: ['job', 'gig'],
     pattern: rx(`${W}ios${E}|android|flutter|react native|мобильн|swift|kotlin multiplatform`) },
   { slug: 'fullstack', label: 'Fullstack-разработчик', plural: 'fullstack-разработчики', types: ['job'],
@@ -138,19 +140,19 @@ export const ROLES: RoleDef[] = [
   { slug: 'embedded', label: 'Embedded-разработчик', plural: 'embedded-разработчики', types: ['job'],
     pattern: rx(`embedded|встраиваем|микроконтрол|${W}плис${E}|fpga|${W}stm32`) },
   { slug: 'backend', label: 'Backend-разработчик', plural: 'backend-разработчики', types: ['job'],
-    pattern: rx(`back[- ]?end|бэкенд|бекенд|разработчик|программист|developer|engineer|инженер-программист|${W}(?:go|golang|java|python|php|c#|\\.net|c\\+\\+|rust|scala|ruby|kotlin)${E}`) },
+    pattern: rx(`back[- ]?end|бэкенд|бекенд|разработчик|программист|software (?:developer|engineer)|инженер-программист|${W}(?:go|golang|java|python|php|c#|\\.net|c\\+\\+|rust|scala|ruby|kotlin)${E}`) },
   { slug: 'education', label: 'Преподавание и менторство', plural: 'преподаватели', types: ['job'],
     pattern: rx(`преподавател|учител|ментор|наставник|автор (?:курс|дисциплин)|методист|tutor|teacher`) },
   { slug: 'support', label: 'Техподдержка', plural: 'специалисты техподдержки', types: ['job'],
-    pattern: rx(`поддержк|support|helpdesk|service desk|оператор`) },
+    pattern: rx(`поддержк|support|helpdesk|service desk|оператор|customer success|customer care|customer reliability|kundenbetreuer`) },
   { slug: 'marketing', label: 'Маркетинг и реклама', plural: 'маркетологи', types: ['job', 'gig'],
-    pattern: rx(`маркетолог|marketing|маркетинг|${W}smm|${W}seo${E}|таргет|директолог|яндекс[. ]директ|реклам|продвижен|авито`) },
+    pattern: rx(`маркетолог|marketing|marketer|маркетинг|${W}smm|${W}seo${E}|${W}aso${E}|таргет|директолог|яндекс[. ]директ|реклам|продвижен|авито|инфлюенс|influenc|affiliate|communications manager|${W}pr[- ]менеджер`) },
   { slug: 'content', label: 'Тексты и контент', plural: 'авторы и контент-менеджеры', types: ['job', 'gig'],
     pattern: rx(`копирайт|рерайт|текст|стать|контент|редактор|писател|copywriter|writer|editor`) },
   { slug: 'sales', label: 'Продажи', plural: 'менеджеры по продажам', types: ['job'],
-    pattern: rx(`продаж|sales|account manager|менеджер по работе с клиентами|развити\\p{L}* бизнеса|business development|${W}kam${E}|пресейл|presale|аккаунт`) },
+    pattern: rx(`продаж|sales|account manager|account executive|account development|менеджер по работе с клиентами|развити\\p{L}* бизнеса|business development|${W}kam${E}|${W}sdr${E}|${W}bdr${E}|solutions? consult|partnerships?${E}|пресейл|presale|аккаунт`) },
   { slug: 'hr', label: 'HR и рекрутинг', plural: 'HR-специалисты', types: ['job'],
-    pattern: rx(`${W}hr${E}|рекрутер|recruiter|подбор персонала`) },
+    pattern: rx(`${W}hr${E}|${W}hrbp${E}|рекрутер|рекрутмент|recruit|sourcer|сорсер|${W}talent|people (?:partner|relations|business)|employer brand|organization development|training & development|подбор\\p{L}* персонала|кадр`) },
   // Orders only: the kinds of work that rarely come as vacancies.
   { slug: 'web', label: 'Сайты', plural: 'веб-разработчики', types: ['gig'],
     pattern: rx(`сайт|лендинг|landing|wordpress|tilda|тильд|битрикс|bitrix|верстк|интернет-магазин|${W}cms${E}|opencart|woocommerce`) },
@@ -192,15 +194,10 @@ export function classifyRole(type: LeadType, title: string, extra = ''): string 
     return OTHER_ROLE.slug;
   }
   // A vacancy is named by its title; the board's specialization helps when the title is vague.
-  for (const role of ROLES) {
-    if (role.types.includes('job') && role.pattern.test(title)) return role.slug;
-  }
-  if (extra) {
-    for (const role of ROLES) {
-      if (role.types.includes('job') && role.pattern.test(extra)) return role.slug;
-    }
-  }
-  return OTHER_ROLE.slug;
+  const jobRole = (source: string): string | undefined => ROLES.find((role) => role.types.includes('job') && (role.slug === 'ai' ? AI_ENGINEER : role.pattern).test(source))?.slug;
+  const ai = roleDef('ai')!.pattern;
+  const engineer = ANY_ENGINEER.test(title) && !NOT_SOFTWARE.test(title) ? 'backend' : undefined;
+  return jobRole(title) ?? (ai.test(title) ? 'ai' : undefined) ?? engineer ?? (extra ? jobRole(extra) : undefined) ?? OTHER_ROLE.slug;
 }
 
 // ---------- Languages ----------
@@ -250,15 +247,14 @@ export function detectGrade(title: string, text: string, boardGrade?: string): G
 
 // ---------- Employer ----------
 
-export function detectCompany(lead: Pick<Lead, 'author' | 'text' | 'type'>, facts?: PageFacts): string | undefined {
+export function detectCompany(lead: Pick<Lead, 'author' | 'text' | 'type' | 'sourceRef'>, facts?: PageFacts): string | undefined {
   const fromText =
     lead.text.match(/Вакансия компании:\s*([^\n]{2,80})/u)?.[1] ??
     lead.text.match(/Компания «(.{2,80}?)» ищет/u)?.[1] ??
     lead.text.match(/Компания «([^»]{2,80})»/u)?.[1] ??
     lead.text.match(/^(?:Компания|Company):\s*([^\n]{2,80})/mu)?.[1];
-  const name = facts?.company ?? fromText ?? (lead.type === 'job' ? lead.author : undefined);
-  const clean = name?.replace(/\s+/g, ' ').trim();
-  return clean && !clean.startsWith('@') ? clean : undefined;
+  const named = [facts?.company, fromText, lead.type === 'job' ? lead.author : undefined];
+  return named.map((name) => name?.replace(/\s+/g, ' ').trim()).find((name) => name && !isOutletName(name, lead.sourceRef?.channelTitle));
 }
 
 // ---------- Pay ----------
@@ -298,7 +294,8 @@ function periodNear(text: string, index: number, type: LeadType): Pay['period'] 
  * опыта» is never a salary.
  */
 export function parsePayText(text: string, type: LeadType): Pay | undefined {
-  const source = normalizeWhitespace(text.replace(/[  ]/g, ' '));
+  // The shared reader of amounts: «€30.000», «150к», and no figures that are not pay.
+  const source = normalizeWhitespace(normalizeMoneyText(text.replace(/[  ]/g, ' ')));
   const patterns: Array<[RegExp, (m: RegExpExecArray) => Pay | undefined]> = [
     // «от 180 000 до 240 000 ₽», «180–240 тыс. руб»
     [new RegExp(`(?:от\\s*)?${NUM}\\s*(?:-|–|—|до)\\s*${NUM}\\s*${UNIT}`, 'iu'), (m) => ({
@@ -351,6 +348,17 @@ const BOUNDS: Record<'month' | 'hour' | 'project', [number, number]> = {
   project: [300, 20_000_000],
 };
 
+/**
+ * Pay read out of free text goes no higher than this a month. The top of the Russian market
+ * sits under it; above it stood a commission, a typed-in joke and a Tashkent salary in sums.
+ * Pay from a board's own markup keeps the wide bound.
+ */
+const TEXT_MONTH_CEILING = 1_000_000;
+/** On boards with a budget field a larger sum in the text is the client's ad spend or turnover. */
+const TEXT_ORDER_CEILING = 150_000;
+/** Boards with a budget field of their own: it beats any sum in the description. */
+const BUDGET_BOARDS = /^https?:\/\/(?:www\.)?(?:kwork\.ru|fl\.ru|freelancehunt\.com)\//i;
+
 interface NormalizedPay {
   min?: number;
   max?: number;
@@ -377,9 +385,13 @@ export function normalizePay(pay: Pay, type: LeadType, rates: Record<string, num
   if (period === 'month' && pay.period !== 'year' && pay.currency !== 'RUB' && (max ?? min ?? 0) > BOUNDS.month[1] / 2) {
     return normalizePay({ ...pay, period: 'year' }, type, rates);
   }
+  if (pay.origin === 'text' && period === 'month' && max !== undefined && max > TEXT_MONTH_CEILING && min !== undefined && min <= TEXT_MONTH_CEILING) {
+    // «от 400 000 до 5 000 000»: the lower bound is the offer, the upper one a boast.
+    return { min, max: undefined, point: min, period };
+  }
   const point = min !== undefined && max !== undefined ? Math.round((min + max) / 2) : (min ?? max)!;
   const [low, high] = BOUNDS[period];
-  if (point < low || point > high) return undefined;
+  if (point < low || point > (pay.origin === 'text' && period === 'month' ? TEXT_MONTH_CEILING : high)) return undefined;
   return { min, max, point, period };
 }
 
@@ -411,9 +423,6 @@ export function factsOf(lead: Pick<Lead, 'metadata'>): PageFacts | undefined {
   const facts = lead.metadata?.facts;
   return facts && typeof facts === 'object' ? (facts as PageFacts) : undefined;
 }
-
-/** Boards that publish only vacancies, whatever type an older post was stored with. */
-const JOB_BOARDS = /^https?:\/\/(?:www\.)?(?:jobicy\.com|weworkremotely\.com|remoteok\.com)\//i;
 
 /** Model answers below this confidence are kept but never used in figures. */
 export const MIN_CONFIDENCE = 0.7;
@@ -451,22 +460,32 @@ export function boardNumber(url: string | undefined): { board: string; id: numbe
 export function deriveRecord(lead: Lead, options: DeriveOptions = {}): ResearchRecord {
   const facts = factsOf(lead);
   const model = options.useModel === false ? undefined : modelFactsOf(lead);
-  const type = lead.url && JOB_BOARDS.test(lead.url) ? 'job' : (lead.type ?? 'gig');
+  // Boards that publish only vacancies, whatever type an older post was stored with.
+  const type = isJobBoardUrl(lead.url) ? 'job' : isGigBoardUrl(lead.url) ? 'gig' : (lead.type ?? 'gig');
   const head = lead.text.slice(0, 3000);
   const skills = Array.from(new Set([...(lead.skills ?? []), ...(facts?.skills ?? []), ...extractTechSkills(`${lead.title}\n${head}`, 12), ...(model?.skills ?? [])]));
   // Rules and page markup first; the model fills what they left open.
-  const ruled = classifyRole(type, lead.title, type === 'gig' ? head.slice(0, 600) : (facts?.specialization ?? ''));
+  // A vague vacancy title («Специалист») gets help from the opening of the text, past the feed's own header.
+  const opening = head.replace(/^Вакансия компании:[^\n]*\n?|^Создана:[^\n]*\n?|^Регион:[^\n]*\n?/gmu, '').slice(0, 250);
+  // English company blurbs open with what the company does, so only Russian posts get this help.
+  const hint = scopeOf(lead.title, head) === 'ru' ? opening : '';
+  const ruled = classifyRole(type, lead.title, type === 'gig' ? head.slice(0, 600) : `${facts?.specialization ?? ''}\n${hint}`);
   const role = ruled === OTHER_ROLE.slug && model?.role ? model.role : ruled;
 
   const fromModel: Pay | undefined = model?.currency && model.period
     ? { min: model.payMin, max: model.payMax, currency: model.currency, period: model.period, origin: 'model' }
     : undefined;
-  const pay = payFromPage(facts?.salary) ?? parsePayText(`${lead.title}\n${head}`, type)
-    ?? (typeof lead.budget === 'number' && lead.budget > 0
-      ? { min: lead.budget, max: lead.budget, currency: lead.currency ?? 'RUB', period: lead.paymentPeriod === 'hourly' ? 'hour' as const : type === 'job' ? 'month' as const : 'project' as const, origin: 'budget' as const }
-      : fromModel);
+  const stored: Pay | undefined = typeof lead.budget === 'number' && lead.budget > 0
+    ? { min: lead.budget, max: lead.budget, currency: lead.currency ?? 'RUB', period: lead.paymentPeriod === 'hourly' ? 'hour' as const : type === 'job' ? 'month' as const : 'project' as const, origin: 'budget' as const }
+    : undefined;
+  const flags = qualityFlagsOf(lead);
+  const fromText = offersNoPay(flags) ? undefined : parsePayText(`${lead.title}\n${head}`, type);
+  const board = Boolean(lead.url && BUDGET_BOARDS.test(lead.url));
+  const pay = payFromPage(facts?.salary) ?? (board ? stored ?? fromText : fromText ?? stored) ?? fromModel;
   const date = (lead.publishedAt ?? lead.createdAt).slice(0, 10);
-  const normalized = pay ? normalizePay(pay, type, ratesOf(date.slice(0, 7), options.fx)) : undefined;
+  const rates = ratesOf(date.slice(0, 7), options.fx);
+  const reckoned = pay ? normalizePay(pay, type, rates) : undefined;
+  const normalized = board && pay?.origin === 'text' && reckoned && reckoned.period === 'project' && reckoned.point > TEXT_ORDER_CEILING ? undefined : reckoned;
   const currency = pay?.currency.toUpperCase();
   const developer = ['backend', 'fullstack', 'frontend', 'mobile', 'data-engineer', 'ml', 'qa', 'gamedev', 'embedded'].includes(role);
   const city = lead.city ?? head.match(/Регион:\s*([^\n]{2,40})/u)?.[1] ?? head.match(/\.\s*([А-ЯЁ][а-яё-]+(?: [А-ЯЁ][а-яё-]+)?) \(Россия\)/u)?.[1] ?? model?.city;
@@ -498,6 +517,7 @@ export function deriveRecord(lead: Lead, options: DeriveOptions = {}): ResearchR
     payOrigin: normalized ? pay!.origin : undefined,
     currency: normalized ? currency : undefined,
     scope: scopeOf(lead.title, head),
-    ...(model?.isPost === false ? { excluded: true } : {}),
+    // Ads, a channel's own articles and roundups are no single offer: no figure counts them.
+    ...(model?.isPost === false || offersNoPay(flags) ? { excluded: true } : {}),
   };
 }

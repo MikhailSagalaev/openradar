@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { RUB_PER } from '../src/core/fx.ts';
 import { extractBudgetAndCurrency } from '../src/core/extract.ts';
 import { normalizeMoneyText, normalizeSalary, parseSalaryRange } from '../src/core/salary.ts';
 
@@ -44,12 +45,12 @@ describe('payment period bounds', () => {
   it('compares a shift rate with monthly pay', () => {
     const shift = normalizeSalary({ text: 'Оплата 3 000 ₽ за смену', type: 'job', currency: 'RUB' });
     expect(shift.paymentPeriod).toBe('monthly');
-    expect(shift.normalizedUsdMax).toBe(Math.round((3000 / 92) * 21));
+    expect(shift.normalizedUsdMax).toBe(Math.round((3000 / RUB_PER.USD!) * 21));
   });
 
   it('does not take a day mentioned elsewhere for a day rate', () => {
     const job = normalizeSalary({ text: 'Оклад 90 000 ₽. Отвечать клиентам 20 раз в день', type: 'job', currency: 'RUB' });
-    expect(job.normalizedUsdMax).toBe(Math.round(90_000 / 92));
+    expect(job.normalizedUsdMax).toBe(Math.round(90_000 / RUB_PER.USD!));
   });
 
   it('does not keep an «hourly» rate of thousands of dollars hourly', () => {

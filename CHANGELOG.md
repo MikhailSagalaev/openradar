@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.45.0
+
+Three outside audits of the feed, /research and the subsystems, each claim checked against the code and live data first.
+
+**Pay**
+- Sums that are not pay stay out: ad budgets and every figure of their sentence, net profit, market statistics, subscription prices, signing bonuses, stipends, travel and learning budgets, «$781M», «25 миллионов долларов». Research reads amounts through the same code, it had none of these masks.
+- A ceiling: monthly pay above $35,000 or an order above $250,000 shows no sum. A huge rouble figure is no longer read as yearly pay. A year counts only next to an amount, so «annual leave» no longer divides a salary by 12.
+- Ads, a channel's articles and roundups carry no sum, in the feed or in research.
+- **One table of rates** in `src/core/fx.ts`. The feed used 92 ₽ per dollar and research 80.56. The feed and /api/market now use the Bank of Russia rate of 1 November.
+- Yearly pay from page markup says «per year»; a day or week rate in schema.org becomes a month of it (×21, ×4.33), it was stored as a monthly sum.
+
+**Posts**
+- #услуги, #предлагаю and an agency's price list are rejected; stored ones sink.
+- «#реклама», «бесплатный вебинар» and «О рекламодателе» count even when the post says «без опыта». A roundup announced on its second line is a roundup. A job channel's article without a position is flagged.
+- Vacancy or order: «зарплата —», «официальное оформление», «испытательный», «что предстоит делать», yearly pay. 31 channels post vacancies only. Exchanges post orders only, even one to write a vacancy. More boards are job boards.
+- Skills: Ozon, Avito and a passing GPT no longer tag a post unless the trade is meant. 25 more tools in the dictionary, Cursor, LoRA and ComfyUI among them.
+- Telegram blocks no longer glue together («рублейПредстоит»); accented letters decode (&ntilde;).
+- A vacancy under 300 characters loses points: getmatch snippets scored like full posts.
+
+**Research**
+- Channels, boards and «Компания скрыта» are no longer employers, here and in X-Ray.
+- A marketer who knows neural networks is a marketer: the AI role needs an engineer's words. Any profession beats a bare «Engineer». Sales, HR and customer success roles are named. «Opportunity» no longer reads as Unity.
+- Exchanges: the budget field beats the description, and a sum from a description counts up to 150 000 ₽. Pay from text stops at 1 000 000 ₽ a month, and a range above it gives its lower sum.
+- Empty rows left the task block, and its header no longer shows a drop in the colour of a rise.
+- On the 300 labelled posts: type 85 → 96%, role 61 → 76%, sums 79 → 92%. The rules were tuned on this set, so these figures are high.
+
+**Elsewhere**
+- /api/market says `none` with too few similar posts; it gave the median of 40 unrelated ones. It compares within a language and skips pay that looks wrong.
+- Digests show the period of pay and skip pay that looks wrong. MCP `search_leads` skips it under a budget filter.
+- `GET /api/leads/{id}` exists: it was documented only.
+- /catalog: the bot page follows the Telegram Bot skill («бот» is inside «работа»), sums keep their currency, pages show Russian posts.
+- The closed-post check reaches Himalayas, Arbeitnow, Freelancehunt, getmatch, GeekJob and Greenhouse.
+- `radar requality --money` reads pay and skills of stored leads again.
+
 ## 0.44.7
 
 - **undici is held at 7.30.1.** undici 8.12 hangs on HTTPS answers of several megabytes, on any Node version, and later requests to the host can hang with it; 7.30.1 reads the same boards in half a second. The app reads sources through this package, so the large Greenhouse boards (Databricks, Stripe, Anthropic) stayed empty. This corrects 0.44.4: going back to Node 24 fixed only the built-in fetch, whose Node 26 version bundles undici 8; the boards that came through after it were the smaller ones.

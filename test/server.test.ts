@@ -594,8 +594,8 @@ describe('http server', () => {
     expect(await ids('/api/leads')).toEqual(['mid', 'rich', 'cheap']);
     expect(await ids('/api/leads?sort=score')).toEqual(['rich', 'mid', 'cheap']);
     expect(await ids('/api/leads?sort=budget')).toEqual(['rich', 'mid', 'cheap']);
-    // 20 000 ₽ is about 217 USD at the reference rate.
-    expect(await ids('/api/leads?budget=20000')).toEqual(['mid', 'rich']);
+    // 15 000 ₽ is about 186 USD at the reference rate.
+    expect(await ids('/api/leads?budget=15000')).toEqual(['mid', 'rich']);
     expect(await ids('/api/leads?skill=Python')).toEqual(['mid', 'rich']);
     expect(await ids('/api/leads?remote=1')).toEqual(['mid', 'cheap']);
 

@@ -390,8 +390,9 @@ function computeTaskTransformation(records: ResearchRecord[]) {
   const netShiftPct = pct(emergingMed, routineMed);
 
   return {
-    routine,
-    emerging,
+    // A row with no orders has nothing to show.
+    routine: routine.filter((item) => item.n > 0),
+    emerging: emerging.filter((item) => item.n > 0),
     netShiftPct,
     routineMedian: routineMed,
     emergingMedian: emergingMed,

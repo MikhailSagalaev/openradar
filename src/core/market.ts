@@ -1,9 +1,10 @@
+import { RUB_PER } from './fx.ts';
 import { budgetUsd } from './salary.ts';
+import { salaryLooksWrong } from './salary-sanity.ts';
 import { extractTechSkills, normalizeForMatch } from './text.ts';
 import type { Lead, LeadType } from './types.ts';
 
-/** Reference rate for showing USD-normalised money in roubles (FX_TO_USD.RUB in salary.ts). */
-const RUB_PER_USD = 92;
+const RUB_PER_USD = RUB_PER.USD!;
 
 /** Words that say nothing about the kind of work: «требуется», «разработка», seniority. */
 const STOP_WORDS = new Set([
@@ -15,7 +16,7 @@ const STOP_WORDS = new Set([
   'developer', 'engineer', 'разработчик', 'разработчика', 'программист', 'инженер',
 ]);
 
-/** Fewer similar leads than this, and the estimate falls back to a wider basis. */
+/** Fewer similar leads than this and there is no estimate: unrelated pay is not a market. */
 const MIN_SAMPLES = 3;
 const MAX_SAMPLES = 40;
 
@@ -33,8 +34,8 @@ export interface MarketRange {
 }
 
 export interface MarketEstimate {
-  /** similar: by title and skills; skills: by skills only; type: all leads of this type. */
-  basis: 'similar' | 'skills' | 'type' | 'none';
+  /** similar: by title and skills; skills: by skills only; none: too few to say. */
+  basis: 'similar' | 'skills' | 'none';
   count: number;
   type: LeadType;
   /** Jobs are monthly pay, gigs are a project budget. */
@@ -70,8 +71,9 @@ function roundRub(value: number): number {
 
 /**
  * Typical pay for work like the query, from leads that carry a budget: the 25th, 50th
- * and 75th percentile of the most similar ones (shared title words and skills), with a
- * wider basis when there are too few. Leads are expected pre-filtered to one type.
+ * and 75th percentile of the most similar ones (shared title words and skills), in the
+ * language of the query. With too few of them it says so rather than guess. Leads are
+ * expected pre-filtered to one type.
  */
 export function estimateMarket(query: MarketQuery, leads: Lead[]): MarketEstimate {
   const words = titleTokens(query.title);
@@ -80,8 +82,9 @@ export function estimateMarket(query: MarketQuery, leads: Lead[]): MarketEstimat
   ).slice(0, 12);
   const wanted = new Set(skills.map((s) => s.toLowerCase()));
 
+  const cyrillic = (title: string): boolean => /[а-яё]/i.test(title);
   const priced = leads
-    .filter((lead) => (lead.type ?? 'gig') === query.type)
+    .filter((lead) => (lead.type ?? 'gig') === query.type && !salaryLooksWrong(lead) && cyrillic(lead.title) === cyrillic(query.title))
     .map((lead) => {
       let usd = budgetUsd(lead);
       if (usd !== undefined && query.type === 'job' && lead.paymentPeriod === 'hourly' && usd <= 300) {
@@ -115,9 +118,7 @@ export function estimateMarket(query: MarketQuery, leads: Lead[]): MarketEstimat
       ? (['similar', similar] as const)
       : bySkills.length >= MIN_SAMPLES
         ? (['skills', bySkills] as const)
-        : scored.length >= MIN_SAMPLES
-          ? (['type', scored] as const)
-          : (['none', []] as const);
+        : (['none', []] as const);
 
   const picked = [...pool].sort((a, b) => b.sim - a.sim || b.lead.createdAt.localeCompare(a.lead.createdAt)).slice(0, MAX_SAMPLES);
   const base: MarketEstimate = {

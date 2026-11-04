@@ -21,14 +21,14 @@ describe('market estimate', () => {
     expect(e.basis).toBe('similar');
     expect(e.count).toBe(5);
     expect(e.usd).toEqual({ p25: 40, median: 50, p75: 60 });
-    expect(e.rub?.median).toBe(4600);
+    expect(e.rub?.median).toBe(4000);
     expect(e.period).toBe('project');
   });
 
-  it('falls back to all leads of the type when nothing similar is priced', () => {
+  it('gives no figure when nothing similar is priced: unrelated pay is no market', () => {
     const e = estimateMarket({ title: 'Видеомонтаж ролика', type: 'gig' }, leads);
-    expect(e.basis).toBe('type');
-    expect(e.count).toBe(8);
+    expect(e).toMatchObject({ basis: 'none', count: 0 });
+    expect(e.usd).toBeUndefined();
   });
 
   it('reports no estimate with too few priced leads', () => {

@@ -67,8 +67,12 @@ export const BOARD_RULES: BoardRule[] = [
     },
   },
   {
-    // No reliable marker on the page: a removed post answers 404 or 410.
-    hosts: ['weworkremotely.com', 'jobicy.com', 'remoteok.com', 'trudvsem.ru'],
+    // No reliable marker on the page: a removed post answers 404 or 410. Their pages also
+    // carry the JobPosting markup, so the same visit fills in pay and employer.
+    hosts: [
+      'weworkremotely.com', 'jobicy.com', 'remoteok.com', 'trudvsem.ru', 'himalayas.app', 'www.arbeitnow.com', 'arbeitnow.com',
+      'freelancehunt.com', 'getmatch.ru', 'geekjob.ru', 'boards.greenhouse.io', 'job-boards.greenhouse.io',
+    ],
     check(page) {
       return gone(page) ? 'closed' : 'unknown';
     },
@@ -168,7 +172,9 @@ export function factsFill(facts: PageFacts, type: LeadType): LeadFactsFill {
     fill.budget = facts.salary.max ?? facts.salary.min;
     fill.currency = facts.salary.currency;
     fill.paymentPeriod = pay.period === 'hour' ? 'hourly' : pay.period === 'month' ? 'monthly' : 'fixed';
-    fill.rawSalary = [facts.salary.min, facts.salary.max].filter((v) => v !== undefined).join('–') + ` ${facts.salary.currency}`;
+    // The stored budget stays as the page gives it; «per year» tells readers and normalizeSalary it is not monthly.
+    const perYear = facts.salary.period === 'year' ? ' per year' : '';
+    fill.rawSalary = [facts.salary.min, facts.salary.max].filter((v) => v !== undefined).join('–') + ` ${facts.salary.currency}${perYear}`;
     fill.normalizedUsdMin = usd(pay.min ?? pay.max);
     fill.normalizedUsdMax = usd(pay.max ?? pay.min);
   }

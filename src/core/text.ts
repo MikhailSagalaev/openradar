@@ -32,6 +32,10 @@ const NAMED_ENTITIES: Record<string, string> = {
   para: '¶',
 };
 
+const ACCENTS: Record<string, string> = {
+  acute: '\u0301', grave: '\u0300', circ: '\u0302', uml: '\u0308', tilde: '\u0303', cedil: '\u0327', ring: '\u030A', caron: '\u030C',
+};
+
 export function decodeHtmlEntities(input: string): string {
   if (!input) return '';
   let str = input;
@@ -49,7 +53,10 @@ export function decodeHtmlEntities(input: string): string {
       })
       .replace(/&([a-z][a-z0-9]*);?/gi, (match, name: string) => {
         const value = NAMED_ENTITIES[name.toLowerCase()];
-        return value ?? match;
+        if (value) return value;
+        // &ntilde;, &uacute;, &Eacute;: a letter and its accent.
+        const [, letter, mark] = /^([a-z])(acute|grave|circ|uml|tilde|cedil|ring|caron)$/i.exec(name) ?? [];
+        return letter && mark ? `${letter}${ACCENTS[mark]}`.normalize('NFC') : match;
       });
   }
   return str;
@@ -139,7 +146,8 @@ export function isRemoteLead(lead: { city?: string; title: string; text: string 
 const TECH_SKILL_PATTERNS: Array<[RegExp, string]> = [
   [/(^|[^a-zа-яё0-9])1\s?[сc]([^a-zа-яё0-9]|$)/i, '1С'],
   [/\bclaude\b/i, 'Claude'],
-  [/\bgpt\b|chatgpt/i, 'GPT'],
+  // «есть GPT, который поможет оформить ТЗ» is not a task for GPT: the name needs a version or a use.
+  [/chatgpt|\bgpt[- ]?\d|\bopenai\b|\bgpt[- ]?(?:api|бот|модел|ассистент|агент)|(?:интеграц\S*|подключ\S*|на\s+базе|через)\s+(?:с\s+)?gpt\b/i, 'GPT'],
   [/\bmidjourney\b/i, 'Midjourney'],
   [/\bpython\b/i, 'Python'],
   [/\bjavascript\b|\bjs\b/i, 'JavaScript'],
@@ -203,14 +211,40 @@ const TECH_SKILL_PATTERNS: Array<[RegExp, string]> = [
   [/перевод(?:чик|\s+(?:текст|с\s|на\s))|\btranslator\b|\btranslation\s+(?:of|from|into)\b/i, 'Переводы'],
   [/таргет|targeting/i, 'Таргет'],
   [/директолог|яндекс\.?\s?директ|google\s+ads|контекстн\S*\s+реклам|(?:^|[^а-яё])директ(?![а-яё])/i, 'Контекстная реклама'],
-  [/авито|avito/i, 'Авито'],
-  [/wildberries|(?:^|[^a-z])wb(?:[^a-z]|$)|ozon|озон|маркетплейс/i, 'Маркетплейсы'],
+  // Brands name an employer or a link as often as a trade: «Аналитик (Авито Путешествия)», «отзывы с Ozon».
+  [/авитолог|(?:авито|avito)[- ](?:объявлен|продвижен|магазин|реклам)|(?:продвиж\S*|размещ\S*|объявлени\S*|постинг\S*|реклам\S*|магазин\S*|продаж\S*|ведени\S*)\s+(?:\S+\s+){0,2}(?:на|в|для|через)\s+(?:авито|avito)/i, 'Авито'],
+  [/маркетплейс|селлер|(?:карточ\S*|продаж\S*|магазин\S*|кабинет\S*|инфографик\S*|реклам\S*|продвиж\S*|ведени\S*)\s+(?:\S+\s+){0,2}(?:на\s+|для\s+)?(?:wildberries|wb|ozon|озон)|(?:^|[^а-яёa-z])(?:на|для)\s+(?:wildberries|wb|ozon|озон)|(?:wildberries|wb|ozon|озон)\s*(?:[/,+и]|\sи\s)\s*(?:wildberries|wb|ozon|озон|яндекс)/i, 'Маркетплейсы'],
   [/бухгалт|accountant/i, 'Бухгалтерия'],
   [/юрист|юридическ|lawyer/i, 'Юриспруденция'],
   [/репетитор|преподава|tutor|teacher/i, 'Обучение'],
   [/фотограф|ретуш|фотосесси/i, 'Фото'],
   [/менеджер\S*\s+по\s+продаж|холодн\S*\s+звон|sales\s+(?:manager|representative)/i, 'Продажи'],
   [/поддержк\S*\s+(?:клиент|пользоват)|customer\s+support|оператор\S*\s+(?:чата|колл)/i, 'Поддержка'],
+  [/\bangular\b/i, 'Angular'],
+  [/\bnext\.?js\b/i, 'Next.js'],
+  [/\bfastapi\b/i, 'FastAPI'],
+  [/\bspring\s+boot\b|\bspring\s+framework\b/i, 'Spring'],
+  [/\bclickhouse\b/i, 'ClickHouse'],
+  [/\belasticsearch\b/i, 'Elasticsearch'],
+  [/\brabbitmq\b/i, 'RabbitMQ'],
+  [/\bgraphql\b/i, 'GraphQL'],
+  [/\bairflow\b/i, 'Airflow'],
+  [/\bapache\s+spark\b|\bpyspark\b/i, 'Spark'],
+  [/\bpower\s?bi\b/i, 'Power BI'],
+  [/\btableau\b/i, 'Tableau'],
+  [/\bselenium\b/i, 'Selenium'],
+  [/\bplaywright\b/i, 'Playwright'],
+  [/\bjira\b/i, 'Jira'],
+  [/\bsalesforce\b/i, 'Salesforce'],
+  [/\bhubspot\b/i, 'HubSpot'],
+  [/\bamo\s?crm\b|амо\s?црм/i, 'amoCRM'],
+  [/\bn8n\b/i, 'n8n'],
+  [/\bCursor\b|\bcursor\s+ai\b/, 'Cursor'],
+  [/\blovable\b/i, 'Lovable'],
+  [/вайб[- ]?код|\bvibe[- ]?cod/i, 'Вайб-кодинг'],
+  [/\bcomfy\s?ui\b/i, 'ComfyUI'],
+  [/\bLoRA\b|\bLORA\b/, 'LoRA'],
+  [/\bstable\s+diffusion\b/i, 'Stable Diffusion'],
 ];
 
 export function extractTechSkills(input: string, max = 8): string[] {

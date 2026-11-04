@@ -1,3 +1,4 @@
+import { SERVICE_OFFER } from './quality.ts';
 import { budgetUsd } from './salary.ts';
 import { extractTechSkills, normalizeForMatch } from './text.ts';
 import type { LeadStatus, SourceRecord } from './types.ts';
@@ -79,6 +80,8 @@ const SPAM_RULES: SpamRule[] = [
     pattern:
       /(?:^|[^\p{L}])(?:ищу\s+(?:работу|подработку|заказы|заказчиков|вакансию|позици[юи])|(?:мо[ёе]|прикладываю|прилагаю)\s+резюме|рассмотрю\s+(?:предложения|вакансии))|#(?:резюме|resume|cv|помогу)(?![\p{L}\d_])/iu,
   },
+  // An agency's price list or a post tagged #услуги offers work instead of asking for it.
+  { reason: 'SERVICE_OFFER', pattern: SERVICE_OFFER },
 ];
 
 export interface RuleResult {
@@ -203,6 +206,8 @@ export function scoreLead(
   const length = lead.text.trim().length;
   if (length < 60) score -= 10;
   else if (length < 150) score -= 4;
+  // A vacancy in two lines of a sitemap snippet says nothing of the job, whatever it pays.
+  else if (length < 300 && lead.type === 'job') score -= 6;
   else if (length > 1500) score += 6;
   else if (length > 600) score += 4;
 
