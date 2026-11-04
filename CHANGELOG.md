@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.44.5
+
+- Profile. Accounts and sources are lists with line icons; the form for a new source opens from «Добавить источник», and the explanation folds away once an account is linked. The two Telegram buttons no longer read the same: «Получать подписки в Telegram» names the bot, «Подключить аккаунт Telegram» links an account for reading.
+- A dialog asks before unlinking an account, deleting a source or a subscription, and reissuing or revoking the agent token. Cancel has the focus. Subscriptions and the token had no question at all; the others used the browser's plain box.
+- Extension 0.12.4: X-Ray uses line icons instead of emoji.
+
 ## 0.44.4
 
 - **Back to Node 24 LTS** in the image and CI. On Node 26.13 an HTTPS answer above about 6.5 MB hangs and later requests to the host hang with it, with any TLS settings; Node 24 with the same OpenSSL and network reads those boards in a second. This is why large Greenhouse boards (Anthropic, Databricks, Stripe) gave nothing since 0.43.0. The cause given in 0.44.1 covered only the rarer stalls that curl sees too; its retries stay for them.

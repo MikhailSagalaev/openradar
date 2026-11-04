@@ -1347,6 +1347,7 @@ export function createApp(runtime: Runtime): Hono {
               list: await runtime.store.listSubscriptions(viewer.userId),
               telegramLinked: Boolean(await runtime.store.getTelegramChat?.(viewer.userId)),
               botAvailable: Boolean(subscriptionBotUsername),
+              botUsername: subscriptionBotUsername,
               notice: c.req.query('subscriptions') ?? undefined,
             }
           : undefined,

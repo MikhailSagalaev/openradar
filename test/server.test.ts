@@ -854,6 +854,9 @@ describe('http server', () => {
     const html = await (await createApp(runtime).request('/me', { headers: { cookie: `radar_session=${session}` } })).text();
     expect(html).toContain('Telegram-источники');
     expect(html).toContain('id="subscriptions"');
+    expect(html).toContain('id="confirm-dialog"');
+    // The two Telegram actions are told apart: the bot for subscriptions, the account for reading.
+    expect(html).toContain('Подключить аккаунт Telegram');
   });
 
   it('shows the signed-in account on research and catalog pages, in both languages', async () => {

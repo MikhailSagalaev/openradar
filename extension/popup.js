@@ -145,6 +145,25 @@ async function readPage() {
   return result?.result;
 }
 
+/** Line icons in the text colour: the extension has no emoji. */
+const ICON_PATHS = {
+  briefcase: 'M4 7h16v13H4zM9 7V4h6v3',
+  send: 'M22 2 11 13M22 2l-7 20-4-9-9-4z',
+  file: 'M14 2H6v20h12V6zM14 2v4h4M9 13h6M9 17h6',
+  code: 'm8 6-6 6 6 6M16 6l6 6-6 6',
+};
+
+function lineIcon(name) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  for (const [key, value] of Object.entries({ width: 14, height: 14, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' })) {
+    svg.setAttribute(key, String(value));
+  }
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', ICON_PATHS[name] ?? '');
+  svg.append(path);
+  return svg;
+}
+
 let cachedPage = null;
 
 async function initPreview() {
@@ -235,7 +254,7 @@ function initXRay(page) {
 
     const icon = document.createElement('span');
     icon.className = 'xray-link-icon';
-    icon.textContent = dork.icon;
+    icon.append(lineIcon(dork.icon));
 
     const label = document.createElement('span');
     label.className = 'xray-link-label';

@@ -1699,21 +1699,40 @@ legend {
 .profile-table td { padding: 8px 6px; border-top: 1px solid var(--line); vertical-align: top; }
 .profile-points { font-weight: 600; white-space: nowrap; width: 48px; }
 .profile-points.neg { color: var(--danger, #b42318); }
-.profile-status.credited { color: var(--ok, #127a3a); }
-.profile-status.hidden { color: var(--danger, #b42318); }
-.tg-explain { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--surface); margin-bottom: 12px; }
+.profile-status.credited { color: color-mix(in srgb, #16a34a 75%, var(--ink)); }
+.profile-status.hidden { color: color-mix(in srgb, #ef4444 80%, var(--ink)); }
+.ui-icon { flex: none; vertical-align: -3px; }
+.btn .ui-icon { margin-right: 6px; }
+.btn.icon-only .ui-icon { margin-right: 0; }
+.tg-explain { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; background: var(--surface); }
+.tg-explain summary { cursor: pointer; color: var(--muted); }
+.tg-explain[open] summary { margin-bottom: 8px; }
+.tg-explain p { margin: 0; }
 .tg-explain ul { margin: 6px 0 0; padding-left: 18px; }
-.tg-accounts { list-style: none; padding: 0; margin: 0 0 12px; }
-.tg-account { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
-.tg-account .profile-status { margin-left: 6px; }
-.tg-connect { margin-bottom: 14px; }
+.tg-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.tg-head h3 { margin: 0; font-size: 13px; color: var(--muted); font-weight: 600; }
+.tg-list { list-style: none; padding: 0; margin: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.tg-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; flex-wrap: wrap; }
+.tg-row + .tg-row { border-top: 1px solid var(--line); }
+.tg-row-icon { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--soft); color: var(--ink); font-size: 13px; font-weight: 600; }
+.tg-row-main { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+.tg-row-meta { font-size: 12px; color: var(--muted); text-align: right; }
+.tg-row .profile-status { font-size: 12px; }
+.tg-empty { color: var(--muted); font-size: 13px; margin: 0; }
+.tg-connect:empty { display: none; }
 .tg-qr { margin-top: 12px; display: grid; gap: 8px; justify-items: start; }
 .tg-qr[hidden], .tg-qr [hidden] { display: none; }
 .tg-qr img { background: #fff; border-radius: 8px; border: 1px solid var(--line); max-width: 100%; height: auto; }
 .tg-qr ol { margin: 0; padding-left: 18px; }
-.tg-source-form { display: grid; gap: 8px; max-width: 520px; margin-top: 8px; }
+.tg-source-form { display: grid; gap: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+.tg-source-form[hidden] { display: none; }
 .tg-source-form label { display: grid; gap: 4px; font-size: 13px; }
-.tg-source-form h3 { margin: 6px 0 0; font-size: 15px; }
+.tg-source-form .tg-form-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.confirm-dialog { border: 1px solid var(--line); border-radius: 12px; padding: 20px; max-width: min(420px, calc(100vw - 32px)); background: var(--bg); color: var(--ink); }
+.confirm-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+.confirm-dialog h3 { margin: 0 0 6px; font-size: 16px; }
+.confirm-dialog p { margin: 0 0 16px; font-size: 13px; color: var(--muted); }
+.confirm-dialog .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .notice-inline { color: var(--muted); margin-top: 2px; }
 .catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
 .catalog-card { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
@@ -3869,6 +3888,7 @@ export interface ProfilePageData {
     telegramLinked: boolean;
     /** The hub runs a subscription bot (RADAR_SUBSCRIPTION_BOT). */
     botAvailable: boolean;
+    botUsername?: string;
     /** Result of the last action: created, deleted, limit, bad_url… */
     notice?: string;
   };
@@ -3888,37 +3908,105 @@ export interface ProfilePageData {
 }
 
 /** Members' own Telegram: accounts linked by QR and the folders or chats read from them. */
+/** Line icons in the text colour: the interface has no emoji. */
+const ICON_PATHS: Record<string, string> = {
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  trash: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+  send: '<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>',
+  folder: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+};
+
+function icon(name: string): string {
+  return `<svg class="ui-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name]}</svg>`;
+}
+
+/**
+ * One dialog for everything that cannot be undone. A form or button with data-confirm asks
+ * first; data-confirm-text and data-confirm-action fill the details. Cancel has the focus.
+ */
+function confirmDialog(lang: SupportedLang): string {
+  const cancel = lang === 'ru' ? 'Отмена' : 'Cancel';
+  return `<dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title">
+  <h3 id="confirm-title"></h3><p id="confirm-text"></p>
+  <div class="confirm-actions"><button class="btn ghost" type="button" data-confirm-no autofocus>${cancel}</button><button class="btn" type="button" data-confirm-yes></button></div>
+</dialog>
+<script>(() => {
+  const dialog = document.getElementById('confirm-dialog');
+  const yes = dialog.querySelector('[data-confirm-yes]');
+  const no = dialog.querySelector('[data-confirm-no]');
+  window.askConfirm = (el) => new Promise((resolve) => {
+    document.getElementById('confirm-title').textContent = el.dataset.confirm;
+    const text = document.getElementById('confirm-text');
+    text.textContent = el.dataset.confirmText || '';
+    text.hidden = !el.dataset.confirmText;
+    yes.textContent = el.dataset.confirmAction;
+    const done = (answer) => { yes.onclick = no.onclick = dialog.oncancel = null; dialog.close(); resolve(answer); };
+    yes.onclick = () => done(true);
+    no.onclick = () => done(false);
+    dialog.oncancel = (event) => { event.preventDefault(); done(false); };
+    dialog.showModal();
+    no.focus();
+  });
+  document.querySelectorAll('form[data-confirm]').forEach((form) => form.addEventListener('submit', async (event) => {
+    if (form.dataset.confirmed) return;
+    event.preventDefault();
+    if (await window.askConfirm(form)) { form.dataset.confirmed = '1'; form.submit(); }
+  }));
+})();</script>`;
+}
+
+function confirmAttrs(title: string, action: string, text = ''): string {
+  return `data-confirm="${escapeHtml(title)}" data-confirm-action="${escapeHtml(action)}"${text ? ` data-confirm-text="${escapeHtml(text)}"` : ''}`;
+}
+
 function renderUserTelegram(data: NonNullable<ProfilePageData['telegram']>, lang: SupportedLang): string {
   const ru = lang === 'ru';
   const when = (iso: string | null): string => (iso ? formatRelative(iso, lang) : (ru ? 'ещё не читали' : 'not read yet'));
-  const accounts = data.accounts.map((a) => `<li class="tg-account">
-      <span><strong>${escapeHtml(a.displayName ?? String(a.tgUserId))}</strong>${a.tgUsername ? ` <span class="muted">@${escapeHtml(a.tgUsername)}</span>` : ''}
-      ${a.status === 'active'
-        ? `<span class="profile-status credited">${ru ? 'подключён' : 'linked'}</span>`
-        : `<span class="profile-status hidden">${ru ? 'сессия отозвана — подключите заново' : 'session revoked — link again'}</span>`}</span>
-      <button class="btn ghost small" type="button" data-tg-unlink="${escapeHtml(a.id)}">${ru ? 'Отключить' : 'Unlink'}</button>
-    </li>`).join('');
+  const accounts = data.accounts.map((a) => {
+    const name = a.displayName ?? String(a.tgUserId);
+    return `<li class="tg-row">
+      <span class="tg-row-icon" aria-hidden="true">${escapeHtml(name.slice(0, 1).toUpperCase())}</span>
+      <div class="tg-row-main"><strong>${escapeHtml(name)}</strong>${a.tgUsername ? ` <span class="muted">@${escapeHtml(a.tgUsername)}</span>` : ''}
+        <div>${a.status === 'active'
+          ? `<span class="profile-status credited">${ru ? 'подключён' : 'linked'}</span>`
+          : `<span class="profile-status hidden">${ru ? 'сессия отозвана — подключите заново' : 'session revoked — link again'}</span>`}</div></div>
+      <button class="btn ghost small" type="button" data-tg-unlink="${escapeHtml(a.id)}" ${confirmAttrs(
+        ru ? `Отключить ${name}?` : `Unlink ${name}?`,
+        ru ? 'Отключить' : 'Unlink',
+        ru ? 'Сессия завершится в Telegram, а источники этого аккаунта удалятся. Найденные заказы останутся в ленте.' : 'The session ends in Telegram and this account\'s sources are deleted. Orders already found stay in the feed.',
+      )}>${icon('logout')}${ru ? 'Отключить' : 'Unlink'}</button>
+    </li>`;
+  }).join('');
   const sources = data.sources.map((s) => {
     const what = [s.folder ? `${ru ? 'папка' : 'folder'} «${escapeHtml(s.folder)}»` : '', s.chats.length ? escapeHtml(s.chats.join(', ')) : ''].filter(Boolean).join(' · ');
-    return `<tr>
-      <td><strong>${escapeHtml(s.title)}</strong><div class="muted small">${what}</div>${s.lastError ? `<div class="small notice-inline">${escapeHtml(s.lastError)}</div>` : ''}</td>
-      <td class="small">${s.lastPolledAt ? `${s.lastCount} ${ru ? plural(s.lastCount, ['пост', 'поста', 'постов']) : 'posts'}` : ''}<div class="muted">${when(s.lastPolledAt)}</div></td>
-      <td><button class="btn ghost small" type="button" data-tg-source-delete="${escapeHtml(s.id)}">${ru ? 'Удалить' : 'Delete'}</button></td>
-    </tr>`;
+    return `<li class="tg-row">
+      <span class="tg-row-icon" aria-hidden="true">${icon('folder')}</span>
+      <div class="tg-row-main"><strong>${escapeHtml(s.title)}</strong><div class="muted small">${what}</div>${s.lastError ? `<div class="small notice-inline">${escapeHtml(s.lastError)}</div>` : ''}</div>
+      <div class="tg-row-meta">${s.lastPolledAt ? `${s.lastCount} ${ru ? plural(s.lastCount, ['пост', 'поста', 'постов']) : 'posts'}<br>` : ''}${when(s.lastPolledAt)}</div>
+      <button class="btn ghost small icon-only" type="button" title="${ru ? 'Удалить' : 'Delete'}" aria-label="${ru ? `Удалить источник ${escapeHtml(s.title)}` : `Delete source ${escapeHtml(s.title)}`}" data-tg-source-delete="${escapeHtml(s.id)}" ${confirmAttrs(
+        ru ? `Удалить источник «${s.title}»?` : `Delete source «${s.title}»?`,
+        ru ? 'Удалить' : 'Delete',
+        ru ? 'openradar перестанет его читать. Найденные заказы останутся в ленте.' : 'openradar stops reading it. Orders already found stay in the feed.',
+      )}>${icon('trash')}</button>
+    </li>`;
   }).join('');
   const active = data.accounts.filter((a) => a.status === 'active');
-  const form = active.length ? `<form class="tg-source-form" data-tg-source-form>
-      <h3>${ru ? 'Откуда читать' : 'What to read'}</h3>
+  const form = active.length ? `<form class="tg-source-form" data-tg-source-form${data.sources.length ? ' hidden' : ''}>
       ${active.length > 1 ? `<label>${ru ? 'Аккаунт' : 'Account'} <select name="accountId">${active.map((a) => `<option value="${escapeHtml(a.id)}">${escapeHtml(a.displayName ?? String(a.tgUserId))}</option>`).join('')}</select></label>` : `<input type="hidden" name="accountId" value="${escapeHtml(active[0]!.id)}">`}
       <label>${ru ? 'Название' : 'Name'} <input name="title" required maxlength="200" placeholder="${ru ? 'Каналы с заказами' : 'Job channels'}"></label>
       <label>${ru ? 'Папка в Telegram' : 'Telegram folder'} <input name="folder" maxlength="200" placeholder="${ru ? 'например, Работа' : 'e.g. Work'}"></label>
       <label>${ru ? 'Или чаты, по одному в строке' : 'Or chats, one per line'} <textarea name="chats" rows="3" placeholder="@remote_jobs&#10;https://t.me/freelance_orders"></textarea></label>
       <p class="muted small">${ru ? 'Нужна папка или хотя бы один чат. Читаем раз в 15 минут.' : 'A folder or at least one chat. Read every 15 minutes.'}</p>
-      <button class="btn" type="submit">${ru ? 'Добавить источник' : 'Add source'}</button>
-      <span class="small" data-tg-source-status></span>
+      <div class="tg-form-actions">
+        <button class="btn" type="submit">${ru ? 'Сохранить' : 'Save'}</button>
+        ${data.sources.length ? `<button class="btn ghost" type="button" data-tg-source-cancel>${ru ? 'Отмена' : 'Cancel'}</button>` : ''}
+        <span class="small" data-tg-source-status></span>
+      </div>
     </form>` : '';
   return `<h2 id="telegram-sources">${ru ? 'Telegram-источники' : 'Telegram sources'}</h2>
-  <div class="tg-explain small">
+  <details class="tg-explain small"${data.accounts.length ? '' : ' open'}>
+    <summary>${ru ? 'Как это работает и что видит сервер' : 'How it works and what the server sees'}</summary>
     <p>${ru
       ? 'Подключите свой Telegram, и openradar будет каждые 15 минут читать выбранную папку или каналы и добавлять найденные заказы в общую ленту от вашего имени — за них начисляются очки.'
       : 'Link your Telegram and openradar reads the folder or channels you pick every 15 minutes and adds the orders it finds to the shared feed in your name, for points.'}</p>
@@ -3927,10 +4015,10 @@ function renderUserTelegram(data: NonNullable<ProfilePageData['telegram']>, lang
       <li>${ru ? 'Сервер получает доступ к аккаунту: сессия хранится зашифрованной (AES-256-GCM) и расшифровывается только на время чтения. Пишет он ничего не будет.' : 'The server gets access to the account: the session is stored encrypted (AES-256-GCM) and decrypted only while reading. It never writes anything.'}</li>
       <li>${ru ? '«Отключить» завершает сессию в самом Telegram и удаляет её отсюда. Её же видно и можно закрыть в Telegram: Настройки → Устройства.' : 'Unlink ends the session in Telegram itself and deletes it here. It is also listed in Telegram: Settings → Devices.'}</li>
     </ul>
-  </div>
-  ${accounts ? `<ul class="tg-accounts">${accounts}</ul>` : ''}
+  </details>
+  ${accounts ? `<div class="tg-head"><h3>${ru ? 'Аккаунты' : 'Accounts'}</h3></div><ul class="tg-list">${accounts}</ul>` : ''}
   <div class="tg-connect" data-tg-connect>
-    <button class="btn ${accounts ? 'ghost' : ''}" type="button" data-tg-start>${accounts ? (ru ? 'Подключить ещё аккаунт' : 'Link another account') : (ru ? 'Подключить Telegram' : 'Link Telegram')}</button>
+    <button class="btn ${accounts ? 'ghost small' : ''}" type="button" data-tg-start>${icon('plus')}${accounts ? (ru ? 'Подключить ещё аккаунт' : 'Link another account') : (ru ? 'Подключить аккаунт Telegram' : 'Link a Telegram account')}</button>
     <div class="tg-qr" data-tg-qr hidden>
       <img data-tg-qr-img alt="${ru ? 'QR-код для входа в Telegram' : 'Telegram login QR code'}" width="220" height="220">
       <ol class="small">
@@ -3946,7 +4034,8 @@ function renderUserTelegram(data: NonNullable<ProfilePageData['telegram']>, lang
       <button class="btn ghost small" type="button" data-tg-cancel>${ru ? 'Отмена' : 'Cancel'}</button>
     </div>
   </div>
-  ${sources ? `<table class="profile-table">${sources}</table>` : ''}
+  ${active.length || sources ? `<div class="tg-head"><h3>${ru ? 'Откуда читать' : 'What to read'}</h3>${active.length && sources ? `<button class="btn ghost small" type="button" data-tg-source-add>${icon('plus')}${ru ? 'Добавить источник' : 'Add a source'}</button>` : ''}</div>` : ''}
+  ${sources ? `<ul class="tg-list">${sources}</ul>` : ''}
   ${form}
   <script>${userTelegramScript(lang)}</script>`;
 }
@@ -3961,8 +4050,6 @@ function userTelegramScript(lang: SupportedLang): string {
     expired: ru ? 'Код устарел. Нажмите «Подключить» ещё раз.' : 'The code expired. Press Link again.',
     error: ru ? 'Не получилось войти. Попробуйте ещё раз.' : 'Sign-in failed. Try again.',
     unavailable: ru ? 'Подключение сейчас недоступно.' : 'Linking is not available right now.',
-    confirmUnlink: ru ? 'Отключить аккаунт? Сессия завершится в Telegram, источники этого аккаунта удалятся.' : 'Unlink? The session ends in Telegram and its sources are deleted.',
-    confirmDelete: ru ? 'Удалить источник?' : 'Delete the source?',
     need: ru ? 'Укажите папку или хотя бы один чат.' : 'Give a folder or at least one chat.',
     failed: ru ? 'Не сохранилось, проверьте поля.' : 'Not saved, check the fields.',
   };
@@ -4015,17 +4102,21 @@ function userTelegramScript(lang: SupportedLang): string {
     id = null; qr.hidden = true; start.hidden = false;
   });
   document.querySelectorAll('[data-tg-unlink]').forEach((b) => b.addEventListener('click', async () => {
-    if (!confirm(T.confirmUnlink)) return;
+    if (!(await window.askConfirm(b))) return;
     b.disabled = true;
     await json('/api/tg/accounts/' + b.dataset.tgUnlink, 'DELETE');
     location.reload();
   }));
   document.querySelectorAll('[data-tg-source-delete]').forEach((b) => b.addEventListener('click', async () => {
-    if (!confirm(T.confirmDelete)) return;
+    if (!(await window.askConfirm(b))) return;
     await json('/api/user-sources/' + b.dataset.tgSourceDelete, 'DELETE');
     location.reload();
   }));
   const form = document.querySelector('[data-tg-source-form]');
+  const add = document.querySelector('[data-tg-source-add]');
+  if (add) add.addEventListener('click', () => { form.hidden = false; add.hidden = true; form.querySelector('input[name=title]').focus(); });
+  const close = document.querySelector('[data-tg-source-cancel]');
+  if (close) close.addEventListener('click', () => { form.hidden = true; if (add) add.hidden = false; });
   if (form) form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = new FormData(form);
@@ -4056,8 +4147,8 @@ function renderAgentToken(data: NonNullable<ProfilePageData['agent']>, lang: Sup
     : 'With this token an agent (Claude, ChatGPT, Cursor) connects to the openradar MCP server as you: it sees the feed with your delay and contacts and can subscribe you to a search with <code>save_search</code>. Nothing else: no voting, no profile changes.'}</p>
   ${fresh}
   <div class="subscription-actions">
-    <form method="post" action="/me/agent-token" class="inline-form"><button class="btn ghost small" type="submit">${data.hasToken ? (ru ? 'Выпустить новый' : 'Issue a new one') : (ru ? 'Выпустить токен' : 'Issue a token')}</button></form>
-    ${data.hasToken ? `<form method="post" action="/me/agent-token/delete" class="inline-form"><button class="btn ghost small" type="submit">${ru ? 'Отозвать' : 'Revoke'}</button></form>` : ''}
+    <form method="post" action="/me/agent-token" class="inline-form"${data.hasToken ? ` ${confirmAttrs(ru ? 'Выпустить новый токен?' : 'Issue a new token?', ru ? 'Выпустить' : 'Issue', ru ? 'Старый токен перестанет работать, агентов придётся настроить заново.' : 'The old token stops working and agents need setting up again.')}` : ''}><button class="btn ghost small" type="submit">${data.hasToken ? (ru ? 'Выпустить новый' : 'Issue a new one') : (ru ? 'Выпустить токен' : 'Issue a token')}</button></form>
+    ${data.hasToken ? `<form method="post" action="/me/agent-token/delete" class="inline-form" ${confirmAttrs(ru ? 'Отозвать токен?' : 'Revoke the token?', ru ? 'Отозвать' : 'Revoke', ru ? 'Агенты с ним больше не смогут войти.' : 'Agents can no longer use it.')}><button class="btn ghost small" type="submit">${ru ? 'Отозвать' : 'Revoke'}</button></form>` : ''}
   </div>`;
 }
 
@@ -4095,10 +4186,11 @@ const SUBSCRIPTION_NOTICES: Record<SupportedLang, Record<string, string>> = {
 function renderSubscriptions(data: NonNullable<ProfilePageData['subscriptions']>, lang: SupportedLang): string {
   const ru = lang === 'ru';
   const notice = data.notice ? SUBSCRIPTION_NOTICES[lang][data.notice] : undefined;
+  const bot = data.botUsername ? `@${data.botUsername}` : (ru ? 'бот' : 'the bot');
   const telegram = data.telegramLinked
-    ? `<p class="small">${ru ? 'Telegram подключён. Отключить — командой /stop боту.' : 'Telegram is linked. Unlink with /stop to the bot.'}</p>`
+    ? `<p class="small">${ru ? `Подписки приходят в Telegram от ${escapeHtml(bot)}. Отключить — командой /stop боту.` : `Subscriptions arrive in Telegram from ${escapeHtml(bot)}. Unlink with /stop to the bot.`}</p>`
     : data.botAvailable
-      ? `<form method="post" action="/me/telegram"><button class="btn ghost" type="submit">${ru ? 'Подключить Telegram' : 'Link Telegram'}</button> <span class="muted small">${ru ? 'откроется бот, нажмите «Start»' : 'the bot opens, press Start'}</span></form>`
+      ? `<form method="post" action="/me/telegram"><button class="btn ghost" type="submit">${icon('send')}${ru ? 'Получать подписки в Telegram' : 'Get subscriptions in Telegram'}</button> <span class="muted small">${ru ? `откроется ${escapeHtml(bot)}, нажмите «Start»` : `${escapeHtml(bot)} opens, press Start`}</span></form>`
       : `<p class="muted small">${ru ? 'Telegram-бот на этом узле не настроен: подписки можно получать на вебхук.' : 'This node has no Telegram bot: use a webhook.'}</p>`;
   const rows = data.list.map((s) => {
     const feed = `/?${feedQuery(s.filters)}`;
@@ -4125,7 +4217,7 @@ function renderSubscriptions(data: NonNullable<ProfilePageData['subscriptions']>
             : `<input type="url" name="target" placeholder="https://…" required aria-label="${ru ? 'Адрес вебхука' : 'Webhook URL'}"><button class="btn ghost small" type="submit">${ru ? 'На вебхук' : 'To webhook'}</button>`}
         </form>
         <form method="post" action="/subscriptions/${escapeHtml(s.id)}/pause" class="inline-form"><button class="btn ghost small" type="submit">${s.paused ? (ru ? 'Возобновить' : 'Resume') : (ru ? 'Пауза' : 'Pause')}</button></form>
-        <form method="post" action="/subscriptions/${escapeHtml(s.id)}/delete" class="inline-form"><button class="btn ghost small" type="submit">${ru ? 'Удалить' : 'Delete'}</button></form>
+        <form method="post" action="/subscriptions/${escapeHtml(s.id)}/delete" class="inline-form" ${confirmAttrs(ru ? `Удалить подписку «${s.name}»?` : `Delete subscription «${s.name}»?`, ru ? 'Удалить' : 'Delete')}><button class="btn ghost small icon-only" type="submit" title="${ru ? 'Удалить' : 'Delete'}" aria-label="${ru ? 'Удалить подписку' : 'Delete subscription'}">${icon('trash')}</button></form>
       </div>
     </div>`;
   }).join('');
@@ -4207,6 +4299,7 @@ export function renderProfilePage(data: ProfilePageData): string {
   ${data.subscriptions ? renderSubscriptions(data.subscriptions, lang) : ''}
   ${data.telegram ? renderUserTelegram(data.telegram, lang) : ''}
   ${data.agent ? renderAgentToken(data.agent, lang) : ''}
+  ${data.subscriptions || data.telegram || data.agent ? confirmDialog(lang) : ''}
   ${activity}
   ${table}
   <h2>${ru ? 'Как получить очки' : 'How to earn points'}</h2>
