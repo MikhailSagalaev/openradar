@@ -525,13 +525,13 @@ export class MemoryStore implements Store {
 
   private queryLeads(options: FeedOptions, feedOnly = false): Lead[] {
     let result = Array.from(this.leads.values());
+    if (options.createdBefore) {
+      const cutoff = options.createdBefore;
+      result = result.filter((l) => l.createdAt <= cutoff);
+    }
     if (feedOnly) {
       // Leads rejected by the pipeline rules stay with the operator, not in the public feed.
       result = result.filter((l) => (l.state ?? 'active') === 'active' && l.status !== 'rejected');
-      if (options.createdBefore) {
-        const cutoff = options.createdBefore;
-        result = result.filter((l) => l.createdAt <= cutoff);
-      }
       if (options.maxAgeDays) {
         const { gig, job } = options.maxAgeDays;
         const now = Date.now();

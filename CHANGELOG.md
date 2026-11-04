@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.45.1
+
+- `radar requality` and `rescore` walk a long window by date. The stores cap an offset at 10 000, so past about 15 000 leads the command went over the same pages again and reported them as checked.
+
 ## 0.45.0
 
 Three outside audits of the feed, /research and the subsystems, each claim checked against the code and live data first.
