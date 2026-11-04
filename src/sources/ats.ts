@@ -374,10 +374,14 @@ export const atsSource: SourceAdapter = {
     const maxAgeDays = Math.max(1, Number(source.config.maxAgeDays ?? 30));
     const since = new Date(ctx.now().getTime() - maxAgeDays * 86_400_000).toISOString();
 
+    // Through a slow proxy a large board needs longer than a page does: config.timeoutMs.
+    const timeoutMs = Math.min(Math.max(Number(source.config.timeoutMs) || ctx.timeoutMs, ctx.timeoutMs), 120_000);
+    const boardCtx = { ...ctx, timeoutMs };
+
     const leads: RawLead[] = [];
     for (const { slug, name } of nextBatch(source.id, companies, perPoll)) {
       try {
-        const json = await fetchBoard(ctx, ENDPOINTS[provider](slug));
+        const json = await fetchBoard(boardCtx, ENDPOINTS[provider](slug));
         const found = PARSERS[provider](source, slug, name, json)
           .filter((lead) => !lead.publishedAt || new Date(lead.publishedAt).toISOString() >= since)
           .sort((a, b) => (b.publishedAt ?? '').localeCompare(a.publishedAt ?? ''))
