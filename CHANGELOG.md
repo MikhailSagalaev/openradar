@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.45.5
+
+- The revenue of past launches is not pay: «опыт запусков от 5 млн рублей» and «с нуля до 500 000 €» topped the orders by budget.
+
 ## 0.45.4
 
 - Freelancer.com: a budget above $10 000 shows no sum. Clients pick a tier from a list, and a promo design at $50 000–100 000 topped «Сначала дорогие».

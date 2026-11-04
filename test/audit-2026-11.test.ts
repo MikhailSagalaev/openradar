@@ -40,6 +40,8 @@ describe('sums that are not pay', () => {
     expect(money('Средняя зарплата в IT за год выросла на 17,7%, до 235 тыс. ₽').budget).toBeUndefined();
     expect(money('затем подписка за $39/мес').budget).toBeUndefined();
     expect(money('Аудитория СНГ, чек $2000–4000').budget).toBeUndefined();
+    expect(money('Требование: подтвержденный опыт запусков от 5 млн рублей').budget).toBeUndefined();
+    expect(money('В команде есть опыт запуска и масштабирования проектов с нуля до 500 000 €').budget).toBeUndefined();
     expect(money('Atari потратила до 25 миллионов долларов на права фильма').budget).toBeUndefined();
     expect(money('We raised $781M in Series D').budget).toBeUndefined();
   });
