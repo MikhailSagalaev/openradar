@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.44.7
+
+- **undici is held at 7.30.1.** undici 8.12 hangs on HTTPS answers of several megabytes, on any Node version, and later requests to the host can hang with it; 7.30.1 reads the same boards in half a second. The app reads sources through this package, so the large Greenhouse boards (Databricks, Stripe, Anthropic) stayed empty. This corrects 0.44.4: going back to Node 24 fixed only the built-in fetch, whose Node 26 version bundles undici 8; the boards that came through after it were the smaller ones.
+
 ## 0.44.6
 
 - ATS sources take `config.timeoutMs` (up to 120 s). From the hub's network answers of api.ashbyhq.com now freeze at about 20 KB, curl included, while Tor delivers them slowly: a 5 MB board takes over 20 s, past the general 15 s limit. The hub's Ashby source runs with `proxy: true`, `timeoutMs: 60000` and `perPoll: 3`.
