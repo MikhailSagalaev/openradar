@@ -48,6 +48,31 @@ describe('cross-board duplicates', () => {
     expect(other.status).not.toBe('duplicate');
   });
 
+  it('joins a vacancy by title only at the same employer, also when the feed names it in the text', async () => {
+    const { runtime, ingest } = deps();
+    const run = randomUUID().slice(0, 8);
+    const hh = await runtime.store.createSource({ kind: 'rss', title: 'hh' });
+    const title = `Программист 1С ${run}`;
+    const vacancy = (id: number, company: string, more = '') => ({ sourceId: '', type: 'job' as const, title, text: `Вакансия компании: ${company}
+Создана: 04.11.2026${more}`, url: `https://hh.ru/vacancy/${id}` });
+    await ingestRawLead(vacancy(1, 'Инструмент-д'), hh, ingest);
+    expect((await ingestRawLead(vacancy(2, 'Рога и копыта'), hh, ingest)).status).not.toBe('duplicate');
+    expect(await ingestRawLead(vacancy(3, 'Инструмент-д'), hh, ingest)).toMatchObject({ status: 'duplicate', reasons: ['duplicate:title_company'] });
+  });
+
+  it('notes another feed reading the same page, and nothing for a re-read', async () => {
+    const { runtime, ingest } = deps();
+    const run = randomUUID().slice(0, 8);
+    const one = await runtime.store.createSource({ kind: 'rss', title: 'One' });
+    const two = await runtime.store.createSource({ kind: 'rss', title: 'Two' });
+    const raw = { sourceId: '', type: 'job' as const, title: `Аналитик ${run}`, text: 'Вакансия компании: Альфа', url: `https://hh.ru/vacancy/9${run.replace(/\D/g, '')}` };
+    const first = await ingestRawLead(raw, one, ingest);
+    await ingestRawLead(raw, one, ingest);
+    expect(await runtime.store.listLeadSightings!(first.lead!.id)).toHaveLength(0);
+    await ingestRawLead(raw, two, ingest);
+    expect(await runtime.store.listLeadSightings!(first.lead!.id)).toMatchObject([{ sourceId: two.id, url: raw.url }]);
+  });
+
   it('finds near-duplicate texts through the stored band index', async () => {
     const { runtime, ingest } = deps();
     const run = randomUUID().slice(0, 8);

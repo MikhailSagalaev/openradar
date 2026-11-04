@@ -6,11 +6,11 @@ import { makeTestRuntime } from './helpers.ts';
 
 function rows(day: string, hh: number, extra: Partial<ResearchDailyRow> = {}): ResearchDailyRow[] {
   return [
-    { day, type: 'job', platform: 'hh.ru', role: 'backend', scope: 'ru', n: hh, ...extra },
-    // Not in the panel, or not Russian-language: never counted.
+    { day, type: 'job', platform: 'hh.ru', role: 'backend', scope: 'ru', n: hh + 30, panelN: hh, ...extra },
+    // Not seen by the panel, or not Russian-language: never counted.
     { day, type: 'job', platform: 'telegram', role: 'backend', scope: 'ru', n: 50 },
-    { day, type: 'job', platform: 'hh.ru', role: 'backend', scope: 'intl', n: 50 },
-    { day, type: 'gig', platform: 'kwork.ru', role: 'bots', scope: 'ru', n: 10 },
+    { day, type: 'job', platform: 'hh.ru', role: 'backend', scope: 'intl', n: 50, panelN: 50 },
+    { day, type: 'gig', platform: 'kwork.ru', role: 'bots', scope: 'ru', n: 10, panelN: 10 },
   ];
 }
 
@@ -35,17 +35,17 @@ describe('openradar index', () => {
     expect(indexCsv(index).split('\n')[0]).toBe('date,type,count,avg7,index');
   });
 
-  it('fixes the base to November once it is over', () => {
+  it('fixes the base once its four weeks are over', () => {
     const data: ResearchDailyRow[] = [];
-    for (let d = PANEL_START; d < '2026-12-08'; d = addDays(d, 1)) data.push(...rows(d, d >= '2026-12-01' ? 150 : 100));
-    const index = buildIndex(data, new Date('2026-12-08T12:00:00Z'));
-    expect(index.base).toMatchObject({ provisional: false, days: 28, from: '2026-11-02' });
+    for (let d = PANEL_START; d < '2026-12-15'; d = addDays(d, 1)) data.push(...rows(d, d >= '2026-12-07' ? 150 : 100));
+    const index = buildIndex(data, new Date('2026-12-15T12:00:00Z'));
+    expect(index.base).toMatchObject({ provisional: false, days: 28, from: '2026-11-09' });
     expect(index.jobs.latest?.index).toBe(150);
   });
 
   it('saves the days that are over and redoes the last ones', async () => {
     const runtime = makeTestRuntime();
-    const source = await runtime.store.createSource({ kind: 'rss', title: 'hh', config: { url: 'https://example.com/rss' } });
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'HeadHunter — IT-вакансии', config: { url: 'https://example.com/rss' } });
     const post = (id: string, day: string, title: string): Lead => ({
       id, sourceId: source.id, externalId: id, url: `https://hh.ru/vacancy/${id}`, title, text: 'Компания ищет разработчика в команду',
       publishedAt: `${day}T10:00:00.000Z`, fingerprint: id, titleKey: id, status: 'new', score: 50, reasons: [], createdAt: `${day}T10:00:00.000Z`,
@@ -62,5 +62,26 @@ describe('openradar index', () => {
     // The next run redoes the last saved days and adds the new one.
     expect(await ensureDailyCounts(runtime.store, new Date(`${addDays(PANEL_START, 3)}T05:00:00Z`))).toEqual([PANEL_START, addDays(PANEL_START, 1), addDays(PANEL_START, 2)]);
     expect(aggregateDay(PANEL_START, [])).toEqual([]);
+  });
+
+  it('counts what the panel feeds saw, and only new vacancies', async () => {
+    const runtime = makeTestRuntime();
+    const panel = await runtime.store.createSource({ kind: 'rss', title: 'HeadHunter — IT-вакансии', config: { url: 'https://example.com/hh' } });
+    const later = await runtime.store.createSource({ kind: 'rss', title: 'HeadHunter — QA', config: { url: 'https://example.com/qa' } });
+    const post = (id: number, sourceId: string): Lead => ({
+      id: `v${id}`, sourceId, externalId: `v${id}`, url: `https://hh.ru/vacancy/${id}`, title: 'Backend-разработчик', text: 'Компания ищет разработчика в команду',
+      publishedAt: `${PANEL_START}T10:00:00.000Z`, fingerprint: `v${id}`, titleKey: `v${id}`, status: 'new', score: 50, reasons: [], createdAt: `${PANEL_START}T10:00:00.000Z`,
+      type: 'job', skills: [],
+    } as unknown as Lead);
+    await runtime.store.insertLead(post(139_000_000, panel.id)); // new, from the panel
+    await runtime.store.insertLead(post(138_000_000, panel.id)); // raised in search: months old
+    await runtime.store.insertLead(post(139_000_001, later.id)); // a later feed only
+    await runtime.store.insertLead(post(139_000_002, later.id)); // met through a later feed, seen by the panel too
+    await runtime.store.addLeadSighting!({ leadId: 'v139000002', url: 'https://hh.ru/vacancy/139000002', sourceId: panel.id, method: 'url', similarity: 1 });
+
+    await ensureDailyCounts(runtime.store, new Date(`${addDays(PANEL_START, 1)}T05:00:00Z`));
+    const stored = await runtime.store.listResearchDaily!(PANEL_START, addDays(PANEL_START, 1));
+    expect(stored.reduce((sum, r) => sum + r.n, 0)).toBe(4);
+    expect(stored.reduce((sum, r) => sum + (r.panelN ?? 0), 0)).toBe(2);
   });
 });

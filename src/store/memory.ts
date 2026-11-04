@@ -201,13 +201,23 @@ export class MemoryStore implements Store {
 
   async addLeadSighting(sighting: LeadSighting): Promise<void> {
     const list = this.sightings.get(sighting.leadId) ?? [];
-    if (list.some((s) => s.url === sighting.url)) return;
+    if (list.some((s) => s.url === sighting.url && s.sourceId === sighting.sourceId)) return;
     list.push({ ...sighting, seenAt: sighting.seenAt ?? new Date().toISOString() });
     this.sightings.set(sighting.leadId, list);
   }
 
   async listLeadSightings(leadId: string): Promise<LeadSighting[]> {
     return [...(this.sightings.get(leadId) ?? [])];
+  }
+
+  private fxRates: Record<string, Record<string, number>> = {};
+
+  async listFxRates(): Promise<Record<string, Record<string, number>>> {
+    return { ...this.fxRates };
+  }
+
+  async saveFxRates(month: string, rates: Record<string, number>): Promise<void> {
+    this.fxRates[month] = rates;
   }
 
   async findRecentByContacts(contacts: Contact[], sinceIso: string, limit = 20): Promise<Lead[]> {
@@ -381,7 +391,7 @@ export class MemoryStore implements Store {
       })
       .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
       .slice(0, options.limit)
-      .map((l) => ({ ...l, text: l.text.slice(0, 3000) }));
+      .map((l) => ({ ...l, text: l.text.slice(0, 3000), seenBy: (this.sightings.get(l.id) ?? []).map((s) => s.sourceId) }));
   }
 
   private researchDaily = new Map<string, ResearchDailyRow[]>();

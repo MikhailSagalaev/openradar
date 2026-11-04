@@ -4,7 +4,7 @@
  */
 import { escapeHtml, jsonForScript } from '../core/text.ts';
 import { layout, type AuthDisplay } from '../server/ui.ts';
-import { GRADE_LABELS, MIN_CONFIDENCE, RUB_PER, ROLES } from './derive.ts';
+import { GRADE_LABELS, MIN_CONFIDENCE, ROLES } from './derive.ts';
 
 const MIN_CONFIDENCE_PCT = Math.round(MIN_CONFIDENCE * 100);
 import {
@@ -12,6 +12,7 @@ import {
   MIN_QUARTILES,
   MONTHS_NOM,
   RELIABLE,
+  REPORT_VERSION,
   formatRub,
   formatShare,
   rubMonthToUsdYear,
@@ -42,28 +43,36 @@ interface BarRow {
 const num = (value: number): string => new Intl.NumberFormat('ru-RU').format(value).replace(/ /g, ' ');
 const short = (rub: number): string => (rub >= 1000 ? `${num(Math.round(rub / 1000))} тыс.` : num(rub));
 
-/** Median with the middle half of pay: a dot on a band. Rows below the threshold are left out. */
+/** Median with its 95% interval on the middle half of pay. Rows below the threshold are left out. */
 function rangeChart(rows: BarRow[], options: { unit?: (v: number) => string; caption?: string } = {}): string {
   const shown = rows.filter((row) => row.pay.median !== undefined);
   if (!shown.length) return `<p class="muted small">Пока мало данных: нужна хотя бы ${MIN_MEDIAN} публикаций с оплатой в группе.</p>`;
   const unit = options.unit ?? formatRub;
-  const top = Math.max(...shown.map((row) => row.pay.p75 ?? row.pay.median!)) * 1.08;
+  const top = Math.max(...shown.map((row) => Math.max(row.pay.p75 ?? 0, row.pay.ciHigh ?? 0, row.pay.median!))) * 1.08;
   const pct = (v: number): string => `${Math.min(100, (v / top) * 100).toFixed(2)}%`;
   const body = shown
     .map((row) => {
       const label = row.href ? `<a href="${escapeHtml(row.href)}">${escapeHtml(row.label)}</a>` : escapeHtml(row.label);
       const band = row.pay.p25 !== undefined && row.pay.p75 !== undefined
-        ? `<span class="rs-band" style="left:${pct(row.pay.p25)};width:calc(${pct(row.pay.p75)} - ${pct(row.pay.p25)})" title="${escapeHtml(`${unit(row.pay.p25)} — ${unit(row.pay.p75)}`)}"></span>`
+        ? `<span class="rs-band" style="left:${pct(row.pay.p25)};width:calc(${pct(row.pay.p75)} - ${pct(row.pay.p25)})"></span>`
         : '';
-      return `<div class="rs-row">
+      const ci = row.pay.ciLow !== undefined && row.pay.ciHigh !== undefined
+        ? `<span class="rs-ci" style="left:${pct(row.pay.ciLow)};width:calc(${pct(row.pay.ciHigh)} - ${pct(row.pay.ciLow)})"></span>`
+        : '';
+      const hint = [
+        `Медиана ${unit(row.pay.median!)}`,
+        row.pay.ciLow !== undefined ? `95% интервал: ${unit(row.pay.ciLow)} — ${unit(row.pay.ciHigh!)}` : '',
+        row.pay.p25 !== undefined ? `половина публикаций: ${unit(row.pay.p25)} — ${unit(row.pay.p75!)}` : '',
+      ].filter(Boolean).join('; ');
+      return `<div class="rs-row" title="${escapeHtml(hint)}">
   <div class="rs-label">${label}</div>
-  <div class="rs-track">${band}<span class="rs-dot" style="left:${pct(row.pay.median!)}"></span></div>
+  <div class="rs-track">${band}${ci}<span class="rs-dot" style="left:${pct(row.pay.median!)}"></span></div>
   <div class="rs-val"><b>${escapeHtml(unit(row.pay.median!))}</b><span class="rs-n">n = ${row.pay.n}${row.pay.n < RELIABLE ? ' · мало' : ''}</span></div>
 </div>`;
     })
     .join('');
   return `<div class="rs-chart" role="table">${body}</div>
-<p class="rs-legend"><span class="rs-dot-key"></span> медиана <span class="rs-band-key"></span> половина вакансий (от 25-го до 75-го процентиля)${options.caption ? ` · ${escapeHtml(options.caption)}` : ''}</p>`;
+<p class="rs-legend"><span class="rs-dot-key"></span> медиана <span class="rs-ci-key"></span> 95% интервал медианы <span class="rs-band-key"></span> половина публикаций (от 25-го до 75-го процентиля)${options.caption ? ` · ${escapeHtml(options.caption)}` : ''}</p>`;
 }
 
 function countBars(rows: Array<{ label: string; n: number; note?: string }>): string {
@@ -102,7 +111,7 @@ function weekly(rows: Report['jobs']['weekly']): string {
     .join('')}</div>
 <p class="rs-legend">Столбик — число вакансий за неделю (по понедельникам), подпись — медианная зарплата, тыс. ₽</p>
 <p class="muted small" style="margin-top: 10px; line-height: 1.5; border-left: 2px solid var(--line-strong); padding-left: 10px;">
-  <b>Обратите внимание на структуру выборки:</b> с 26 октября в мониторинг подключены общероссийские платформы (hh.ru, «Работа России»), что значительно увеличило долю региональных и сервисных вакансий и скорректировало общую медиану к уровню рынка РФ (парадокс Симпсона). Для сопоставимости по конкретным специализациям смотрите срезы по направлениям ниже.
+  <b>Состав выборки менялся:</b> новые источники подключались в октябре и ноябре, а в первые дни лента площадки отдаёт и старые вакансии, поднятые в поиске. Поэтому недели здесь не сравниваются между собой. Для динамики смотрите <a href="/research/index">индекс</a>: он считается на постоянной панели источников.
 </p>`;
 }
 
@@ -143,16 +152,16 @@ function renderCartaSection(rows?: Report['cartaCapital'], baseUrl = ''): string
   return `<section class="rs-section">
   <div class="rs-section-head">
     <div>
-      <h2>Объём против денежной массы: где концентрируется капитал</h2>
-      <p class="muted small">Левая колонка — число объявлений (доля потока), правая — доля в совокупном бюджете рынка в %</p>
+      <h2>Заказы на фрилансе: число против суммы бюджетов</h2>
+      <p class="muted small">Русскоязычные заказы с указанным бюджетом. Слева — их число, справа — доля в сумме этих бюджетов. Сумма чувствительна к отдельным крупным заказам.</p>
     </div>
     <button type="button" class="btn ghost btn-sm rs-embed-btn" data-embed="${escapeHtml(embedCode)}">&lt;/&gt; Встроить</button>
   </div>
   <div class="rs-dual-table">
     <div class="rs-dual-head">
       <div>Специализация</div>
-      <div style="text-align:right">Объём (число)</div>
-      <div style="text-align:right">Денежный пул (% капитала)</div>
+      <div style="text-align:right">Заказов</div>
+      <div style="text-align:right">Доля суммы бюджетов</div>
     </div>
     ${rows.map((r) => `<div class="rs-dual-row">
       <div class="rs-dual-name font-medium">${escapeHtml(r.label)}</div>
@@ -166,7 +175,7 @@ function renderCartaSection(rows?: Report['cartaCapital'], baseUrl = ''): string
       </div>
     </div>`).join('')}
   </div>
-  <p class="muted small" style="margin-top:8px;text-align:right">Сумма долей: 100,0% объема (${num(totalN)} объявлений) · 100,0% контрактного капитала</p>
+  <p class="muted small" style="margin-top:8px;text-align:right">Всего ${num(totalN)} заказов с бюджетом</p>
 </section>`;
 }
 
@@ -175,15 +184,15 @@ const signedPct = (value: number): string => (value > 0 ? `+${value}%` : `${valu
 function renderTaskTransformationSection(data?: Report['taskTransformation'], baseUrl = ''): string {
   if (!data) return '';
   const embedCode = `<iframe src="${baseUrl}/embed/task-transformation" width="100%" height="420" frameborder="0"></iframe>`;
-  const sample = data.totalMatched ? ` (выборка: ${num(data.totalMatched)} публикаций)` : '';
+  const sample = data.totalMatched ? ` (выборка: ${num(data.totalMatched)} заказов)` : '';
   const subTitle = data.netShiftPct === undefined
-    ? `Синхронный срез рынка: для сравнения оплаты пока мало публикаций с суммой${sample}`
-    : `Синхронный срез рынка: AI-компетенции ${signedPct(data.netShiftPct)} к базовой оплате${sample}`;
+    ? `Русскоязычные заказы: для сравнения бюджетов пока мало заказов с суммой${sample}`
+    : `Русскоязычные заказы: медианный бюджет новых задач ${signedPct(data.netShiftPct)} к типовым${sample}. Это разница в цене разных работ, а не надбавка за навык.`;
 
   return `<section class="rs-section">
   <div class="rs-section-head">
     <div>
-      <h2>Трансформация задач: давление автоматизации vs новые AI-компетенции</h2>
+      <h2>Типовые задачи и новые AI-задачи в заказах</h2>
       <p class="muted small">${escapeHtml(subTitle)}</p>
     </div>
     <button type="button" class="btn ghost btn-sm rs-embed-btn" data-embed="${escapeHtml(embedCode)}">&lt;/&gt; Встроить</button>
@@ -191,7 +200,7 @@ function renderTaskTransformationSection(data?: Report['taskTransformation'], ba
   <div class="rs-transform-grid">
     <div class="rs-transform-col">
       <div class="rs-transform-title">
-        <span>Задачи под давлением автоматизации</span>
+        <span>Типовые задачи</span>
         <span class="rs-mono text-muted">${data.routineMedian ? `медиана ${formatRub(data.routineMedian)}` : 'базовые задачи'}</span>
       </div>
       <ul class="rs-transform-list">
@@ -203,7 +212,7 @@ function renderTaskTransformationSection(data?: Report['taskTransformation'], ba
     </div>
     <div class="rs-transform-col">
       <div class="rs-transform-title">
-        <span>Новые специализированные компетенции</span>
+        <span>Новые AI-задачи</span>
         <span class="rs-mono rs-diff-up">${data.emergingMedian ? `медиана ${formatRub(data.emergingMedian)}` : 'AI-компетенции'}</span>
       </div>
       <ul class="rs-transform-list">
@@ -407,6 +416,10 @@ export function renderReportPage(options: {
   const roleHref = (slug: string): string | undefined =>
     jobs.roles.some((r) => r.slug === slug) ? `/research/roles/${slug}` : undefined;
   const intlMedian = jobs.intl.median;
+  const usd = report.fx?.USD;
+  const oldMethod = report.version < REPORT_VERSION
+    ? `<p class="notice">Отчёт зафиксирован по прежней версии методики (${report.version}): в нём заказы смешаны с зарубежными, а «денежная масса» складывает зарплаты с бюджетами проектов. Цифры не менялись, чтобы ссылки на них оставались верными, но эти разделы цитировать не стоит. <a href="/research/methodology#versions">Что изменилось</a>.</p>`
+    : '';
 
   const body = `
 <nav class="crumbs" aria-label="Навигация"><a href="/">openradar</a> / ${isLive ? 'Исследования' : `<a href="/research">Исследования</a> / ${escapeHtml(report.period.label)}`}</nav>
@@ -417,11 +430,13 @@ export function renderReportPage(options: {
     : `Отчёт за ${escapeHtml(report.period.label.toLowerCase())}: ${num(totals.posts)} публикаций. Цифры зафиксированы и не меняются.`}
   Источники: биржи фриланса, hh.ru, Хабр Карьера, «Работа России», Telegram-каналы и участники openradar.</p>
 </div><div class="actions"><a class="btn ghost" href="/research/index">Индекс</a><a class="btn ghost" href="/research/methodology">Методика</a><a class="btn ghost" href="/research/dataset.csv">Данные CSV</a></div></div>
+${oldMethod}
 
 <div class="rs-kpis">
   ${kpi(num(totals.jobs), 'вакансий')}
   ${kpi(formatShare(jobs.payShare), 'с указанной зарплатой')}
   ${kpi(jobs.pay.median ? formatRub(jobs.pay.median) : '—', 'медианная зарплата в месяц')}
+  ${jobs.it?.median ? kpi(formatRub(jobs.it.median), 'медиана в IT-вакансиях') : ''}
   ${kpi(num(totals.gigs), 'заказов на фрилансе')}
   ${kpi(gigs.budget.median ? formatRub(gigs.budget.median) : '—', 'медианный бюджет заказа')}
   ${kpi(num(totals.companies), 'работодателей')}
@@ -461,7 +476,7 @@ ${report.findings.length ? `<section class="rs-section">
 <section class="rs-section">
   <h2>География и удалёнка</h2>
   ${rangeChart(sliceRows(jobs.byRegion))}
-  <p class="small">Удалённую работу допускают <b>${formatShare(jobs.remote.share)}</b> вакансий.${jobs.remote.remote.median && jobs.remote.office.median ? ` Медиана: ${formatRub(jobs.remote.remote.median)} с удалёнкой и ${formatRub(jobs.remote.office.median)} без неё.` : ''}</p>
+  <p class="small">Удалённую работу допускают <b>${formatShare(jobs.remote.share)}</b> вакансий.${jobs.remote.remote.median && jobs.remote.office.median ? ` Медиана: ${formatRub(jobs.remote.remote.median)} с удалёнкой и ${formatRub(jobs.remote.office.median)} без неё.` : ''}${jobs.remote.adjusted ? ` Вакансии с удалёнкой в среднем старше по уровню, поэтому важнее другое сравнение: при той же роли и уровне разница ${signedPct(jobs.remote.adjusted.pct)} (сравнение по ${num(jobs.remote.adjusted.n)} вакансиям).` : ''}</p>
 </section>
 
 <section class="rs-section">
@@ -482,6 +497,7 @@ ${report.findings.length ? `<section class="rs-section">
     { label: 'Упоминают ИИ', n: jobs.ai.with.n, pay: jobs.ai.with },
     { label: 'Не упоминают', n: jobs.ai.without.n, pay: jobs.ai.without },
   ])}
+  ${jobs.ai.adjusted ? `<p class="small">При той же роли и уровне разница ${signedPct(jobs.ai.adjusted.pct)} (сравнение по ${num(jobs.ai.adjusted.n)} вакансиям).</p>` : ''}
 </section>
 
 <section class="rs-section">
@@ -496,20 +512,22 @@ ${jobs.companies.length ? `<section class="rs-section">
 
 <section class="rs-section">
   <h2>Фриланс: бюджеты заказов</h2>
-  <p class="small">Бюджет указан в <b>${formatShare(gigs.budgetShare)}</b> заказов. Бюджет — за весь проект; на Kwork это желаемая цена заказчика.</p>
+  <p class="small">Русскоязычные заказы. Бюджет указан в <b>${formatShare(gigs.budgetShare)}</b> из них. Бюджет — за весь проект; на Kwork это желаемая цена заказчика.${totals.intlGigs ? ` Англоязычные заказы (${num(totals.intlGigs)}) сюда не входят.` : ''}</p>
   ${rangeChart(sliceRows(gigs.byCategory.filter((s) => s.key !== 'other')))}
   ${gigs.hourly.median ? `<p class="small">Почасовая ставка в заказах, где она указана: медиана ${formatRub(gigs.hourly.median)} в час (n = ${gigs.hourly.n}).</p>` : ''}
 </section>
 
 ${intlMedian ? `<section class="rs-section">
   <h2>Международная удалёнка</h2>
-  <p class="small">Англоязычные вакансии: зарубежные доски и карьерные страницы компаний (${num(totals.intlJobs ?? 0)} вакансий). Медиана в долларах и евро — <b>$${num(rubMonthToUsdYear(intlMedian))} в год</b> (n = ${jobs.intl.n}). В основные цифры отчёта они не входят.</p>
+  <p class="small">Англоязычные вакансии: зарубежные доски и карьерные страницы компаний (${num(totals.intlJobs ?? 0)} вакансий). Медиана в долларах и евро — <b>$${num(rubMonthToUsdYear(intlMedian, usd))} в год</b> (n = ${jobs.intl.n}). В основные цифры отчёта они не входят.</p>
 </section>` : ''}
 
 <section class="rs-section">
   <h2>Откуда данные</h2>
   ${countBars(totals.platforms.slice(0, 12).map((p) => ({ label: p.key, n: p.n })))}
   ${totals.payOrigins && Object.keys(totals.payOrigins).length ? `<p class="small">Откуда взята оплата: ${Object.entries(totals.payOrigins).map(([origin, n]) => `${escapeHtml(ORIGIN_LABELS[origin] ?? origin)} — ${num(n)}`).join(', ')}.${totals.excluded ? ` Модель отсеяла ${num(totals.excluded)} рекламных и нерелевантных публикаций.` : ''}</p>` : ''}
+  ${jobs.byPlatform?.length ? `<h3>Медиана зависит от площадки</h3><p class="small">На площадках разные вакансии, поэтому общая медиана меняется вместе с составом источников.</p>${rangeChart(sliceRows(jobs.byPlatform))}` : ''}
+  ${jobs.bounds ? `<p class="small">Как указана сумма: вилка — ${num(jobs.bounds.range)}, только «от» — ${num(jobs.bounds.from)}, только «до» — ${num(jobs.bounds.to)}, одна сумма — ${num(jobs.bounds.single)}.${jobs.bounds.rangeMedian ? ` Медиана только по вилкам — ${formatRub(jobs.bounds.rangeMedian)}.` : ''}${totals.foreignPayJobs ? ` Ещё ${num(totals.foreignPayJobs)} русскоязычных вакансий платят в долларах или евро и в рублёвую медиану не входят.` : ''}</p>` : ''}
 </section>
 
 <section class="rs-section prose" style="margin-top:36px">
@@ -589,10 +607,10 @@ export function renderEmbedPage(options: { chartId: string; report: Report; base
   let title = '';
 
   if (chartId === 'carta') {
-    title = 'Объём против денежной массы — openradar';
+    title = 'Заказы: число против суммы бюджетов — openradar';
     chartHtml = renderCartaSection(report.cartaCapital, baseUrl);
   } else if (chartId === 'task-transformation') {
-    title = 'Трансформация контрактных задач — openradar';
+    title = 'Типовые и новые AI-задачи в заказах — openradar';
     chartHtml = renderTaskTransformationSection(report.taskTransformation, baseUrl);
   } else if (chartId === 'bump') {
     title = 'Рейтинг технологий — openradar';
@@ -742,10 +760,6 @@ ${detail.companies.length ? `<section class="rs-section"><h2>Кто нанима
 
 export function renderMethodologyPage(options: { baseUrl: string; version: string; auth?: AuthDisplay }): string {
   const { baseUrl, version } = options;
-  const rates = Object.entries(RUB_PER)
-    .filter(([code]) => !['RUB', 'RUR', 'USDT'].includes(code))
-    .map(([code, rate]) => `${code} — ${String(rate).replace('.', ',')} ₽`)
-    .join(', ');
   const roles = ROLES.filter((r) => r.types.includes('job')).map((r) => r.label).join(', ');
   const body = `
 <nav class="crumbs" aria-label="Навигация"><a href="/">openradar</a> / <a href="/research">Исследования</a> / Методика</nav>
@@ -755,28 +769,31 @@ export function renderMethodologyPage(options: { baseUrl: string; version: strin
   <p>Исследования openradar показывают предложение работодателей и заказчиков: какую оплату указывают в опубликованных вакансиях и заказах. Это не зарплаты, которые люди получают на руки, и не результаты опроса. Такие данные хорошо показывают рынок найма прямо сейчас и его изменения от месяца к месяцу.</p>
 
   <h2>Откуда данные</h2>
-  <p>Вакансии и заказы, опубликованные за период на hh.ru, Хабр Карьере, портале «Работа России», FL.ru, Kwork, Freelancehunt, We Work Remotely, Jobicy, RemoteOK, в Telegram-каналах, на карьерных страницах компаний (публичные API систем найма Greenhouse, Lever и Ashby), а также добавленные участниками. Одна и та же публикация на разных площадках считается один раз: openradar склеивает дубликаты по ссылке, тексту и близости содержания. Публикации, которые участники отметили как мусор или мошенничество, в выборку не входят. Закрытые позже вакансии входят: они были опубликованы в этот период.</p>
+  <p>Вакансии и заказы, опубликованные за период на российских площадках (hh.ru, Хабр Карьера, getmatch, GeekJob, «Работа России», FL.ru, Kwork, Freelancehunt), в Telegram-каналах, на международных досках и на карьерных страницах компаний (публичные API систем найма), а также добавленные участниками. <a href="/sources">Полный список источников</a>. Одна и та же публикация на разных площадках считается один раз: openradar склеивает дубликаты по ссылке, по заголовку вместе с работодателем и по близости текста; копии записываются, но в цифры не входят. Публикации, которые участники отметили как мусор или мошенничество, в выборку не входят. Закрытые позже вакансии входят: они были опубликованы в этот период.</p>
 
   <h2>Русскоязычный и зарубежный рынок</h2>
-  <p>Основные цифры отчёта описывают русскоязычный рынок: публикации, написанные в основном кириллицей. Англоязычные вакансии зарубежных досок и карьерных страниц компаний показаны отдельным разделом и в доли, медианы и списки компаний основной части не входят. Иначе тысячи вакансий крупных зарубежных компаний изменили бы долю удалёнки или список работодателей, не говоря ничего о рынке в России.</p>
+  <p>Основные цифры отчёта описывают русскоязычный рынок: публикации, написанные в основном кириллицей. Это правило одно для вакансий и заказов. Англоязычные публикации показаны отдельно и в доли, медианы и списки компаний основной части не входят. Иначе тысячи вакансий крупных зарубежных компаний изменили бы долю удалёнки или список работодателей, не говоря ничего о рынке в России.</p>
 
   <h2>Как определяется зарплата</h2>
   <ul>
     <li>Сначала берётся разметка страницы вакансии (schema.org JobPosting), затем текст публикации, затем бюджет, который указала площадка.</li>
     <li>В тексте учитываются только суммы рядом с валютой или словами «оклад», «зарплата»: «3–5 лет опыта» зарплатой не станет.</li>
-    <li>Вилка «от 150 000 до 200 000 ₽» даёт одно значение — середину, 175 000 ₽. Если указана одна граница («от 150 000 ₽» или «до 200 000 ₽»), берётся она.</li>
+    <li>Вилка «от 150 000 до 200 000 ₽» даёт одно значение — середину, 175 000 ₽. Если указана одна граница («от 150 000 ₽» или «до 200 000 ₽»), берётся она, хотя это не точная сумма: отчёт показывает, сколько сумм указано каждым способом, и медиану только по вилкам.</li>
     <li>Годовые суммы делятся на 12. Почасовые ставки в месячную статистику не входят.</li>
-    <li>Валюты переводятся в рубли по справочному курсу: ${escapeHtml(rates)}.</li>
-    <li>Зарплаты в вакансиях в долларах и евро (международные доски) показаны отдельно и в рублёвую медиану не входят.</li>
+    <li>Валюты переводятся в рубли по курсу Банка России на первое число месяца публикации. Один курс на месяц нужен, чтобы отчёт можно было воспроизвести.</li>
+    <li>Зарплаты в долларах и евро в рублёвую медиану не входят, в том числе в русскоязычных вакансиях: их число указано в отчёте.</li>
+    <li>Заказ с оплатой в месяц в бюджеты проектов не входит.</li>
     <li>Значения меньше 12 000 ₽ или больше 3 000 000 ₽ в месяц считаются ошибкой разбора и отбрасываются.</li>
     <li>Указана ли сумма до или после вычета налогов, площадки сообщают не всегда, поэтому эти суммы не разделяются.</li>
   </ul>
 
   <h2 id="index">Индекс openradar</h2>
-  <p>Индекс показывает, сколько новых вакансий и заказов появляется каждый день, относительно базового периода, равного 100. Считаются только русскоязычные публикации на постоянной панели площадок: вакансии — hh.ru, Хабр Карьера, getmatch, «Работа России»; заказы — Kwork, FL.ru, Freelancehunt. Источники, подключённые позже, в индекс не входят, иначе он рос бы вместе с нашим охватом, а не с рынком. Значение дня — среднее за 7 дней. База — среднее число публикаций в день за 2–29 ноября 2026 года; до 30 ноября база предварительная и считается по всем дням с 27 октября. Последние два дня пересчитываются, потому что часть публикаций приходит с опозданием. Если площадка панели закроется или изменит ленту, это будет отмечено, а индекс — пересчитан с новой версией.</p>
+  <p>Индекс показывает, сколько новых вакансий и заказов появляется каждый день, относительно базового периода, равного 100. Считаются только русскоязычные публикации, которые увидела постоянная панель лент: две ленты hh.ru, общая лента Хабр Карьеры, getmatch, «Работа России», Kwork, FL.ru, Freelancehunt. Другие ленты тех же площадок и новые источники в индекс не входят, иначе он рос бы вместе с нашим охватом, а не с рынком.</p>
+  <p>Лента площадки отдаёт и старые вакансии, поднятые в поиске. Поэтому на hh.ru и Хабр Карьере новой считается вакансия, номер которой не больше чем примерно на неделю отстаёт от самого нового. В первую неделю наблюдений без этого правила почти половина «новых» вакансий hh.ru была старше недели.</p>
+  <p>Значение дня — среднее за 7 дней. База — среднее число публикаций в день за четыре полные недели с 9 ноября по 6 декабря 2026 года; до 7 декабря база предварительная и считается по всем дням с 30 октября. Индекс не скорректирован на сезонность: для этого нужно хотя бы два года наблюдений, поэтому праздники и конец года видны в нём как есть. Индекс показывает панель лент, а не весь рынок: на hh.ru это небольшая часть всех вакансий. Последние два дня пересчитываются, потому что часть публикаций приходит с опозданием. Если лента панели закроется или изменится, это будет отмечено, а индекс — пересчитан с новой версией.</p>
 
   <h2>Языковая модель</h2>
-  <p>Часть публикаций написана свободным текстом: «оплата 50к», «нужен мидл на питоне». Такие публикации дополнительно читает языковая модель и возвращает строгий набор полей: оплату, направление, уровень, язык, город, компанию. Модель только заполняет пробелы: разметка страницы, правила и бюджет площадки всегда важнее. Ответы с уверенностью ниже ${MIN_CONFIDENCE_PCT}% в статистику не попадают. Ответы модели входят в цифры только после проверки качества: там, где правила или разметка страницы уже знают ответ, ответ модели сверяется с ними, и модель включается, если совпадение не ниже 85% по направлению и оплате на 30 и более сравнениях. Если модель уверена, что публикация — реклама услуг, резюме или спам, публикация исключается из всех цифр. Сколько зарплат получено каждым способом, указано в отчёте в разделе «Откуда данные».</p>
+  <p>Часть публикаций написана свободным текстом: «оплата 50к», «нужен мидл на питоне». Такие публикации дополнительно читает языковая модель и возвращает строгий набор полей: оплату, направление, уровень, язык, город, компанию. Модель только заполняет пробелы: разметка страницы, правила и бюджет площадки всегда важнее. Ответы с уверенностью ниже ${MIN_CONFIDENCE_PCT}% в статистику не попадают. Сейчас ответы модели в цифры не входят. Они войдут только после проверки на выборке постов, размеченных вручную: совпадение с ручной разметкой должно быть не ниже 85% по направлению и оплате. Сверка модели с нашими же правилами для этого не годится, потому что правила тоже ошибаются. Если модель уверена, что публикация — реклама услуг, резюме или спам, публикация исключается из всех цифр. Сколько зарплат получено каждым способом, указано в отчёте в разделе «Откуда данные».</p>
 
   <h2>Направление, уровень, язык</h2>
   <p>Направление определяется по названию вакансии по словарю правил, а если название ничего не говорит — по специализации, которую указала площадка. Направления: ${escapeHtml(roles)}. Уровень (Стажёр, Junior, Middle, Senior, Lead) берётся из названия, из отметки площадки или из тегов вроде #middle. Когда в названии несколько уровней («Middle/Senior»), берётся старший. Язык программирования — из названия, затем из списка навыков.</p>
@@ -785,20 +802,29 @@ export function renderMethodologyPage(options: { baseUrl: string; version: strin
   <h2>Статистика</h2>
   <ul>
     <li>Главная величина — медиана: половина вакансий предлагает больше, половина меньше. В отличие от среднего, она не скачет из-за единичных очень высоких зарплат.</li>
-    <li>Полоса на графиках — от 25-го до 75-го процентиля: в этот диапазон попадает средняя половина вакансий.</li>
-    <li>Медиана показывается, если в группе не меньше ${MIN_MEDIAN} вакансий с оплатой, процентили — от ${MIN_QUARTILES}. Группы меньше ${RELIABLE} помечены «мало»: такие цифры стоит цитировать осторожно.</li>
+    <li>Широкая полоса на графиках — от 25-го до 75-го процентиля: в этот диапазон попадает средняя половина публикаций.</li>
+    <li>Тонкая линия — 95% доверительный интервал медианы, он считается по порядковым статистикам и не требует предположений о распределении. Если интервалы двух групп пересекаются, разницу между ними утверждать нельзя. Интервал учитывает только случайность выборки, но не то, какие вакансии вообще публикуют с зарплатой.</li>
+    <li>Разница между группами (удалёнка и офис, Москва и регионы, упоминание ИИ) показывается при той же роли и уровне: простая разница медиан в основном отражает разный состав групп. Сравниваются пары «роль и уровень», где в каждой группе есть хотя бы три вакансии, вес пары — меньшая из групп, всего нужно не меньше 30 вакансий. Это сравнение, а не доказательство причины.</li>
+    <li>Медиана показывается, если в группе не меньше ${MIN_MEDIAN} публикаций с оплатой, процентили — от ${MIN_QUARTILES}. Группы меньше ${RELIABLE} помечены «мало»: такие цифры стоит цитировать осторожно. В выводы отчёта они не попадают.</li>
     <li>Суммы округлены до тысячи рублей.</li>
   </ul>
+
+  <h2>Заказы: сумма бюджетов и новые AI-задачи</h2>
+  <p>Оба блока считаются только по русскоязычным заказам с бюджетом за проект, чтобы сравнивались одинаковые величины. Доля суммы бюджетов показывает, где сосредоточены указанные деньги, и зависит от отдельных крупных заказов. Сравнение типовых и новых AI-задач — это разница в цене разных работ, а не надбавка за навык.</p>
 
   <h2>Периоды</h2>
   <p>На странице <a href="/research">Исследования</a> — живой отчёт за последние 30 дней, он пересчитывается каждые 15 минут. В начале каждого месяца отчёт за прошедший месяц фиксируется и больше не меняется: на него можно ссылаться.</p>
 
   <h2>Ограничения</h2>
   <ul>
-    <li>В выборке больше фриланса и Telegram-каналов, чем у классических сайтов вакансий, и меньше вакансий без указанной зарплаты на hh.ru: площадка не всегда отдаёт такие вакансии в ленты.</li>
-    <li>Работодатели чаще указывают зарплату в массовых и младших вакансиях, чем в старших, поэтому медиана по всем вакансиям ниже медианы по рынку старших специалистов.</li>
+    <li>Выборка определяется тем, какие ленты мы читаем: это не случайная выборка рынка, и веса к официальной статистике не применяются. Общая медиана меняется вместе с составом источников, поэтому отчёт показывает её по площадкам. Сравнивать месяцы между собой лучше внутри одного направления.</li>
+    <li>Зарплату указывают не случайно. Исследования объявлений в США показывают: оплату реже раскрывают высокооплачиваемые профессии и компании, а в низкооплачиваемых указанные суммы выше реальных. Здесь вероятно то же самое, поэтому отчёт описывает только вакансии с указанной оплатой.</li>
     <li>Бюджет заказа на фрилансе — оценка заказчика до переговоров; на Kwork это желаемая цена.</li>
+    <li>Направление определяется правилами по заголовку, поэтому часть вакансий попадает не туда или в «Другое». Точность правил ещё не измерена на ручной разметке.</li>
   </ul>
+
+  <h2 id="versions">Версии методики</h2>
+  <p><b>Отчёт, версия 2, и индекс, версия 2 (ноябрь 2026).</b> Заказы считаются только по русскоязычному рынку: раньше зарубежные заказы завышали медиану примерно на 40%. «Денежная масса» и сравнение задач считаются внутри одного потока: раньше складывались месячные зарплаты и бюджеты проектов. Курс — Банка России вместо постоянного справочного. Разницы между группами — при той же роли и уровне, у медиан появились интервалы. В индексе панель определяется лентами, а не площадками, поднятые вакансии не считаются новыми, база перенесена на 9 ноября — 6 декабря. Отчёт за октябрь 2026 зафиксирован по версии 1 и не пересчитывался.</p>
 
   <h2>Данные</h2>
   <p>Данные открыты по лицензии ${LICENSE}. <a href="/research/dataset.csv">CSV</a> содержит по строке на публикацию: дату, площадку, направление, уровень, язык, город, компанию, вилку в рублях и навыки. Тексты и контакты в него не входят. Последние сутки в выгрузку не попадают.</p>

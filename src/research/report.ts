@@ -4,13 +4,16 @@
  * behind it (MIN_MEDIAN); quartiles need more (MIN_QUARTILES).
  */
 import { GRADE_LABELS, GRADE_ORDER, OTHER_ROLE, ROLES, RUB_PER, roleDef, type ResearchRecord } from './derive.ts';
-import { classifyTaskTransformation } from './methodology.ts';
 
 /** Bump when the rules change what a figure means; snapshots keep the version they were built with. */
-export const REPORT_VERSION = 1;
+export const REPORT_VERSION = 2;
 export const MIN_MEDIAN = 10;
 export const MIN_QUARTILES = 20;
 export const RELIABLE = 30;
+/** Pay figures compared at equal role and grade need this many matched posts. */
+const MIN_ADJUSTED = 30;
+/** Roles of the IT market: the headline for it leaves sales, support and the like out. */
+const TECH_ROLES = new Set(['ai', '1c', 'security', 'qa', 'devops', 'architect', 'sysadmin', 'data-engineer', 'analyst-system', 'analyst-business', 'analyst-data', 'ml', 'product', 'project', 'gamedev', 'mobile', 'fullstack', 'frontend', 'embedded', 'backend']);
 
 export interface Dist {
   n: number;
@@ -19,6 +22,9 @@ export interface Dist {
   p75?: number;
   iqr?: number;
   trimmedMean?: number;
+  /** 95% confidence interval of the median, from order statistics. */
+  ciLow?: number;
+  ciHigh?: number;
 }
 
 export interface CartaCapitalRow {
@@ -79,6 +85,13 @@ export interface RoleDetail {
   remoteShare: number;
 }
 
+/** A difference in pay between posts of the same role and grade. */
+export interface Adjusted {
+  pct: number;
+  /** Matched posts behind it. */
+  n: number;
+}
+
 export interface Report {
   version: number;
   kind: 'live' | 'month';
@@ -96,19 +109,28 @@ export interface Report {
     payOrigins?: Record<string, number>;
     /** Posts the model found to be ads, resumes or chatter, left out of every figure. */
     excluded?: number;
-    /** English-language vacancies, counted apart from the main figures. */
+    /** English-language vacancies and orders, counted apart from the main figures. */
     intlJobs?: number;
+    intlGigs?: number;
+    /** Russian-language vacancies paying in dollars or euros: outside the rouble median. */
+    foreignPayJobs?: number;
   };
   jobs: {
     pay: Dist;
     payShare: number;
+    /** Vacancies of IT roles only. */
+    it?: Dist;
+    /** How the sums were written, and the median of full ranges alone. */
+    bounds?: { range: number; from: number; to: number; single: number; rangeMedian?: number };
+    byPlatform?: Slice[];
     intl: Dist;
     byRole: Slice[];
     byGrade: Slice[];
     byLanguage: Slice[];
     byRegion: Slice[];
-    remote: { share: number; remote: Dist; office: Dist };
-    ai: { share: number; with: Dist; without: Dist };
+    remote: { share: number; remote: Dist; office: Dist; adjusted?: Adjusted };
+    ai: { share: number; with: Dist; without: Dist; adjusted?: Adjusted };
+    moscowAdjusted?: Adjusted;
     skills: Array<{ skill: string; n: number; pay: Dist }>;
     companies: Array<{ name: string; n: number }>;
     histogram: Array<{ from: number; to?: number; n: number }>;
@@ -117,6 +139,8 @@ export interface Report {
   };
   gigs: { budget: Dist; budgetShare: number; byCategory: Slice[]; hourly: Dist };
   findings: Finding[];
+  /** Roubles per unit at the end of the period (Bank of Russia). */
+  fx?: Record<string, number>;
   cartaCapital?: CartaCapitalRow[];
   taskTransformation?: {
     routine: TaskTransformationItem[];
@@ -153,6 +177,10 @@ export function dist(values: number[]): Dist {
   const n = sorted.length;
   if (n < MIN_MEDIAN) return { n };
   const out: Dist = { n, median: round(quantile(sorted, 0.5)) };
+  // Order statistics give the interval of a median with no assumption about the distribution.
+  const reach = 0.98 * Math.sqrt(n);
+  out.ciLow = round(sorted[Math.max(0, Math.round(n / 2 - reach) - 1)]!);
+  out.ciHigh = round(sorted[Math.min(n - 1, Math.round(n / 2 + 1 + reach) - 1)]!);
   if (n >= MIN_QUARTILES) {
     out.p25 = round(quantile(sorted, 0.25));
     out.p75 = round(quantile(sorted, 0.75));
@@ -167,6 +195,33 @@ export function dist(values: number[]): Dist {
   return out;
 }
 
+/**
+ * The difference in pay between two groups of posts at the same role and grade: a plain gap
+ * mostly shows who the groups are (remote vacancies are more senior). Each role-and-grade cell
+ * with both groups gives a ratio of medians; cells weigh by their smaller group.
+ */
+function adjustedGap(paid: ResearchRecord[], inGroup: (r: ResearchRecord) => boolean): Adjusted | undefined {
+  const cells = new Map<string, { yes: number[]; no: number[] }>();
+  for (const r of paid) {
+    if (r.role === OTHER_ROLE.slug || !r.grade) continue;
+    const key = `${r.role}|${r.grade}`;
+    const cell = cells.get(key) ?? { yes: [], no: [] };
+    (inGroup(r) ? cell.yes : cell.no).push(r.pay!);
+    cells.set(key, cell);
+  }
+  const median = (values: number[]): number => quantile([...values].sort((a, b) => a - b), 0.5);
+  let weight = 0;
+  let sum = 0;
+  for (const { yes, no } of cells.values()) {
+    if (yes.length < 3 || no.length < 3) continue;
+    const w = Math.min(yes.length, no.length);
+    weight += w;
+    sum += w * Math.log(median(yes) / median(no));
+  }
+  return weight >= MIN_ADJUSTED ? { pct: Math.round((Math.exp(sum / weight) - 1) * 100), n: weight } : undefined;
+}
+
+/** Orders with a budget by direction: both shares come from the same posts in the same unit. */
 function computeCartaCapital(records: ResearchRecord[]): CartaCapitalRow[] {
   if (!records.length) return [];
   const groups = new Map<string, { n: number; capital: number }>();
@@ -235,6 +290,9 @@ function computeCartaCapital(records: ResearchRecord[]): CartaCapitalRow[] {
   });
 }
 
+const projectPay = (r: ResearchRecord): boolean => r.payPeriod === 'project' && (r.pay ?? 0) > 0;
+
+/** Russian-language orders only: project budgets compare with project budgets, never with salaries. */
 function computeTaskTransformation(records: ResearchRecord[]) {
   const routineDefs = [
     { key: 'copywriting', label: 'Базовый копирайтинг и рерайт текстов', rx: /копирайт|рерайт|статьи|написание текста|контент|writer/i, roles: ['content'] },
@@ -270,9 +328,9 @@ function computeTaskTransformation(records: ResearchRecord[]) {
       if (d.rx.test(text) || d.roles.includes(r.role)) {
         const cur = emergingStats.get(d.key)!;
         cur.n++;
-        if (r.pay && r.pay > 0) {
-          cur.pays.push(r.pay);
-          allEmergingPays.push(r.pay);
+        if (projectPay(r)) {
+          cur.pays.push(r.pay!);
+          allEmergingPays.push(r.pay!);
         }
         matchedEmerging = true;
         totalMatched++;
@@ -285,9 +343,9 @@ function computeTaskTransformation(records: ResearchRecord[]) {
         if (d.rx.test(text) || d.roles.includes(r.role)) {
           const cur = routineStats.get(d.key)!;
           cur.n++;
-          if (r.pay && r.pay > 0) {
-            cur.pays.push(r.pay);
-            allRoutinePays.push(r.pay);
+          if (projectPay(r)) {
+            cur.pays.push(r.pay!);
+            allRoutinePays.push(r.pay!);
           }
           totalMatched++;
           break;
@@ -300,7 +358,7 @@ function computeTaskTransformation(records: ResearchRecord[]) {
   const emergingMed = allEmergingPays.length ? dist(allEmergingPays).median : undefined;
 
   // No invented baseline: without enough paid posts a comparison is simply not shown.
-  const allPays = records.filter((r) => r.pay && r.pay > 0).map((r) => r.pay!);
+  const allPays = records.filter(projectPay).map((r) => r.pay!);
   const overallMed = allPays.length ? dist(allPays).median : undefined;
   const baseline = routineMed ?? overallMed;
   const pct = (value: number | undefined, base: number | undefined): number | undefined =>
@@ -455,37 +513,26 @@ function computeBumpChart(records: ResearchRecord[]): { quarters: BumpSnapshot[]
   return { quarters, months };
 }
 
-function computeEditorialInsight(records: ResearchRecord[], carta: CartaCapitalRow[], period: Report['period']) {
-  if (!carta.length) {
+/** Fact, contrast, conclusion about order budgets; nothing to say without a real contrast. */
+function computeEditorialInsight(carta: CartaCapitalRow[], period: Report['period']): Report['editorialInsight'] {
+  const named = carta.filter((row) => row.label !== OTHER_ROLE.label && row.label !== 'Другие направления');
+  const total = carta.reduce((sum, row) => sum + row.n, 0);
+  if (named.length < 2 || total < RELIABLE) return undefined;
+  const byCount = [...named].sort((a, b) => b.n - a.n)[0]!;
+  const byMoney = [...named].sort((a, b) => b.capitalShare - a.capitalShare)[0]!;
+  if (byCount.label === byMoney.label) {
     return {
-      fact: 'Рынок труда формируется балансом инженерных и продуктовых специализаций.',
-      contrast: 'Распределение капитала зависит от уровня сложности задач.',
-      conclusion: 'Ключевые бюджеты сосредоточены в специализированных направлениях разработки.',
-      quote: `По данным openradar, структура рынка труда отражает концентрацию капитала в ключевых направлениях (${period.phrase}, выборка: ${records.length} публикаций).`,
+      fact: `Больше всего заказов с бюджетом — в направлении «${byCount.label}» (${formatShare(byCount.nShare)}).`,
+      contrast: `На него же приходится наибольшая сумма бюджетов (${formatShare(byMoney.capitalShare)}).`,
+      conclusion: 'Здесь число заказов и деньги совпадают.',
+      quote: `По данным openradar, на направление «${byCount.label}» приходится ${formatShare(byCount.nShare)} заказов с указанным бюджетом и ${formatShare(byCount.capitalShare)} суммы этих бюджетов (${period.phrase}, выборка: ${total} заказов).`,
     };
   }
-
-  const topVol = [...carta].sort((a, b) => b.n - a.n)[0]!;
-  const topCap = carta[0]!;
-
-  if (topVol.label === topCap.label) {
-    return {
-      fact: `Направление «${topVol.label}» лидирует по объёму объявлений (${formatShare(topVol.nShare)} от общего потока).`,
-      contrast: `Оно же аккумулирует крупнейшую долю контрактного капитала рынка (${formatShare(topCap.capitalShare)}).`,
-      conclusion: 'Спрос работодателей и денежная масса в текущей выборке максимально согласованы.',
-      quote: `По данным openradar, направление «${topVol.label}» формирует ${formatShare(topVol.nShare)} объявлений и ${formatShare(topCap.capitalShare)} совокупного бюджета (${period.phrase}, выборка: ${records.length} публикаций).`,
-    };
-  }
-
-  const top2 = carta.slice(0, 2);
-  const sumTop2Cap = Math.round(top2.reduce((s, r) => s + r.capitalShare, 0) * 10) / 10;
-  const top2Names = top2.map((r) => r.label).join(' и ');
-
   return {
-    fact: `Направление «${topVol.label}» лидирует по числу вакансий и заказов (${formatShare(topVol.nShare)} от общего потока).`,
-    contrast: `Однако наибольшую долю контрактного капитала (${formatShare(sumTop2Cap)}) аккумулируют ${top2Names}.`,
-    conclusion: 'Массовый поток задач формирует численный объём, тогда как основная покупательная способность сконцентрирована в инженерных специализациях.',
-    quote: `По данным openradar, более ${formatShare(sumTop2Cap)} совокупного бюджета рынка сосредоточено в направлениях ${top2Names}, несмотря на долю «${topVol.label}» в объёме (${period.phrase}, выборка: ${records.length} публикаций).`,
+    fact: `Больше всего заказов с бюджетом — в направлении «${byCount.label}» (${formatShare(byCount.nShare)}).`,
+    contrast: `Наибольшая сумма бюджетов — у направления «${byMoney.label}»: ${formatShare(byMoney.capitalShare)} при ${formatShare(byMoney.nShare)} заказов.`,
+    conclusion: 'Частые заказы и крупные бюджеты — разные части рынка. Сумма чувствительна к отдельным крупным заказам.',
+    quote: `По данным openradar, направление «${byMoney.label}» даёт ${formatShare(byMoney.nShare)} заказов с указанным бюджетом и ${formatShare(byMoney.capitalShare)} суммы этих бюджетов; больше всего заказов — у направления «${byCount.label}» (${period.phrase}, выборка: ${total} заказов).`,
   };
 }
 
@@ -568,7 +615,8 @@ export function buildReport(
   // company career pages make the international section.
   const intlScope = records.filter((r) => r.type === 'job' && r.scope === 'intl');
   const jobs = records.filter((r) => r.type === 'job' && r.scope !== 'intl');
-  const gigs = records.filter((r) => r.type === 'gig');
+  // Orders in English (Freelancer.com and the like) are a market of their own, as vacancies are.
+  const gigs = records.filter((r) => r.type === 'gig' && r.scope !== 'intl');
   // One employer often posts the same vacancy in many cities: in pay figures it counts once.
   const repeated = new Set<string>();
   const seen = new Set<string>();
@@ -602,10 +650,11 @@ export function buildReport(
     .filter((detail) => detail.pay.median !== undefined)
     .sort((a, b) => b.withPay - a.withPay);
 
-  const cartaCapital = computeCartaCapital(records);
-  const taskTransformation = computeTaskTransformation(records);
-  const bumpChart = computeBumpChart(records);
-  const editorialInsight = computeEditorialInsight(records, cartaCapital, period);
+  const cartaCapital = computeCartaCapital(gigsPaid);
+  const taskTransformation = computeTaskTransformation(gigs);
+  const bumpChart = computeBumpChart([...jobs, ...gigs]);
+  const editorialInsight = computeEditorialInsight(cartaCapital, period);
+  const twoBounds = ruJobs.filter((r) => r.payMin !== undefined && r.payMax !== undefined && r.payMin !== r.payMax);
 
   const report: Report = {
     version: REPORT_VERSION,
@@ -618,6 +667,8 @@ export function buildReport(
       gigs: gigs.length,
       jobsWithPay: ruJobs.length,
       intlJobs: intlScope.length,
+      intlGigs: records.filter((r) => r.type === 'gig' && r.scope === 'intl').length,
+      foreignPayJobs: jobs.filter((r) => r.market === 'intl' && r.pay !== undefined).length,
       gigsWithBudget: gigsPaid.length,
       companies: new Set(jobs.map((r) => r.company).filter(Boolean)).size,
       platforms: topCounts(records.map((r) => r.platform), 20).map(({ name, n }) => ({ key: name, n })),
@@ -627,6 +678,15 @@ export function buildReport(
     jobs: {
       pay: dist(ruJobs.map((r) => r.pay!)),
       payShare: share(ruJobs.length, jobs.length),
+      it: dist(ruJobs.filter((r) => TECH_ROLES.has(r.role)).map((r) => r.pay!)),
+      bounds: {
+        range: twoBounds.length,
+        from: ruJobs.filter((r) => r.payMin !== undefined && r.payMax === undefined).length,
+        to: ruJobs.filter((r) => r.payMax !== undefined && r.payMin === undefined).length,
+        single: ruJobs.filter((r) => r.payMin !== undefined && r.payMin === r.payMax).length,
+        rangeMedian: dist(twoBounds.map((r) => r.pay!)).median,
+      },
+      byPlatform: sliceBy(jobs, (r) => r.platform, (k) => k, ruPaid).filter((slice) => slice.pay.median !== undefined),
       intl: dist(intlJobs.map((r) => r.pay!)),
       byRole: sliceBy(jobs, (r) => r.role, (k) => roleDef(k)?.label ?? OTHER_ROLE.label, ruPaid),
       byGrade: sliceBy(jobs, (r) => r.grade, (k) => GRADE_LABELS[k as keyof typeof GRADE_LABELS], ruPaid, GRADE_ORDER),
@@ -636,12 +696,15 @@ export function buildReport(
         share: share(jobs.filter((r) => r.remote).length, jobs.length),
         remote: dist(ruJobs.filter((r) => r.remote).map((r) => r.pay!)),
         office: dist(ruJobs.filter((r) => !r.remote).map((r) => r.pay!)),
+        adjusted: adjustedGap(ruJobs, (r) => r.remote),
       },
       ai: {
         share: share(jobs.filter((r) => r.ai).length, jobs.length),
         with: dist(ruJobs.filter((r) => r.ai).map((r) => r.pay!)),
         without: dist(ruJobs.filter((r) => !r.ai).map((r) => r.pay!)),
+        adjusted: adjustedGap(ruJobs, (r) => r.ai),
       },
+      moscowAdjusted: adjustedGap(ruJobs.filter((r) => r.region === 'Москва' || r.region === 'Другие города'), (r) => r.region === 'Москва'),
       skills: skillStats(ruJobs, 20),
       companies: topCounts(jobs.map((r) => r.company), 15),
       histogram: bins,
@@ -686,12 +749,20 @@ export function findingsOf(report: Report): Finding[] {
       quote: `По данным openradar, зарплату указывают в ${formatShare(jobs.payShare)} вакансий ${when} (выборка: ${report.totals.jobs} вакансий).`,
     });
   }
-  const ranked = jobs.roles.filter((r) => r.pay.n >= MIN_MEDIAN);
-  const top = ranked.slice().sort((a, b) => b.pay.median! - a.pay.median!)[0];
-  if (top && ranked.length >= 3) {
+  if (jobs.it?.median !== undefined) {
     out.push({
-      text: `Больше всего в вакансиях предлагают направлению «${top.label}»: медиана ${formatRub(top.pay.median!)}.`,
-      quote: cite(`медианная зарплата в вакансиях направления «${top.label}» составила ${formatRub(top.pay.median!)} в месяц — больше, чем в других направлениях`, top.pay.n),
+      text: `В IT-вакансиях медиана — ${formatRub(jobs.it.median)} в месяц.`,
+      quote: cite(`медианная зарплата в IT-вакансиях с указанной оплатой составила ${formatRub(jobs.it.median)} в месяц`, jobs.it.n),
+    });
+  }
+  const ranked = jobs.roles.filter((r) => r.pay.n >= RELIABLE).sort((a, b) => b.pay.median! - a.pay.median!);
+  const top = ranked[0];
+  if (top && ranked.length >= 3) {
+    // «The highest» needs the next role's interval to end below this one's.
+    const clear = (ranked[1]!.pay.ciHigh ?? Infinity) < (top.pay.ciLow ?? 0);
+    out.push({
+      text: `${clear ? 'Больше всего' : 'Среди самых высоких'} в вакансиях предлагают направлению «${top.label}»: медиана ${formatRub(top.pay.median!)}.`,
+      quote: cite(`медианная зарплата в вакансиях направления «${top.label}» составила ${formatRub(top.pay.median!)} в месяц — ${clear ? 'больше, чем в других направлениях' : 'одна из самых высоких среди направлений'}`, top.pay.n),
     });
   }
   const junior = jobs.byGrade.find((s) => s.key === 'junior')?.pay.median;
@@ -699,36 +770,42 @@ export function findingsOf(report: Report): Finding[] {
   if (junior && senior?.pay.median) {
     const ratio = Math.round((senior.pay.median / junior) * 10) / 10;
     out.push({
-      text: `Senior в среднем предлагают в ${String(ratio).replace('.', ',')} раза больше, чем Junior: ${formatRub(senior.pay.median)} против ${formatRub(junior)}.`,
+      text: `Вакансии Senior предлагают в ${String(ratio).replace('.', ',')} раза больше, чем Junior: ${formatRub(senior.pay.median)} против ${formatRub(junior)}.`,
       quote: cite(`медианная зарплата в вакансиях уровня Senior (${formatRub(senior.pay.median)}) в ${String(ratio).replace('.', ',')} раза выше, чем у Junior (${formatRub(junior)})`, senior.pay.n + (jobs.byGrade.find((s) => s.key === 'junior')?.pay.n ?? 0)),
     });
   }
+  const gap = (a: Adjusted): string => (a.pct === 0 ? 'разницы нет' : `разница ${a.pct > 0 ? '+' : '−'}${Math.abs(a.pct)}%`);
   if (jobs.remote.remote.median && jobs.remote.office.median) {
-    const diff = Math.round(((jobs.remote.remote.median - jobs.remote.office.median) / jobs.remote.office.median) * 100);
+    const adjusted = jobs.remote.adjusted;
     out.push({
-      text: `Удалённую работу допускают ${formatShare(jobs.remote.share)} вакансий; медиана на удалёнке ${formatRub(jobs.remote.remote.median)} против ${formatRub(jobs.remote.office.median)} в офисе.`,
-      quote: cite(`удалённую работу допускают ${formatShare(jobs.remote.share)} вакансий, а медианная зарплата в них ${diff >= 0 ? 'на ' + diff + '% выше' : 'на ' + -diff + '% ниже'}, чем в офисных`, jobs.remote.remote.n + jobs.remote.office.n),
+      text: `Удалённую работу допускают ${formatShare(jobs.remote.share)} вакансий. Медиана ${formatRub(jobs.remote.remote.median)} против ${formatRub(jobs.remote.office.median)} в офисе${adjusted ? `, но при той же роли и уровне ${gap(adjusted)}` : ': сравнивать напрямую нельзя, у этих вакансий другой состав'}.`,
+      quote: adjusted
+        ? cite(`удалённую работу допускают ${formatShare(jobs.remote.share)} вакансий; при той же роли и уровне ${gap(adjusted)} к офисным`, adjusted.n)
+        : `По данным openradar, удалённую работу допускают ${formatShare(jobs.remote.share)} вакансий ${when} (выборка: ${report.totals.jobs} вакансий).`,
     });
   }
   if (jobs.ai.with.median && jobs.ai.without.median) {
-    const diff = Math.round(((jobs.ai.with.median - jobs.ai.without.median) / jobs.ai.without.median) * 100);
+    const adjusted = jobs.ai.adjusted;
     out.push({
-      text: `ИИ и нейросети упоминают ${formatShare(jobs.ai.share)} вакансий; в них предлагают ${formatRub(jobs.ai.with.median)} против ${formatRub(jobs.ai.without.median)} в остальных.`,
-      quote: cite(`ИИ и нейросети упоминаются в ${formatShare(jobs.ai.share)} вакансий, а медианная зарплата в таких вакансиях ${diff >= 0 ? 'на ' + diff + '% выше' : 'на ' + -diff + '% ниже'}, чем в остальных`, jobs.ai.with.n + jobs.ai.without.n),
+      text: `ИИ и нейросети упоминают ${formatShare(jobs.ai.share)} вакансий${adjusted ? `; при той же роли и уровне ${gap(adjusted)} к остальным` : '. Сравнить оплату при той же роли и уровне пока не на чем'}.`,
+      quote: adjusted
+        ? cite(`ИИ и нейросети упоминаются в ${formatShare(jobs.ai.share)} вакансий; при той же роли и уровне ${gap(adjusted)} к остальным`, adjusted.n)
+        : `По данным openradar, ИИ и нейросети упоминаются в ${formatShare(jobs.ai.share)} вакансий ${when} (выборка: ${report.totals.jobs} вакансий).`,
     });
   }
   const moscow = jobs.byRegion.find((s) => s.key === 'Москва')?.pay;
   const regions = jobs.byRegion.find((s) => s.key === 'Другие города')?.pay;
   if (moscow?.median && regions?.median) {
+    const adjusted = jobs.moscowAdjusted;
     out.push({
-      text: `В Москве медиана ${formatRub(moscow.median)}, в других городах (кроме Петербурга) — ${formatRub(regions.median)}.`,
-      quote: cite(`медианная зарплата в московских вакансиях составила ${formatRub(moscow.median)}, в других городах кроме Петербурга — ${formatRub(regions.median)}`, moscow.n + regions.n),
+      text: `В Москве медиана ${formatRub(moscow.median)}, в других городах (кроме Петербурга) — ${formatRub(regions.median)}${adjusted ? `; при той же роли и уровне ${gap(adjusted)}` : ''}.`,
+      quote: cite(`медианная зарплата в московских вакансиях составила ${formatRub(moscow.median)}, в других городах кроме Петербурга — ${formatRub(regions.median)}${adjusted ? `; при той же роли и уровне ${gap(adjusted)}` : ''}`, moscow.n + regions.n),
     });
   }
   if (gigs.budget.median !== undefined) {
     out.push({
       text: `Медианный бюджет заказа на фрилансе — ${formatRub(gigs.budget.median)}; бюджет указан в ${formatShare(gigs.budgetShare)} заказов.`,
-      quote: `По данным openradar, медианный бюджет заказа на фриланс-биржах и в Telegram-каналах ${when} составил ${formatRub(gigs.budget.median)} (выборка: ${gigs.budget.n} заказов).`,
+      quote: `По данным openradar, медианный бюджет русскоязычного заказа на фриланс-биржах и в Telegram-каналах ${when} составил ${formatRub(gigs.budget.median)} (выборка: ${gigs.budget.n} заказов).`,
     });
   }
   return out;
@@ -759,8 +836,8 @@ export function livePeriod(now: Date, days = 30): Report['period'] {
 }
 
 /** USD per year from roubles per month, for the international section. */
-export function rubMonthToUsdYear(rub: number): number {
-  return Math.round((rub * 12) / RUB_PER.USD! / 1000) * 1000;
+export function rubMonthToUsdYear(rub: number, usd: number = RUB_PER.USD!): number {
+  return Math.round((rub * 12) / usd / 1000) * 1000;
 }
 
 export { ROLES };

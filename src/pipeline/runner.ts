@@ -11,6 +11,7 @@ import { recomputeRatings } from '../hub/rating.ts';
 import { parseModerators } from '../hub/service.ts';
 import { ensureMonthlySnapshot, liveReport } from '../research/service.ts';
 import { ensureDailyCounts, openradarIndex } from '../research/index.ts';
+import { ensureFxRates } from '../research/fx.ts';
 import { extractionEnabled, runModelExtraction } from '../research/model.ts';
 import type { UserTelegramRound } from './user-telegram.ts';
 
@@ -100,7 +101,12 @@ export class PollRunner {
       this.runUserTelegramIfDue();
       // Keeps the live research report built, so no visitor waits the seconds it takes.
       const useModel = this.deps.env.RADAR_EXTRACT_APPLY;
-      void liveReport(this.deps.store, new Date(), { useModel })
+      void ensureFxRates(this.deps.store)
+        .catch((error: unknown) => {
+          // The reference rates stand in until the Bank of Russia answers.
+          this.logger.warn('Bank of Russia rates not saved', { error: error instanceof Error ? error.message : String(error) });
+        })
+        .then(() => liveReport(this.deps.store, new Date(), { useModel }))
         .then(() => openradarIndex(this.deps.store, new Date(), { useModel }))
         .catch((error: unknown) => {
           this.logger.warn('research report build failed', { error: error instanceof Error ? error.message : String(error) });

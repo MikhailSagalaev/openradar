@@ -209,7 +209,7 @@ export function registerV2Routes(app: Hono, runtime: Runtime, h: V2Helpers): voi
       })),
       signals: counts,
       // The same post seen at other addresses: boards, aggregators, company pages.
-      sightings: sightings.map((s) => ({ url: s.url, method: s.method, seenAt: s.seenAt })),
+      sightings: sightings.filter((s) => s.url !== lead.url).map((s) => ({ url: s.url, method: s.method, seenAt: s.seenAt })),
     });
   });
 

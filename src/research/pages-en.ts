@@ -6,10 +6,9 @@
  */
 import { escapeHtml, jsonForScript } from '../core/text.ts';
 import { layout, type AuthDisplay } from '../server/ui.ts';
-import { RUB_PER } from './derive.ts';
 import type { IndexSeries, OpenradarIndex } from './index.ts';
 import { lineChart } from './index-page.ts';
-import { MIN_MEDIAN, RELIABLE, rubMonthToUsdYear, type Dist, type Report, type Slice } from './report.ts';
+import { MIN_MEDIAN, RELIABLE, REPORT_VERSION, rubMonthToUsdYear, type Dist, type Report, type Slice } from './report.ts';
 
 const LICENSE = 'CC BY 4.0';
 const REPO_URL = 'https://github.com/MikhailSagalaev/openradar';
@@ -86,14 +85,14 @@ function translate(slices: Slice[], names: Record<string, string>): Slice[] {
 function rangeChart(rows: Array<{ label: string; href?: string; pay: Dist }>, unit: (v: number) => string = rub): string {
   const shown = rows.filter((row) => row.pay.median !== undefined);
   if (!shown.length) return `<p class="muted small">Not enough data yet: a group needs at least ${MIN_MEDIAN} posts with pay.</p>`;
-  const top = Math.max(...shown.map((row) => row.pay.p75 ?? row.pay.median!)) * 1.08;
+  const top = Math.max(...shown.map((row) => Math.max(row.pay.p75 ?? 0, row.pay.ciHigh ?? 0, row.pay.median!))) * 1.08;
   const at = (v: number): string => `${Math.min(100, (v / top) * 100).toFixed(2)}%`;
-  return `<div class="rs-chart" role="table">${shown.map((row) => `<div class="rs-row">
+  return `<div class="rs-chart" role="table">${shown.map((row) => `<div class="rs-row"${row.pay.ciLow !== undefined ? ` title="${escapeHtml(`95% interval: ${unit(row.pay.ciLow)} to ${unit(row.pay.ciHigh!)}`)}"` : ''}>
   <div class="rs-label">${row.href ? `<a href="${escapeHtml(row.href)}">${escapeHtml(row.label)}</a>` : escapeHtml(row.label)}</div>
-  <div class="rs-track">${row.pay.p25 !== undefined && row.pay.p75 !== undefined ? `<span class="rs-band" style="left:${at(row.pay.p25)};width:calc(${at(row.pay.p75)} - ${at(row.pay.p25)})"></span>` : ''}<span class="rs-dot" style="left:${at(row.pay.median!)}"></span></div>
+  <div class="rs-track">${row.pay.p25 !== undefined && row.pay.p75 !== undefined ? `<span class="rs-band" style="left:${at(row.pay.p25)};width:calc(${at(row.pay.p75)} - ${at(row.pay.p25)})"></span>` : ''}${row.pay.ciLow !== undefined && row.pay.ciHigh !== undefined ? `<span class="rs-ci" style="left:${at(row.pay.ciLow)};width:calc(${at(row.pay.ciHigh)} - ${at(row.pay.ciLow)})"></span>` : ''}<span class="rs-dot" style="left:${at(row.pay.median!)}"></span></div>
   <div class="rs-val"><b>${escapeHtml(unit(row.pay.median!))}</b><span class="rs-n">n = ${row.pay.n}${row.pay.n < RELIABLE ? ' · few' : ''}</span></div>
 </div>`).join('')}</div>
-<p class="rs-legend"><span class="rs-dot-key"></span> median <span class="rs-band-key"></span> middle half of posts (25th to 75th percentile)</p>`;
+<p class="rs-legend"><span class="rs-dot-key"></span> median <span class="rs-ci-key"></span> 95% interval of the median <span class="rs-band-key"></span> middle half of posts (25th to 75th percentile)</p>`;
 }
 
 function countBars(rows: Array<{ label: string; n: number }>): string {
@@ -125,7 +124,7 @@ export function findingsEn(report: Report): Array<{ text: string; quote: string 
   if (jobs.pay.median !== undefined) {
     out.push({
       text: `The median monthly pay in Russian-language vacancies that state it is ${rub(jobs.pay.median)}.`,
-      quote: cite(`the median monthly pay offered in Russian-language IT vacancies was ${rub(jobs.pay.median)}`, jobs.pay.n),
+      quote: cite(`the median monthly pay offered in Russian-language vacancies was ${rub(jobs.pay.median)}`, jobs.pay.n),
     });
   }
   if (report.totals.jobs >= RELIABLE) {
@@ -134,11 +133,18 @@ export function findingsEn(report: Report): Array<{ text: string; quote: string 
       quote: `According to openradar, ${pct(jobs.payShare)} of Russian-language vacancies stated the pay ${phrase} (sample: ${num(report.totals.jobs)} vacancies).`,
     });
   }
-  const ranked = jobs.roles.filter((r) => r.pay.n >= MIN_MEDIAN);
-  const top = ranked.slice().sort((a, b) => b.pay.median! - a.pay.median!)[0];
+  if (jobs.it?.median !== undefined) {
+    out.push({ text: `In IT vacancies the median is ${rub(jobs.it.median)} a month.`, quote: cite(`the median monthly pay offered in Russian-language IT vacancies was ${rub(jobs.it.median)}`, jobs.it.n) });
+  }
+  const ranked = jobs.roles.filter((r) => r.pay.n >= RELIABLE).sort((a, b) => b.pay.median! - a.pay.median!);
+  const top = ranked[0];
   if (top && ranked.length >= 3) {
     const name = ROLE_EN[top.slug] ?? top.label;
-    out.push({ text: `${name} vacancies offer the most: a median of ${rub(top.pay.median!)}.`, quote: cite(`${name} vacancies offered the highest median pay, ${rub(top.pay.median!)} a month`, top.pay.n) });
+    const clear = (ranked[1]!.pay.ciHigh ?? Infinity) < (top.pay.ciLow ?? 0);
+    out.push({
+      text: `${name} vacancies offer ${clear ? 'the most' : 'among the most'}: a median of ${rub(top.pay.median!)}.`,
+      quote: cite(`${name} vacancies offered ${clear ? 'the highest' : 'one of the highest'} median pay, ${rub(top.pay.median!)} a month`, top.pay.n),
+    });
   }
   const junior = jobs.byGrade.find((s) => s.key === 'junior')?.pay;
   const senior = jobs.byGrade.find((s) => s.key === 'senior')?.pay;
@@ -149,18 +155,23 @@ export function findingsEn(report: Report): Array<{ text: string; quote: string 
       quote: cite(`the median pay offered to Senior specialists (${rub(senior.median)}) was ${ratio} times that of Juniors (${rub(junior.median)})`, senior.n + junior.n),
     });
   }
+  const gap = (value: number): string => (value === 0 ? 'there is no difference' : `the difference is ${value > 0 ? '+' : '−'}${Math.abs(value)}%`);
   if (jobs.remote.remote.median && jobs.remote.office.median) {
-    const diff = Math.round(((jobs.remote.remote.median - jobs.remote.office.median) / jobs.remote.office.median) * 100);
+    const adjusted = jobs.remote.adjusted;
     out.push({
-      text: `${pct(jobs.remote.share)} of vacancies allow remote work; their median is ${rub(jobs.remote.remote.median)} against ${rub(jobs.remote.office.median)} on site.`,
-      quote: cite(`${pct(jobs.remote.share)} of vacancies allowed remote work, and their median pay was ${Math.abs(diff)}% ${diff >= 0 ? 'higher' : 'lower'} than on site`, jobs.remote.remote.n + jobs.remote.office.n),
+      text: `${pct(jobs.remote.share)} of vacancies allow remote work. The median is ${rub(jobs.remote.remote.median)} against ${rub(jobs.remote.office.median)} on site${adjusted ? `, but at the same role and seniority ${gap(adjusted.pct)}` : ', which compares different vacancies'}.`,
+      quote: adjusted
+        ? cite(`${pct(jobs.remote.share)} of vacancies allowed remote work; at the same role and seniority ${gap(adjusted.pct)} against on-site ones`, adjusted.n)
+        : `According to openradar, ${pct(jobs.remote.share)} of vacancies allowed remote work ${phrase} (sample: ${num(report.totals.jobs)} vacancies).`,
     });
   }
   if (jobs.ai.with.median && jobs.ai.without.median) {
-    const diff = Math.round(((jobs.ai.with.median - jobs.ai.without.median) / jobs.ai.without.median) * 100);
+    const adjusted = jobs.ai.adjusted;
     out.push({
-      text: `${pct(jobs.ai.share)} of vacancies mention AI; they offer ${rub(jobs.ai.with.median)} against ${rub(jobs.ai.without.median)} in the rest.`,
-      quote: cite(`AI was mentioned in ${pct(jobs.ai.share)} of vacancies, and their median pay was ${Math.abs(diff)}% ${diff >= 0 ? 'higher' : 'lower'} than in the rest`, jobs.ai.with.n + jobs.ai.without.n),
+      text: `${pct(jobs.ai.share)} of vacancies mention AI${adjusted ? `; at the same role and seniority ${gap(adjusted.pct)} against the rest` : ''}.`,
+      quote: adjusted
+        ? cite(`AI was mentioned in ${pct(jobs.ai.share)} of vacancies; at the same role and seniority ${gap(adjusted.pct)} against the rest`, adjusted.n)
+        : `According to openradar, AI was mentioned in ${pct(jobs.ai.share)} of vacancies ${phrase} (sample: ${num(report.totals.jobs)} vacancies).`,
     });
   }
   if (gigs.budget.median !== undefined) {
@@ -201,11 +212,13 @@ export function renderReportPageEn(options: { report: Report; baseUrl: string; v
   ${kpi(num(totals.jobs), 'vacancies')}
   ${kpi(pct(jobs.payShare), 'state the pay')}
   ${kpi(jobs.pay.median ? rub(jobs.pay.median) : '—', 'median monthly pay')}
+  ${jobs.it?.median ? kpi(rub(jobs.it.median), 'median in IT vacancies') : ''}
   ${kpi(num(totals.gigs), 'freelance orders')}
   ${kpi(gigs.budget.median ? rub(gigs.budget.median) : '—', 'median order budget')}
   ${kpi(num(totals.companies), 'employers')}
 </div>
-<p class="small muted">Pay is in Russian roubles a month (₽${num(Math.round(RUB_PER.USD!))} ≈ $1 at the reference rate).</p>
+<p class="small muted">Pay is in Russian roubles a month${report.fx?.USD ? ` (₽${num(Math.round(report.fx.USD))} ≈ $1, the Bank of Russia rate)` : ''}.</p>
+${report.version < REPORT_VERSION ? `<p class="notice">This report is frozen under an earlier version of the methodology (${report.version}): its order figures include English-language orders. The figures are kept so that links to them stay true. See the <a href="/en/research/methodology#versions">changes</a>.</p>` : ''}
 
 ${findings.length ? `<section class="rs-section">
   <h2>Key findings</h2>
@@ -219,17 +232,17 @@ ${findings.length ? `<section class="rs-section">
 <section class="rs-section"><h2>By seniority</h2>${rangeChart(translate(jobs.byGrade, GRADE_EN))}</section>
 <section class="rs-section"><h2>By programming language</h2>${rangeChart(jobs.byLanguage)}</section>
 <section class="rs-section"><h2>Location and remote work</h2>${rangeChart(translate(jobs.byRegion, REGION_EN))}
-  <p class="small"><b>${pct(jobs.remote.share)}</b> of vacancies allow remote work.${jobs.remote.remote.median && jobs.remote.office.median ? ` Median: ${rub(jobs.remote.remote.median)} remote, ${rub(jobs.remote.office.median)} on site.` : ''}</p></section>
+  <p class="small"><b>${pct(jobs.remote.share)}</b> of vacancies allow remote work.${jobs.remote.remote.median && jobs.remote.office.median ? ` Median: ${rub(jobs.remote.remote.median)} remote, ${rub(jobs.remote.office.median)} on site.` : ''}${jobs.remote.adjusted ? ` At the same role and seniority the difference is ${jobs.remote.adjusted.pct > 0 ? '+' : ''}${jobs.remote.adjusted.pct}% (${num(jobs.remote.adjusted.n)} vacancies compared).` : ''}</p></section>
 <section class="rs-section"><h2>Skills</h2>${rangeChart(jobs.skills.map((s) => ({ label: s.skill, pay: s.pay })))}</section>
 <section class="rs-section"><h2>AI in vacancies</h2>
   <p class="small">Neural networks, LLMs, GPT, Cursor, Copilot or machine learning appear in <b>${pct(jobs.ai.share)}</b> of vacancies.</p>
   ${rangeChart([{ label: 'Mention AI', pay: jobs.ai.with }, { label: 'Do not', pay: jobs.ai.without }])}</section>
 ${jobs.companies.length ? `<section class="rs-section"><h2>Who hires most</h2>${countBars(jobs.companies.slice(0, 12).map((c) => ({ label: c.name, n: c.n })))}</section>` : ''}
 <section class="rs-section"><h2>Freelance order budgets</h2>
-  <p class="small"><b>${pct(gigs.budgetShare)}</b> of orders state a budget, for the whole project.</p>
+  <p class="small">Russian-language orders. <b>${pct(gigs.budgetShare)}</b> of them state a budget, for the whole project.${totals.intlGigs ? ` English-language orders (${num(totals.intlGigs)}) stay out.` : ''}</p>
   ${rangeChart(translate(gigs.byCategory.filter((s) => s.key !== 'other'), ROLE_EN))}</section>
 ${intlMedian ? `<section class="rs-section"><h2>International remote vacancies</h2>
-  <p class="small">English-language vacancies from international boards and company career pages (${num(totals.intlJobs ?? 0)}): a median of <b>$${num(rubMonthToUsdYear(intlMedian))} a year</b> (n = ${jobs.intl.n}). They stay out of the main figures above.</p></section>` : ''}
+  <p class="small">English-language vacancies from international boards and company career pages (${num(totals.intlJobs ?? 0)}): a median of <b>$${num(rubMonthToUsdYear(intlMedian, report.fx?.USD))} a year</b> (n = ${jobs.intl.n}). They stay out of the main figures above.</p></section>` : ''}
 <section class="rs-section"><h2>Where the data comes from</h2>
   ${countBars(totals.platforms.slice(0, 12).map((p) => ({ label: p.key, n: p.n })))}
   ${totals.payOrigins && Object.keys(totals.payOrigins).length ? `<p class="small">Where the pay was read: ${Object.entries(totals.payOrigins).map(([o, n]) => `${escapeHtml(ORIGIN_EN[o] ?? o)} — ${num(n)}`).join(', ')}.</p>` : ''}</section>
@@ -286,8 +299,8 @@ export function renderIndexPageEn(options: { index: OpenradarIndex; baseUrl: str
   const { index, baseUrl, version } = options;
   const roles = index.roles.filter((r) => r.latest?.index !== undefined);
   const baseNote = index.base.provisional
-    ? `The base is provisional for now: the mean of every day since 27 October (${index.base.days} days). The final base is 2–29 November 2026; it is fixed on 30 November and the values are recalculated.`
-    : `The base is the mean number of posts a day over 2–29 November 2026 (${index.base.days} days) = 100.`;
+    ? `The base is provisional for now: the mean of every day since 30 October (${index.base.days} days). The final base is 9 November to 6 December 2026; it is fixed on 7 December and the values are recalculated.`
+    : `The base is the mean number of posts a day from 9 November to 6 December 2026 (${index.base.days} days) = 100.`;
   const body = `<nav class="crumbs" aria-label="Breadcrumbs"><a href="/">openradar</a> / <a href="/en/research">Research</a> / Index</nav>
 <div class="page-head"><div><h1>The openradar index</h1><p class="muted small">How many new vacancies and freelance orders appear in Russian-language IT and freelance each day, against a base of 100.</p></div>
 <div class="actions"><a class="btn ghost" href="/research/index.csv">CSV</a><a class="btn ghost" href="/research/index.json">JSON</a></div></div>
@@ -299,7 +312,9 @@ ${roles.length ? `<section class="rs-section"><h2>By role</h2><table class="tabl
 ${roles.map((r) => `<tr><td>${escapeHtml(ROLE_EN[r.slug] ?? r.label)}</td><td>${num(r.latest!.index!)}</td><td>${r.weekChange !== undefined ? `${r.weekChange > 0 ? '+' : ''}${r.weekChange}%` : '—'}</td><td>${num(r.base)}</td></tr>`).join('')}
 </tbody></table></section>` : ''}
 <section class="rs-section prose"><h2>How the index works</h2><ul>
-  <li>It counts new Russian-language vacancies and orders published each day on a fixed panel of boards. Sources added later never enter it: it follows the market, not our coverage.</li>
+  <li>It counts new Russian-language vacancies and orders seen by a fixed panel of feeds. Other feeds of the same boards and sources added later never enter it: it follows the market, not our coverage.</li>
+  <li>An old vacancy raised in search is not new: on hh.ru and Habr Career the vacancy number tells them apart.</li>
+  <li>It is not seasonally adjusted: holidays and the year's end show as they are.</li>
   <li>A day's value is the mean of the last seven days. The index is that mean divided by the mean of the base period, times 100.</li>
   <li>Posts flagged as junk or scam, and those the model is sure are not posts, are not counted. The last two days are recalculated as late posts arrive.</li>
 </ul><p>Details are in the <a href="/en/research/methodology#index">methodology</a>. Open data under ${LICENSE}. Cite as: openradar, “The openradar index”. ${escapeHtml(baseUrl)}/en/research/index</p></section>`;
@@ -316,34 +331,41 @@ ${roles.map((r) => `<tr><td>${escapeHtml(ROLE_EN[r.slug] ?? r.label)}</td><td>${
 
 export function renderMethodologyPageEn(options: { baseUrl: string; version: string; auth?: AuthDisplay }): string {
   const { baseUrl, version } = options;
-  const rates = Object.entries(RUB_PER).map(([code, v]) => `${code} ${v}`).join(', ');
   const body = `<nav class="crumbs" aria-label="Breadcrumbs"><a href="/">openradar</a> / <a href="/en/research">Research</a> / Methodology</nav>
 <div class="page-head"><div><h1>Methodology</h1><p class="muted small">How openradar counts pay and budgets.</p></div></div>
 <section class="prose" style="margin-top:0">
   <h2>What is measured</h2>
   <p>openradar research shows what employers and clients offer: the pay stated in published vacancies and orders. It is neither what people take home nor a survey. Such data shows the hiring market as it is now and how it changes month to month.</p>
   <h2>Sources</h2>
-  <p>Vacancies and orders published in the period on hh.ru, Habr Career, the state portal «Работа России», getmatch, FL.ru, Kwork, Freelancehunt, Telegram channels, international boards and company career pages (the public job-board APIs of Greenhouse, Lever and Ashby), and posts added by participants. A post on several boards counts once: openradar merges duplicates by link, text and similarity. Posts flagged as junk or scam are left out.</p>
+  <p>Vacancies and orders published in the period on hh.ru, Habr Career, the state portal «Работа России», getmatch, FL.ru, Kwork, Freelancehunt, Telegram channels, international boards and company career pages (the public job-board APIs of Greenhouse, Lever and Ashby), and posts added by participants. A post on several boards counts once: openradar merges duplicates by link, by title with the employer, and by text similarity. Posts flagged as junk or scam are left out.</p>
   <h2>Russian-language and international market</h2>
-  <p>The main figures describe the Russian-language market: posts written mostly in Cyrillic. English-language vacancies are shown in a section of their own and do not enter the shares, medians or employer lists of the main part.</p>
+  <p>The main figures describe the Russian-language market: posts written mostly in Cyrillic. The rule is the same for vacancies and orders. English-language posts are shown apart and do not enter the shares, medians or employer lists of the main part.</p>
   <h2>How pay is read</h2>
   <ul>
     <li>First the vacancy page markup (schema.org JobPosting), then the post text, then the budget the board states.</li>
     <li>Only sums next to a currency or words like «оклад», «зарплата» count: «3–5 years of experience» never becomes pay.</li>
-    <li>A range gives its middle; a single bound («from ₽150,000») gives itself. Yearly sums are divided by 12; hourly rates stay out of the monthly figures.</li>
-    <li>Currencies are converted to roubles at a reference rate: ${escapeHtml(rates)}.</li>
+    <li>A range gives its middle; a single bound («from ₽150,000») gives itself, which is not an exact sum, so reports show how sums were written and the median of full ranges alone. Yearly sums are divided by 12; hourly rates stay out of the monthly figures.</li>
+    <li>Currencies are converted to roubles at the Bank of Russia rate on the first day of the month of publication.</li>
     <li>Values below ₽12,000 or above ₽3,000,000 a month are parsing errors and dropped.</li>
   </ul>
   <h2 id="index">The openradar index</h2>
-  <p>The index shows how many new vacancies and orders appear each day against a base of 100. Only Russian-language posts on a fixed panel count: vacancies on hh.ru, Habr Career, getmatch and «Работа России»; orders on Kwork, FL.ru and Freelancehunt. A day's value is the seven-day mean. The base is the mean daily count over 2–29 November 2026; until 30 November it is provisional and covers every day since 27 October. The last two days are recalculated as late posts arrive.</p>
+  <p>The index shows how many new vacancies and orders appear each day against a base of 100. Only Russian-language posts seen by a fixed panel of feeds count: two hh.ru feeds, the main Habr Career feed, getmatch, «Работа России», Kwork, FL.ru and Freelancehunt. Vacancies raised in search are not new: on hh.ru and Habr Career a vacancy counts when its number is within about a week of the newest one. A day's value is the seven-day mean. The base is the mean daily count from 9 November to 6 December 2026; until 7 December it is provisional and covers every day since 30 October. The index is not seasonally adjusted and shows the panel, not the whole market. The last two days are recalculated as late posts arrive.</p>
   <h2>Language model</h2>
-  <p>Some posts are free text («pay 50k», «need a mid-level Python dev»). A language model reads them and returns a strict set of fields. It only fills gaps: page markup, rules and the board's budget always win. Answers below 70% confidence are dropped, and the model enters the figures only once it agrees with the rules on at least 85% of role and pay on 30+ comparisons.</p>
+  <p>Some posts are free text («pay 50k», «need a mid-level Python dev»). A language model reads them and returns a strict set of fields. It only fills gaps: page markup, rules and the board's budget always win. Answers below 70% confidence are dropped. The model's answers are not in the figures yet: they enter only after a check against hand-labelled posts, with at least 85% agreement on role and pay.</p>
+  <h2>Statistics</h2>
+  <ul>
+    <li>The median is the main figure. The wide band is the 25th to 75th percentile; the thin line is the 95% confidence interval of the median, from order statistics. Overlapping intervals mean no difference can be claimed. The interval covers sampling only, not which vacancies state pay at all.</li>
+    <li>Gaps between groups (remote and on site, Moscow and the regions, AI mentions) are shown at the same role and seniority: role-and-seniority cells with at least three posts on each side, weighted by the smaller side, at least 30 posts in all. It is a comparison, not proof of a cause.</li>
+  </ul>
   <h2>Limits</h2>
   <ul>
-    <li>Not every vacancy states the pay; the share is shown in each report.</li>
+    <li>The sample is set by the feeds we read: it is not a random sample of the market and is not weighted to official statistics. The overall median moves with the mix of sources, so reports show it by board.</li>
+    <li>Not every vacancy states the pay, and not at random: US research finds high-paying occupations and firms disclose less. The share is shown in each report.</li>
     <li>Whether a sum is before or after tax is not always stated, so the two are not separated.</li>
     <li>A freelance budget is the client's estimate before negotiation.</li>
   </ul>
+  <h2 id="versions">Versions</h2>
+  <p><b>Report version 2 and index version 2 (November 2026).</b> Orders cover the Russian-language market only. Budgets are compared within one stream. Bank of Russia rates replace a fixed reference rate. Group gaps are shown at the same role and seniority, and medians carry intervals. The index panel is a set of feeds, raised vacancies are not new, and the base moved to 9 November – 6 December. The October 2026 report stays frozen under version 1.</p>
   <h2>Data</h2>
   <p>Open under ${LICENSE}. The <a href="/research/dataset.csv">CSV</a> has a row per post with derived fields only: date, board, role, seniority, language, city, company, pay in roubles, skills and market scope.</p>
 </section>`;

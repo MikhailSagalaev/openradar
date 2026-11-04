@@ -1870,7 +1870,7 @@ export function createApp(runtime: Runtime): Hono {
       skill: lead.skills?.[0],
       ...filterOptions({ sort: 'score', remote: false }),
     })).filter((item) => item.id !== lead.id).slice(0, 4);
-    const sightings = (await runtime.store.listLeadSightings?.(lead.id)) ?? [];
+    const sightings = ((await runtime.store.listLeadSightings?.(lead.id)) ?? []).filter((s) => s.url !== lead.url);
     return c.html(
       renderLeadPage({
         similar,
