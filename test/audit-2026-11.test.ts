@@ -216,6 +216,8 @@ describe('research pay', () => {
     expect(normalizePay({ min: 3_000_000, max: 3_000_000, currency: 'RUB', period: 'month', origin: 'text' }, 'job')).toBeUndefined();
     expect(normalizePay({ min: 400_000, max: 5_000_000, currency: 'RUB', period: 'month', origin: 'text' }, 'job')?.point).toBe(400_000);
     expect(normalizePay({ min: 2_000_000, max: 2_000_000, currency: 'RUB', period: 'month', origin: 'page' }, 'job')?.point).toBe(2_000_000);
+    expect(normalizePay({ min: 5_000_000, max: 5_000_000, currency: 'RUB', period: 'project', origin: 'text' }, 'gig')).toBeUndefined();
+    expect(normalizePay({ min: 5_000_000, max: 5_000_000, currency: 'RUB', period: 'project', origin: 'budget' }, 'gig')?.point).toBe(5_000_000);
   });
 
   it('leaves ads and roundups out', () => {
@@ -317,6 +319,13 @@ describe('repair of stored leads', () => {
     const lead = await store.getLead(id);
     expect(lead?.budget).toBe(2000);
     expect(lead?.normalizedUsdMax).toBe(44);
+  });
+
+  it('reads a channel post again whatever figure it stored', async () => {
+    const text = 'Запуски принесли 1,3 млн ₽ выручки. При чистой прибыли 900 000 ₽ ваши 5% составят 45 000 ₽';
+    const { store, id } = await stored({ type: 'gig', title: 'Контент-менеджер', text, budget: 900000, currency: 'RUB', rawSalary: '900000 RUB', normalizedUsdMax: 11172 });
+    await rescoreLeads(store, { money: true });
+    expect((await store.getLead(id))?.budget).toBeUndefined();
   });
 
   it('drops a skill that came from a mention', async () => {

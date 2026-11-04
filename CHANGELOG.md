@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.45.3
+
+- Research: an order's sum read from free text stops at 1 000 000 ₽, as a month's pay does. One Telegram post with 5 000 000 ₽ made «Видео и анимация» the leader by the sum of budgets.
+- `requality --money` reads every channel post again: they have no budget field, so all their figures came from the text.
+
 ## 0.45.2
 
 - A job board's posts are vacancies whatever the adapter says: the RSS adapter called them orders, so about 3 000 Himalayas posts a week and their yearly pay stood among the orders, on top of «Сначала дорогие».

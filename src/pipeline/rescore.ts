@@ -30,13 +30,14 @@ const GENERATED_SALARY = /^\d+(?:–\d+)? [A-Z]{3,4}(?: per year)?$/;
  * again, so a figure that turns out not to be pay goes; a budget from the board's own field
  * stays and only gets today's rates.
  */
-function moneyOf(lead: Lead, type: LeadType, flags: QualityFlag[]): LeadMoney {
+function moneyOf(lead: Lead, type: LeadType, flags: QualityFlag[], source: SourceRecord): LeadMoney {
   const post = `${lead.title}\n${lead.text}`;
   const found = extractTechSkills(post, 12);
   const skills = Array.from(new Set([...(lead.skills ?? []).filter((skill) => !MENTION_SKILLS.has(skill) || found.includes(skill)), ...found]));
   if (offersNoPay(flags)) return { skills };
 
-  const fromText = lead.budget !== undefined && extractBudgetAndCurrency(post, { keepNotPay: true }).budget === lead.budget;
+  // A Telegram post has no budget field: whatever it holds came from its text. A webhook may send one.
+  const fromText = lead.budget !== undefined && (source.kind.startsWith('telegram') || extractBudgetAndCurrency(post, { keepNotPay: true }).budget === lead.budget);
   const read = fromText ? extractBudgetAndCurrency(post) : undefined;
   const budget = fromText ? read!.budget : lead.budget;
   const currency = (fromText ? read!.currency : undefined) ?? lead.currency;
@@ -118,7 +119,7 @@ export async function rescoreLeads(
       requalified += 1;
     }
     if (options.money && store.updateLeadMoney) {
-      const money = moneyOf(lead, quality.type, quality.flags);
+      const money = moneyOf(lead, quality.type, quality.flags, source);
       const same = money.budget === lead.budget && money.normalizedUsdMax === lead.normalizedUsdMax && money.normalizedUsdMin === lead.normalizedUsdMin
         && money.rawSalary === lead.rawSalary && money.skills.join() === (lead.skills ?? []).join();
       if (!same) {
