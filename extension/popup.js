@@ -630,6 +630,13 @@ function sessionLine(board) {
     return line;
   }
   line.textContent = state === 'signed_in' ? `${t('collectorSignedIn')}. ${board.hint[collectorLang()]}` : board.hint[collectorLang()];
+  if (board.help) {
+    const link = document.createElement('a');
+    link.href = board.help;
+    link.target = '_blank';
+    link.textContent = t('collectorHow');
+    line.append(' ', link);
+  }
   return line;
 }
 

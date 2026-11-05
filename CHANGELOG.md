@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.51.0
+
+- **Participants.** `/network` opens from the menu and names people: the rating links to a public page `/u/<handle>` with their posts, points and tier. Anyone can leave the rating in the profile.
+- Extension 0.20.0: a link on how filters work; a time offset no longer lands in a Profi.ru city.
+- [docs/GIG_SOURCES.md](docs/GIG_SOURCES.md): how to add a board, and an issue template for proposing one.
+
 ## 0.50.3
 
 - A walk reads Yandex and Profi.ru first, and YouDo has one budget of 200 tasks for the whole walk. The YouDo lists of eleven cities held the other boards back for half an hour.

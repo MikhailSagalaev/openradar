@@ -51,7 +51,8 @@ async function readProfiBoard(scrolls) {
     const body = card.querySelector('p')?.innerText.trim() ?? '';
     const price = /(\d[\d\s]*)\s*₽/.exec(card.querySelector('[aria-hidden="true"]')?.innerText ?? '')?.[1];
     const place = Array.from(card.querySelectorAll('li')).map((li) => li.innerText.trim()).find((text) => /·|Дистанционно|^[А-ЯЁ]/.test(text)) ?? '';
-    const parts = place.split('·').map((part) => part.trim()).filter(Boolean);
+    // «Калининград -1 час»: the difference from the reader's clock is no part of the city.
+    const parts = place.replace(/\s*[+-]\d+\s*час\S*/, '').split('·').map((part) => part.trim()).filter(Boolean);
     return {
       id,
       url: `https://profi.ru/backoffice/n.php?o=${id}`,

@@ -78,6 +78,7 @@ import {
   findCatalogEntry,
   renderAboutPage,
   renderNetworkPage,
+  renderParticipantPage,
   renderCatalogIndex,
   renderContributePage,
   renderTrustPage,
@@ -1299,6 +1300,13 @@ export function createApp(runtime: Runtime): Hono {
     );
   });
 
+  /** Each account's web key, to put a name on a line of the rating. */
+  const accountsByKey = async (): Promise<Map<string, UserRecord>> => {
+    const secret = webKeySecret(runtime);
+    const users = secret ? await runtime.store.listUsers?.(5000) : undefined;
+    return new Map((users ?? []).map((user) => [webPubkey(secret!, user.id), user]));
+  };
+
   /** Where the account's orders come from: its Telegram channels and, for the owner, the boards. */
   const sourceActivityFor = async (user: UserRecord): Promise<ProfilePageData['sourcesActivity']> => {
     const store = runtime.store;
@@ -1347,6 +1355,7 @@ export function createApp(runtime: Runtime): Hono {
     return (
       renderProfilePage({
         sourcesActivity,
+        publicProfile: profileUser ? { handle: profileUser.handle, on: profileUser.publicProfile !== false } : undefined,
         version: VERSION,
         auth: await getAuthDisplay(c, runtime),
         lang: resolveLang(c),
@@ -2931,8 +2940,12 @@ export function createApp(runtime: Runtime): Hono {
       .slice(0, 30);
     const moderators = parseModerators(runtime.env.RADAR_MODERATORS);
     const participants = [];
+    const accounts = await accountsByKey();
     for (const [pubkey, points] of sums) {
       const participant = await runtime.store.getParticipant(pubkey);
+      const account = accounts.get(pubkey) ?? (participant?.githubUserId ? await runtime.store.getUserById(participant.githubUserId) ?? undefined : undefined);
+      const shown = account && account.publicProfile !== false ? account : undefined;
+      const posts = (await runtime.store.listObservationsByPubkey(pubkey, 1000)).length;
       const profileName = participant?.profile?.name;
       const profileAbout = participant?.profile?.about;
       participants.push({
@@ -2940,6 +2953,8 @@ export function createApp(runtime: Runtime): Hono {
         name: typeof profileName === 'string' && profileName.trim() ? profileName.trim() : undefined,
         about: typeof profileAbout === 'string' && profileAbout.trim() ? profileAbout.trim() : undefined,
         points,
+        posts,
+        handle: shown?.handle,
         tier: tierFor({ rating: points, moderator: moderators.has(pubkey), githubLinked: Boolean(participant?.githubUserId) }),
       });
     }
@@ -2975,6 +2990,50 @@ export function createApp(runtime: Runtime): Hono {
     c.header('Cache-Control', 'public, max-age=600');
     return c.html(body);
   });
+  // A participant's public page: what they brought to the shared base. Only public posts,
+  // and nothing for someone who left the rating.
+  app.get('/u/:handle', rateLimit({ windowMs: 60_000, max: 60 }), async (c) => {
+    const lang = resolveLang(c);
+    const user = await runtime.store.getUserByHandle?.(c.req.param('handle') as string);
+    if (!user || user.publicProfile === false) return c.html(renderNotFound(VERSION, lang, await getAuthDisplay(c, runtime)), 404);
+    const since = new Date(Date.now() - RATING_WINDOW_MS).toISOString();
+    const ledger = await runtime.store.sumLedger(since);
+    const secret = webKeySecret(runtime);
+    const keys = new Set(secret ? [webPubkey(secret, user.id)] : []);
+    for (const pubkey of ledger.keys()) {
+      if (/^[0-9a-f]{64}$/.test(pubkey) && (await runtime.store.getParticipant(pubkey))?.githubUserId === user.id) keys.add(pubkey);
+    }
+    const observations = (await Promise.all([...keys].map((key) => runtime.store.listObservationsByPubkey(key, 1000)))).flat()
+      .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+    const posts: Lead[] = [];
+    for (const observation of observations) {
+      if (posts.length >= 15) break;
+      const lead = await runtime.store.getLead(observation.leadId);
+      if (lead && viewerCanSeeLead({ tier: 'guest' }, lead, runtime.access) && (lead.state ?? 'active') === 'active') posts.push(projectContacts(lead, { tier: 'guest' }));
+    }
+    return c.html(renderParticipantPage({
+      baseUrl: seoBaseUrl(c),
+      version: VERSION,
+      auth: await getAuthDisplay(c, runtime),
+      lang,
+      handle: user.handle,
+      since: user.createdAt,
+      points: [...keys].reduce((total, key) => total + (ledger.get(key) ?? 0), 0),
+      total: observations.length,
+      posts,
+      tier: tierFor({ rating: [...keys].reduce((total, key) => total + (ledger.get(key) ?? 0), 0), moderator: false, githubLinked: true }),
+    }));
+  });
+
+  app.post('/me/public', async (c) => {
+    const user = await currentUser(c, runtime);
+    if (!user) return c.redirect('/login?returnTo=/me');
+    const form = await c.req.parseBody();
+    await runtime.store.setUserPublic?.(user.id, form.public === '1');
+    networkCache = undefined;
+    return c.redirect('/me#public-profile');
+  });
+
   app.get('/faq', async (c) => c.html(renderFaqPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c) })));
   app.get('/catalog', async (c) => c.html(renderCatalogIndex({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c) })));
 

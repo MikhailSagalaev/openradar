@@ -770,12 +770,42 @@ ${ldScripts(faqJsonLd(SITE_FAQ), breadcrumbsJsonLd(baseUrl, [['openradar', '/'],
 
 /** A plain-text map of the site for AI assistants (llmstxt.org). */
 /** Participants and sources of the last 30 days: the network made visible. */
+/** A participant's public page: the rating, the number of posts and the latest of them. */
+export function renderParticipantPage(options: {
+  baseUrl: string;
+  version: string;
+  auth?: AuthDisplay;
+  lang?: SupportedLang;
+  handle: string;
+  since: string;
+  points: number;
+  total: number;
+  tier: string;
+  posts: Lead[];
+}): string {
+  const ru = options.lang !== 'en';
+  const handle = escapeHtml(options.handle);
+  const rows = options.posts.map((lead) => leadRow(lead, options.baseUrl)).join('\n');
+  const body = `
+<nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/network">${ru ? 'Участники' : 'Participants'}</a> / @${handle}</nav>
+<div class="page-head"><div>
+  <h1>@${handle}</h1>
+  <p class="muted small"><a href="https://github.com/${handle}" rel="noopener nofollow">GitHub</a> · ${ru ? 'в openradar с' : 'on openradar since'} ${escapeHtml(options.since.slice(0, 10))}</p>
+</div></div>
+<section class="profile">
+  <p>${ru ? 'Постов принесено' : 'Posts brought'}: <strong>${options.total}</strong> · ${ru ? 'очков за 30 дней' : 'points over 30 days'}: <strong>${Math.round(options.points * 10)}</strong> · ${ru ? 'уровень' : 'tier'}: <strong>${escapeHtml(options.tier)}</strong></p>
+  <h2>${ru ? 'Последние публикации' : 'Latest posts'}</h2>
+  ${rows ? `<div class="list">${rows}</div>` : `<p class="muted">${ru ? 'Пока нет публикаций, открытых всем.' : 'No public posts yet.'}</p>`}
+</section>`;
+  return layout({ title: `@${options.handle} · openradar`, version: options.version, body, auth: options.auth, lang: options.lang });
+}
+
 export function renderNetworkPage(options: {
   baseUrl: string;
   version: string;
   auth?: AuthDisplay;
   lang?: SupportedLang;
-  participants: Array<{ shortPubkey: string; name?: string; about?: string; points: number; tier: string }>;
+  participants: Array<{ shortPubkey: string; name?: string; about?: string; handle?: string; posts: number; points: number; tier: string }>;
   sources: Array<{ title: string; leads: number; href?: string }>;
   windowDays: number;
 }): string {
@@ -785,7 +815,8 @@ export function renderNetworkPage(options: {
   const totalLeads = options.sources.reduce((sum, s) => sum + s.leads, 0);
 
   const participantRows = options.participants.map((p, index) => {
-    const label = p.name ? escapeHtml(p.name) : `<code>${escapeHtml(p.shortPubkey)}</code>`;
+    const name = p.handle ? `@${escapeHtml(p.handle)}` : p.name ? escapeHtml(p.name) : `<code>${escapeHtml(p.shortPubkey)}</code>`;
+    const label = p.handle ? `<a href="/u/${escapeHtml(encodeURIComponent(p.handle))}">${name}</a>` : name;
     return `<tr><td>${index + 1}</td><td>${label}${p.about ? `<div class="muted small">${escapeHtml(p.about.slice(0, 120))}</div>` : ''}</td><td class="num">${p.points % 1 === 0 ? p.points : p.points.toFixed(1)}</td><td>${escapeHtml(p.tier)}</td></tr>`;
   }).join('\n');
 
@@ -808,7 +839,7 @@ export function renderNetworkPage(options: {
     <h2>${ru ? 'Участники' : 'Participants'}</h2>
     ${options.participants.length ? `
     <table class="profile-table">
-      <thead><tr><th>#</th><th>${ru ? 'Участник' : 'Participant'}</th><th>${ru ? 'Очки' : 'Points'}</th><th>${ru ? 'Уровень' : 'Tier'}</th></tr></thead>
+      <thead><tr><th>#</th><th>${ru ? 'Участник' : 'Participant'}</th><th>${ru ? 'Постов' : 'Posts'}</th><th>${ru ? 'Очки' : 'Points'}</th><th>${ru ? 'Уровень' : 'Tier'}</th></tr></thead>
       <tbody>${participantRows}</tbody>
     </table>
     <p class="muted small">${ru

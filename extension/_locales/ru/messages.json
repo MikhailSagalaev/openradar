@@ -447,5 +447,8 @@
         "content": "$1"
       }
     }
+  },
+  "collectorHow": {
+    "message": "Как настроить"
   }
 }

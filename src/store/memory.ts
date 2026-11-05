@@ -1180,6 +1180,20 @@ export class MemoryStore implements Store {
   private decisions = new Map<string, LeadDecision>();
   private contactFlags = new Map<string, ContactFlag>();
 
+  async getUserByHandle(handle: string): Promise<UserRecord | null> {
+    const user = [...this.users.values()].find((item) => item.handle.toLowerCase() === handle.toLowerCase());
+    return user ? { ...user } : null;
+  }
+
+  async listUsers(limit: number): Promise<UserRecord[]> {
+    return [...this.users.values()].slice(0, limit).map((user) => ({ ...user }));
+  }
+
+  async setUserPublic(id: number, value: boolean): Promise<void> {
+    const user = this.users.get(id);
+    if (user) user.publicProfile = value;
+  }
+
   async getUserById(id: number): Promise<UserRecord | null> {
     const user = this.users.get(id);
     return user ? { ...user } : null;
