@@ -374,39 +374,14 @@ function renderAccount(account) {
 }
 
 /**
- * GitHub sign-in on the hub. Through the chrome.identity window where the browser has it;
- * otherwise in a tab that the hub sends back to the extension's connected.html.
+ * GitHub sign-in on the hub,
+ * in a tab that the hub sends back to the extension's connected.html, which closes itself.
  */
 async function signIn() {
   const base = normalizeBase(fields.marketBase.value) || DEFAULT_MARKET_BASE;
-  const button = document.getElementById('sign-in');
-  button.disabled = true;
-  try {
-    if (!chrome.identity?.launchWebAuthFlow) throw new Error('identity API is not available');
-    const redirect = chrome.identity.getRedirectURL();
-    const result = await chrome.identity.launchWebAuthFlow({
-      url: `${base}/extension/connect?redirect_uri=${encodeURIComponent(redirect)}`,
-      interactive: true,
-    });
-    const params = new URLSearchParams(new URL(result).hash.slice(1));
-    const token = params.get('token');
-    if (!token || !token.startsWith('ext_')) throw new Error(t('errNoToken'));
-    const account = { token, handle: params.get('handle') || '', base: normalizeBase(params.get('base') || base) };
-    await chrome.storage.local.set({ radarAccount: account });
-    renderAccount(account);
-    setStatus(t('signedIn'), 'ok');
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (/did not approve|user closed|canceled|cancelled/i.test(message)) {
-      setStatus(t('signInCancelled'), '');
-      return;
-    }
-    // No chrome.identity window in this browser: sign in in a tab instead.
-    const back = chrome.runtime.getURL('connected.html');
-    await chrome.tabs.create({ url: `${base}/extension/connect?redirect_uri=${encodeURIComponent(back)}` });
-  } finally {
-    button.disabled = false;
-  }
+  const back = chrome.runtime.getURL('connected.html');
+  await chrome.tabs.create({ url: `${base}/extension/connect?redirect_uri=${encodeURIComponent(back)}` });
+  window.close();
 }
 
 async function signOut() {
@@ -586,44 +561,140 @@ loadConfig().catch((error) => setStatus(String(error), 'err'));
 initPreview();
 checkUpdate().catch(() => {});
 
-// Order boards behind a login: see collector.js.
-const COLLECTOR_ORIGINS = ['https://profi.ru/*', 'https://uslugi.yandex.ru/*', 'https://youdo.com/*'];
+// Order boards behind a login: boards.js says what exists, collector.js reads them.
 const collector = {
+  box: document.getElementById('collector'),
+  boards: document.getElementById('collector-boards'),
   now: document.getElementById('collector-now'),
-  save: document.getElementById('collector-save'),
-  urls: document.getElementById('collector-urls'),
   auto: document.getElementById('collector-auto'),
   minutes: document.getElementById('collector-minutes'),
   status: document.getElementById('collector-status'),
 };
+const collectorLang = () => uiLanguage();
+let collectorSettings = { auto: false, minutes: 30, boards: {} };
 
-chrome.storage.local.get(['radarCollector', 'radarCollectorLast']).then(({ radarCollector: saved, radarCollectorLast: last }) => {
-  collector.urls.value = (saved?.urls ?? []).join('\n');
-  collector.auto.checked = Boolean(saved?.auto);
-  collector.minutes.value = saved?.minutes ?? 30;
-  if (last) collector.status.textContent = t('collectorLast', [String(last.pages), String(last.found), String(last.inserted), String(last.errors)]);
-});
-
-collector.save.addEventListener('click', async () => {
-  // Asked on a click: the browser allows the request only then.
-  if (!await chrome.permissions.request({ origins: COLLECTOR_ORIGINS })) {
-    collector.status.textContent = t('collectorDenied');
-    return;
-  }
-  const urls = collector.urls.value.split(/\s+/).filter(Boolean);
-  await chrome.storage.local.set({ radarCollector: { urls, auto: collector.auto.checked, minutes: Number(collector.minutes.value) || 30 } });
+async function saveCollector() {
+  await chrome.storage.local.set({ radarCollector: collectorSettings });
   await chrome.runtime.sendMessage({ type: 'collector-schedule' });
-  collector.status.textContent = t('collectorSaved');
-});
+}
 
-collector.now.addEventListener('click', async () => {
-  if (!await chrome.permissions.request({ origins: COLLECTOR_ORIGINS })) {
-    collector.status.textContent = t('collectorDenied');
-    return;
+function collectorAgo(iso) {
+  const minutes = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
+  if (minutes < 60) return t('collectorAgoMin', [String(minutes)]);
+  return t('collectorAgoHour', [String(Math.round(minutes / 60))]);
+}
+
+function boardStatusLine(board, status) {
+  if (!status) return '';
+  if (status.error === 'sign_in') return t('collectorSignIn');
+  if (status.error) return t('collectorFailed', [status.error]);
+  return t('collectorLast', [collectorAgo(status.at), String(status.found), String(status.inserted)]);
+}
+
+function renderBoards(statuses) {
+  collector.boards.textContent = '';
+  for (const board of BOARDS) {
+    const chosen = collectorSettings.boards[board.id] ?? {};
+    const row = document.createElement('div');
+    row.className = 'board';
+    const head = document.createElement('label');
+    head.className = 'switch-row board-head';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = Boolean(chosen.on);
+    input.addEventListener('change', async () => {
+      // Asked on the click itself: the browser allows the request only then.
+      if (input.checked && !await chrome.permissions.request({ origins: [board.origin] })) {
+        input.checked = false;
+        collector.status.textContent = t('collectorDenied');
+        return;
+      }
+      collectorSettings.boards[board.id] = { ...chosen, on: input.checked };
+      await saveCollector();
+      renderBoards(statuses);
+    });
+    const knob = document.createElement('span');
+    knob.className = 'switch';
+    const name = document.createElement('strong');
+    name.textContent = board.title;
+    head.append(input, knob, name);
+    row.append(head);
+
+    const hint = document.createElement('div');
+    hint.className = 'board-hint';
+    hint.textContent = boardStatusLine(board, statuses?.[board.id]) || board.hint[collectorLang()];
+    row.append(hint);
+    if (statuses?.[board.id]?.error === 'sign_in') {
+      const link = document.createElement('a');
+      link.href = board.open;
+      link.target = '_blank';
+      link.textContent = t('collectorOpenBoard');
+      hint.append(' ', link);
+    }
+
+    if (input.checked) {
+      for (const filter of board.filters) {
+        const group = document.createElement('div');
+        group.className = 'chips';
+        const label = document.createElement('span');
+        label.className = 'chips-title';
+        label.textContent = filter.title[collectorLang()];
+        group.append(label);
+        for (const [value, text] of Object.entries(filter.options)) {
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          const picked = (chosen[filter.key] ?? []).includes(value);
+          chip.className = picked ? 'chip on' : 'chip';
+          chip.setAttribute('aria-pressed', String(picked));
+          chip.textContent = text[collectorLang()];
+          chip.addEventListener('click', async () => {
+            const list = new Set(chosen[filter.key] ?? []);
+            if (list.has(value)) list.delete(value);
+            else list.add(value);
+            collectorSettings.boards[board.id] = { ...chosen, [filter.key]: [...list] };
+            await saveCollector();
+            renderBoards(statuses);
+          });
+          group.append(chip);
+        }
+        row.append(group);
+      }
+    }
+    collector.boards.append(row);
   }
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  const result = await chrome.runtime.sendMessage({ type: 'collector-tab', tabId: tab.id, url: tab.url });
-  collector.status.textContent = result?.ok === false
-    ? t('collectorFailed', [String(result.error)])
-    : t('collectorDone', [String(result?.found ?? 0), String(result?.inserted ?? 0)]);
+}
+
+async function refreshCollector() {
+  const { radarCollector: saved, radarCollectorStatus: statuses, radarCollectorRunning: running } = await chrome.storage.local.get(['radarCollector', 'radarCollectorStatus', 'radarCollectorRunning']);
+  collectorSettings = { auto: false, minutes: 30, boards: {}, ...saved };
+  collector.auto.checked = Boolean(collectorSettings.auto);
+  collector.minutes.value = String(collectorSettings.minutes);
+  renderBoards(statuses);
+  collector.now.disabled = Boolean(running);
+  collector.status.textContent = running ? t('collectorRunning') : '';
+}
+
+/** The section is for the hub's owner: the hub says who that is. */
+async function showCollector() {
+  const { radarAccount: account } = await chrome.storage.local.get(['radarAccount']);
+  if (!account?.token) return;
+  const response = await fetch(`${account.base.replace(/\/+$/, '')}/api/ext/me`, { headers: { authorization: `Bearer ${account.token}` } }).catch(() => undefined);
+  const me = response?.ok ? await response.json() : undefined;
+  if (!me?.collector) return;
+  collector.box.hidden = false;
+  await refreshCollector();
+}
+
+collector.auto.addEventListener('change', async () => {
+  collectorSettings.auto = collector.auto.checked;
+  await saveCollector();
 });
+collector.minutes.addEventListener('change', async () => {
+  collectorSettings.minutes = Number(collector.minutes.value) || 30;
+  await saveCollector();
+});
+collector.now.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'collector-run' }));
+chrome.storage.onChanged.addListener((changes) => {
+  if (!collector.box.hidden && (changes.radarCollectorStatus || changes.radarCollectorRunning)) refreshCollector();
+});
+showCollector();

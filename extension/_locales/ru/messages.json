@@ -356,40 +356,17 @@
   "collectorTitle": {
     "message": "Сбор заказов"
   },
-  "collectorHint": {
-    "message": "Для владельца хаба: читает Профи.ру, Яндекс Услуги и YouDo в этом браузере, где вы вошли в аккаунт."
-  },
   "collectorNow": {
-    "message": "Собрать с этой страницы"
-  },
-  "collectorUrls": {
-    "message": "Страницы по городам и специальностям, по одной в строке"
+    "message": "Собрать сейчас"
   },
   "collectorAuto": {
-    "message": "Обходить автоматически"
-  },
-  "collectorMinutes": {
-    "message": "Раз в сколько минут"
+    "message": "Собирать автоматически"
   },
   "collectorDenied": {
-    "message": "Без доступа к этим сайтам сбор не работает"
-  },
-  "collectorSaved": {
-    "message": "Сохранено"
-  },
-  "collectorDone": {
-    "message": "Найдено: $A$, новых: $B$",
-    "placeholders": {
-      "a": {
-        "content": "$1"
-      },
-      "b": {
-        "content": "$2"
-      }
-    }
+    "message": "Без доступа к сайту сбор не работает"
   },
   "collectorFailed": {
-    "message": "Не вышло: $A$",
+    "message": "Ошибка: $A$",
     "placeholders": {
       "a": {
         "content": "$1"
@@ -397,7 +374,7 @@
     }
   },
   "collectorLast": {
-    "message": "Прошлый обход: страниц $A$, найдено $B$, новых $C$, ошибок $D$",
+    "message": "$A$: найдено $B$, новых $C$",
     "placeholders": {
       "a": {
         "content": "$1"
@@ -407,9 +384,31 @@
       },
       "c": {
         "content": "$3"
-      },
-      "d": {
-        "content": "$4"
+      }
+    }
+  },
+  "collectorRunning": {
+    "message": "Идёт сбор…"
+  },
+  "collectorSignIn": {
+    "message": "Нужен вход на площадке."
+  },
+  "collectorOpenBoard": {
+    "message": "Открыть"
+  },
+  "collectorAgoMin": {
+    "message": "$A$ мин назад",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      }
+    }
+  },
+  "collectorAgoHour": {
+    "message": "$A$ ч назад",
+    "placeholders": {
+      "a": {
+        "content": "$1"
       }
     }
   }

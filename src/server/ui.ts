@@ -1172,6 +1172,7 @@ dialog::backdrop {
 .admin-table th, .admin-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .admin-table th { color: var(--muted); font-weight: 500; }
 .admin-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.activity-table .activity-group td { color: var(--muted); font-size: 12px; padding-top: 14px; }
 .admin-links { display: flex; flex-wrap: wrap; gap: 8px; }
 .connect-card { max-width: 520px; margin: 40px auto; border: 1px solid var(--line); border-radius: 12px; padding: 24px; display: grid; gap: 10px; }
 .connect-card h1 { font-size: 20px; margin: 0; }
@@ -3892,6 +3893,8 @@ export interface ProfilePageData {
     /** Result of the last action: created, deleted, limit, bad_url… */
     notice?: string;
   };
+  /** Where the account's orders come from. */
+  sourcesActivity?: Array<{ title: string; group: 'boards' | 'telegram'; day: number; week: number; total: number; lastAt?: string }>;
   /** Members' own Telegram accounts and sources; set only when RADAR_USER_TELEGRAM is on. */
   telegram?: {
     accounts: Array<{ id: string; tgUserId: number; tgUsername: string | null; displayName: string | null; status: string }>;
@@ -3958,6 +3961,26 @@ function confirmDialog(lang: SupportedLang): string {
 
 function confirmAttrs(title: string, action: string, text = ''): string {
   return `data-confirm="${escapeHtml(title)}" data-confirm-action="${escapeHtml(action)}"${text ? ` data-confirm-text="${escapeHtml(text)}"` : ''}`;
+}
+
+function renderSourcesActivity(rows: NonNullable<ProfilePageData['sourcesActivity']>, lang: SupportedLang): string {
+  const ru = lang === 'ru';
+  const line = (row: (typeof rows)[number]): string => `<tr>
+      <td>${escapeHtml(row.title)}</td>
+      <td class="num">${row.day}</td>
+      <td class="num">${row.week}</td>
+      <td class="num">${row.total}</td>
+      <td class="muted small">${row.lastAt ? formatRelative(row.lastAt, lang) : (ru ? 'ещё нет' : 'none yet')}</td>
+    </tr>`;
+  const part = (group: 'boards' | 'telegram', title: string): string => {
+    const list = rows.filter((row) => row.group === group);
+    return list.length ? `<tr class="activity-group"><td colspan="5">${title}</td></tr>${list.map(line).join('')}` : '';
+  };
+  return `<h2 id="sources-activity">${ru ? 'Откуда приходят заказы' : 'Where orders come from'}</h2>
+  <table class="admin-table activity-table">
+    <thead><tr><th>${ru ? 'Источник' : 'Source'}</th><th class="num">${ru ? 'Сутки' : 'Day'}</th><th class="num">${ru ? '7 дней' : '7 days'}</th><th class="num">${ru ? 'Всего' : 'Total'}</th><th>${ru ? 'Последний' : 'Latest'}</th></tr></thead>
+    <tbody>${part('boards', ru ? 'Площадки: сбор через расширение' : 'Boards: collected by the extension')}${part('telegram', ru ? 'Telegram: каналы вашей папки и других участников' : 'Telegram: channels of your folder and other members')}</tbody>
+  </table>`;
 }
 
 function renderUserTelegram(data: NonNullable<ProfilePageData['telegram']>, lang: SupportedLang): string {
@@ -4296,6 +4319,7 @@ export function renderProfilePage(data: ProfilePageData): string {
 <section class="profile">
   ${progress}
   <p class="profile-tier">${ru ? 'Уровень' : 'Tier'}: <strong>${escapeHtml(names[data.tier])}</strong>${data.hubMode && data.tier !== 'admin' ? ` · ${ru ? 'задержка ленты' : 'feed delay'}: <strong>${escapeHtml(delay(data.delays[data.tier]))}</strong>` : ''}</p>
+  ${data.sourcesActivity ? renderSourcesActivity(data.sourcesActivity, lang) : ''}
   ${data.subscriptions ? renderSubscriptions(data.subscriptions, lang) : ''}
   ${data.telegram ? renderUserTelegram(data.telegram, lang) : ''}
   ${data.agent ? renderAgentToken(data.agent, lang) : ''}

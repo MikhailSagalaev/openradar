@@ -1,6 +1,6 @@
 /**
  * openradar extension: reads order boards in the browser where the owner is signed in
- * (docs/GIG_SOURCES.md). Lists to walk are saved board addresses, one per city and specialty.
+ * (docs/GIG_SOURCES.md). What to read comes from boards.js and the owner's choice in the popup.
  * It runs only where the owner granted the host and never passes a check on the page: if
  * a board asks for a sign-in or a captcha, no orders are found and a person has to step in.
  * Readers were checked on the live boards on 5 November 2026. They never press a button that
@@ -8,21 +8,8 @@
  */
 
 const COLLECTOR_ALARM = 'radar-collector';
-const COLLECTOR_ORIGINS = ['https://profi.ru/*', 'https://uslugi.yandex.ru/*', 'https://youdo.com/*'];
 const PAGE_SETTLE_MS = 6000;
 const PAUSE_BETWEEN_PAGES_MS = 20000;
-
-function collectorPlatform(url) {
-  try {
-    const host = new URL(url).hostname;
-    if (host === 'profi.ru' || host.endsWith('.profi.ru')) return 'profi';
-    if (host === 'uslugi.yandex.ru') return 'yandex';
-    if (host === 'youdo.com' || host.endsWith('.youdo.com')) return 'youdo';
-  } catch {
-    // Not a page of a board.
-  }
-  return undefined;
-}
 
 /** Runs inside the Profi.ru board: the orders of the account's own specialties and region. */
 async function readProfiBoard(scrolls) {
@@ -245,11 +232,9 @@ async function sendCollected(platform, orders) {
   return response.ok ? { ok: true, ...json } : { ok: false, error: json.error ?? `http_${response.status}` };
 }
 
-async function collectFromTab(tabId, url) {
-  const platform = collectorPlatform(url);
-  if (!platform) return { ok: false, error: 'not_a_board' };
-  if (platform === 'youdo') return walkYoudo(tabId, url);
-  if (platform === 'yandex') return walkYandex(tabId);
+async function readBoardPage(board, tabId, url) {
+  if (board.id === 'youdo') return walkYoudo(tabId, url);
+  if (board.id === 'yandex') return walkYandex(tabId);
   return walkProfi(tabId);
 }
 
@@ -270,48 +255,73 @@ function tabLoaded(tabId) {
   });
 }
 
-/** One walk over the saved lists, a page at a time, in a tab that does not take the focus. */
-async function walkCollectorLists() {
-  const { radarCollector: settings } = await chrome.storage.local.get(['radarCollector']);
-  const urls = (settings?.urls ?? []).filter(collectorPlatform);
-  const summary = { pages: 0, found: 0, inserted: 0, errors: 0, at: new Date().toISOString() };
-  for (const url of urls) {
-    const tab = await chrome.tabs.create({ url, active: false });
-    try {
-      await tabLoaded(tab.id);
-      await collectorWait(PAGE_SETTLE_MS);
-      const result = await collectFromTab(tab.id, url);
-      summary.pages++;
-      summary.found += result.found ?? 0;
-      summary.inserted += result.inserted ?? 0;
-      if (result.ok === false) summary.errors++;
-    } catch {
-      summary.errors++;
-    } finally {
-      await chrome.tabs.remove(tab.id).catch(() => {});
-    }
-    await collectorWait(PAUSE_BETWEEN_PAGES_MS);
+async function saveBoardStatus(id, status) {
+  const { radarCollectorStatus: all } = await chrome.storage.local.get(['radarCollectorStatus']);
+  await chrome.storage.local.set({ radarCollectorStatus: { ...all, [id]: status } });
+}
+
+/** One page of a board in a tab that does not take the focus. */
+async function walkPage(board, url) {
+  const tab = await chrome.tabs.create({ url, active: false });
+  try {
+    await tabLoaded(tab.id);
+    await collectorWait(PAGE_SETTLE_MS);
+    const opened = await chrome.tabs.get(tab.id);
+    if (board.isSignIn(opened.url ?? '', opened.title ?? '')) return { ok: false, error: 'sign_in' };
+    return await readBoardPage(board, tab.id, url);
+  } finally {
+    await chrome.tabs.remove(tab.id).catch(() => {});
   }
-  await chrome.storage.local.set({ radarCollectorLast: summary });
-  return summary;
+}
+
+let collectorBusy = false;
+
+/** One walk over the boards the owner switched on, a page at a time. */
+async function walkBoards() {
+  if (collectorBusy) return;
+  collectorBusy = true;
+  await chrome.storage.local.set({ radarCollectorRunning: true });
+  try {
+    const { radarCollector: settings } = await chrome.storage.local.get(['radarCollector']);
+    for (const board of BOARDS) {
+      const chosen = settings?.boards?.[board.id];
+      if (!chosen?.on) continue;
+      const status = { at: new Date().toISOString(), found: 0, inserted: 0 };
+      for (const url of board.lists(chosen)) {
+        try {
+          const result = await walkPage(board, url);
+          status.found += result.found ?? 0;
+          status.inserted += result.inserted ?? 0;
+          if (result.ok === false) status.error = result.error;
+        } catch (error) {
+          status.error = String(error?.message ?? error);
+        }
+        await saveBoardStatus(board.id, status);
+        if (status.error === 'sign_in') break;
+        await collectorWait(PAUSE_BETWEEN_PAGES_MS);
+      }
+    }
+  } finally {
+    collectorBusy = false;
+    await chrome.storage.local.set({ radarCollectorRunning: false });
+  }
 }
 
 async function scheduleCollector() {
   const { radarCollector: settings } = await chrome.storage.local.get(['radarCollector']);
   await chrome.alarms.clear(COLLECTOR_ALARM);
-  if (settings?.auto && settings.urls?.length) {
-    chrome.alarms.create(COLLECTOR_ALARM, { periodInMinutes: Math.max(15, Number(settings.minutes) || 30) });
-  }
+  if (settings?.auto) chrome.alarms.create(COLLECTOR_ALARM, { periodInMinutes: Math.max(15, Number(settings.minutes) || 30) });
 }
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === COLLECTOR_ALARM) walkCollectorLists();
+  if (alarm.name === COLLECTOR_ALARM) walkBoards();
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, reply) => {
-  if (message?.type === 'collector-tab') {
-    collectFromTab(message.tabId, message.url).then(reply, (error) => reply({ ok: false, error: String(error?.message ?? error) }));
-    return true;
+  if (message?.type === 'collector-run') {
+    walkBoards();
+    reply({ ok: true });
+    return false;
   }
   if (message?.type === 'collector-schedule') {
     scheduleCollector().then(() => reply({ ok: true }));
@@ -319,5 +329,3 @@ chrome.runtime.onMessage.addListener((message, _sender, reply) => {
   }
   return false;
 });
-
-globalThis.COLLECTOR_ORIGINS = COLLECTOR_ORIGINS;

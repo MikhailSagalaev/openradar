@@ -917,7 +917,7 @@ describe('http server', () => {
     const preflight = await app.request('/api/ext/submit', { method: 'OPTIONS' });
     expect(preflight.status).toBe(204);
     expect(preflight.headers.get('access-control-allow-headers')).toContain('authorization');
-    expect(await (await app.request('/api/ext/me', { headers: bearer })).json()).toEqual({ handle: 'octocat' });
+    expect(await (await app.request('/api/ext/me', { headers: bearer })).json()).toEqual({ handle: 'octocat', collector: false });
 
     const submitted = await app.request('/api/ext/submit', {
       method: 'POST',
@@ -945,6 +945,10 @@ describe('http server', () => {
     expect(collected!.text).not.toMatch(/912|ivan_client/);
     expect(collected!.contacts ?? []).toEqual([]);
     expect(await (await orders('profi', [order])).json()).toMatchObject({ inserted: 0, duplicates: 1 });
+    expect(await (await app.request('/api/ext/me', { headers: bearer })).json()).toMatchObject({ collector: true });
+    const profile = await (await app.request('/me', { headers: cookie })).text();
+    expect(profile).toContain('Откуда приходят заказы');
+    expect(profile).toContain('Профи.ру — заказы');
 
     const extensionPage = await (await app.request('/extension')).text();
     expect(extensionPage).toMatch(/Актуальная версия: <strong>\d+\.\d+\.\d+<\/strong>/);

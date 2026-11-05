@@ -1,5 +1,5 @@
 /**
- * openradar extension: finishes GitHub sign-in in browsers without chrome.identity.
+ * openradar extension: finishes the sign-in.
  * The hub redirects here with #token=…&handle=…&base=… after the user allows the extension.
  */
 (async () => {
@@ -19,4 +19,6 @@
   await chrome.storage.local.set({ radarAccount: { token, handle, base } });
   title.textContent = t('connectedTitle');
   text.textContent = t('connectedText', [new URL(base).hostname, handle]);
+  // Nothing is left to do here: the popup shows the account from now on.
+  setTimeout(() => chrome.tabs.getCurrent((tab) => tab?.id && chrome.tabs.remove(tab.id)), 1200);
 })();

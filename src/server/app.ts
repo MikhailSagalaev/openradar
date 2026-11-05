@@ -49,6 +49,7 @@ import {
   renderNewSourcePage,
   renderNotFound,
   renderExtensionConnectPage,
+  type ProfilePageData,
   renderProfilePage,
   setAnalytics,
   setPublicBaseUrl,
@@ -1298,6 +1299,30 @@ export function createApp(runtime: Runtime): Hono {
     );
   });
 
+  /** Where the account's orders come from: its Telegram channels and, for the owner, the boards. */
+  const sourceActivityFor = async (user: UserRecord): Promise<ProfilePageData['sourcesActivity']> => {
+    const store = runtime.store;
+    if (!store.sourceActivity) return undefined;
+    const sources = await store.listSources();
+    const telegram = sources.find((s) => s.config.userTelegram === true);
+    const reads = (await store.listUserSources?.(user.id))?.length ?? 0;
+    const boards = isGitHubAdmin(user, runtime);
+    const rows: NonNullable<ProfilePageData['sourcesActivity']> = [];
+    if (boards) {
+      for (const [platform, { title }] of Object.entries(COLLECTOR_PLATFORMS)) {
+        const source = sources.find((s) => s.config.collector === platform);
+        const [activity] = source ? await store.sourceActivity({ sourceId: source.id }) : [];
+        rows.push({ title, group: 'boards', day: activity?.day ?? 0, week: activity?.week ?? 0, total: activity?.total ?? 0, lastAt: activity?.lastAt });
+      }
+    }
+    if (reads && telegram) {
+      for (const activity of await store.sourceActivity({ sourceId: telegram.id, byChannel: true })) {
+        rows.push({ title: activity.title ?? 'Telegram', group: 'telegram', day: activity.day, week: activity.week, total: activity.total, lastAt: activity.lastAt });
+      }
+    }
+    return rows.length ? rows : undefined;
+  };
+
   /** The profile page; `agentToken` is a token just issued, shown this once. */
   const renderProfile = async (c: Context, extra: { agentToken?: string } = {}): Promise<string> => {
     const viewer = await viewerFromRequest(c, runtime);
@@ -1317,8 +1342,11 @@ export function createApp(runtime: Runtime): Hono {
       if (lead) titles.set(id, lead);
     }
     const rating = viewer.userId ? await accountRating(runtime, viewer.userId, participant) : participant?.rating;
+    const profileUser = await currentUser(c, runtime);
+    const sourcesActivity = profileUser ? await sourceActivityFor(profileUser) : undefined;
     return (
       renderProfilePage({
+        sourcesActivity,
         version: VERSION,
         auth: await getAuthDisplay(c, runtime),
         lang: resolveLang(c),
@@ -2492,7 +2520,7 @@ export function createApp(runtime: Runtime): Hono {
     extensionCors(c);
     const auth = await extensionUser(c);
     if (!auth) return c.json({ error: 'unauthorized' }, 401);
-    return c.json({ handle: auth.user.handle });
+    return c.json({ handle: auth.user.handle, collector: isGitHubAdmin(auth.user, runtime) });
   });
 
   app.post('/api/ext/submit', rateLimit({ windowMs: 10 * 60_000, max: 60 }), async (c) => {

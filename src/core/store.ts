@@ -316,6 +316,14 @@ export interface ResearchDailyRow {
   n: number;
 }
 
+export interface SourceActivity {
+  title?: string;
+  day: number;
+  week: number;
+  total: number;
+  lastAt?: string;
+}
+
 export interface LeadMoney {
   budget?: number;
   currency?: string;
@@ -396,6 +404,8 @@ export interface Store extends HubStore {
   updateLeadQuality?(id: string, type: LeadType, flags: string[]): Promise<void>;
   /** Stores pay and skills worked out again from the post's text; undefined fields are cleared. */
   updateLeadMoney?(id: string, money: LeadMoney): Promise<void>;
+  /** How many posts a source brought; with byChannel, one row per Telegram channel. */
+  sourceActivity?(options: { sourceId: string; byChannel?: boolean }): Promise<SourceActivity[]>;
   updateLeadState?(id: string, state: LeadState): Promise<void>;
   /** Active leads on these hosts whose page is due for a closed-post check, oldest check first. */
   listLeadsToCheck?(options: { hosts: string[]; limit: number; createdAfter: string; now?: Date }): Promise<Array<Pick<Lead, 'id' | 'url' | 'createdAt' | 'type'>>>;
