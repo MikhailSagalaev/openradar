@@ -505,6 +505,19 @@ export const SOURCE_PRESETS: SourcePreset[] = [
     },
   },
   {
+    id: 'foxford',
+    kind: 'sitemap',
+    title: 'Фоксфорд — Вакансии',
+    description: 'Вакансии онлайн-школы «Фоксфорд» из карты сайта jobs.foxford.ru: страницы без разметки JobPosting, зарплата — текстом на странице',
+    config: {
+      url: 'https://jobs.foxford.ru/sitemap-0.xml',
+      pattern: String.raw`/vacancies/([a-z0-9-]+)`,
+      perPoll: 10,
+      delayMs: 1500,
+      maxAgeDays: 30,
+    },
+  },
+  {
     id: 'adzuna-us',
     kind: 'adzuna',
     title: 'Adzuna — Вакансии США',
