@@ -20,6 +20,18 @@ function pageState(html, id) {
   }
 }
 
+/** A picked field stands for itself until the owner narrows it to some of its parts. */
+function narrowed(parents = [], children = [], catalog = []) {
+  const whole = [];
+  const parts = [];
+  for (const parent of parents) {
+    const own = (catalog.find(([id]) => id === parent)?.[2] ?? []).map(([id]) => id).filter((id) => children.includes(id));
+    if (own.length) parts.push(...own);
+    else whole.push(parent);
+  }
+  return { parents: whole, children: parts };
+}
+
 const BOARDS = [
   {
     id: 'youdo',
@@ -33,7 +45,7 @@ const BOARDS = [
       return {
         state: 'open',
         catalog: {
-          categories: dictionaries.categoriesTree.map((item) => [item.code, item.name]),
+          categories: dictionaries.categoriesTree.map((item) => [item.code, item.name, (item.subcategories ?? []).map((sub) => [String(sub.id), sub.name])]),
           cities: (dictionaries.cities ?? []).filter((item) => item.code !== 'Other').map((item) => [item.code, item.name, item.location?.center?.latitude, item.location?.center?.longitude]),
         },
       };
@@ -42,11 +54,14 @@ const BOARDS = [
       return [
         { key: 'remote', title: { ru: 'Формат', en: 'Format' }, options: [['only', { ru: 'Только удалённые', en: 'Remote only' }]] },
         { key: 'cities', title: { ru: 'Города', en: 'Cities' }, options: (catalog?.cities ?? []).map(([code, name]) => [code, name]) },
-        { key: 'categories', title: { ru: 'Направления', en: 'Fields' }, options: catalog?.categories ?? [] },
+        { key: 'categories', title: { ru: 'Направления', en: 'Fields' }, options: catalog?.categories ?? [], childKey: 'subs' },
       ];
     },
     lists(settings, catalog) {
-      const shared = settings.categories?.length ? [`categories=${settings.categories.join(',')}`] : [];
+      const shared = [];
+      const whole = narrowed(settings.categories, settings.subs, catalog?.categories);
+      if (whole.parents.length) shared.push(`categories=${whole.parents.join(',')}`);
+      if (whole.children.length) shared.push(`sub=${whole.children.join(',')}`);
       if (settings.remote?.includes('only')) return [`${YOUDO_LIST}#${['virtual=1', ...shared].join('&')}`];
       const cities = (catalog?.cities ?? []).filter(([code]) => settings.cities?.includes(code));
       if (!cities.length) return [`${YOUDO_LIST}#${shared.join('&')}`];
@@ -64,11 +79,12 @@ const BOARDS = [
       if (/passport\.yandex/.test(url)) return { state: 'signed_out' };
       const rubrics = pageState(html, '__PRELOADED_STATE__')?.rubrics?.occupations;
       if (!rubrics) return { state: 'unknown' };
-      return { state: 'signed_in', catalog: { rubrics: rubrics.map((item) => [item.id, item.name]) } };
+      return { state: 'signed_in', catalog: { rubrics: rubrics.map((item) => [item.id, item.name, (item.specializations ?? []).map((spec) => [spec.id, spec.name])]) } };
     },
-    filters: (catalog) => [{ key: 'rubrics', title: { ru: 'Разделы', en: 'Sections' }, options: catalog?.rubrics ?? [] }],
-    lists(settings) {
-      const rubrics = (settings.rubrics ?? []).map((rubric) => `&rubric=${encodeURIComponent(rubric)}`).join('');
+    filters: (catalog) => [{ key: 'rubrics', title: { ru: 'Разделы', en: 'Sections' }, options: catalog?.rubrics ?? [], childKey: 'specs' }],
+    lists(settings, catalog) {
+      const { parents, children } = narrowed(settings.rubrics, settings.specs, catalog?.rubrics);
+      const rubrics = [...parents, ...children].map((rubric) => `&rubric=${encodeURIComponent(rubric)}`).join('');
       return [`https://uslugi.yandex.ru/cab/orders?type=new${rubrics}`];
     },
     isSignIn: (url) => /passport\.yandex/.test(url),

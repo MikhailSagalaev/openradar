@@ -419,5 +419,22 @@
         "content": "$1"
       }
     }
+  },
+  "collectorAll": {
+    "message": "Все"
+  },
+  "collectorLess": {
+    "message": "свернуть"
+  },
+  "collectorFiltersOff": {
+    "message": "Фильтры: всё подряд"
+  },
+  "collectorFiltersOn": {
+    "message": "Фильтры: выбрано $A$",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      }
+    }
   }
 }

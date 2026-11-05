@@ -11,7 +11,9 @@ const COLLECTOR_ALARM = 'radar-collector';
 const PAGE_SETTLE_MS = 6000;
 const PAUSE_BETWEEN_PAGES_MS = 5000;
 /** Orders read per step. A browser stops a worker that sits in one long call. */
-const STEP_SIZE = 8;
+const STEP_SIZE = 10;
+/** Between two pages of a board: about one request a second, as a person clicking through. */
+const READ_PAUSE_MS = 600;
 
 /** Runs inside the Profi.ru board: the orders of the account's own specialties and region. */
 async function readProfiBoard(scrolls) {
@@ -129,6 +131,7 @@ async function readYoudoList(fragment, page) {
   const body = { q: wanted.get('q') ?? '', list: 'all', status: 'opened', page, noOffers: false, onlySbr: false, onlyB2B: false, onlyVacancies: false, priceMin: wanted.get('priceMin') ?? '', sortType: 1, onlyVirtual: wanted.get('virtual') === '1' };
   if (wanted.get('lat') && wanted.get('lng')) Object.assign(body, { lat: Number(wanted.get('lat')), lng: Number(wanted.get('lng')), radius: Number(wanted.get('radius')) || 30 });
   if (wanted.get('categories')) body.categories = wanted.get('categories').split(',');
+  if (wanted.get('sub')) body.sub = wanted.get('sub').split(',').map(Number);
   const response = await fetch('/api/tasks/tasks/', { method: 'POST', headers: { 'content-type': 'application/json', 'x-requested-with': 'XMLHttpRequest' }, credentials: 'include', body: JSON.stringify(body) });
   if (!response.ok) return { error: `http_${response.status}`, ids: [], total: 0 };
   const result = (await response.json()).ResultObject ?? {};
@@ -165,8 +168,8 @@ async function readYoudoTasks(ids, pauseMs) {
   return out;
 }
 
-const YOUDO_PAGES_PER_WALK = 5;
-const YOUDO_TASKS_PER_WALK = 60;
+const YOUDO_PAGES_PER_WALK = 8;
+const YOUDO_TASKS_PER_WALK = 200;
 const YOUDO_SEEN_KEPT = 30000;
 
 /** New tasks of one list, newest first: pages stop once a page holds nothing new. */
@@ -183,29 +186,27 @@ async function walkYoudo(tabId, url) {
     fresh.push(...unseen);
     if (!unseen.length) break;
   }
-  return readInSteps(fresh.slice(0, YOUDO_TASKS_PER_WALK), 'youdo', (ids) => run(readYoudoTasks, [ids, 1500]), seen, 'radarYoudoSeen');
+  return readInSteps(fresh.slice(0, YOUDO_TASKS_PER_WALK), 'youdo', (ids) => run(readYoudoTasks, [ids, READ_PAUSE_MS]), seen, 'radarYoudoSeen');
 }
 
 /** Reads and sends a few orders at a time, so a stopped walk loses one step at most. */
 async function readInSteps(ids, platform, read, seen, key) {
-  const total = { found: 0, inserted: 0 };
   for (let start = 0; start < ids.length; start += STEP_SIZE) {
     const step = ids.slice(start, start + STEP_SIZE);
     const orders = ((await read(step)) ?? []).filter((order) => !order.skip);
     if (orders.length) {
       const result = await sendCollected(platform, orders);
-      if (result.ok === false) return { ...total, ...result };
-      total.found += orders.length;
-      total.inserted += result.inserted ?? 0;
+      if (result.ok === false) return result;
+      await noteProgress(orders.length, result.inserted ?? 0);
     }
     for (const id of step) seen.add(id);
     await chrome.storage.local.set({ [key]: [...seen].slice(-YOUDO_SEEN_KEPT) });
   }
-  return { ok: true, ...total };
+  return { ok: true };
 }
 
 const YANDEX_PAGES_PER_WALK = 3;
-const YANDEX_ORDERS_PER_WALK = 30;
+const YANDEX_ORDERS_PER_WALK = 60;
 const PROFI_SCROLLS = 8;
 
 /** New orders of a Yandex list: order pages are read once, in small portions. */
@@ -214,14 +215,16 @@ async function walkYandex(tabId) {
   const { radarYandexSeen: stored } = await chrome.storage.local.get(['radarYandexSeen']);
   const seen = new Set(stored ?? []);
   const ids = ((await run(readYandexList, [YANDEX_PAGES_PER_WALK])) ?? []).filter((id) => !seen.has(id)).slice(0, YANDEX_ORDERS_PER_WALK);
-  return readInSteps(ids, 'yandex', (step) => run(readYandexOrders, [step, 1500]), seen, 'radarYandexSeen');
+  return readInSteps(ids, 'yandex', (step) => run(readYandexOrders, [step, READ_PAUSE_MS]), seen, 'radarYandexSeen');
 }
 
 async function walkProfi(tabId) {
   const [result] = await chrome.scripting.executeScript({ target: { tabId }, world: 'MAIN', func: readProfiBoard, args: [PROFI_SCROLLS] });
   const orders = result?.result ?? [];
-  if (!orders.length) return { ok: true, found: 0, inserted: 0 };
-  return { ...(await sendCollected('profi', orders)), found: orders.length };
+  if (!orders.length) return { ok: true };
+  const sent = await sendCollected('profi', orders);
+  if (sent.ok !== false) await noteProgress(orders.length, sent.inserted ?? 0);
+  return sent;
 }
 
 async function sendCollected(platform, orders) {
@@ -259,6 +262,18 @@ function tabLoaded(tabId) {
   });
 }
 
+let walkStatus;
+let walkBoardId;
+
+/** The popup shows the walk as it goes, not when a list of a hundred orders is over. */
+async function noteProgress(found, inserted) {
+  if (!walkStatus) return;
+  walkStatus.found += found;
+  walkStatus.inserted += inserted;
+  walkStatus.at = new Date().toISOString();
+  await saveBoardStatus(walkBoardId, walkStatus);
+}
+
 async function saveBoardStatus(id, status) {
   const { radarCollectorStatus: all } = await chrome.storage.local.get(['radarCollectorStatus']);
   await chrome.storage.local.set({ radarCollectorStatus: { ...all, [id]: status } });
@@ -293,12 +308,12 @@ async function walkBoards() {
       const chosen = settings?.boards?.[board.id];
       if (!chosen?.on) continue;
       const status = { at: new Date().toISOString(), found: 0, inserted: 0 };
+      walkStatus = status;
+      walkBoardId = board.id;
       await saveBoardStatus(board.id, status);
       for (const url of board.lists(chosen, catalogs?.[board.id])) {
         try {
           const result = await walkPage(board, url);
-          status.found += result.found ?? 0;
-          status.inserted += result.inserted ?? 0;
           if (result.ok === false) status.error = result.error;
         } catch (error) {
           status.error = String(error?.message ?? error);
