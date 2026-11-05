@@ -960,6 +960,19 @@ describe('http server', () => {
     expect((await app.request('/api/ext/me', { headers: { authorization: 'Bearer ext_forged' } })).status).toBe(401);
   });
 
+  it('shows a participant on a public page and lets them leave', async () => {
+    const runtime = makeRuntime();
+    const app = createApp(runtime);
+    const user = await runtime.store.upsertGitHubUser!({ githubId: 77, handle: 'mona' });
+    const page = await app.request('/u/MONA');
+    expect(page.status).toBe(200);
+    expect(await page.text()).toContain('@mona');
+    await runtime.store.setUserPublic!(user.id, false);
+    expect((await app.request('/u/mona')).status).toBe(404);
+    expect((await app.request('/u/nobody')).status).toBe(404);
+    expect((await app.request('/network')).status).toBe(200);
+  });
+
   it('supports GDPR erasure with DELETE /api/leads/:id', async () => {
     const runtime = makeRuntime();
     const app = createApp(runtime);

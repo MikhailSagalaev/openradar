@@ -2154,7 +2154,7 @@ export { STYLE };
 export function layout(input: {
   title: string;
   version: string;
-  active?: 'leads' | 'sources' | 'extension' | 'research';
+  active?: 'leads' | 'sources' | 'extension' | 'research' | 'network';
   body: string;
   actions?: string;
   script?: string;
@@ -2165,7 +2165,7 @@ export function layout(input: {
 }): string {
   const lang = input.lang ?? 'ru';
   const t = getTranslations(lang);
-  const nav = (key: 'leads' | 'sources' | 'extension' | 'research', label: string, href: string): string =>
+  const nav = (key: 'leads' | 'sources' | 'extension' | 'research' | 'network', label: string, href: string): string =>
     `<a href="${href}"${input.active === key ? ' class="active"' : ''}>${label}</a>`;
 
   const isMember = Boolean(input.auth?.handle || input.auth?.isAdmin);
@@ -2232,6 +2232,7 @@ ${analyticsBodyHtml}
     ${nav('leads', t.navLeads, '/')}
     ${nav('research', lang === 'ru' ? 'Исследования' : 'Research', '/research')}
     ${nav('sources', t.navSources, '/sources')}
+    ${nav('network', lang === 'ru' ? 'Участники' : 'Participants', '/network')}
   </nav>
   <div class="actions">${input.actions ?? ''}${authWidget}</div>
 </header>
@@ -3893,6 +3894,8 @@ export interface ProfilePageData {
     /** Result of the last action: created, deleted, limit, bad_url… */
     notice?: string;
   };
+  /** The account's public page and whether it shows. */
+  publicProfile?: { handle: string; on: boolean };
   /** Where the account's orders come from. */
   sourcesActivity?: Array<{ title: string; group: 'boards' | 'telegram'; href?: string; day: number; week: number; total: number; lastAt?: string }>;
   /** Members' own Telegram accounts and sources; set only when RADAR_USER_TELEGRAM is on. */
@@ -4351,6 +4354,11 @@ export function renderProfilePage(data: ProfilePageData): string {
   ${data.telegram ? renderUserTelegram(data.telegram, lang) : ''}
   ${data.agent ? renderAgentToken(data.agent, lang) : ''}
   ${data.sourcesActivity ? renderSourcesActivity(data.sourcesActivity, lang) : ''}
+  ${data.publicProfile ? `<h2 id="public-profile">${ru ? 'Публичный профиль' : 'Public profile'}</h2>
+  <p class="small">${data.publicProfile.on
+    ? `${ru ? 'Вы видны в рейтинге участников, ваша страница' : 'You are in the participant rating, your page is'} <a href="/u/${escapeHtml(encodeURIComponent(data.publicProfile.handle))}">/u/${escapeHtml(data.publicProfile.handle)}</a>.`
+    : (ru ? 'Вы скрыты: в рейтинге стоит только короткий ключ, страницы нет.' : 'You are hidden: the rating shows a short key and there is no page.')}</p>
+  <form method="post" action="/me/public" class="inline-form"><input type="hidden" name="public" value="${data.publicProfile.on ? '0' : '1'}"><button class="btn ghost small" type="submit">${data.publicProfile.on ? (ru ? 'Скрыть меня' : 'Hide me') : (ru ? 'Показывать меня' : 'Show me')}</button></form>` : ''}
   ${data.subscriptions || data.telegram || data.agent ? confirmDialog(lang) : ''}
   ${activity}
   ${table}

@@ -9,6 +9,7 @@
  * A walk goes in this order, so the long YouDo lists do not hold the others back.
  */
 const YOUDO_LIST = 'https://youdo.com/tasks-all-opened-all';
+const BOARD_HELP = 'https://github.com/MikhailSagalaev/openradar/blob/main/docs/GIG_SOURCES.md#что-определяет-охват';
 
 /** The JSON a page carries in <script id="…">, or undefined. */
 function pageState(html, id) {
@@ -40,6 +41,7 @@ const BOARDS = [
     open: 'https://uslugi.yandex.ru/cab/orders?type=new',
     signInNeeded: true,
     hint: { ru: 'Город и удалённые заказы берутся из анкеты', en: 'The city comes from the profile' },
+    help: BOARD_HELP,
     probe(html, url) {
       if (/passport\.yandex/.test(url)) return { state: 'signed_out' };
       const rubrics = pageState(html, '__PRELOADED_STATE__')?.rubrics?.occupations;
@@ -60,6 +62,7 @@ const BOARDS = [
     open: 'https://profi.ru/backoffice/n.php',
     signInNeeded: true,
     hint: { ru: 'Специальности и город задаются в анкете на Профи.ру', en: 'Specialties and city are set in the Profi.ru profile' },
+    help: BOARD_HELP,
     // The sign-in page carries this key; the board does not.
     probe: (html) => ({ state: html.includes('loginHeader') ? 'signed_out' : 'signed_in' }),
     filters: () => [],

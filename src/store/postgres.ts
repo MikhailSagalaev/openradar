@@ -209,7 +209,7 @@ export class PostgresStore implements Store {
     if (!res.rows[0]) return null;
     // A banned account loses its agent too.
     const user = await this.pool.query(
-      `SELECT id, github_id, handle, role, created_at, github_created_at FROM app_users WHERE id = $1 AND banned_at IS NULL`,
+      `SELECT id, github_id, handle, role, created_at, github_created_at, public_profile FROM app_users WHERE id = $1 AND banned_at IS NULL`,
       [res.rows[0].user_id],
     );
     return user.rows[0] ? rowToUser(user.rows[0]) : null;
@@ -1294,7 +1294,7 @@ export class PostgresStore implements Store {
        ON CONFLICT (github_id) DO UPDATE
          SET handle = EXCLUDED.handle,
              github_created_at = COALESCE(EXCLUDED.github_created_at, app_users.github_created_at)
-       RETURNING id, github_id, handle, role, created_at, github_created_at`,
+       RETURNING id, github_id, handle, role, created_at, github_created_at, public_profile`,
       [input.githubId, input.handle, input.githubCreatedAt ? new Date(input.githubCreatedAt) : null]
     );
     return rowToUser(res.rows[0]);
@@ -1312,7 +1312,7 @@ export class PostgresStore implements Store {
     const userId = res.rows[0]?.user_id;
     if (userId === undefined) return null;
     const user = await this.pool.query(
-      `SELECT id, github_id, handle, role, created_at, github_created_at FROM app_users WHERE id = $1 AND banned_at IS NULL`,
+      `SELECT id, github_id, handle, role, created_at, github_created_at, public_profile FROM app_users WHERE id = $1 AND banned_at IS NULL`,
       [userId],
     );
     return user.rows[0] ? rowToUser(user.rows[0]) : null;
@@ -1770,7 +1770,7 @@ export class PostgresStore implements Store {
 
   async getUserById(id: number): Promise<UserRecord | null> {
     const res = await this.pool.query(
-      `SELECT id, github_id, handle, role, created_at, github_created_at FROM app_users WHERE id = $1`,
+      `SELECT id, github_id, handle, role, created_at, github_created_at, public_profile FROM app_users WHERE id = $1`,
       [id],
     );
     return res.rows[0] ? rowToUser(res.rows[0]) : null;
@@ -1994,6 +1994,26 @@ export class PostgresStore implements Store {
     return result.rows.map((r) => ({ title: r.title || undefined, day: r.day, week: r.week, total: r.total, lastAt: r.last_at ? new Date(r.last_at).toISOString() : undefined }));
   }
 
+  async getUserByHandle(handle: string): Promise<UserRecord | null> {
+    const res = await this.pool.query(
+      `SELECT id, github_id, handle, role, created_at, github_created_at, public_profile FROM app_users WHERE lower(handle) = lower($1) AND banned_at IS NULL`,
+      [handle],
+    );
+    return res.rows[0] ? rowToUser(res.rows[0]) : null;
+  }
+
+  async listUsers(limit: number): Promise<UserRecord[]> {
+    const res = await this.pool.query(
+      `SELECT id, github_id, handle, role, created_at, github_created_at, public_profile FROM app_users WHERE banned_at IS NULL ORDER BY id LIMIT $1`,
+      [limit],
+    );
+    return res.rows.map(rowToUser);
+  }
+
+  async setUserPublic(id: number, value: boolean): Promise<void> {
+    await this.pool.query(`UPDATE app_users SET public_profile = $2 WHERE id = $1`, [id, value]);
+  }
+
   async updateLeadMoney(id: string, money: LeadMoney): Promise<void> {
     await this.pool.query(
       `UPDATE leads SET budget = $2, currency = COALESCE($3, currency), payment_period = COALESCE($4, payment_period),
@@ -2173,6 +2193,7 @@ function rowToUser(r: any): UserRecord {
     role: r.role,
     createdAt: new Date(r.created_at).toISOString(),
     githubCreatedAt: r.github_created_at ? new Date(r.github_created_at).toISOString() : undefined,
+    publicProfile: r.public_profile !== false,
   };
 }
 

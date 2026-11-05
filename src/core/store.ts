@@ -108,6 +108,8 @@ export interface UserRecord {
   role: string;
   createdAt: string;
   githubCreatedAt?: string;
+  /** False when the person left the public rating. */
+  publicProfile?: boolean;
 }
 
 export interface UserTelegramAccountRecord {
@@ -282,6 +284,9 @@ export interface HubStore {
 
   // --- rating and moderation (migration 013) ---
   getUserById(id: number): Promise<UserRecord | null>;
+  getUserByHandle?(handle: string): Promise<UserRecord | null>;
+  listUsers?(limit: number): Promise<UserRecord[]>;
+  setUserPublic?(id: number, value: boolean): Promise<void>;
   linkParticipantGithub(pubkey: string, userId: number): Promise<void>;
   getParticipantByGithubUser(userId: number): Promise<ParticipantRecord | null>;
   /** `reason` null lifts the ban. */
