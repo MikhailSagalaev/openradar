@@ -352,5 +352,65 @@
   },
   "copied": {
     "message": "Скопировано!"
+  },
+  "collectorTitle": {
+    "message": "Сбор заказов"
+  },
+  "collectorHint": {
+    "message": "Для владельца хаба: читает Профи.ру, Яндекс Услуги и YouDo в этом браузере, где вы вошли в аккаунт."
+  },
+  "collectorNow": {
+    "message": "Собрать с этой страницы"
+  },
+  "collectorUrls": {
+    "message": "Страницы по городам и специальностям, по одной в строке"
+  },
+  "collectorAuto": {
+    "message": "Обходить автоматически"
+  },
+  "collectorMinutes": {
+    "message": "Раз в сколько минут"
+  },
+  "collectorDenied": {
+    "message": "Без доступа к этим сайтам сбор не работает"
+  },
+  "collectorSaved": {
+    "message": "Сохранено"
+  },
+  "collectorDone": {
+    "message": "Найдено: $A$, новых: $B$",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      },
+      "b": {
+        "content": "$2"
+      }
+    }
+  },
+  "collectorFailed": {
+    "message": "Не вышло: $A$",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      }
+    }
+  },
+  "collectorLast": {
+    "message": "Прошлый обход: страниц $A$, найдено $B$, новых $C$, ошибок $D$",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      },
+      "b": {
+        "content": "$2"
+      },
+      "c": {
+        "content": "$3"
+      },
+      "d": {
+        "content": "$4"
+      }
+    }
   }
 }

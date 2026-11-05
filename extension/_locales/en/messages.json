@@ -352,5 +352,65 @@
   },
   "copied": {
     "message": "Copied!"
+  },
+  "collectorTitle": {
+    "message": "Order collector"
+  },
+  "collectorHint": {
+    "message": "For the hub owner: reads Profi.ru, Yandex Uslugi and YouDo in this browser, where you are signed in."
+  },
+  "collectorNow": {
+    "message": "Collect from this page"
+  },
+  "collectorUrls": {
+    "message": "Pages by city and specialty, one per line"
+  },
+  "collectorAuto": {
+    "message": "Walk them automatically"
+  },
+  "collectorMinutes": {
+    "message": "Every how many minutes"
+  },
+  "collectorDenied": {
+    "message": "The collector needs access to these sites"
+  },
+  "collectorSaved": {
+    "message": "Saved"
+  },
+  "collectorDone": {
+    "message": "Found: $A$, new: $B$",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      },
+      "b": {
+        "content": "$2"
+      }
+    }
+  },
+  "collectorFailed": {
+    "message": "Failed: $A$",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      }
+    }
+  },
+  "collectorLast": {
+    "message": "Last walk: pages $A$, found $B$, new $C$, errors $D$",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      },
+      "b": {
+        "content": "$2"
+      },
+      "c": {
+        "content": "$3"
+      },
+      "d": {
+        "content": "$4"
+      }
+    }
   }
 }

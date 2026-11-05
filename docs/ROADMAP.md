@@ -21,7 +21,7 @@ Good first issues: [#54](https://github.com/MikhailSagalaev/openradar/issues/54)
 
 ## Ближайшее (ноябрь 2026)
 
-Заказы становятся основным потоком. Срез и приоритеты: [STATE_2026-11.md](STATE_2026-11.md), площадки заказов: [GIG_SOURCES.md](GIG_SOURCES.md), подключение агентов: [MCP.md](MCP.md).
+Заказы становятся основным потоком. Чек-лист: [TASKS.md](TASKS.md). Срез и приоритеты: [STATE_2026-11.md](STATE_2026-11.md), площадки заказов: [GIG_SOURCES.md](GIG_SOURCES.md), подключение агентов: [MCP.md](MCP.md).
 
 ## v1.0 — критерии
 

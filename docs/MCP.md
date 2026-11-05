@@ -56,9 +56,4 @@ url = "https://openradar.fun/mcp"
 
 Карточка сервера: `/.well-known/mcp/server-card.json`, описание для реестра: [server.json](../server.json).
 
-Публикация новой версии в официальный реестр делается вручную, вход нужен владельцу репозитория:
-
-```bash
-mcp-publisher login github
-mcp-publisher publish
-```
+Официальный реестр обновляется сам при каждом релизе: workflow `MCP registry` входит через GitHub OIDC, токены не нужны.

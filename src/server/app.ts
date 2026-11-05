@@ -28,6 +28,7 @@ import { renderAdminPage } from './admin.ts';
 import { analyticsFromEnv, contentSecurityPolicy } from './analytics.ts';
 import { filterOptions, parseFeedFilters, type FeedFilters } from './filters.ts';
 import { estimateMarket } from '../core/market.ts';
+import { COLLECTOR_MAX_ORDERS, COLLECTOR_PLATFORMS, collectedOrderToRaw, type CollectorPlatform } from './collector.ts';
 import { rateLimit } from './ratelimit.ts';
 import { indexCsv, openradarIndex } from '../research/index.ts';
 import { qualityFlagsOf } from '../core/quality.ts';
@@ -1579,7 +1580,7 @@ export function createApp(runtime: Runtime): Hono {
     if (!title && !text) return c.redirect('/submit');
 
     // Not the row personal Telegram sources file their posts under.
-    const sources = (await runtime.store.listSources()).filter((s) => s.config.userTelegram !== true);
+    const sources = (await runtime.store.listSources()).filter((s) => s.config.userTelegram !== true && !s.config.collector);
     let source =
       sources.find((s) => s.kind === 'webhook' && s.enabled) ??
       sources.find((s) => s.kind === 'webhook');
@@ -2504,6 +2505,35 @@ export function createApp(runtime: Runtime): Hono {
     delete body.author;
     const result = await submitForUser(auth.user, body);
     return c.json(result.json, result.status);
+  });
+
+  // Orders the owner's browser read on boards behind a login. Only admins: these posts
+  // stand under the board's name, so a stranger's could not be told from real ones.
+  app.post('/api/ext/orders', rateLimit({ windowMs: 10 * 60_000, max: 120 }), async (c) => {
+    extensionCors(c);
+    const auth = await extensionUser(c);
+    if (!auth) return c.json({ error: 'unauthorized' }, 401);
+    if (!isGitHubAdmin(auth.user, runtime)) return c.json({ error: 'forbidden' }, 403);
+    const body = (await c.req.json().catch(() => null)) as { platform?: unknown; orders?: unknown } | null;
+    const platform = body?.platform as CollectorPlatform;
+    if (!body || typeof platform !== 'string' || !Object.hasOwn(COLLECTOR_PLATFORMS, platform) || !Array.isArray(body.orders)) return c.json({ error: 'invalid_body' }, 400);
+    const { title } = COLLECTOR_PLATFORMS[platform];
+    const source = (await runtime.store.listSources()).find((s) => s.config.collector === platform)
+      ?? await runtime.store.createSource({ kind: 'webhook', title, enabled: false, config: { collector: platform } });
+    const summary = { found: 0, inserted: 0, duplicates: 0, rejected: 0, skipped: 0 };
+    for (const order of body.orders.slice(0, COLLECTOR_MAX_ORDERS)) {
+      const raw = order && typeof order === 'object' ? collectedOrderToRaw(platform, source.id, order as Record<string, unknown>) : undefined;
+      if (!raw) {
+        summary.skipped++;
+        continue;
+      }
+      summary.found++;
+      const outcome = await ingestRawLead(raw, source, deps(runtime));
+      if (outcome.status === 'inserted' || outcome.status === 'delivered') summary.inserted++;
+      else if (outcome.status === 'duplicate') summary.duplicates++;
+      else summary.rejected++;
+    }
+    return c.json(summary);
   });
 
   app.delete('/api/ext/token', async (c) => {

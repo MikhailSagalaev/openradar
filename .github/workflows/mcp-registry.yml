@@ -1,0 +1,28 @@
+name: MCP registry
+run-name: MCP registry ${{ github.ref_name }}
+
+# Keeps the official MCP registry on the released version. Signing in with the workflow's own
+# GitHub identity means no token to keep; it works for the io.github.<owner> namespace.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    if: github.repository == 'MikhailSagalaev/openradar'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install mcp-publisher
+        run: |
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+      - name: Sign in with GitHub OIDC
+        run: ./mcp-publisher login github-oidc
+      - name: Publish
+        run: ./mcp-publisher publish

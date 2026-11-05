@@ -585,3 +585,45 @@ getAccount().then(renderAccount);
 loadConfig().catch((error) => setStatus(String(error), 'err'));
 initPreview();
 checkUpdate().catch(() => {});
+
+// Order boards behind a login: see collector.js.
+const COLLECTOR_ORIGINS = ['https://profi.ru/*', 'https://uslugi.yandex.ru/*', 'https://youdo.com/*'];
+const collector = {
+  now: document.getElementById('collector-now'),
+  save: document.getElementById('collector-save'),
+  urls: document.getElementById('collector-urls'),
+  auto: document.getElementById('collector-auto'),
+  minutes: document.getElementById('collector-minutes'),
+  status: document.getElementById('collector-status'),
+};
+
+chrome.storage.local.get(['radarCollector', 'radarCollectorLast']).then(({ radarCollector: saved, radarCollectorLast: last }) => {
+  collector.urls.value = (saved?.urls ?? []).join('\n');
+  collector.auto.checked = Boolean(saved?.auto);
+  collector.minutes.value = saved?.minutes ?? 30;
+  if (last) collector.status.textContent = t('collectorLast', [String(last.pages), String(last.found), String(last.inserted), String(last.errors)]);
+});
+
+collector.save.addEventListener('click', async () => {
+  // Asked on a click: the browser allows the request only then.
+  if (!await chrome.permissions.request({ origins: COLLECTOR_ORIGINS })) {
+    collector.status.textContent = t('collectorDenied');
+    return;
+  }
+  const urls = collector.urls.value.split(/\s+/).filter(Boolean);
+  await chrome.storage.local.set({ radarCollector: { urls, auto: collector.auto.checked, minutes: Number(collector.minutes.value) || 30 } });
+  await chrome.runtime.sendMessage({ type: 'collector-schedule' });
+  collector.status.textContent = t('collectorSaved');
+});
+
+collector.now.addEventListener('click', async () => {
+  if (!await chrome.permissions.request({ origins: COLLECTOR_ORIGINS })) {
+    collector.status.textContent = t('collectorDenied');
+    return;
+  }
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const result = await chrome.runtime.sendMessage({ type: 'collector-tab', tabId: tab.id, url: tab.url });
+  collector.status.textContent = result?.ok === false
+    ? t('collectorFailed', [String(result.error)])
+    : t('collectorDone', [String(result?.found ?? 0), String(result?.inserted ?? 0)]);
+});
