@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.51.4
+
+- Sources: 25 companies join the Greenhouse, Ashby, Lever and Workable presets (Mistral AI, Mapbox, Voodoo, Mollie, Tenable, Oura, Wargaming, SonarSource, Pigment, StackAdapt and others), and three Russian company career sites come as sitemap presets: RT-Solar, Avito careers and CRPT («Честный знак»). Foxford's 721 vacancies ride along from the earlier PR.
+
 ## 0.51.3
 
 - `/submit` works again: a line break in the skills separator stopped the whole form script from parsing, so neither the preview nor the publish button did anything. Reported by GmsDev55 in issue 70.
