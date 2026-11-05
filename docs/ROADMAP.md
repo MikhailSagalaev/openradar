@@ -19,6 +19,10 @@ Good first issues: [#54](https://github.com/MikhailSagalaev/openradar/issues/54)
 [#57](https://github.com/MikhailSagalaev/openradar/issues/57),
 [#58](https://github.com/MikhailSagalaev/openradar/issues/58).
 
+## Ближайшее (ноябрь 2026)
+
+Заказы становятся основным потоком. Срез и приоритеты: [STATE_2026-11.md](STATE_2026-11.md), площадки заказов: [GIG_SOURCES.md](GIG_SOURCES.md), подключение агентов: [MCP.md](MCP.md).
+
 ## v1.0 — критерии
 
 - Стабильный контракт адаптеров с semver и публичным реестром.

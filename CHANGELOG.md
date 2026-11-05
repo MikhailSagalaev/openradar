@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.46.1
+
+- MCP directories get a server card at `/.well-known/mcp/server-card.json`.
+- [docs/MCP.md](docs/MCP.md): connecting Claude, Cursor, Gemini CLI, VS Code and Codex. [docs/GIG_SOURCES.md](docs/GIG_SOURCES.md): how to read Profi.ru, Yandex Uslugi and YouDo. [docs/STATE_2026-11.md](docs/STATE_2026-11.md): users, agents, what is broken.
+- «Юридическое лицо» in an order no longer tags it as legal work.
+
 ## 0.46.0
 
 - Orders and vacancies in Telegram: a post that calls itself a vacancy is one, as is a position at a named company, and hours or monthly pay count as terms of employment. Remocate and WorkASAP post vacancies, Pawetta is a job board. #ищузаказы and «ищу проекты» are offers of work, not orders.

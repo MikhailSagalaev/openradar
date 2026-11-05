@@ -2832,6 +2832,22 @@ export function createApp(runtime: Runtime): Hono {
   app.get('/openapi.json', (c) =>
     c.json(renderOpenApi(seoBaseUrl(c)), 200, { 'cache-control': 'public, max-age=3600' }),
   );
+  // What MCP directories read before they connect.
+  const serverCard = async (c: Context) => {
+    const { MCP_TOOLS } = await import('../mcp/server.ts');
+    return c.json({
+      serverInfo: { name: 'openradar', title: 'openradar', version: VERSION },
+      description: 'Open base of freelance orders and job vacancies from boards and Telegram channels, free and open source.',
+      transport: { type: 'streamable-http', url: `${seoBaseUrl(c)}/mcp` },
+      authentication: { required: false, schemes: ['bearer'] },
+      license: 'AGPL-3.0',
+      repository: 'https://github.com/MikhailSagalaev/openradar',
+      tools: MCP_TOOLS.map((tool) => ({ name: tool.name, description: tool.description })),
+    }, 200, { 'cache-control': 'public, max-age=3600', 'access-control-allow-origin': '*' });
+  };
+  app.get('/.well-known/mcp/server-card.json', serverCard);
+  app.get('/.well-known/mcp.json', serverCard);
+  app.get('/mcp/server-card', serverCard);
   app.get('/.well-known/api-catalog', (c) =>
     c.json(renderApiCatalog(seoBaseUrl(c)), 200, { 'cache-control': 'public, max-age=86400' }),
   );
