@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extName__",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "__MSG_extDescription__",
   "icons": {
     "16": "icon16.png",
@@ -16,6 +16,11 @@
     "storage",
     "contextMenus",
     "notifications"
+  ],
+  "host_permissions": [
+    "https://profi.ru/*",
+    "https://uslugi.yandex.ru/*",
+    "https://youdo.com/*"
   ],
   "optional_host_permissions": [
     "http://*/*",

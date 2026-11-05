@@ -47,7 +47,7 @@ Contacts in the text are sent as they are. The node keeps them in a structured f
 
 ## Order collector
 
-For the hub owner: the section appears only for an account in `RADAR_ADMIN_GITHUB`. **Сбор заказов** lists the boards from `boards.js`. Switch a board on and the browser asks for access to it; pick cities, fields or rubrics as chips, none means everything. The extension reads the boards on a timer, in a background tab, at most every 15 minutes, and sends orders to `POST /api/ext/orders`. A board shows its last walk or asks for a sign-in. The hub removes phones, addresses and handles. See [GIG_SOURCES.md](GIG_SOURCES.md).
+For the hub owner: the section appears only for an account in `RADAR_ADMIN_GITHUB`. **Сбор заказов** lists the boards from `boards.js`. Access to these boards is granted at install. Cities, fields and sections come from the boards' own pages and show as chips, none means everything. The popup also checks whether you are signed in on each board. The extension reads the boards on a timer, in a background tab, at most every 15 minutes, and sends orders to `POST /api/ext/orders`. A board shows its last walk or asks for a sign-in. The hub removes phones, addresses and handles. See [GIG_SOURCES.md](GIG_SOURCES.md).
 
 ## Market pay estimate
 

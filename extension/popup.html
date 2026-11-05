@@ -54,27 +54,6 @@
   </div>
   <p id="status" class="status"></p>
 
-  <section class="market">
-    <button id="estimate" type="button" class="ghost" data-i18n="estimate"></button>
-    <div id="market-result" class="market-result" hidden></div>
-  </section>
-
-  <section class="xray-section" id="xray-section" hidden>
-    <div class="xray-header">
-      <span class="xray-title" data-i18n="xrayTitle"></span>
-      <span class="xray-target" id="xray-target"></span>
-    </div>
-    <p class="xray-desc" data-i18n="xrayDesc"></p>
-    <div class="xray-buttons" id="xray-buttons"></div>
-    <div class="xray-template-box" id="xray-template-box">
-      <div class="xray-template-header">
-        <span class="xray-template-title" data-i18n="xrayPitchTitle"></span>
-        <button type="button" class="mini-btn" id="xray-copy-pitch" data-i18n="copy"></button>
-      </div>
-      <textarea id="xray-pitch-text" readonly rows="3"></textarea>
-    </div>
-  </section>
-
   <section id="collector" class="collector" hidden>
     <h2 class="collector-title" data-i18n="collectorTitle"></h2>
     <div id="collector-boards"></div>
@@ -89,6 +68,27 @@
     <button id="collector-now" type="button" class="ghost" data-i18n="collectorNow"></button>
     <p id="collector-status" class="status"></p>
   </section>
+
+  <section class="market">
+    <button id="estimate" type="button" class="ghost" data-i18n="estimate"></button>
+    <div id="market-result" class="market-result" hidden></div>
+  </section>
+
+  <details class="xray-section" id="xray-section" hidden>
+    <summary class="xray-header">
+      <span class="xray-title" data-i18n="xrayTitle"></span>
+      <span class="xray-target" id="xray-target"></span>
+    </summary>
+    <p class="xray-desc" data-i18n="xrayDesc"></p>
+    <div class="xray-buttons" id="xray-buttons"></div>
+    <div class="xray-template-box" id="xray-template-box">
+      <div class="xray-template-header">
+        <span class="xray-template-title" data-i18n="xrayPitchTitle"></span>
+        <button type="button" class="mini-btn" id="xray-copy-pitch" data-i18n="copy"></button>
+      </div>
+      <textarea id="xray-pitch-text" readonly rows="3"></textarea>
+    </div>
+  </details>
 
   <details id="settings-details">
     <summary data-i18n="ownNode"></summary>

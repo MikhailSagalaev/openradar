@@ -609,3 +609,42 @@ button.chip.on {
   font: inherit;
   font-size: 11px;
 }
+
+.xray-section {
+  padding-top: 8px;
+}
+
+.xray-section summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0;
+}
+
+.xray-section[open] summary {
+  margin-bottom: 8px;
+}
+
+.board-session {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0 0 36px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.board-session a {
+  color: var(--ink);
+}
+
+.chips-more {
+  border: 0;
+  background: none;
+  width: auto;
+  padding: 0;
+  color: var(--muted);
+  font-size: 11px;
+  text-decoration: underline;
+  cursor: pointer;
+}

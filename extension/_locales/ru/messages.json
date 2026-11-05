@@ -339,7 +339,7 @@
     }
   },
   "xrayTitle": {
-    "message": "🎯 Прямой контакт (X-Ray)"
+    "message": "Прямой контакт (X-Ray)"
   },
   "xrayDesc": {
     "message": "Найти тимлида или руководителя направления в обход HR-фильтра:"
@@ -361,9 +361,6 @@
   },
   "collectorAuto": {
     "message": "Собирать автоматически"
-  },
-  "collectorDenied": {
-    "message": "Без доступа к сайту сбор не работает"
   },
   "collectorFailed": {
     "message": "Ошибка: $A$",
@@ -390,12 +387,6 @@
   "collectorRunning": {
     "message": "Идёт сбор…"
   },
-  "collectorSignIn": {
-    "message": "Нужен вход на площадке."
-  },
-  "collectorOpenBoard": {
-    "message": "Открыть"
-  },
   "collectorAgoMin": {
     "message": "$A$ мин назад",
     "placeholders": {
@@ -406,6 +397,23 @@
   },
   "collectorAgoHour": {
     "message": "$A$ ч назад",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      }
+    }
+  },
+  "collectorSignedOut": {
+    "message": "Вы не вошли на площадке."
+  },
+  "collectorSignInLink": {
+    "message": "Войти"
+  },
+  "collectorSignedIn": {
+    "message": "Вход выполнен"
+  },
+  "collectorMore": {
+    "message": "ещё $A$",
     "placeholders": {
       "a": {
         "content": "$1"

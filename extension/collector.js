@@ -9,7 +9,9 @@
 
 const COLLECTOR_ALARM = 'radar-collector';
 const PAGE_SETTLE_MS = 6000;
-const PAUSE_BETWEEN_PAGES_MS = 20000;
+const PAUSE_BETWEEN_PAGES_MS = 5000;
+/** Orders read per step. A browser stops a worker that sits in one long call. */
+const STEP_SIZE = 8;
 
 /** Runs inside the Profi.ru board: the orders of the account's own specialties and region. */
 async function readProfiBoard(scrolls) {
@@ -181,16 +183,25 @@ async function walkYoudo(tabId, url) {
     fresh.push(...unseen);
     if (!unseen.length) break;
   }
-  const batch = fresh.slice(0, YOUDO_TASKS_PER_WALK);
-  if (!batch.length) return { ok: true, found: 0, inserted: 0 };
-  const read = (await run(readYoudoTasks, [batch, 1500])) ?? [];
-  const orders = read.filter((task) => !task.skip);
-  const result = orders.length ? await sendCollected('youdo', orders) : { ok: true, inserted: 0 };
-  if (result.ok !== false) {
-    for (const task of read) seen.add(Number(task.id));
-    await chrome.storage.local.set({ radarYoudoSeen: [...seen].slice(-YOUDO_SEEN_KEPT) });
+  return readInSteps(fresh.slice(0, YOUDO_TASKS_PER_WALK), 'youdo', (ids) => run(readYoudoTasks, [ids, 1500]), seen, 'radarYoudoSeen');
+}
+
+/** Reads and sends a few orders at a time, so a stopped walk loses one step at most. */
+async function readInSteps(ids, platform, read, seen, key) {
+  const total = { found: 0, inserted: 0 };
+  for (let start = 0; start < ids.length; start += STEP_SIZE) {
+    const step = ids.slice(start, start + STEP_SIZE);
+    const orders = ((await read(step)) ?? []).filter((order) => !order.skip);
+    if (orders.length) {
+      const result = await sendCollected(platform, orders);
+      if (result.ok === false) return { ...total, ...result };
+      total.found += orders.length;
+      total.inserted += result.inserted ?? 0;
+    }
+    for (const id of step) seen.add(id);
+    await chrome.storage.local.set({ [key]: [...seen].slice(-YOUDO_SEEN_KEPT) });
   }
-  return { found: orders.length, ...result };
+  return { ok: true, ...total };
 }
 
 const YANDEX_PAGES_PER_WALK = 3;
@@ -203,21 +214,14 @@ async function walkYandex(tabId) {
   const { radarYandexSeen: stored } = await chrome.storage.local.get(['radarYandexSeen']);
   const seen = new Set(stored ?? []);
   const ids = ((await run(readYandexList, [YANDEX_PAGES_PER_WALK])) ?? []).filter((id) => !seen.has(id)).slice(0, YANDEX_ORDERS_PER_WALK);
-  if (!ids.length) return { ok: true, found: 0, inserted: 0 };
-  const orders = (await run(readYandexOrders, [ids, 1500])) ?? [];
-  const result = orders.length ? await sendCollected('yandex', orders) : { ok: true, inserted: 0 };
-  if (result.ok !== false) {
-    for (const id of ids) seen.add(id);
-    await chrome.storage.local.set({ radarYandexSeen: [...seen].slice(-YOUDO_SEEN_KEPT) });
-  }
-  return { found: orders.length, ...result };
+  return readInSteps(ids, 'yandex', (step) => run(readYandexOrders, [step, 1500]), seen, 'radarYandexSeen');
 }
 
 async function walkProfi(tabId) {
   const [result] = await chrome.scripting.executeScript({ target: { tabId }, world: 'MAIN', func: readProfiBoard, args: [PROFI_SCROLLS] });
   const orders = result?.result ?? [];
   if (!orders.length) return { ok: true, found: 0, inserted: 0 };
-  return { found: orders.length, ...(await sendCollected('profi', orders)) };
+  return { ...(await sendCollected('profi', orders)), found: orders.length };
 }
 
 async function sendCollected(platform, orders) {
@@ -229,7 +233,7 @@ async function sendCollected(platform, orders) {
     body: JSON.stringify({ platform, orders: orders.slice(0, 100) }),
   });
   const json = await response.json().catch(() => ({}));
-  return response.ok ? { ok: true, ...json } : { ok: false, error: json.error ?? `http_${response.status}` };
+  return response.ok ? { ...json, ok: true } : { ok: false, error: json.error ?? `http_${response.status}` };
 }
 
 async function readBoardPage(board, tabId, url) {
@@ -280,14 +284,17 @@ let collectorBusy = false;
 async function walkBoards() {
   if (collectorBusy) return;
   collectorBusy = true;
-  await chrome.storage.local.set({ radarCollectorRunning: true });
+  // A worker with no calls in flight is stopped after 30 seconds, mid-walk.
+  const keepAlive = setInterval(() => chrome.runtime.getPlatformInfo(() => {}), 20000);
+  await chrome.storage.local.set({ radarCollectorRunning: new Date().toISOString() });
   try {
-    const { radarCollector: settings } = await chrome.storage.local.get(['radarCollector']);
+    const { radarCollector: settings, radarBoardCatalog: catalogs } = await chrome.storage.local.get(['radarCollector', 'radarBoardCatalog']);
     for (const board of BOARDS) {
       const chosen = settings?.boards?.[board.id];
       if (!chosen?.on) continue;
       const status = { at: new Date().toISOString(), found: 0, inserted: 0 };
-      for (const url of board.lists(chosen)) {
+      await saveBoardStatus(board.id, status);
+      for (const url of board.lists(chosen, catalogs?.[board.id])) {
         try {
           const result = await walkPage(board, url);
           status.found += result.found ?? 0;
@@ -296,12 +303,14 @@ async function walkBoards() {
         } catch (error) {
           status.error = String(error?.message ?? error);
         }
+        status.at = new Date().toISOString();
         await saveBoardStatus(board.id, status);
-        if (status.error === 'sign_in') break;
+        if (status.error) break;
         await collectorWait(PAUSE_BETWEEN_PAGES_MS);
       }
     }
   } finally {
+    clearInterval(keepAlive);
     collectorBusy = false;
     await chrome.storage.local.set({ radarCollectorRunning: false });
   }
