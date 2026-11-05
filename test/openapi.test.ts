@@ -55,6 +55,17 @@ describe('OpenAPI description of the public API', () => {
     expect(catalog.spec[0].url).toContain('/openapi.json');
   });
 
+  it('gives MCP directories a server card', async () => {
+    const { app } = makeRuntime();
+    for (const path of ['/.well-known/mcp/server-card.json', '/.well-known/mcp.json', '/mcp/server-card']) {
+      const res = await app.request(path);
+      expect(res.status).toBe(200);
+      const card = (await res.json()) as any;
+      expect(card.transport.url).toMatch(/\/mcp$/);
+      expect(card.tools.map((tool: { name: string }) => tool.name)).toContain('search_leads');
+    }
+  });
+
   it('every field of a live /api/leads lead is described by the Lead schema', async () => {
     const { app, runtime } = makeRuntime();
     await seedOneLead(runtime);

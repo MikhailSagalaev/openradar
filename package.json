@@ -1,6 +1,6 @@
 {
   "name": "radar",
-  "version": "0.46.0",
+  "version": "0.46.1",
   "private": true,
   "description": "Self-hosted lead pipeline for public order sources",
   "license": "AGPL-3.0-only",

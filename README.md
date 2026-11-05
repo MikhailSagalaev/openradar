@@ -34,6 +34,7 @@ Job seekers should not have to pay for subscriptions to parsers or for respondin
 - **Browser extension.** Sign in with GitHub once, then add a vacancy or an order from any site in one click; it also shows what similar work usually pays and whether the pay on the page is below, within or above it. Includes 1-click **X-Ray Direct Outreach** to locate engineering leads and hiring managers across LinkedIn, Telegram, Habr and GitHub.
 - **Votes and submissions.** Signed-in users mark leads as useful, junk, scam or closed, and add posts by link.
 - **Market research.** [openradar.fun/research](https://openradar.fun/research): pay in vacancies and order budgets by role, grade, language, city and skill, with medians, quartiles and sample sizes. Monthly reports are frozen so they can be cited; the data is open under CC BY 4.0 (CSV and JSON). How it is counted: [methodology](https://openradar.fun/research/methodology).
+- **Connect an agent in one line:** `claude mcp add --transport http openradar https://openradar.fun/mcp`. Cursor, Gemini CLI, VS Code and Codex: [docs/MCP.md](docs/MCP.md).
 - **RSS for any query**, an HTTP API and an MCP server over the same feed (including `xray_generate_dorks` for AI agent sourcing).
 - **Your own node.** Run it at home or on a server, connect your sources, filters and notifications (Telegram, webhook). Nothing leaves the node unless you share a source.
 
