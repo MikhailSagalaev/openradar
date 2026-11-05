@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.51.4
+
+- Sources: the RocketHunt catalog read end to end — 25 companies join the Greenhouse, Ashby, Lever and Workable presets (Mistral AI, Mapbox, Voodoo, Mollie, Tenable, Oura, Wargaming, SonarSource, Pigment, StackAdapt and others), and three Russian company career sites come as sitemap presets: RT-Solar, Avito careers and CRPT («Честный знак»). Foxford's 721 vacancies ride along from the earlier PR.
+- The 402 recruiter Telegram handles from the same extraction are personal accounts: t.me serves them no public preview, so they are not sources — they stay a contact segment.
+
 ## 0.51.3
 
 - `/submit` works again: a line break in the skills separator stopped the whole form script from parsing, so neither the preview nor the publish button did anything. Reported by GmsDev55 in issue 70.
