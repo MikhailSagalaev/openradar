@@ -1,5 +1,6 @@
 import type { PollContext, RawLead, SourceAdapter, SourceRecord } from '../core/types.ts';
 import { asText, companyOf, extractPageFacts, isType, jsonLdObjects, salaryOf } from '../research/facts.ts';
+import { stripHtml } from '../core/text.ts';
 import { fetchText } from './http.ts';
 
 /**
@@ -43,8 +44,12 @@ function locationOf(posting: Record<string, unknown>): string | undefined {
 /** One vacancy page to a lead, or nothing when the page has no JobPosting. */
 export function leadFromPage(source: SourceRecord, url: string, key: string, html: string): RawLead | undefined {
   const posting = jsonLdObjects(html).find((node) => isType(node, 'JobPosting'));
-  const title = posting && asText(posting.title, 200);
-  if (!posting || !title) return undefined;
+  if (posting) return leadFromPosting(source, url, key, html, posting);
+  return leadFromPlainPage(source, url, key, html);
+}
+
+function leadFromPosting(source: SourceRecord, url: string, key: string, html: string, posting: Record<string, unknown>): RawLead {
+  const title = asText(posting.title, 200)!;
   const facts = extractPageFacts(html);
   const company = companyOf(posting);
   const salary = salaryOf(posting);
@@ -72,6 +77,41 @@ ${markup}` : markup;
     publishedAt: typeof posting.datePosted === 'string' ? posting.datePosted : undefined,
     metadata: { facts },
     raw: { sitemap: true },
+  };
+}
+
+const DEAD_PAGE = /40[43]|not[\s-]?found|страница не найдена|доступ ограничен|access denied/i;
+
+/**
+ * Pages without JobPosting markup: most company career sites render the vacancy into plain
+ * HTML. The h1 (else the <title>) is the vacancy, the meta description and the body text
+ * carry the rest; the money and quality stages downstream parse pay and reject junk.
+ */
+function leadFromPlainPage(source: SourceRecord, url: string, key: string, html: string): RawLead | undefined {
+  const h1 = asText(html.match(/<h1[^>]*>([\s\S]{1,300}?)<\/h1>/i)?.[1]?.replace(/<[^>]+>/g, ' '), 200);
+  const title = asText(html.match(/<title>([\s\S]{1,300}?)<\/title>/i)?.[1], 200);
+  const heading = (h1 && !DEAD_PAGE.test(h1) ? h1 : '') || '';
+  const pageTitle = title && !DEAD_PAGE.test(title) ? title : '';
+  if (!heading && !pageTitle) return undefined;
+  const meta = asText(html.match(/<meta\s+(?:name="description"|property="og:description")\s+content="([^"]*)"/i)?.[1], 800) ?? '';
+  const body = stripHtml(html
+    .replace(/<(script|style|nav|footer|header|svg)[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<h1[^>]*>([\s\S]*?)<\/h1>/i, ' '))
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (body.length < 200) return undefined;
+  const facts = extractPageFacts(html);
+  const name = heading || pageTitle;
+  return {
+    sourceId: source.id,
+    type: 'job',
+    externalId: `sitemap:${new URL(url).host}:${key}`,
+    url,
+    title: name,
+    text: [name, meta, body.slice(0, MAX_TEXT)].filter(Boolean).join('\n\n').slice(0, MAX_TEXT),
+    publishedAt: html.match(/<meta\s+property="article:published_time"\s+content="([^"]+)"/i)?.[1],
+    metadata: { facts },
+    raw: { sitemap: true, plain: true },
   };
 }
 
