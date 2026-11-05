@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.51.5
+
+- Sources: nine more company career sites join as sitemap presets — VK, Andersen, Wise, T1, Magnit Tech, CROC, Nekki, Sber2B and Jahon School — from the systematic pass over the 155 career-site domains in the RocketHunt extraction. The rest were ATS hosts already read, aggregators, or sites whose sitemaps carry no per-vacancy URLs.
+
 ## 0.51.4
 
 - Sources: the RocketHunt catalog read end to end — 25 companies join the Greenhouse, Ashby, Lever and Workable presets (Mistral AI, Mapbox, Voodoo, Mollie, Tenable, Oura, Wargaming, SonarSource, Pigment, StackAdapt and others), and three Russian company career sites come as sitemap presets: RT-Solar, Avito careers and CRPT («Честный знак»). Foxford's 721 vacancies ride along from the earlier PR.
