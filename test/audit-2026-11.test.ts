@@ -85,6 +85,36 @@ describe('the ceiling', () => {
   });
 });
 
+describe('orders and vacancies in free text', () => {
+  const type = (title: string, text: string, channel?: string) => detectPostType({ type: 'gig', title, text, channel }, telegram);
+
+  it('a post that calls itself a vacancy is one', () => {
+    expect(type('Открыта вакансия в команду', '#ищу #смм Продюсерский центр')).toBe('job');
+    expect(type('Название вакансии / роль', '#ищу #ассистент')).toBe('job');
+  });
+
+  it('a position at a named company is a vacancy', () => {
+    expect(type('Product Marketing Manager в Got it Life', 'Стартап из Кремниевой долины')).toBe('job');
+    expect(type('Руководитель группы разработки бэкенда в Codenv', 'Команда разработки')).toBe('job');
+  });
+
+  it('hours and monthly pay make a vacancy', () => {
+    expect(type('Ищу бизнес-ассистента', 'Занятость: 4 часа. Оплата 30 000 ₽ в месяц')).toBe('job');
+  });
+
+  it('a one-off task stays an order', () => {
+    expect(type('Сделать бота в MAX', 'Создать бота в мессенджере max для работы с клиентами')).toBe('gig');
+    expect(type('Доработать телеграм бота', 'Есть готовый бот, нужно добавить оплату, бюджет: 15000')).toBe('gig');
+    expect(type('Ищу SMM-специалиста на два проекта', 'Нужно сделать контент-план')).toBe('gig');
+  });
+
+  it('a person offering work is no order', () => {
+    const flags = (text: string) => assessQuality({ type: 'gig', title: 'Привет', text }, telegram).flags;
+    expect(flags('#ищу #ищузаказы #инфографика Меня зовут Варвара')).toContain('channel_ad');
+    expect(flags('Ищу проекты и разовые задачи по GetCourse')).toContain('channel_ad');
+  });
+});
+
 describe('day rates', () => {
   it('multiplies only the sum named per day', () => {
     const text = 'Оплата без задержек: 5/2 – 119 600 ₽ 2/2 – 78 000 ₽ в день– 5200 ₽';
