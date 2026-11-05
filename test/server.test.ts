@@ -928,6 +928,23 @@ describe('http server', () => {
     expect(result.ok).toBe(true);
     expect((await runtime.store.getLead(result.leadId))?.author).toBe('octocat');
 
+    // Orders from boards behind a login come from admins only, and carry no client.
+    const orders = (platform: string, list: unknown[]) => app.request('/api/ext/orders', {
+      method: 'POST',
+      headers: { ...bearer, 'content-type': 'application/json' },
+      body: JSON.stringify({ platform, orders: list }),
+    });
+    const order = { id: '92191314', url: 'https://profi.ru/backoffice/n.php?o=92191314', title: 'Сайт на Tilda', text: 'Сделать лендинг. Телефон +7 912 345-67-89, пишите @ivan_client. Бюджет 30 000 ₽' };
+    expect((await orders('profi', [order])).status).toBe(403);
+    runtime.env.RADAR_ADMIN_GITHUB = 'octocat';
+    expect((await orders('kwork', [order])).status).toBe(400);
+    expect(await (await orders('profi', [order, { ...order, id: 'x', url: 'https://evil.example/o' }])).json()).toMatchObject({ found: 1, inserted: 1, skipped: 1 });
+    const [collected] = await runtime.store.listLeads({ query: 'Tilda' });
+    expect(collected).toMatchObject({ type: 'gig', budget: 30000 });
+    expect(collected!.text).not.toMatch(/912|ivan_client/);
+    expect(collected!.contacts ?? []).toEqual([]);
+    expect(await (await orders('profi', [order])).json()).toMatchObject({ inserted: 0, duplicates: 1 });
+
     const extensionPage = await (await app.request('/extension')).text();
     expect(extensionPage).toMatch(/Актуальная версия: <strong>\d+\.\d+\.\d+<\/strong>/);
 

@@ -25,7 +25,7 @@ const JOB_HINT = /ваканс|vacanc|career|hiring|в\s+штат|оклад|т�
 /** Boards that publish only vacancies: a post from them is a job whatever its title says. */
 const JOB_BOARD_URL = /^https?:\/\/(?:www\.)?(?:jobicy\.com|weworkremotely\.com|remoteok\.com|remotive\.com|arbeitnow\.com|himalayas\.app|getmatch\.ru|hh\.ru\/vacancy|career\.habr\.com\/vacancies|trudvsem\.ru|boards\.greenhouse\.io|job-boards\.greenhouse\.io|jobs\.lever\.co|jobs\.ashbyhq\.com|jobs\.gem\.com|remoteworker\.[a-z]+|nodesk\.co|cryptojobslist\.com|cryptocurrencyjobs\.co|landing\.jobs|golangprojects\.com|workingnomads\.com|jobspresso\.co|elixirjobs\.net|pawetta\.ru)\b/i;
 /** Freelance exchanges: everything on them is an order, even an order to write a vacancy. */
-const GIG_BOARD_URL = /^https?:\/\/(?:www\.)?(?:kwork\.ru|fl\.ru|freelancehunt\.com\/project|freelancer\.com)\b/i;
+const GIG_BOARD_URL = /^https?:\/\/(?:www\.)?(?:kwork\.ru|fl\.ru|freelancehunt\.com\/project|freelancer\.com|profi\.ru|uslugi\.yandex\.ru|youdo\.com)\b/i;
 
 export function isJobBoardUrl(url: string | undefined): boolean {
   return Boolean(url && JOB_BOARD_URL.test(url));

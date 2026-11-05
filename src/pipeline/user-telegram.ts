@@ -24,7 +24,8 @@ import {
 export const USER_TELEGRAM_INTERVAL_MS = 15 * 60_000;
 const SOURCES_PER_ROUND = 10;
 const CHATS_PER_SOURCE = 30;
-const MESSAGES_PER_CHAT = 30;
+/** A busy group writes more than 30 posts between two rounds, and a skipped post is never read again. */
+const MESSAGES_PER_CHAT = 100;
 
 /** The part of an mtcute message this reader looks at. */
 export interface UserTelegramMessage {

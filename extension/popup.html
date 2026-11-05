@@ -75,6 +75,21 @@
     </div>
   </section>
 
+  <details id="collector-details">
+    <summary data-i18n="collectorTitle"></summary>
+    <p class="hint" data-i18n="collectorHint"></p>
+    <button id="collector-now" type="button" class="ghost" data-i18n="collectorNow"></button>
+    <label><span data-i18n="collectorUrls"></span>
+      <textarea id="collector-urls" rows="4" placeholder="https://uslugi.yandex.ru/cab/orders"></textarea>
+    </label>
+    <label><input id="collector-auto" type="checkbox"> <span data-i18n="collectorAuto"></span></label>
+    <label><span data-i18n="collectorMinutes"></span>
+      <input id="collector-minutes" type="number" min="15" value="30">
+    </label>
+    <button id="collector-save" type="button" class="ghost" data-i18n="save"></button>
+    <p id="collector-status" class="status"></p>
+  </details>
+
   <details id="settings-details">
     <summary data-i18n="ownNode"></summary>
     <p class="account-note" data-i18n="ownNodeNote"></p>

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.47.0
+
+- **Order collector.** Extension 0.13.0 reads Profi.ru, Yandex Uslugi and YouDo in a browser where the owner is signed in, from one page or over a saved list of cities and specialties. The hub takes them at `POST /api/ext/orders`, from admins only, and cuts phones, addresses and handles first. The page markup comes from public repositories and is not yet checked on live accounts.
+- The official MCP registry follows every release through GitHub OIDC.
+- Personal Telegram sources read 100 posts a chat each round, not 30: a busy group lost the rest.
+
 ## 0.46.1
 
 - MCP directories get a server card at `/.well-known/mcp/server-card.json`.

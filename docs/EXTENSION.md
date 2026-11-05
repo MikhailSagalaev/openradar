@@ -45,6 +45,10 @@ To send leads to your own server instead, sign out and use the settings:
 
 Contacts in the text are sent as they are. The node keeps them in a structured field; in hub mode guests never see them.
 
+## Order collector
+
+For the hub owner. In **Сбор заказов**, list pages of Profi.ru, Yandex Uslugi and YouDo, one per city and specialty, in a browser signed in to those boards. The extension reads a page on demand or walks the list on a timer, in a background tab, at most every 15 minutes, and sends orders to `POST /api/ext/orders`. The hub accepts them from accounts in `RADAR_ADMIN_GITHUB` only and removes phones, addresses and handles. See [GIG_SOURCES.md](GIG_SOURCES.md).
+
 ## Market pay estimate
 
 On a vacancy or an order, press **Оценить оплату на рынке** in the popup. The extension asks the market server (`https://openradar.fun` by default, **Сервер рыночной оценки** in the settings) for `/api/market` and shows:

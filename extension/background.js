@@ -2,6 +2,8 @@
  * openradar extension: background service worker (context menu, shortcut, notifications).
  */
 
+importScripts('collector.js');
+
 const notificationUrls = new Map();
 
 /** Localised UI string; see _locales/. */
