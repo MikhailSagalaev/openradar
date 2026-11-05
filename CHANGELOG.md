@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.51.1
+
+- `/network`: the rating shows how many posts a participant brought; the points and tier no longer sit under the wrong headers.
+
 ## 0.51.0
 
 - **Participants.** `/network` opens from the menu and names people: the rating links to a public page `/u/<handle>` with their posts, points and tier. Anyone can leave the rating in the profile.

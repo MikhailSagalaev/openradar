@@ -7,6 +7,7 @@ import {
   renderCatalogPage,
   renderFaqPage,
   renderLlmsTxt,
+  renderNetworkPage,
   renderRobotsTxt,
   renderSitemapXml,
 } from '../src/server/seo.ts';
@@ -152,5 +153,23 @@ describe('SEO catalog pages', () => {
     // Leading hashtags are stripped from meta description
     expect(html).not.toMatch(/content="#вакансия/);
     expect(html).toContain('content="Компания: Яндекс Лавка');
+  });
+});
+
+describe('participants table', () => {
+  it('keeps every row under its header', () => {
+    const html = renderNetworkPage({
+      baseUrl: 'https://example.test',
+      version: '0',
+      participants: [{ shortPubkey: 'abcd', handle: 'mona', posts: 12, points: 3.5, tier: 'member' }],
+      sources: [],
+      windowDays: 30,
+    });
+    const table = html.slice(html.indexOf('<table class="profile-table">'));
+    const head = table.slice(0, table.indexOf('</thead>'));
+    const row = table.slice(table.indexOf('<tbody>'), table.indexOf('</tbody>'));
+    expect(row.match(/<td/g)?.length).toBe(head.match(/<th>/g)?.length);
+    expect(row).toContain('<td class="num">12</td>');
+    expect(row).toContain('href="/u/mona"');
   });
 });

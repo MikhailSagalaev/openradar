@@ -817,7 +817,7 @@ export function renderNetworkPage(options: {
   const participantRows = options.participants.map((p, index) => {
     const name = p.handle ? `@${escapeHtml(p.handle)}` : p.name ? escapeHtml(p.name) : `<code>${escapeHtml(p.shortPubkey)}</code>`;
     const label = p.handle ? `<a href="/u/${escapeHtml(encodeURIComponent(p.handle))}">${name}</a>` : name;
-    return `<tr><td>${index + 1}</td><td>${label}${p.about ? `<div class="muted small">${escapeHtml(p.about.slice(0, 120))}</div>` : ''}</td><td class="num">${p.points % 1 === 0 ? p.points : p.points.toFixed(1)}</td><td>${escapeHtml(p.tier)}</td></tr>`;
+    return `<tr><td>${index + 1}</td><td>${label}${p.about ? `<div class="muted small">${escapeHtml(p.about.slice(0, 120))}</div>` : ''}</td><td class="num">${p.posts}</td><td class="num">${p.points % 1 === 0 ? p.points : p.points.toFixed(1)}</td><td>${escapeHtml(p.tier)}</td></tr>`;
   }).join('\n');
 
   const sourceRows = options.sources.map((s) => {
