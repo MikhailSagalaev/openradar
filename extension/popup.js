@@ -561,7 +561,7 @@ loadConfig().catch((error) => setStatus(String(error), 'err'));
 initPreview();
 checkUpdate().catch(() => {});
 
-// Order boards behind a login: boards.js says what exists, collector.js reads them.
+// Order boards: boards.js says what exists, the boards say what they offer, collector.js reads them.
 const collector = {
   box: document.getElementById('collector'),
   boards: document.getElementById('collector-boards'),
@@ -571,7 +571,11 @@ const collector = {
   status: document.getElementById('collector-status'),
 };
 const collectorLang = () => uiLanguage();
+const STALE_RUN_MS = 15 * 60_000;
+const CHIPS_FOLDED = 8;
 let collectorSettings = { auto: false, minutes: 30, boards: {} };
+let collectorData = {};
+const openFilters = new Set();
 
 async function saveCollector() {
   await chrome.storage.local.set({ radarCollector: collectorSettings });
@@ -584,14 +588,79 @@ function collectorAgo(iso) {
   return t('collectorAgoHour', [String(Math.round(minutes / 60))]);
 }
 
-function boardStatusLine(board, status) {
-  if (!status) return '';
-  if (status.error === 'sign_in') return t('collectorSignIn');
-  if (status.error) return t('collectorFailed', [status.error]);
-  return t('collectorLast', [collectorAgo(status.at), String(status.found), String(status.inserted)]);
+function sessionLine(board) {
+  const line = document.createElement('div');
+  line.className = 'board-session';
+  const state = collectorData.states?.[board.id];
+  if (!board.signInNeeded) {
+    line.textContent = board.hint[collectorLang()];
+    return line;
+  }
+  if (state === 'signed_out') {
+    line.textContent = t('collectorSignedOut');
+    const link = document.createElement('a');
+    link.href = board.open;
+    link.target = '_blank';
+    link.textContent = t('collectorSignInLink');
+    line.append(' ', link);
+    return line;
+  }
+  line.textContent = state === 'signed_in' ? `${t('collectorSignedIn')}. ${board.hint[collectorLang()]}` : board.hint[collectorLang()];
+  return line;
 }
 
-function renderBoards(statuses) {
+function runLine(status) {
+  const line = document.createElement('div');
+  line.className = 'board-hint';
+  if (status.error === 'sign_in') line.textContent = t('collectorSignedOut');
+  else if (status.error) line.textContent = t('collectorFailed', [status.error]);
+  else line.textContent = t('collectorLast', [collectorAgo(status.at), String(status.found), String(status.inserted)]);
+  return line;
+}
+
+function chipGroup(board, filter, chosen) {
+  const group = document.createElement('div');
+  group.className = 'chips';
+  const label = document.createElement('span');
+  label.className = 'chips-title';
+  label.textContent = filter.title[collectorLang()];
+  group.append(label);
+  const key = `${board.id}:${filter.key}`;
+  const picked = chosen[filter.key] ?? [];
+  const all = filter.options;
+  const shown = openFilters.has(key) ? all : all.filter(([value], index) => index < CHIPS_FOLDED || picked.includes(value));
+  for (const [value, text] of shown) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    const on = picked.includes(value);
+    chip.className = on ? 'chip on' : 'chip';
+    chip.setAttribute('aria-pressed', String(on));
+    chip.textContent = typeof text === 'string' ? text : text[collectorLang()];
+    chip.addEventListener('click', async () => {
+      const list = new Set(picked);
+      if (list.has(value)) list.delete(value);
+      else list.add(value);
+      collectorSettings.boards[board.id] = { ...chosen, [filter.key]: [...list] };
+      await saveCollector();
+      renderBoards();
+    });
+    group.append(chip);
+  }
+  if (shown.length < all.length) {
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'chips-more';
+    more.textContent = t('collectorMore', [String(all.length - shown.length)]);
+    more.addEventListener('click', () => {
+      openFilters.add(key);
+      renderBoards();
+    });
+    group.append(more);
+  }
+  return group;
+}
+
+function renderBoards() {
   collector.boards.textContent = '';
   for (const board of BOARDS) {
     const chosen = collectorSettings.boards[board.id] ?? {};
@@ -603,61 +672,21 @@ function renderBoards(statuses) {
     input.type = 'checkbox';
     input.checked = Boolean(chosen.on);
     input.addEventListener('change', async () => {
-      // Asked on the click itself: the browser allows the request only then.
-      if (input.checked && !await chrome.permissions.request({ origins: [board.origin] })) {
-        input.checked = false;
-        collector.status.textContent = t('collectorDenied');
-        return;
-      }
       collectorSettings.boards[board.id] = { ...chosen, on: input.checked };
       await saveCollector();
-      renderBoards(statuses);
+      renderBoards();
     });
     const knob = document.createElement('span');
     knob.className = 'switch';
     const name = document.createElement('strong');
     name.textContent = board.title;
     head.append(input, knob, name);
-    row.append(head);
-
-    const hint = document.createElement('div');
-    hint.className = 'board-hint';
-    hint.textContent = boardStatusLine(board, statuses?.[board.id]) || board.hint[collectorLang()];
-    row.append(hint);
-    if (statuses?.[board.id]?.error === 'sign_in') {
-      const link = document.createElement('a');
-      link.href = board.open;
-      link.target = '_blank';
-      link.textContent = t('collectorOpenBoard');
-      hint.append(' ', link);
-    }
-
+    row.append(head, sessionLine(board));
+    const status = collectorData.statuses?.[board.id];
+    if (status) row.append(runLine(status));
     if (input.checked) {
-      for (const filter of board.filters) {
-        const group = document.createElement('div');
-        group.className = 'chips';
-        const label = document.createElement('span');
-        label.className = 'chips-title';
-        label.textContent = filter.title[collectorLang()];
-        group.append(label);
-        for (const [value, text] of Object.entries(filter.options)) {
-          const chip = document.createElement('button');
-          chip.type = 'button';
-          const picked = (chosen[filter.key] ?? []).includes(value);
-          chip.className = picked ? 'chip on' : 'chip';
-          chip.setAttribute('aria-pressed', String(picked));
-          chip.textContent = text[collectorLang()];
-          chip.addEventListener('click', async () => {
-            const list = new Set(chosen[filter.key] ?? []);
-            if (list.has(value)) list.delete(value);
-            else list.add(value);
-            collectorSettings.boards[board.id] = { ...chosen, [filter.key]: [...list] };
-            await saveCollector();
-            renderBoards(statuses);
-          });
-          group.append(chip);
-        }
-        row.append(group);
+      for (const filter of board.filters(collectorData.catalogs?.[board.id])) {
+        if (filter.options.length) row.append(chipGroup(board, filter, chosen));
       }
     }
     collector.boards.append(row);
@@ -665,24 +694,53 @@ function renderBoards(statuses) {
 }
 
 async function refreshCollector() {
-  const { radarCollector: saved, radarCollectorStatus: statuses, radarCollectorRunning: running } = await chrome.storage.local.get(['radarCollector', 'radarCollectorStatus', 'radarCollectorRunning']);
-  collectorSettings = { auto: false, minutes: 30, boards: {}, ...saved };
+  const stored = await chrome.storage.local.get(['radarCollector', 'radarCollectorStatus', 'radarCollectorRunning', 'radarBoardCatalog', 'radarBoardState']);
+  collectorSettings = { auto: false, minutes: 30, boards: {}, ...stored.radarCollector };
+  collectorData = { statuses: stored.radarCollectorStatus, catalogs: stored.radarBoardCatalog, states: stored.radarBoardState };
   collector.auto.checked = Boolean(collectorSettings.auto);
   collector.minutes.value = String(collectorSettings.minutes);
-  renderBoards(statuses);
+  renderBoards();
+  // A walk the browser cut off leaves its mark behind: it must not lock the button for good.
+  const running = stored.radarCollectorRunning && Date.now() - Date.parse(stored.radarCollectorRunning) < STALE_RUN_MS;
   collector.now.disabled = Boolean(running);
   collector.status.textContent = running ? t('collectorRunning') : '';
 }
 
-/** The section is for the hub's owner: the hub says who that is. */
+/** Reads each board's own page: is the owner signed in, and which filters does it offer today. */
+async function probeBoards() {
+  const { radarBoardCatalog: catalogs, radarBoardState: states } = await chrome.storage.local.get(['radarBoardCatalog', 'radarBoardState']);
+  const nextCatalogs = { ...catalogs };
+  const nextStates = { ...states };
+  await Promise.all(BOARDS.map(async (board) => {
+    try {
+      // A sign-in page answers with a redirect to another host, which this page may not read.
+      const response = await fetch(board.open, { credentials: 'include', redirect: board.signInNeeded ? 'manual' : 'follow' });
+      const result = response.type === 'opaqueredirect' ? { state: 'signed_out' } : board.probe(await response.text(), response.url);
+      nextStates[board.id] = result.state;
+      if (result.catalog) nextCatalogs[board.id] = result.catalog;
+    } catch {
+      nextStates[board.id] = 'unknown';
+    }
+  }));
+  await chrome.storage.local.set({ radarBoardCatalog: nextCatalogs, radarBoardState: nextStates });
+}
+
+/** The section is for the hub's owner. The saved answer shows it at once, the hub confirms it. */
 async function showCollector() {
-  const { radarAccount: account } = await chrome.storage.local.get(['radarAccount']);
+  const { radarAccount: account, radarCollectorAllowed: allowed } = await chrome.storage.local.get(['radarAccount', 'radarCollectorAllowed']);
   if (!account?.token) return;
+  if (allowed) {
+    collector.box.hidden = false;
+    await refreshCollector();
+  }
   const response = await fetch(`${account.base.replace(/\/+$/, '')}/api/ext/me`, { headers: { authorization: `Bearer ${account.token}` } }).catch(() => undefined);
   const me = response?.ok ? await response.json() : undefined;
-  if (!me?.collector) return;
-  collector.box.hidden = false;
+  if (me === undefined) return;
+  await chrome.storage.local.set({ radarCollectorAllowed: Boolean(me.collector) });
+  collector.box.hidden = !me.collector;
+  if (!me.collector) return;
   await refreshCollector();
+  await probeBoards();
 }
 
 collector.auto.addEventListener('change', async () => {
@@ -695,6 +753,7 @@ collector.minutes.addEventListener('change', async () => {
 });
 collector.now.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'collector-run' }));
 chrome.storage.onChanged.addListener((changes) => {
-  if (!collector.box.hidden && (changes.radarCollectorStatus || changes.radarCollectorRunning)) refreshCollector();
+  if (collector.box.hidden) return;
+  if (changes.radarCollectorStatus || changes.radarCollectorRunning || changes.radarBoardState || changes.radarBoardCatalog) refreshCollector();
 });
 showCollector();

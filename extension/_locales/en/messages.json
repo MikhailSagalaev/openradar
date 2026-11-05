@@ -339,7 +339,7 @@
     }
   },
   "xrayTitle": {
-    "message": "🎯 Direct Contact (X-Ray)"
+    "message": "Direct contact (X-Ray)"
   },
   "xrayDesc": {
     "message": "Find the hiring manager or engineering team directly, bypassing ATS filters:"
@@ -361,9 +361,6 @@
   },
   "collectorAuto": {
     "message": "Collect automatically"
-  },
-  "collectorDenied": {
-    "message": "The collector needs access to this site"
   },
   "collectorFailed": {
     "message": "Error: $A$",
@@ -390,12 +387,6 @@
   "collectorRunning": {
     "message": "Collecting…"
   },
-  "collectorSignIn": {
-    "message": "Sign in on the board."
-  },
-  "collectorOpenBoard": {
-    "message": "Open"
-  },
   "collectorAgoMin": {
     "message": "$A$ min ago",
     "placeholders": {
@@ -406,6 +397,23 @@
   },
   "collectorAgoHour": {
     "message": "$A$ h ago",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      }
+    }
+  },
+  "collectorSignedOut": {
+    "message": "You are not signed in on this board."
+  },
+  "collectorSignInLink": {
+    "message": "Sign in"
+  },
+  "collectorSignedIn": {
+    "message": "Signed in"
+  },
+  "collectorMore": {
+    "message": "$A$ more",
     "placeholders": {
       "a": {
         "content": "$1"

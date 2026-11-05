@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.50.1
+
+- **The collector works.** A browser stopped the extension's worker during a long read, so nothing reached the hub and the walk stayed «Идёт сбор…». Extension 0.17.0 reads and sends eight orders at a time and keeps the worker awake.
+- Cities, fields and sections come from the boards themselves, not from a list in the code: 11 cities and 16 fields on YouDo, 19 sections on Yandex.
+- The popup checks the sign-in on each board and offers it. Access to the boards is granted at install, so a switch no longer asks for permission and closes the popup. The section shows at once from the saved answer.
+- X-Ray has no emoji and is folded.
+
 ## 0.50.0
 
 - **Collector settings without addresses.** Extension 0.16.0 lists the boards with a switch each and filters as chips: cities, fields, rubrics, remote only. A board is one entry in `extension/boards.js`. Each board shows its last walk and asks for a sign-in when its session ended. Only the hub's owner sees the section.
