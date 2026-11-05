@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.51.2
+
+- `/network` and `/u/<handle>`: the post count is real, it stopped at 1000; points read the same as in the profile.
+
 ## 0.51.1
 
 - `/network`: the rating shows how many posts a participant brought; the points and tier no longer sit under the wrong headers.
