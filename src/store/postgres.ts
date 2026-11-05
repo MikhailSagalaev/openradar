@@ -2055,7 +2055,8 @@ export class PostgresStore implements Store {
         WHERE created_at >= $1::timestamptz
           AND state NOT IN ('hidden_junk', 'hidden_scam') AND status NOT IN ('rejected', 'failed')
           AND COALESCE((metadata_json->'model'->>'v')::int, 0) < $2
-        ORDER BY (normalized_usd_min IS NULL AND normalized_usd_max IS NULL) ${options.withPayFirst ? 'ASC' : 'DESC'}, created_at DESC
+        ORDER BY (type = 'gig') DESC, (title ~ '[А-Яа-яЁё]') DESC,
+          (normalized_usd_min IS NULL AND normalized_usd_max IS NULL) ${options.withPayFirst ? 'ASC' : 'DESC'}, created_at DESC
         LIMIT $3`,
       [options.since, options.version, options.limit],
     );

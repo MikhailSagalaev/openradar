@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.46.0
+
+- Orders and vacancies in Telegram: a post that calls itself a vacancy is one, as is a position at a named company, and hours or monthly pay count as terms of employment. Remocate and WorkASAP post vacancies, Pawetta is a job board. #ищузаказы and «ищу проекты» are offers of work, not orders.
+- The model reads orders and Russian posts first: about 60% of its answers went to Himalayas, which needs it least. It now says whether a post is a vacancy or an order, without being told what the rules think. Version 2 of its answers.
+
 ## 0.45.6
 
 - A day rate multiplies only the sum named per day: «5/2 – 119 600 ₽, в день – 5200 ₽» stood at the top of the orders at $31 000.

@@ -45,6 +45,8 @@ const VACANCY_SIGNALS: RegExp[] = [
   /полн(?:ая|ую)\s+занятост|full[\s-]?time|(?:^|[^\p{L}\d])5\/2(?![\d])/iu,
   /опыт\s+работы\s*:|опыт\s+(?:от|более)\s+\d+\s+(?:год|лет)/iu,
   /испытательн|трудоустройств|оформлени[ея]\s+по\s+тк|официальн[а-я]*\s+оформлени|(?:^|[^\p{L}])дмс(?![\p{L}])|соцпакет/iu,
+  // Terms of employment: orders have a deadline, not hours or a monthly sum.
+  /занятост[ьи]\s*[:—–-]|частичн[а-я]*\s+занятост|(?:^|[^\p{L}])график\s*[:—–-]|\d\s*(?:к|k|тыс[а-я.]*|₽|руб[а-я.]*)?\s*(?:в|за|\/)\s*мес/iu,
   // Yearly pay is a salary: nobody quotes an order by the year.
   /[\dkк₽$€]\s*\/\s*(?:год|year|yr)(?![\p{L}])|\d\s*(?:₽|\$|€|руб[а-я.]*)\s+в\s+год(?![\p{L}])/iu,
   /#ваканси|(?:^|[^\p{L}])вакансия\s*:|(?:^|[^\p{L}])(?:hiring|vacancy)(?![\p{L}])/iu,
@@ -62,13 +64,13 @@ const GIG_SIGNALS =
 const AD_MARKING = /(?:^|[^\p{L}])erid(?![\p{L}])|на\s+правах\s+рекламы|#реклама|(?:^|\n)\s*реклама\.?\s*(?:$|\n|ооо|ип)/iu;
 
 /** Promotion that no vacancy wording excuses: it is an ad even when it talks about candidates. */
-const PROMOTION = /о\s+рекламодателе|бесплатн[а-я]*\s+(?:вебинар|интенсив|мастер-класс)|записаться\s+на\s+(?:бесплатн|вебинар|интенсив|курс)/iu;
+const PROMOTION = /openradar\.fun|о\s+рекламодателе|бесплатн[а-я]*\s+(?:вебинар|интенсив|мастер-класс)|записаться\s+на\s+(?:бесплатн|вебинар|интенсив|курс)/iu;
 
 /**
  * Someone selling their services, not looking for a contractor: the tags chats use for it and
  * an agency's price list. Works on raw text and on normalizeForMatch() output alike.
  */
-export const SERVICE_OFFER = /(?:^|[^\p{L}\d_])#(?:услуг[аи]|предлагаю)(?![\p{L}])|наши\s+(?:тарифы|пакеты|услуги\s+и\s+цены)|(?:агентств[а-я]*|студи[а-я]*)\s+предлагает\s+(?:готов|услуг|пакет)|(?<![a-z])start(?![a-z])[^a-z]{0,40}\d[\s\S]{0,400}?(?<![a-z])(?:business|premium)(?![a-z])[^a-z]{0,40}\d/iu;
+export const SERVICE_OFFER = /(?:^|[^\p{L}\d_])#(?:услуг[аи]|предлагаю|ищузаказ[а-я]*|резюме|resume)(?![\p{L}])|помогаю\s+бизнесу|(?:^|[^\p{L}])ищу\s+(?:проекты|разовые\s+задачи|клиентов)|занимаюсь\s+профессиональн|профессиональн[а-я]*\s+помощь\s+в\s+подготовке|наши\s+(?:тарифы|пакеты|услуги\s+и\s+цены)|(?:агентств[а-я]*|студи[а-я]*)\s+предлагает\s+(?:готов|услуг|пакет)|(?<![a-z])start(?![a-z])[^a-z]{0,40}\d[\s\S]{0,400}?(?<![a-z])(?:business|premium)(?![a-z])[^a-z]{0,40}\d/iu;
 
 /** Channel content that is never an offer of work: course sales, discounts, events, greetings to subscribers. */
 const CHANNEL_CONTENT: RegExp[] = [
@@ -103,8 +105,14 @@ const JOB_CHANNELS = new Set([
   'careerspace', 'datasciencejobs', 'designhunters', 'devjobs', 'foranalysts', 'forcpp', 'forcsharp', 'fordevops', 'forfrontend',
   'forgamedev', 'forhr', 'forproducts', 'forpython', 'gamedevjobs', 'habr_career', 'hireproproduct', 'it_vakansii_jobs',
   'job4analyst_junior', 'jobforjunior', 'jobs_juniors_remote', 'juno_jobs', 'marketing_jobs', 'motion_design_jobs',
-  'product_design_jobs', 'product_jobs', 'proglib_jobs', 'remote_jobs_ru', 'stagirovky', 'startup_job_russia', 'vacancysmm', 'vakansii_it',
+  'product_design_jobs', 'product_jobs', 'proglib_jobs', 'remocate', 'remote_jobs_ru', 'stagirovky', 'startup_job_russia', 'vacancysmm', 'vakansii_it', 'workasap',
 ]);
+
+/** The word itself, near the top of a post: its author calls it a vacancy, whatever else it says. */
+const NAMED_VACANCY = /(?:^|[^\p{L}])ваканси[яюи](?![\p{L}])|#ваканси/iu;
+
+/** «Product Marketing Manager в Got it Life»: a position at a named company. */
+const AT_COMPANY = /\sв\s+(?:команду\s+)?[A-ZА-ЯЁ][\p{L}\d.-]+/u;
 
 /** A title that names a position: a job channel's post without one and without vacancy words is its own content. */
 const POSITION_WORD = /разработчик|программист|developer|engineer|инженер|менеджер|manager|дизайнер|designer|аналитик|analyst|маркетолог|marketer|рекрутер|recruiter|специалист|specialist|редактор|копирайтер|тестировщик|стаж[её]р|intern|lead|head|директор|руководител|администратор|architect|архитектор|devops|(?:^|[^\p{L}])(?:hr|qa|ml|smm|seo)(?![\p{L}])/iu;
@@ -153,9 +161,11 @@ export function detectPostType(lead: QualityInput, source: QualitySource): LeadT
   if (!FREE_TEXT_KINDS.has(source.kind) || lead.type === 'job') return lead.type;
   const head = `${lead.title}\n${lead.text}`.slice(0, 1500);
   const vacancy = distinctMatches(head, VACANCY_SIGNALS);
-  if (vacancy >= 3) return 'job';
+  if (vacancy >= 3 || NAMED_VACANCY.test(head.slice(0, 250))) return 'job';
   if (GIG_SIGNALS.test(head)) return lead.type;
   if (isJobChannel(lead, source)) return 'job';
+  // Chats tag an order #ищу; a position named with no tag comes from a channel of vacancies.
+  if (POSITION_WORD.test(lead.title) && (AT_COMPANY.test(lead.title) || !/#ищу/iu.test(head))) return 'job';
   // A post that opens with a role at an introduced company is a vacancy post of a job channel.
   return vacancy >= 2 || distinctMatches(head.slice(0, 300), COMPANY_INTRO) > 0 ? 'job' : lead.type;
 }

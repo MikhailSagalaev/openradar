@@ -348,7 +348,7 @@ describe('model extraction', () => {
   });
 
   it('fills gaps the rules left and leaves out ads', () => {
-    const stored = (facts: Record<string, unknown>) => ({ model: { v: 1, model: 'test', at: '2026-10-28T00:00:00Z', facts } });
+    const stored = (facts: Record<string, unknown>) => ({ model: { v: 2, model: 'test', at: '2026-10-28T00:00:00Z', facts } });
     const order = lead('tg', { type: 'gig', title: 'Нужна помощь', text: 'Сделайте бота для записи, оплата 50к', metadata: stored({ isPost: true, confidence: 0.9, role: 'bots', payMin: 50000, payMax: 50000, currency: 'RUB', period: 'project' }) });
     expect(deriveRecord(order)).toMatchObject({ role: 'bots', pay: 50000, payPeriod: 'project', payOrigin: 'model' });
 
@@ -411,7 +411,7 @@ describe('model extraction', () => {
   });
 
   it('measures agreement with the rules before the model is trusted', () => {
-    const stored = (facts: Record<string, unknown>) => ({ model: { v: 1, model: 'test', at: '2026-10-28T00:00:00Z', facts } });
+    const stored = (facts: Record<string, unknown>) => ({ model: { v: 2, model: 'test', at: '2026-10-28T00:00:00Z', facts } });
     const leads = [
       // Agrees on role and pay.
       ...Array.from({ length: 30 }, (_, i) => lead(`a${i}`, { type: 'gig', title: 'Telegram-бот для записи', text: 'Бюджет 20 000 ₽', metadata: stored({ isPost: true, confidence: 0.9, role: 'bots', payMin: 20000, payMax: 20000, currency: 'RUB', period: 'project' }) })),
