@@ -257,7 +257,7 @@ const TECH_SKILL_PATTERNS: Array<[RegExp, string]> = [
   [/project\s+manager|проджект|руководител\S*\s+проект|менеджер\S*\s+проект/i, 'Управление проектами'],
   [/product\s+(?:manager|owner)|продакт|менеджер\S*\s+продукт/i, 'Продакт-менеджмент'],
   [/маркетолог|marketing|маркетинг/i, 'Маркетинг'],
-  [/разработчик|программист|\bdeveloper\b|software\s+engineer/i, 'Разработка'],
+  [/разработчик|программист|\bdeveloper\b|software\s+engineer|full[- ]?stack|back[- ]?end|front[- ]?end/i, 'Разработка'],
 ];
 
 export function extractTechSkills(input: string, max = 8): string[] {
