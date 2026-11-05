@@ -54,8 +54,8 @@
   </div>
   <p id="status" class="status"></p>
 
-  <section id="collector" class="collector" hidden>
-    <h2 class="collector-title" data-i18n="collectorTitle"></h2>
+  <details id="collector" class="collector" hidden>
+    <summary><span data-i18n="collectorTitle"></span> <span id="collector-summary" class="collector-summary"></span></summary>
     <div id="collector-boards"></div>
     <div class="collector-foot">
       <label class="switch-row"><input id="collector-auto" type="checkbox"><span class="switch"></span><span data-i18n="collectorAuto"></span></label>
@@ -67,7 +67,7 @@
     </div>
     <button id="collector-now" type="button" class="ghost" data-i18n="collectorNow"></button>
     <p id="collector-status" class="status"></p>
-  </section>
+  </details>
 
   <section class="market">
     <button id="estimate" type="button" class="ghost" data-i18n="estimate"></button>

@@ -194,7 +194,7 @@
     "message": "Not enough priced leads to estimate yet."
   },
   "perMonth": {
-    "message": " a month"
+    "message": "a month"
   },
   "perProject": {
     "message": " per project"
@@ -431,6 +431,17 @@
   },
   "collectorFiltersOn": {
     "message": "Filters: $A$ picked",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      }
+    }
+  },
+  "perYear": {
+    "message": "a year"
+  },
+  "collectorSummary": {
+    "message": "· $A$ new",
     "placeholders": {
       "a": {
         "content": "$1"

@@ -194,7 +194,7 @@
     "message": "Пока мало заказов с бюджетом, чтобы оценить."
   },
   "perMonth": {
-    "message": " в месяц"
+    "message": "в месяц"
   },
   "perProject": {
     "message": " за проект"
@@ -431,6 +431,17 @@
   },
   "collectorFiltersOn": {
     "message": "Фильтры: выбрано $A$",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      }
+    }
+  },
+  "perYear": {
+    "message": "в год"
+  },
+  "collectorSummary": {
+    "message": "· новых $A$",
     "placeholders": {
       "a": {
         "content": "$1"

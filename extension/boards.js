@@ -6,6 +6,7 @@
  * Filters are not written here. probe() reads the board's own page, so cities and fields are
  * whatever the board offers today, and tells whether the owner is signed in. filters() turns
  * that catalog into chips; none picked means everything. lists() turns the choice into pages.
+ * A walk goes in this order, so the long YouDo lists do not hold the others back.
  */
 const YOUDO_LIST = 'https://youdo.com/tasks-all-opened-all';
 
@@ -33,6 +34,38 @@ function narrowed(parents = [], children = [], catalog = []) {
 }
 
 const BOARDS = [
+  {
+    id: 'yandex',
+    title: 'Яндекс Услуги',
+    open: 'https://uslugi.yandex.ru/cab/orders?type=new',
+    signInNeeded: true,
+    hint: { ru: 'Город и удалённые заказы берутся из анкеты', en: 'The city comes from the profile' },
+    probe(html, url) {
+      if (/passport\.yandex/.test(url)) return { state: 'signed_out' };
+      const rubrics = pageState(html, '__PRELOADED_STATE__')?.rubrics?.occupations;
+      if (!rubrics) return { state: 'unknown' };
+      return { state: 'signed_in', catalog: { rubrics: rubrics.map((item) => [item.id, item.name, (item.specializations ?? []).map((spec) => [spec.id, spec.name])]) } };
+    },
+    filters: (catalog) => [{ key: 'rubrics', title: { ru: 'Разделы', en: 'Sections' }, options: catalog?.rubrics ?? [], childKey: 'specs' }],
+    lists(settings, catalog) {
+      const { parents, children } = narrowed(settings.rubrics, settings.specs, catalog?.rubrics);
+      const rubrics = [...parents, ...children].map((rubric) => `&rubric=${encodeURIComponent(rubric)}`).join('');
+      return [`https://uslugi.yandex.ru/cab/orders?type=new${rubrics}`];
+    },
+    isSignIn: (url) => /passport\.yandex/.test(url),
+  },
+  {
+    id: 'profi',
+    title: 'Профи.ру',
+    open: 'https://profi.ru/backoffice/n.php',
+    signInNeeded: true,
+    hint: { ru: 'Специальности и город задаются в анкете на Профи.ру', en: 'Specialties and city are set in the Profi.ru profile' },
+    // The sign-in page carries this key; the board does not.
+    probe: (html) => ({ state: html.includes('loginHeader') ? 'signed_out' : 'signed_in' }),
+    filters: () => [],
+    lists: () => ['https://profi.ru/backoffice/n.php'],
+    isSignIn: (_url, title) => /^Вход/.test(title),
+  },
   {
     id: 'youdo',
     title: 'YouDo',
@@ -68,37 +101,5 @@ const BOARDS = [
       return cities.map(([, , lat, lng]) => `${YOUDO_LIST}#${[`lat=${lat}`, `lng=${lng}`, 'radius=30', ...shared].join('&')}`);
     },
     isSignIn: () => false,
-  },
-  {
-    id: 'yandex',
-    title: 'Яндекс Услуги',
-    open: 'https://uslugi.yandex.ru/cab/orders?type=new',
-    signInNeeded: true,
-    hint: { ru: 'Город и удалённые заказы берутся из анкеты', en: 'The city comes from the profile' },
-    probe(html, url) {
-      if (/passport\.yandex/.test(url)) return { state: 'signed_out' };
-      const rubrics = pageState(html, '__PRELOADED_STATE__')?.rubrics?.occupations;
-      if (!rubrics) return { state: 'unknown' };
-      return { state: 'signed_in', catalog: { rubrics: rubrics.map((item) => [item.id, item.name, (item.specializations ?? []).map((spec) => [spec.id, spec.name])]) } };
-    },
-    filters: (catalog) => [{ key: 'rubrics', title: { ru: 'Разделы', en: 'Sections' }, options: catalog?.rubrics ?? [], childKey: 'specs' }],
-    lists(settings, catalog) {
-      const { parents, children } = narrowed(settings.rubrics, settings.specs, catalog?.rubrics);
-      const rubrics = [...parents, ...children].map((rubric) => `&rubric=${encodeURIComponent(rubric)}`).join('');
-      return [`https://uslugi.yandex.ru/cab/orders?type=new${rubrics}`];
-    },
-    isSignIn: (url) => /passport\.yandex/.test(url),
-  },
-  {
-    id: 'profi',
-    title: 'Профи.ру',
-    open: 'https://profi.ru/backoffice/n.php',
-    signInNeeded: true,
-    hint: { ru: 'Специальности и город задаются в анкете на Профи.ру', en: 'Specialties and city are set in the Profi.ru profile' },
-    // The sign-in page carries this key; the board does not.
-    probe: (html) => ({ state: html.includes('loginHeader') ? 'signed_out' : 'signed_in' }),
-    filters: () => [],
-    lists: () => ['https://profi.ru/backoffice/n.php'],
-    isSignIn: (_url, title) => /^Вход/.test(title),
   },
 ];

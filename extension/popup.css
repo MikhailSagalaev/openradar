@@ -663,3 +663,12 @@ button.chip.on {
 .board-filters .chips {
   margin-left: 0;
 }
+
+.collector-summary {
+  color: var(--muted);
+}
+
+.radio-off {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

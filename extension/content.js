@@ -118,6 +118,13 @@ function placeLineOf(lines) {
   return line.split(/\s[•·|]\s/).map((part) => part.replace(/\s+Area$/i, '').trim()).filter(Boolean).slice(0, 3).join(', ');
 }
 
+/** Vacancies abroad state pay by the year; a sum that large is no month's pay. */
+function periodOfPay(after, amount, currency) {
+  if (/per\s+year|annual|a\s+year|\/\s*y(?:ea)?r|в\s+год/i.test(after)) return 'year';
+  if (/per\s+month|a\s+month|\/\s*mo|в\s+месяц/i.test(after)) return 'month';
+  return currency !== 'RUB' && amount >= 20000 ? 'year' : 'month';
+}
+
 /** Pay written in the text: all overlapping ranges of a vacancy make one, as on the hub. */
 function moneyInText(text) {
   const signs = { $: 'USD', '€': 'EUR', '£': 'GBP' };
@@ -125,7 +132,7 @@ function moneyInText(text) {
   for (const m of String(text || '').matchAll(/([$€£])\s?(\d{1,3}(?:,\d{3})+|\d{4,7})\s*(?:-|–|—|to)\s*[$€£]?\s?(\d{1,3}(?:,\d{3})+|\d{4,7})/g)) {
     const min = Number(m[2].replace(/,/g, ''));
     const max = Number(m[3].replace(/,/g, ''));
-    if (!found) found = { budget: min, salaryMax: max, currency: signs[m[1]] };
+    if (!found) found = { budget: min, salaryMax: max, currency: signs[m[1]], payPeriod: periodOfPay(String(text).slice(m.index + m[0].length, m.index + m[0].length + 40), max, signs[m[1]]) };
     else if (min <= found.salaryMax && max >= found.budget) {
       found = { ...found, budget: Math.min(found.budget, min), salaryMax: Math.max(found.salaryMax, max) };
     }
@@ -162,6 +169,7 @@ function jobFromPage(doc) {
     budget: money?.budget,
     salaryMax: money?.salaryMax,
     currency: money?.currency,
+    payPeriod: money?.payPeriod,
     skills: [],
     url,
   };
@@ -177,7 +185,8 @@ function extractSalary(salary) {
   if (typeof val === 'object' && val !== null) {
     const min = typeof val.minValue === 'number' ? val.minValue : undefined;
     const max = typeof val.maxValue === 'number' ? val.maxValue : (typeof val.value === 'number' ? val.value : undefined);
-    return { budget: min ?? max, salaryMax: max, currency };
+    const unit = String(val.unitText ?? salary.unitText ?? '').toUpperCase();
+    return { budget: min ?? max, salaryMax: max, currency, payPeriod: unit === 'YEAR' ? 'year' : unit === 'MONTH' ? 'month' : undefined };
   }
   const min = typeof salary.minValue === 'number' ? salary.minValue : undefined;
   const max = typeof salary.maxValue === 'number' ? salary.maxValue : (typeof salary.value === 'number' ? salary.value : undefined);
@@ -213,6 +222,7 @@ function normalizeJobPosting(posting, doc) {
     budget: salary.budget ?? money?.budget,
     salaryMax: salary.salaryMax ?? money?.salaryMax,
     currency: salary.currency ?? money?.currency,
+    payPeriod: salary.payPeriod ?? money?.payPeriod,
     skills: extractSkills(posting),
     url: posting.url || (doc?.location?.href ?? ''),
   };
