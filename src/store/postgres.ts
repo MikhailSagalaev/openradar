@@ -1723,6 +1723,11 @@ export class PostgresStore implements Store {
     return res.rows.map(rowToObservation);
   }
 
+  async countObservationsByPubkey(pubkey: string): Promise<number> {
+    const res = await this.pool.query(`SELECT count(*)::int AS total FROM observations WHERE pubkey = $1`, [pubkey]);
+    return res.rows[0].total;
+  }
+
   async findObservationsByPost(platform: string, channel: string, messageId: string): Promise<ObservationRecord[]> {
     const res = await this.pool.query(
       `SELECT * FROM observations WHERE platform = $1 AND channel = $2 AND message_id = $3 ORDER BY received_at ASC`,

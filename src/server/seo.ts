@@ -811,13 +811,13 @@ export function renderNetworkPage(options: {
 }): string {
   const { baseUrl, version } = options;
   const ru = options.lang !== 'en';
-  const totalPoints = options.participants.reduce((sum, p) => sum + p.points, 0);
+  const totalPoints = Math.round(options.participants.reduce((sum, p) => sum + p.points, 0) * 10);
   const totalLeads = options.sources.reduce((sum, s) => sum + s.leads, 0);
 
   const participantRows = options.participants.map((p, index) => {
     const name = p.handle ? `@${escapeHtml(p.handle)}` : p.name ? escapeHtml(p.name) : `<code>${escapeHtml(p.shortPubkey)}</code>`;
     const label = p.handle ? `<a href="/u/${escapeHtml(encodeURIComponent(p.handle))}">${name}</a>` : name;
-    return `<tr><td>${index + 1}</td><td>${label}${p.about ? `<div class="muted small">${escapeHtml(p.about.slice(0, 120))}</div>` : ''}</td><td class="num">${p.posts}</td><td class="num">${p.points % 1 === 0 ? p.points : p.points.toFixed(1)}</td><td>${escapeHtml(p.tier)}</td></tr>`;
+    return `<tr><td>${index + 1}</td><td>${label}${p.about ? `<div class="muted small">${escapeHtml(p.about.slice(0, 120))}</div>` : ''}</td><td class="num">${p.posts}</td><td class="num">${Math.round(p.points * 10)}</td><td>${escapeHtml(p.tier)}</td></tr>`;
   }).join('\n');
 
   const sourceRows = options.sources.map((s) => {
@@ -858,8 +858,8 @@ export function renderNetworkPage(options: {
     : `<p class="muted">${ru ? 'Пока нет данных за неделю.' : 'No data for the week yet.'}</p>`}
     <details class="score-help"><summary>${ru ? 'Как попасть в таблицу' : 'How to get on this table'}</summary>
       <p>${ru
-        ? `Подключите источник: публичный канал, RSS или свой узел с флагом share. Суммарно участники сети набрали ${totalPoints % 1 === 0 ? totalPoints : totalPoints.toFixed(1)} очков за ${options.windowDays} дней.`
-        : `Connect a source: a public channel, an RSS feed or your own node with the share flag. The network has earned ${totalPoints % 1 === 0 ? totalPoints : totalPoints.toFixed(1)} points in ${options.windowDays} days.`}</p>
+        ? `Подключите источник: публичный канал, RSS или свой узел с флагом share. Суммарно участники сети набрали ${totalPoints} очков за ${options.windowDays} дней.`
+        : `Connect a source: a public channel, an RSS feed or your own node with the share flag. The network has earned ${totalPoints} points in ${options.windowDays} days.`}</p>
     </details>
   </section>
 </div>`;

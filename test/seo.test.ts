@@ -170,6 +170,7 @@ describe('participants table', () => {
     const row = table.slice(table.indexOf('<tbody>'), table.indexOf('</tbody>'));
     expect(row.match(/<td/g)?.length).toBe(head.match(/<th>/g)?.length);
     expect(row).toContain('<td class="num">12</td>');
+    expect(row).toContain('<td class="num">35</td>');
     expect(row).toContain('href="/u/mona"');
   });
 });

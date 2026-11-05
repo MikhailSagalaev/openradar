@@ -2945,7 +2945,7 @@ export function createApp(runtime: Runtime): Hono {
       const participant = await runtime.store.getParticipant(pubkey);
       const account = accounts.get(pubkey) ?? (participant?.githubUserId ? await runtime.store.getUserById(participant.githubUserId) ?? undefined : undefined);
       const shown = account && account.publicProfile !== false ? account : undefined;
-      const posts = (await runtime.store.listObservationsByPubkey(pubkey, 1000)).length;
+      const posts = await runtime.store.countObservationsByPubkey(pubkey);
       const profileName = participant?.profile?.name;
       const profileAbout = participant?.profile?.about;
       participants.push({
@@ -3019,7 +3019,7 @@ export function createApp(runtime: Runtime): Hono {
       handle: user.handle,
       since: user.createdAt,
       points: [...keys].reduce((total, key) => total + (ledger.get(key) ?? 0), 0),
-      total: observations.length,
+      total: (await Promise.all([...keys].map((key) => runtime.store.countObservationsByPubkey(key)))).reduce((sum, count) => sum + count, 0),
       posts,
       tier: tierFor({ rating: [...keys].reduce((total, key) => total + (ledger.get(key) ?? 0), 0), moderator: false, githubLinked: true }),
     }));
