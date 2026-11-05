@@ -546,19 +546,6 @@ export const SOURCE_PRESETS: SourcePreset[] = [
     },
   },
   {
-    id: 'vk-career',
-    kind: 'sitemap',
-    title: 'VK — Вакансии',
-    description: 'Вакансии ВКонтакте из карты сайта team.vk.company',
-    config: {
-      url: 'https://team.vk.company/sitemap.xml',
-      pattern: String.raw`/vacancy/(\d+)`,
-      perPoll: 10,
-      delayMs: 1500,
-      maxAgeDays: 30,
-    },
-  },
-  {
     id: 'andersenlab',
     kind: 'sitemap',
     title: 'Andersen — Вакансии',
@@ -579,19 +566,6 @@ export const SOURCE_PRESETS: SourcePreset[] = [
     config: {
       url: 'https://wise.jobs/sitemap.xml',
       pattern: String.raw`/job/([a-z0-9-]+-jid-\d+)`,
-      perPoll: 10,
-      delayMs: 1500,
-      maxAgeDays: 30,
-    },
-  },
-  {
-    id: 't1-career',
-    kind: 'sitemap',
-    title: 'Т1 — Вакансии',
-    description: 'Вакансии Т1 (включая стажировки) из карты сайта career.t1.ru',
-    config: {
-      url: 'https://career.t1.ru/sitemap.xml',
-      pattern: String.raw`/vacancies/([a-z0-9_-]+)`,
       perPoll: 10,
       delayMs: 1500,
       maxAgeDays: 30,
