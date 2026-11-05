@@ -29,7 +29,17 @@
 
 **Яндекс Услуги.** Лента исполнителя: `uslugi.yandex.ru/cab/orders`. Карточка `.OrderCard2`, ссылка `/order/<uuid>`, рядом заголовок, рубрика, описание, срок и цена. Цифры взяты из репозитория 2026 года, разметка могла измениться.
 
-**YouDo.** Сайт отвечает проверкой на бота, с сервера и из curl заказов не получить. В браузере лента `youdo.com/tasks-all-opened-all`, данные идут через `POST /api/tasks/tasks/` с полями `lat`, `lng`, `radius`, `categories`, `sub`, `page`. Ответ: `Id`, `Name`, `Description`, `BudgetDescription`, `Url`.
+**YouDo.** Проверено в браузере 5 ноября 2026, вход не нужен: открыто около 7 000 заданий. С сервера и из curl отвечает проверка на бота, поэтому читаем только из браузера. Лента: `POST /api/tasks/tasks/`, 50 заданий на страницу, новые сверху. Фильтры: `lat`, `lng`, `radius` (Санкт-Петербург 30 км: 1 902 задания), `categories` по коду (`virtualassistant`: 753), `onlyVirtual` (удалённые: 1 315), `page`. Карточка `/t<id>` несёт в `__NEXT_DATA__` описание, дату создания, бюджет, подкатегорию и `isVacancy`. В `robots.txt` страницы заданий закрыты для всех роботов.
+
+В сборщике страница YouDo в списке задаётся так:
+
+```text
+https://youdo.com/tasks-all-opened-all
+https://youdo.com/tasks-all-opened-all#virtual=1
+https://youdo.com/tasks-all-opened-all#lat=59.93&lng=30.31&radius=30&categories=webdevelopment,design
+```
+
+Сборщик берёт только новые задания, не больше 60 за обход, с паузой 1,5 с. Заказчика и улицу не сохраняем, только город.
 
 ## План
 

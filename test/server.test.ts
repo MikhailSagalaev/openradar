@@ -941,6 +941,7 @@ describe('http server', () => {
     expect(await (await orders('profi', [order, { ...order, id: 'x', url: 'https://evil.example/o' }])).json()).toMatchObject({ found: 1, inserted: 1, skipped: 1 });
     const [collected] = await runtime.store.listLeads({ query: 'Tilda' });
     expect(collected).toMatchObject({ type: 'gig', budget: 30000 });
+    expect(collected!.score).toBeGreaterThan(0);
     expect(collected!.text).not.toMatch(/912|ivan_client/);
     expect(collected!.contacts ?? []).toEqual([]);
     expect(await (await orders('profi', [order])).json()).toMatchObject({ inserted: 0, duplicates: 1 });
