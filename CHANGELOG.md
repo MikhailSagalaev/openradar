@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.51.6
+
+- Sitemap sources read plain pages: most company career sites carry no JobPosting markup, so the adapter falls back to the h1 (else the title) with the meta description and the body text; dead and thin pages are rejected. The VK and T1 career presets leave — their pages are pure SPAs with nothing server-rendered.
+
 ## 0.51.5
 
 - Sources: nine more company career sites join as sitemap presets — VK, Andersen, Wise, T1, Magnit Tech, CROC, Nekki, Sber2B and Jahon School — from the systematic pass over the 155 career-site domains in the RocketHunt extraction. The rest were ATS hosts already read, aggregators, or sites whose sitemaps carry no per-vacancy URLs.
