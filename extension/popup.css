@@ -648,3 +648,18 @@ button.chip.on {
   text-decoration: underline;
   cursor: pointer;
 }
+
+.board-filters {
+  border-top: 0;
+  margin: 4px 0 0 36px;
+  padding-top: 0;
+}
+
+.board-filters summary {
+  margin-bottom: 0;
+  font-size: 11px;
+}
+
+.board-filters .chips {
+  margin-left: 0;
+}

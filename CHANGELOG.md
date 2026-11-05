@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.50.2
+
+- Extension 0.18.0 reads about one page a second, up to 200 tasks per list, and shows the count as it goes. It took 25 seconds per eight orders.
+- Filters fold under one line per board, with «Все» first and «свернуть» on long lists. A picked field opens its parts: 194 on YouDo, 810 on Yandex.
+
 ## 0.50.1
 
 - **The collector works.** A browser stopped the extension's worker during a long read, so nothing reached the hub and the walk stayed «Идёт сбор…». Extension 0.17.0 reads and sends eight orders at a time and keeps the worker awake.

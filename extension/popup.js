@@ -576,6 +576,7 @@ const CHIPS_FOLDED = 8;
 let collectorSettings = { auto: false, minutes: 30, boards: {} };
 let collectorData = {};
 const openFilters = new Set();
+const openBlocks = new Set();
 
 async function saveCollector() {
   await chrome.storage.local.set({ radarCollector: collectorSettings });
@@ -618,46 +619,81 @@ function runLine(status) {
   return line;
 }
 
-function chipGroup(board, filter, chosen) {
+function textOf(label) {
+  return typeof label === 'string' ? label : label[collectorLang()];
+}
+
+/** One row of chips: «Все» first, the board's own options after it, folded when long. */
+function chipRow(board, title, key, options, chosen) {
   const group = document.createElement('div');
   group.className = 'chips';
   const label = document.createElement('span');
   label.className = 'chips-title';
-  label.textContent = filter.title[collectorLang()];
+  label.textContent = title;
   group.append(label);
-  const key = `${board.id}:${filter.key}`;
-  const picked = chosen[filter.key] ?? [];
-  const all = filter.options;
-  const shown = openFilters.has(key) ? all : all.filter(([value], index) => index < CHIPS_FOLDED || picked.includes(value));
+  const foldKey = `${board.id}:${key}:${title}`;
+  const picked = chosen[key] ?? [];
+  const own = options.map(([value]) => value);
+  const pickedHere = picked.filter((value) => own.includes(value));
+  const save = async (next) => {
+    collectorSettings.boards[board.id] = { ...chosen, [key]: next };
+    await saveCollector();
+    renderBoards();
+  };
+  const chip = (text, on, click) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = on ? 'chip on' : 'chip';
+    button.setAttribute('aria-pressed', String(on));
+    button.textContent = text;
+    button.addEventListener('click', click);
+    return button;
+  };
+  group.append(chip(t('collectorAll'), !pickedHere.length, () => save(picked.filter((value) => !own.includes(value)))));
+  const unfolded = openFilters.has(foldKey);
+  const shown = unfolded ? options : options.filter(([value], index) => index < CHIPS_FOLDED || picked.includes(value));
   for (const [value, text] of shown) {
-    const chip = document.createElement('button');
-    chip.type = 'button';
     const on = picked.includes(value);
-    chip.className = on ? 'chip on' : 'chip';
-    chip.setAttribute('aria-pressed', String(on));
-    chip.textContent = typeof text === 'string' ? text : text[collectorLang()];
-    chip.addEventListener('click', async () => {
-      const list = new Set(picked);
-      if (list.has(value)) list.delete(value);
-      else list.add(value);
-      collectorSettings.boards[board.id] = { ...chosen, [filter.key]: [...list] };
-      await saveCollector();
-      renderBoards();
-    });
-    group.append(chip);
+    group.append(chip(textOf(text), on, () => save(on ? picked.filter((item) => item !== value) : [...picked, value])));
   }
-  if (shown.length < all.length) {
+  if (options.length > CHIPS_FOLDED) {
     const more = document.createElement('button');
     more.type = 'button';
     more.className = 'chips-more';
-    more.textContent = t('collectorMore', [String(all.length - shown.length)]);
+    more.textContent = unfolded ? t('collectorLess') : t('collectorMore', [String(options.length - shown.length)]);
     more.addEventListener('click', () => {
-      openFilters.add(key);
+      if (unfolded) openFilters.delete(foldKey);
+      else openFilters.add(foldKey);
       renderBoards();
     });
-    group.append(more);
+    if (unfolded || options.length > shown.length) group.append(more);
   }
   return group;
+}
+
+/** The filters of a board, folded until asked for: the popup stays one short list. */
+function filtersBlock(board, chosen) {
+  const filters = board.filters(collectorData.catalogs?.[board.id]).filter((filter) => filter.options.length);
+  if (!filters.length) return undefined;
+  const block = document.createElement('details');
+  block.className = 'board-filters';
+  block.open = openBlocks.has(board.id);
+  block.addEventListener('toggle', () => {
+    if (block.open) openBlocks.add(board.id);
+    else openBlocks.delete(board.id);
+  });
+  const summary = document.createElement('summary');
+  const count = filters.reduce((total, filter) => total + (chosen[filter.key]?.length ?? 0), 0);
+  summary.textContent = count ? t('collectorFiltersOn', [String(count)]) : t('collectorFiltersOff');
+  block.append(summary);
+  for (const filter of filters) {
+    block.append(chipRow(board, filter.title[collectorLang()], filter.key, filter.options, chosen));
+    if (!filter.childKey) continue;
+    for (const [value, name, children] of filter.options) {
+      if ((chosen[filter.key] ?? []).includes(value) && children?.length) block.append(chipRow(board, textOf(name), filter.childKey, children, chosen));
+    }
+  }
+  return block;
 }
 
 function renderBoards() {
@@ -684,11 +720,8 @@ function renderBoards() {
     row.append(head, sessionLine(board));
     const status = collectorData.statuses?.[board.id];
     if (status) row.append(runLine(status));
-    if (input.checked) {
-      for (const filter of board.filters(collectorData.catalogs?.[board.id])) {
-        if (filter.options.length) row.append(chipGroup(board, filter, chosen));
-      }
-    }
+    const block = input.checked ? filtersBlock(board, chosen) : undefined;
+    if (block) row.append(block);
     collector.boards.append(row);
   }
 }

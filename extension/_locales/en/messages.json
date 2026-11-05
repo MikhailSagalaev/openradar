@@ -419,5 +419,22 @@
         "content": "$1"
       }
     }
+  },
+  "collectorAll": {
+    "message": "All"
+  },
+  "collectorLess": {
+    "message": "fold"
+  },
+  "collectorFiltersOff": {
+    "message": "Filters: everything"
+  },
+  "collectorFiltersOn": {
+    "message": "Filters: $A$ picked",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      }
+    }
   }
 }
