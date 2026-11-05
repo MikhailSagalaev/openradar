@@ -67,11 +67,11 @@ echo "waiting for CI run ${run_id} on ${head_sha}"
 gh run watch "$run_id" -R MikhailSagalaev/radar-oss --exit-status >/dev/null || die "CI failed for ${head_sha}; not publishing"
 
 echo "push main -> public (${public_url})"
-git push public main
+git push public "${head_sha}:refs/heads/main"
 
 if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
   tagged=$(git rev-parse "${tag}^{commit}")
-  head=$(git rev-parse HEAD)
+  head=$head_sha
   [ "$tagged" = "$head" ] || die "local tag ${tag} points at ${tagged}, not HEAD ${head}"
 else
   if [ "${1:-}" != "--tag" ]; then
@@ -79,10 +79,10 @@ else
     echo "When this commit is the release: bash scripts/publish-public.sh --tag"
     exit 0
   fi
-  git tag -a "$tag" -m "$tag"
+  git tag -a "$tag" -m "$tag" "$head_sha"
   echo "created annotated tag ${tag}"
 fi
 
 echo "push ${tag} -> public only"
 git push public "refs/tags/${tag}"
-echo "public ${tag} is $(git rev-parse --short HEAD). The server deploys it within 5 minutes."
+echo "public ${tag} is ${head_sha:0:7}. The server deploys it within 5 minutes."
