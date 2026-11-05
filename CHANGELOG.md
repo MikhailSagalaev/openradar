@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.51.3
+
+- `/submit` works again: a line break in the skills separator stopped the whole form script from parsing, so neither the preview nor the publish button did anything. Reported by GmsDev55 in issue 70.
+- A test now parses the inline scripts of the pages a signed-in member opens.
+
 ## 0.51.2
 
 - `/network` and `/u/<handle>`: the post count is real, it stopped at 1000; points read the same as in the profile.
