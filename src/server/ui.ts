@@ -4901,7 +4901,7 @@ export function renderSubmitPage(data: SubmitPageData): string {
       city: cityInput.value.trim() || undefined,
       budget: budgetInput.value ? Number(budgetInput.value) : undefined,
       currency: currencyInput.value.trim() || 'RUB',
-      skills: skillsInput.value.trim() ? skillsInput.value.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean) : undefined,
+      skills: skillsInput.value.trim() ? skillsInput.value.split(/[,;\\n]+/).map((s) => s.trim()).filter(Boolean) : undefined,
       isRemote: isRemoteInput.checked,
     };
 
