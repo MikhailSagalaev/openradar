@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.50.0
+
+- **Collector settings without addresses.** Extension 0.16.0 lists the boards with a switch each and filters as chips: cities, fields, rubrics, remote only. A board is one entry in `extension/boards.js`. Each board shows its last walk and asks for a sign-in when its session ended. Only the hub's owner sees the section.
+- **Sign-in in one tab.** One press on «Разрешить», and the tab closes by itself. The separate auth window opened a second tab in some browsers.
+- **Profile:** «Откуда приходят заказы» shows posts by board and Telegram channel for a day, a week and in all.
+- Popup layout: switches and chips in place of stretched checkboxes.
+
 ## 0.49.0
 
 - **Profi.ru and Yandex Uslugi in the collector, checked under real accounts.** Extension 0.15.0 reads the Profi.ru board and new orders of Yandex lists by rubric, with their date, budget, category and place. It never presses «Показать номер» and takes neither the client's name nor the street. Coverage follows the account: Yandex ignores a region in the address and Profi shows the account's specialties.

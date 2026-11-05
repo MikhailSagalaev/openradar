@@ -25,7 +25,7 @@ import type {
   UserSourceInput,
   UserSourceRecord,
 } from '../core/store.ts';
-import type { LeadFactsFill, LeadMoney, LeadSighting, ResearchDailyRow } from '../core/store.ts';
+import type { LeadFactsFill, LeadMoney, LeadSighting, ResearchDailyRow, SourceActivity } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
 import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
 import { computeSalaryMedians } from '../core/salary-sanity.ts';
@@ -352,6 +352,23 @@ export class MemoryStore implements Store {
     if (flags.length) metadata.qualityFlags = flags;
     else delete metadata.qualityFlags;
     lead.metadata = metadata;
+  }
+
+  async sourceActivity(options: { sourceId: string; byChannel?: boolean }): Promise<SourceActivity[]> {
+    const now = Date.now();
+    const rows = new Map<string, SourceActivity>();
+    for (const lead of this.leads.values()) {
+      if (lead.sourceId !== options.sourceId) continue;
+      const key = options.byChannel ? (lead.sourceRef?.channelTitle ?? '') : '';
+      const row = rows.get(key) ?? { title: key || undefined, day: 0, week: 0, total: 0 };
+      const age = now - Date.parse(lead.createdAt);
+      row.total++;
+      if (age < 86_400_000) row.day++;
+      if (age < 7 * 86_400_000) row.week++;
+      if (!row.lastAt || lead.createdAt > row.lastAt) row.lastAt = lead.createdAt;
+      rows.set(key, row);
+    }
+    return [...rows.values()].sort((a, b) => b.week - a.week || b.total - a.total).slice(0, 30);
   }
 
   async updateLeadMoney(id: string, money: LeadMoney): Promise<void> {

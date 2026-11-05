@@ -23,7 +23,7 @@ Versions before 0.8.0 have no GitHub sign-in: the popup shows **Настройк
 
 Press **Войти через GitHub** (**Sign in with GitHub** in an English browser) in the popup. A sign-in window opens on the hub (`https://openradar.fun` by default, the **Сервер рыночной оценки** setting); after GitHub sign-in the hub asks you to allow the extension to add leads as you. Nothing else to type: leads go to the shared base under your GitHub name.
 
-How it works: the extension opens `/extension/connect` in a `chrome.identity.launchWebAuthFlow` window. Browsers without that API (or where the window cannot open) get the same page in a regular tab, and the hub sends you back to the extension's own `connected.html`. Either way the personal token (`ext_…`) goes only to the extension: `https://<extension id>.chromiumapp.org/` or `chrome-extension://<extension id>/connected.html`. The token can add leads and nothing else; the hub stores only its SHA-256. **Выйти** revokes it. Firefox is not supported.
+How it works: the extension opens `/extension/connect` in a tab. After **Разрешить** the hub sends the tab back to the extension, which saves the token and closes it.
 
 You need to be signed in to the site with GitHub in the same browser, or you will be asked to sign in during the flow. The leads you add appear in the feed under your GitHub name and count as yours.
 
@@ -47,7 +47,7 @@ Contacts in the text are sent as they are. The node keeps them in a structured f
 
 ## Order collector
 
-For the hub owner. In **Сбор заказов**, list pages of Profi.ru, Yandex Uslugi and YouDo, one per city and specialty, in a browser signed in to those boards. The extension reads a page on demand or walks the list on a timer, in a background tab, at most every 15 minutes, and sends orders to `POST /api/ext/orders`. The hub accepts them from accounts in `RADAR_ADMIN_GITHUB` only and removes phones, addresses and handles. See [GIG_SOURCES.md](GIG_SOURCES.md).
+For the hub owner: the section appears only for an account in `RADAR_ADMIN_GITHUB`. **Сбор заказов** lists the boards from `boards.js`. Switch a board on and the browser asks for access to it; pick cities, fields or rubrics as chips, none means everything. The extension reads the boards on a timer, in a background tab, at most every 15 minutes, and sends orders to `POST /api/ext/orders`. A board shows its last walk or asks for a sign-in. The hub removes phones, addresses and handles. See [GIG_SOURCES.md](GIG_SOURCES.md).
 
 ## Market pay estimate
 

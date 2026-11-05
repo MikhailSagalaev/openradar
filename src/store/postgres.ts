@@ -41,7 +41,7 @@ import type {
   UserSourceInput,
   UserSourceRecord,
 } from '../core/store.ts';
-import type { LeadFactsFill, LeadMoney, LeadSighting, ResearchDailyRow } from '../core/store.ts';
+import type { LeadFactsFill, LeadMoney, LeadSighting, ResearchDailyRow, SourceActivity } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
 import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
 import { BROKEN_AFTER, countFailedInRow } from '../core/source-health.ts';
@@ -1980,6 +1980,18 @@ export class PostgresStore implements Store {
        WHERE id = $1`,
       [id, type, JSON.stringify(flags)],
     );
+  }
+
+  async sourceActivity(options: { sourceId: string; byChannel?: boolean }): Promise<SourceActivity[]> {
+    const group = options.byChannel ? 'source_channel_title' : `''`;
+    const result = await this.pool.query(
+      `SELECT ${group} AS title, count(*)::int AS total, max(created_at) AS last_at,
+         count(*) FILTER (WHERE created_at > now() - interval '1 day')::int AS day,
+         count(*) FILTER (WHERE created_at > now() - interval '7 days')::int AS week
+       FROM leads WHERE source_id = $1 GROUP BY 1 ORDER BY week DESC, total DESC LIMIT 30`,
+      [options.sourceId],
+    );
+    return result.rows.map((r) => ({ title: r.title || undefined, day: r.day, week: r.week, total: r.total, lastAt: r.last_at ? new Date(r.last_at).toISOString() : undefined }));
   }
 
   async updateLeadMoney(id: string, money: LeadMoney): Promise<void> {
