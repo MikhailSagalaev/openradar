@@ -3,6 +3,8 @@
  * (docs/GIG_SOURCES.md). Lists to walk are saved board addresses, one per city and specialty.
  * It runs only where the owner granted the host and never passes a check on the page: if
  * a board asks for a sign-in or a captcha, no orders are found and a person has to step in.
+ * Readers were checked on the live boards on 5 November 2026. They never press a button that
+ * reveals a phone, and they take neither the client's name nor the street.
  */
 
 const COLLECTOR_ALARM = 'radar-collector';
@@ -22,44 +24,110 @@ function collectorPlatform(url) {
   return undefined;
 }
 
-/** Runs inside the page: must not use anything from this file. */
-function readOrdersFromPage(platform) {
-  const clean = (value) => (value ?? '').replace(/\s+\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
-  const money = (value) => {
-    const found = /(\d[\d\s ]{2,})\s*(?:₽|руб)/.exec(value ?? '');
-    const amount = found ? Number(found[1].replace(/[\s ]/g, '')) : NaN;
-    return Number.isFinite(amount) && amount > 0 ? amount : undefined;
-  };
-  /** The largest block around a link that holds no other order. */
-  const cards = (selector, idOf) => {
-    const links = Array.from(document.querySelectorAll(selector)).filter((a) => idOf(a));
-    const seen = new Set();
-    const out = [];
-    for (const link of links) {
-      const id = idOf(link);
-      if (seen.has(id)) continue;
-      seen.add(id);
-      let card = link;
-      while (card.parentElement && Array.from(card.parentElement.querySelectorAll(selector)).every((a) => idOf(a) === id)) card = card.parentElement;
-      // A line of one capitalised word is a client's first name.
-      const lines = clean(card.innerText).split('\n').map((line) => line.trim()).filter((line) => line && !/^[А-ЯЁ][а-яё]{2,14}$/.test(line));
-      out.push({ id, url: link.href, title: lines[0] ?? '', text: lines.join('\n'), budget: money(lines.join('\n')) });
-    }
-    return out;
-  };
-
-  if (platform === 'yandex') {
-    return Array.from(document.querySelectorAll('.OrderCard2')).map((card) => {
-      const link = card.querySelector('a[href^="/order/"]');
-      const part = (name) => clean(card.querySelector(`.OrderCard2-${name}`)?.innerText);
-      const id = /\/order\/([0-9a-f-]{36})/.exec(link?.getAttribute('href') ?? '')?.[1];
-      if (!id) return undefined;
-      const price = part('Price');
-      return { id, url: link.href, title: part('TitleRow'), text: [part('Description'), part('Date'), price].filter(Boolean).join('\n'), category: part('RubricName'), budget: money(price) };
-    }).filter(Boolean);
+/** Runs inside the Profi.ru board: the orders of the account's own specialties and region. */
+async function readProfiBoard(scrolls) {
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const selector = 'a[data-testid$="_order-snippet"]';
+  for (let i = 0; i < scrolls; i++) {
+    const before = document.querySelectorAll(selector).length;
+    for (const box of document.querySelectorAll('*')) if (box.scrollHeight > box.clientHeight + 200) box.scrollTop = 1e7;
+    window.scrollTo(0, 1e7);
+    await wait(1300);
+    if (document.querySelectorAll(selector).length === before) break;
   }
-  if (platform === 'profi') return cards('a[href*="n.php?o="]', (a) => /[?&]o=(\d+)/.exec(a.href)?.[1]);
-  return [];
+  const months = ['январ', 'феврал', 'март', 'апрел', 'ма', 'июн', 'июл', 'август', 'сентябр', 'октябр', 'ноябр', 'декабр'];
+  const dateOf = (age) => {
+    const now = new Date();
+    const ago = /(\d+)\s+(минут|час|д[ен])/.exec(age);
+    if (ago) return new Date(now.getTime() - Number(ago[1]) * { минут: 60000, час: 3600000, де: 86400000, дн: 86400000 }[ago[2]]).toISOString();
+    if (/только что/i.test(age)) return now.toISOString();
+    const yesterday = /Вчера в (\d+):(\d+)/.exec(age);
+    if (yesterday) {
+      const day = new Date(now.getTime() - 86400000);
+      day.setHours(Number(yesterday[1]), Number(yesterday[2]), 0, 0);
+      return day.toISOString();
+    }
+    const dated = /(\d+)\s+([а-я]+)/.exec(age);
+    const month = dated ? months.findIndex((name) => dated[2].startsWith(name)) : -1;
+    if (month < 0) return undefined;
+    const day = new Date(now.getFullYear(), month, Number(dated[1]), 12);
+    if (day > now) day.setFullYear(day.getFullYear() - 1);
+    return day.toISOString();
+  };
+  return Array.from(document.querySelectorAll(selector)).map((card) => {
+    const id = /\?o=(\d+)/.exec(card.getAttribute('href') ?? '')?.[1];
+    const heading = card.querySelector('h3')?.innerText.trim() ?? '';
+    const body = card.querySelector('p')?.innerText.trim() ?? '';
+    const price = /(\d[\d\s]*)\s*₽/.exec(card.querySelector('[aria-hidden="true"]')?.innerText ?? '')?.[1];
+    const place = Array.from(card.querySelectorAll('li')).map((li) => li.innerText.trim()).find((text) => /·|Дистанционно|^[А-ЯЁ]/.test(text)) ?? '';
+    const parts = place.split('·').map((part) => part.trim()).filter(Boolean);
+    return {
+      id,
+      url: `https://profi.ru/backoffice/n.php?o=${id}`,
+      title: body && heading.length < 25 ? `${heading}: ${body.split('·')[0].trim()}` : heading,
+      text: [heading, body].filter(Boolean).join('\n'),
+      budget: price ? Number(price.replace(/\s/g, '')) : undefined,
+      category: heading,
+      city: parts.filter((part) => part !== 'Дистанционно').pop(),
+      remote: /Дистанционно/.test(place),
+      publishedAt: dateOf(card.querySelector('span')?.innerText ?? ''),
+    };
+  }).filter((order) => order.id);
+}
+
+/** Runs inside the Yandex order list: the ids of a few pages, turned with the list's own «Далее». */
+async function readYandexList(pages) {
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const ids = new Set();
+  for (let page = 0; page < pages; page++) {
+    await wait(2500);
+    for (const link of document.querySelectorAll('.OrderCard2 a[href^="/order/"]')) {
+      const id = /\/order\/([0-9a-f-]{36})/.exec(link.getAttribute('href') ?? '')?.[1];
+      if (id) ids.add(id);
+    }
+    const next = Array.from(document.querySelectorAll('a, button, [role="button"]')).find((el) => el.innerText?.trim() === 'Далее');
+    if (!next) break;
+    next.click();
+  }
+  return [...ids];
+}
+
+/** Runs inside Yandex: the order its own page carries. Never the client's name or phone. */
+async function readYandexOrders(ids, pauseMs) {
+  const out = [];
+  const find = (node, id, depth) => {
+    if (!node || typeof node !== 'object' || depth > 9) return undefined;
+    if (node.id === id && 'description' in node) return node;
+    for (const value of Object.values(node)) {
+      const found = find(value, id, depth + 1);
+      if (found) return found;
+    }
+    return undefined;
+  };
+  for (const id of ids) {
+    await new Promise((resolve) => setTimeout(resolve, pauseMs));
+    const response = await fetch(`/order/${id}`, { credentials: 'include' });
+    if (!response.ok) continue;
+    const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+    const state = page.getElementById('__PRELOADED_STATE__')?.textContent;
+    const order = state ? find(JSON.parse(state), id, 0) : undefined;
+    if (!order?.title) continue;
+    // «service» is the whole job; other measures are a rate per lesson or per hour.
+    const measure = String(order.price?.measure ?? '');
+    const amount = Number(order.price?.amount);
+    const names = order.rubricsNames ?? {};
+    out.push({
+      id,
+      url: `https://uslugi.yandex.ru/order/${id}`,
+      title: order.title,
+      text: order.description ?? '',
+      budget: amount > 0 && (!measure || measure === 'service') ? amount : undefined,
+      category: names.specialization ?? names.occupation,
+      city: order.address?.name ? order.address.name.split(',').map((part) => part.trim()).filter((part) => !/\d/.test(part) && !/улица|проспект|шоссе|переулок/i.test(part))[0] : undefined,
+      publishedAt: Number(order.createTime) ? new Date(Number(order.createTime) * 1000).toISOString() : undefined,
+    });
+  }
+  return out;
 }
 
 /**
@@ -138,6 +206,33 @@ async function walkYoudo(tabId, url) {
   return { found: orders.length, ...result };
 }
 
+const YANDEX_PAGES_PER_WALK = 3;
+const YANDEX_ORDERS_PER_WALK = 30;
+const PROFI_SCROLLS = 8;
+
+/** New orders of a Yandex list: order pages are read once, in small portions. */
+async function walkYandex(tabId) {
+  const run = async (func, args) => (await chrome.scripting.executeScript({ target: { tabId }, world: 'MAIN', func, args }))[0]?.result;
+  const { radarYandexSeen: stored } = await chrome.storage.local.get(['radarYandexSeen']);
+  const seen = new Set(stored ?? []);
+  const ids = ((await run(readYandexList, [YANDEX_PAGES_PER_WALK])) ?? []).filter((id) => !seen.has(id)).slice(0, YANDEX_ORDERS_PER_WALK);
+  if (!ids.length) return { ok: true, found: 0, inserted: 0 };
+  const orders = (await run(readYandexOrders, [ids, 1500])) ?? [];
+  const result = orders.length ? await sendCollected('yandex', orders) : { ok: true, inserted: 0 };
+  if (result.ok !== false) {
+    for (const id of ids) seen.add(id);
+    await chrome.storage.local.set({ radarYandexSeen: [...seen].slice(-YOUDO_SEEN_KEPT) });
+  }
+  return { found: orders.length, ...result };
+}
+
+async function walkProfi(tabId) {
+  const [result] = await chrome.scripting.executeScript({ target: { tabId }, world: 'MAIN', func: readProfiBoard, args: [PROFI_SCROLLS] });
+  const orders = result?.result ?? [];
+  if (!orders.length) return { ok: true, found: 0, inserted: 0 };
+  return { found: orders.length, ...(await sendCollected('profi', orders)) };
+}
+
 async function sendCollected(platform, orders) {
   const { radarAccount: account } = await chrome.storage.local.get(['radarAccount']);
   if (!account?.token) return { ok: false, error: 'not_signed_in' };
@@ -154,10 +249,8 @@ async function collectFromTab(tabId, url) {
   const platform = collectorPlatform(url);
   if (!platform) return { ok: false, error: 'not_a_board' };
   if (platform === 'youdo') return walkYoudo(tabId, url);
-  const [result] = await chrome.scripting.executeScript({ target: { tabId }, func: readOrdersFromPage, args: [platform] });
-  const orders = result?.result ?? [];
-  if (!orders.length) return { ok: true, found: 0, inserted: 0 };
-  return { found: orders.length, ...(await sendCollected(platform, orders)) };
+  if (platform === 'yandex') return walkYandex(tabId);
+  return walkProfi(tabId);
 }
 
 const collectorWait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
