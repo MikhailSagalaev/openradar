@@ -57,5 +57,7 @@ export function collectedOrderToRaw(platform: CollectorPlatform, sourceId: strin
     currency: budget ? 'RUB' : undefined,
     category: text(order.category, 100) || undefined,
     city: text(order.city, 100) || undefined,
+    isRemote: typeof order.remote === 'boolean' ? order.remote : undefined,
+    publishedAt: Number.isNaN(Date.parse(text(order.publishedAt, 40))) ? undefined : text(order.publishedAt, 40),
   };
 }

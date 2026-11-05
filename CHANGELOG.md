@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.48.0
+
+- **YouDo in the collector.** Extension 0.14.0 reads the task list with filters by place, category and remote work, and each new task's page for its text, date, budget and subcategory. Checked on the live site: about 7 000 open tasks, no sign-in needed. Clients and street addresses are not kept.
+- `POST /api/ext/orders` takes the publication date and remote work.
+
 ## 0.47.0
 
 - **Order collector.** Extension 0.13.0 reads Profi.ru, Yandex Uslugi and YouDo in a browser where the owner is signed in, from one page or over a saved list of cities and specialties. The hub takes them at `POST /api/ext/orders`, from admins only, and cuts phones, addresses and handles first. The page markup comes from public repositories and is not yet checked on live accounts.
