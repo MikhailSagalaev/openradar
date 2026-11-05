@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.49.0
+
+- **Profi.ru and Yandex Uslugi in the collector, checked under real accounts.** Extension 0.15.0 reads the Profi.ru board and new orders of Yandex lists by rubric, with their date, budget, category and place. It never presses «Показать номер» and takes neither the client's name nor the street. Coverage follows the account: Yandex ignores a region in the address and Profi shows the account's specialties.
+
 ## 0.48.0
 
 - **YouDo in the collector.** Extension 0.14.0 reads the task list with filters by place, category and remote work, and each new task's page for its text, date, budget and subcategory. Checked on the live site: about 7 000 open tasks, no sign-in needed. Clients and street addresses are not kept.
