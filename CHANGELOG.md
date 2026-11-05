@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.50.3
+
+- A walk reads Yandex and Profi.ru first, and YouDo has one budget of 200 tasks for the whole walk. The YouDo lists of eleven cities held the other boards back for half an hour.
+- Extension 0.19.0: pay shows as the page states it, «184 800–302 500 $ в год», and a yearly range is compared with the market by its month. A page that is clearly a vacancy or an order locks the choice. «Сбор заказов» folds.
+- Profile: board and channel names open their orders, «Откуда приходят заказы» moved below the settings, «ждёт подтверждения» became «очки позже» with an explanation, and a new agent token appears in place, without a reload.
+
 ## 0.50.2
 
 - Extension 0.18.0 reads about one page a second, up to 200 tasks per list, and shows the count as it goes. It took 25 seconds per eight orders.

@@ -173,6 +173,8 @@ const YOUDO_TASKS_PER_WALK = 200;
 const YOUDO_SEEN_KEPT = 30000;
 
 /** New tasks of one list, newest first: pages stop once a page holds nothing new. */
+let youdoLeft = YOUDO_TASKS_PER_WALK;
+
 async function walkYoudo(tabId, url) {
   const fragment = new URL(url).hash;
   const run = async (func, args) => (await chrome.scripting.executeScript({ target: { tabId }, world: 'MAIN', func, args }))[0]?.result;
@@ -186,7 +188,9 @@ async function walkYoudo(tabId, url) {
     fresh.push(...unseen);
     if (!unseen.length) break;
   }
-  return readInSteps(fresh.slice(0, YOUDO_TASKS_PER_WALK), 'youdo', (ids) => run(readYoudoTasks, [ids, READ_PAUSE_MS]), seen, 'radarYoudoSeen');
+  const batch = fresh.slice(0, Math.max(0, youdoLeft));
+  youdoLeft -= batch.length;
+  return readInSteps(batch, 'youdo', (ids) => run(readYoudoTasks, [ids, READ_PAUSE_MS]), seen, 'radarYoudoSeen');
 }
 
 /** Reads and sends a few orders at a time, so a stopped walk loses one step at most. */
@@ -302,6 +306,7 @@ async function walkBoards() {
   // A worker with no calls in flight is stopped after 30 seconds, mid-walk.
   const keepAlive = setInterval(() => chrome.runtime.getPlatformInfo(() => {}), 20000);
   await chrome.storage.local.set({ radarCollectorRunning: new Date().toISOString() });
+  youdoLeft = YOUDO_TASKS_PER_WALK;
   try {
     const { radarCollector: settings, radarBoardCatalog: catalogs } = await chrome.storage.local.get(['radarCollector', 'radarBoardCatalog']);
     for (const board of BOARDS) {
@@ -320,7 +325,7 @@ async function walkBoards() {
         }
         status.at = new Date().toISOString();
         await saveBoardStatus(board.id, status);
-        if (status.error) break;
+        if (status.error || (board.id === 'youdo' && youdoLeft <= 0)) break;
         await collectorWait(PAUSE_BETWEEN_PAGES_MS);
       }
     }

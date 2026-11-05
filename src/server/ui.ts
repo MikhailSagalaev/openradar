@@ -3894,7 +3894,7 @@ export interface ProfilePageData {
     notice?: string;
   };
   /** Where the account's orders come from. */
-  sourcesActivity?: Array<{ title: string; group: 'boards' | 'telegram'; day: number; week: number; total: number; lastAt?: string }>;
+  sourcesActivity?: Array<{ title: string; group: 'boards' | 'telegram'; href?: string; day: number; week: number; total: number; lastAt?: string }>;
   /** Members' own Telegram accounts and sources; set only when RADAR_USER_TELEGRAM is on. */
   telegram?: {
     accounts: Array<{ id: string; tgUserId: number; tgUsername: string | null; displayName: string | null; status: string }>;
@@ -3954,7 +3954,10 @@ function confirmDialog(lang: SupportedLang): string {
   document.querySelectorAll('form[data-confirm]').forEach((form) => form.addEventListener('submit', async (event) => {
     if (form.dataset.confirmed) return;
     event.preventDefault();
-    if (await window.askConfirm(form)) { form.dataset.confirmed = '1'; form.submit(); }
+    if (!await window.askConfirm(form)) return;
+    form.dataset.confirmed = '1';
+    if (form.dataset.inPlace) form.dispatchEvent(new Event('in-place'));
+    else form.submit();
   }));
 })();</script>`;
 }
@@ -3966,7 +3969,7 @@ function confirmAttrs(title: string, action: string, text = ''): string {
 function renderSourcesActivity(rows: NonNullable<ProfilePageData['sourcesActivity']>, lang: SupportedLang): string {
   const ru = lang === 'ru';
   const line = (row: (typeof rows)[number]): string => `<tr>
-      <td>${escapeHtml(row.title)}</td>
+      <td>${row.href ? `<a href="${escapeHtml(row.href)}">${escapeHtml(row.title)}</a>` : escapeHtml(row.title)}</td>
       <td class="num">${row.day}</td>
       <td class="num">${row.week}</td>
       <td class="num">${row.total}</td>
@@ -4168,11 +4171,35 @@ function renderAgentToken(data: NonNullable<ProfilePageData['agent']>, lang: Sup
   <p class="small">${ru
     ? 'С этим токеном агент (Claude, ChatGPT, Cursor) подключается к MCP-серверу openradar от вашего имени: видит ленту с вашей задержкой и контактами и может подписать вас на поиск инструментом <code>save_search</code>. Больше он ничего не может: ни голосовать, ни менять профиль.'
     : 'With this token an agent (Claude, ChatGPT, Cursor) connects to the openradar MCP server as you: it sees the feed with your delay and contacts and can subscribe you to a search with <code>save_search</code>. Nothing else: no voting, no profile changes.'}</p>
-  ${fresh}
+  <div data-agent-result>${fresh}</div>
   <div class="subscription-actions">
-    <form method="post" action="/me/agent-token" class="inline-form"${data.hasToken ? ` ${confirmAttrs(ru ? 'Выпустить новый токен?' : 'Issue a new token?', ru ? 'Выпустить' : 'Issue', ru ? 'Старый токен перестанет работать, агентов придётся настроить заново.' : 'The old token stops working and agents need setting up again.')}` : ''}><button class="btn ghost small" type="submit">${data.hasToken ? (ru ? 'Выпустить новый' : 'Issue a new one') : (ru ? 'Выпустить токен' : 'Issue a token')}</button></form>
+    <form method="post" action="/me/agent-token#agent" data-in-place="1" data-agent-form class="inline-form"${data.hasToken ? ` ${confirmAttrs(ru ? 'Выпустить новый токен?' : 'Issue a new token?', ru ? 'Выпустить' : 'Issue', ru ? 'Старый токен перестанет работать, агентов придётся настроить заново.' : 'The old token stops working and agents need setting up again.')}` : ''}><button class="btn ghost small" type="submit">${data.hasToken ? (ru ? 'Выпустить новый' : 'Issue a new one') : (ru ? 'Выпустить токен' : 'Issue a token')}</button></form>
     ${data.hasToken ? `<form method="post" action="/me/agent-token/delete" class="inline-form" ${confirmAttrs(ru ? 'Отозвать токен?' : 'Revoke the token?', ru ? 'Отозвать' : 'Revoke', ru ? 'Агенты с ним больше не смогут войти.' : 'Agents can no longer use it.')}><button class="btn ghost small" type="submit">${ru ? 'Отозвать' : 'Revoke'}</button></form>` : ''}
-  </div>`;
+  </div>
+  <script>(() => {
+    const form = document.querySelector('[data-agent-form]');
+    const result = document.querySelector('[data-agent-result]');
+    const issue = async () => {
+      delete form.dataset.confirmed;
+      const response = await fetch('/me/agent-token', { method: 'POST', headers: { accept: 'application/json' } });
+      if (!response.ok) return form.submit();
+      const { token, config } = await response.json();
+      const note = document.createElement('p');
+      note.className = 'notice';
+      note.textContent = ${JSON.stringify(ru ? 'Скопируйте токен сейчас: больше он показан не будет. Новый токен отменяет старый.' : 'Copy the token now: it will not be shown again. A new token revokes the old one.')};
+      const code = document.createElement('pre');
+      code.className = 'code-block';
+      code.textContent = config;
+      result.replaceChildren(note, code);
+      void token;
+    };
+    form.addEventListener('in-place', issue);
+    form.addEventListener('submit', (event) => {
+      if (form.dataset.confirm) return;
+      event.preventDefault();
+      issue();
+    });
+  })();</script>`;
 }
 
 const SUBSCRIPTION_NOTICES: Record<SupportedLang, Record<string, string>> = {
@@ -4302,7 +4329,7 @@ export function renderProfilePage(data: ProfilePageData): string {
       <td class="muted small">${formatRelative(entry.createdAt, lang)}</td>
     </tr>`).join('');
   const statusLabel = (status: 'credited' | 'waiting' | 'hidden'): string =>
-    status === 'credited' ? (ru ? 'очки начислены' : 'credited') : status === 'hidden' ? (ru ? 'скрыт' : 'hidden') : (ru ? 'ждёт подтверждения' : 'awaiting confirmation');
+    status === 'credited' ? (ru ? 'очки начислены' : 'credited') : status === 'hidden' ? (ru ? 'скрыт' : 'hidden') : (ru ? 'очки позже' : 'points later');
   const postRows = (data.posts ?? []).map((post) => `<tr>
       <td><a href="/leads/${escapeHtml(post.leadId)}">${escapeHtml(post.title)}</a>${post.first ? '' : `<div class="muted small">${ru ? 'уже был в базе' : 'already in the base'}</div>`}</td>
       <td class="small"><span class="profile-status ${post.status}">${statusLabel(post.status)}</span></td>
@@ -4312,6 +4339,7 @@ export function renderProfilePage(data: ProfilePageData): string {
   <h2>${ru ? 'Начисления' : 'Points'}</h2>
   ${ledgerRows ? `<table class="profile-table">${ledgerRows}</table>` : `<p class="muted">${ru ? 'Пока пусто. Очки приходят, когда добавленный вами заказ подтверждают другие участники или он сутки висит без жалоб.' : 'Nothing yet. Points come when others confirm a lead you added, or it stays a day without complaints.'}</p>`}
   <h2>${ru ? 'Ваши публикации' : 'Your posts'}</h2>
+  <p class="muted small">${ru ? '«Очки позже»: пост уже в ленте. Очки придут, когда его подтвердит другой участник или кто-то отметит «полезно». Без подтверждения через сутки начисляется половина.' : '«Points later»: the post is in the feed. Points come when another participant confirms it or someone marks it useful. With no confirmation, half is credited after a day.'}</p>
   ${postRows ? `<table class="profile-table">${postRows}</table>` : `<p class="muted">${ru ? 'Добавьте заказ <a href="/submit">по ссылке</a> или через <a href="/extension">расширение</a> — он появится здесь.' : 'Add a lead <a href="/submit">by link</a> or with the <a href="/extension">extension</a> and it shows up here.'}</p>`}` : '';
   const body = `
 <div class="page-head"><div><h1>${escapeHtml(t.profileTitle)}</h1>
@@ -4319,10 +4347,10 @@ export function renderProfilePage(data: ProfilePageData): string {
 <section class="profile">
   ${progress}
   <p class="profile-tier">${ru ? 'Уровень' : 'Tier'}: <strong>${escapeHtml(names[data.tier])}</strong>${data.hubMode && data.tier !== 'admin' ? ` · ${ru ? 'задержка ленты' : 'feed delay'}: <strong>${escapeHtml(delay(data.delays[data.tier]))}</strong>` : ''}</p>
-  ${data.sourcesActivity ? renderSourcesActivity(data.sourcesActivity, lang) : ''}
   ${data.subscriptions ? renderSubscriptions(data.subscriptions, lang) : ''}
   ${data.telegram ? renderUserTelegram(data.telegram, lang) : ''}
   ${data.agent ? renderAgentToken(data.agent, lang) : ''}
+  ${data.sourcesActivity ? renderSourcesActivity(data.sourcesActivity, lang) : ''}
   ${data.subscriptions || data.telegram || data.agent ? confirmDialog(lang) : ''}
   ${activity}
   ${table}

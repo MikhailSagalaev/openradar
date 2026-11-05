@@ -166,13 +166,25 @@ function lineIcon(name) {
 
 let cachedPage = null;
 
+/** Exchanges publish orders whatever a title says. */
+const ORDER_BOARDS = /(?:^|\.)(?:kwork\.ru|fl\.ru|freelancehunt\.com|freelancer\.com|profi\.ru|youdo\.com|upwork\.com)$/i;
+
+/** When the page itself says what it is, the choice is not offered. */
+function lockType(type) {
+  setSelectedType(type);
+  document.querySelectorAll('input[name="leadType"]').forEach((radio) => {
+    radio.disabled = radio.value !== type;
+    radio.closest('label')?.classList.toggle('radio-off', radio.disabled);
+  });
+}
+
 async function initPreview() {
   try {
     const page = await readPage();
     cachedPage = page;
     if (page) {
       if (page.jobPosting) {
-        setSelectedType('job');
+        lockType('job');
         const jp = page.jobPosting;
         fields.pageTitle.textContent = jp.title || page.title;
 
@@ -180,10 +192,7 @@ async function initPreview() {
         if (jp.company) details.push(jp.company);
         if (jp.city) details.push(jp.city);
         if (jp.isRemote) details.push(t('remote'));
-        if (typeof jp.budget === 'number') {
-          const cur = jp.currency === 'RUB' ? '₽' : jp.currency;
-          details.push(`${jp.budget.toLocaleString(uiLocale())} ${cur}`);
-        }
+        if (typeof jp.budget === 'number') details.push(payLine(jp));
 
         if (details.length) {
           fields.jobChip.textContent = details.join(' · ');
@@ -195,6 +204,7 @@ async function initPreview() {
       }
 
       fields.pageUrl.textContent = page.url ? new URL(page.url).hostname : '';
+      if (!page.jobPosting && page.url && ORDER_BOARDS.test(new URL(page.url).hostname)) lockType('gig');
 
       if (page.selection) {
         fields.selectionSnippet.textContent = t('selection', [String(page.selection.length), `${page.selection.slice(0, 160)}${page.selection.length > 160 ? '...' : ''}`]);
@@ -408,14 +418,27 @@ function marketLine(className, text) {
 }
 
 /** Pay on this page against the market range, in the same currency when we can tell it. */
+/** «184 800–302 500 $ в год» as the page states it. */
+function payLine(job) {
+  const low = job.budget;
+  const high = typeof job.salaryMax === 'number' && job.salaryMax !== low ? job.salaryMax : undefined;
+  const sign = { RUB: '₽', USD: '$', EUR: '€' }[job.currency] ?? job.currency ?? '';
+  const amount = [low, high].filter((value) => typeof value === 'number').map((value) => Math.round(value).toLocaleString(uiLocale())).join('–');
+  const period = job.payPeriod === 'year' ? ` ${t('perYear')}` : job.payPeriod === 'month' ? ` ${t('perMonth')}` : '';
+  return `${amount} ${sign}${period}`;
+}
+
 function compareWithPage(estimate, page) {
-  const budget = page?.jobPosting?.budget;
-  if (typeof budget !== 'number' || !estimate.rub || !estimate.usd) return null;
-  const currency = page.jobPosting.currency || 'RUB';
+  const job = page?.jobPosting;
+  if (typeof job?.budget !== 'number' || !estimate.rub || !estimate.usd) return null;
+  const currency = job.currency || 'RUB';
   const range = currency === 'USD' ? estimate.usd : currency === 'RUB' ? estimate.rub : null;
   if (!range) return null;
-  const verdict = budget < range.p25 ? t('belowMarket') : budget > range.p75 ? t('aboveMarket') : t('inMarket');
-  return t('onThisPage', [formatMoney(budget, currency), verdict]);
+  // The estimate is per month for vacancies: a yearly range is compared by its month.
+  const high = typeof job.salaryMax === 'number' ? job.salaryMax : job.budget;
+  const middle = (job.budget + high) / 2 / (job.payPeriod === 'year' ? 12 : 1);
+  const verdict = middle < range.p25 ? t('belowMarket') : middle > range.p75 ? t('aboveMarket') : t('inMarket');
+  return t('onThisPage', [payLine(job), verdict]);
 }
 
 /** Sends only the title, type and skills: no URL, no page text. On the user's click only. */
@@ -733,6 +756,8 @@ async function refreshCollector() {
   collector.auto.checked = Boolean(collectorSettings.auto);
   collector.minutes.value = String(collectorSettings.minutes);
   renderBoards();
+  const sum = Object.values(collectorData.statuses ?? {}).reduce((total, status) => total + (status.inserted ?? 0), 0);
+  document.getElementById('collector-summary').textContent = sum ? t('collectorSummary', [String(sum)]) : '';
   // A walk the browser cut off leaves its mark behind: it must not lock the button for good.
   const running = stored.radarCollectorRunning && Date.now() - Date.parse(stored.radarCollectorRunning) < STALE_RUN_MS;
   collector.now.disabled = Boolean(running);

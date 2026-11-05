@@ -114,7 +114,11 @@ describe('extension on boards like Gem', () => {
 
   it('leaves ordinary pages alone and reads a plain money range', () => {
     expect(extractJobPosting(page('https://example.com/blog/post', 'Text'))).toBeNull();
-    expect(moneyInText('€60,000 – €80,000 a year')).toEqual({ budget: 60000, salaryMax: 80000, currency: 'EUR' });
+    expect(moneyInText('€60,000 – €80,000 a year')).toMatchObject({ budget: 60000, salaryMax: 80000, currency: 'EUR' });
+    expect(moneyInText('€60,000 – €80,000 a year').payPeriod).toBe('year');
+    expect(moneyInText('$4,000 - $6,000 per month').payPeriod).toBe('month');
+    // No word at all: a sum this large is no month's pay.
+    expect(moneyInText('Engineer: $184,800 - $250,000, Sr. Engineer: $223,600 - $302,500')).toMatchObject({ budget: 184800, salaryMax: 302500, payPeriod: 'year' });
   });
 });
 

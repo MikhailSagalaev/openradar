@@ -1312,12 +1312,12 @@ export function createApp(runtime: Runtime): Hono {
       for (const [platform, { title }] of Object.entries(COLLECTOR_PLATFORMS)) {
         const source = sources.find((s) => s.config.collector === platform);
         const [activity] = source ? await store.sourceActivity({ sourceId: source.id }) : [];
-        rows.push({ title, group: 'boards', day: activity?.day ?? 0, week: activity?.week ?? 0, total: activity?.total ?? 0, lastAt: activity?.lastAt });
+        rows.push({ title, group: 'boards', href: source ? `/sources/${source.id}` : undefined, day: activity?.day ?? 0, week: activity?.week ?? 0, total: activity?.total ?? 0, lastAt: activity?.lastAt });
       }
     }
     if (reads && telegram) {
       for (const activity of await store.sourceActivity({ sourceId: telegram.id, byChannel: true })) {
-        rows.push({ title: activity.title ?? 'Telegram', group: 'telegram', day: activity.day, week: activity.week, total: activity.total, lastAt: activity.lastAt });
+        rows.push({ title: activity.title ?? 'Telegram', group: 'telegram', href: `/sources/${telegram.id}`, day: activity.day, week: activity.week, total: activity.total, lastAt: activity.lastAt });
       }
     }
     return rows.length ? rows : undefined;
@@ -1435,6 +1435,10 @@ export function createApp(runtime: Runtime): Hono {
     await runtime.store.setAgentToken(user.id, createHash('sha256').update(token).digest('hex'));
     // Shown once, in this response only: the token is not stored and not put in a URL.
     c.header('Cache-Control', 'no-store');
+    if (c.req.header('accept')?.includes('application/json')) {
+      const url = `${publicBaseUrl(c, runtime)}/mcp`;
+      return c.json({ token, config: JSON.stringify({ mcpServers: { openradar: { url, headers: { Authorization: `Bearer ${token}` } } } }, null, 2) });
+    }
     return c.html(await renderProfile(c, { agentToken: token }));
   });
 

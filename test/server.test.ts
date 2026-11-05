@@ -949,6 +949,8 @@ describe('http server', () => {
     const profile = await (await app.request('/me', { headers: cookie })).text();
     expect(profile).toContain('Откуда приходят заказы');
     expect(profile).toContain('Профи.ру — заказы');
+    const issued = await app.request('/me/agent-token', { method: 'POST', headers: { ...cookie, origin: 'http://localhost', accept: 'application/json' } });
+    expect((await issued.json()) as { token: string }).toMatchObject({ token: expect.stringMatching(/^mcp_/) });
 
     const extensionPage = await (await app.request('/extension')).text();
     expect(extensionPage).toMatch(/Актуальная версия: <strong>\d+\.\d+\.\d+<\/strong>/);
@@ -1610,7 +1612,7 @@ describe('http server', () => {
     const profile = await (await app.request('/me', { headers: { cookie: `radar_session=${userSession}` } })).text();
     expect(profile).toContain('Ваши публикации');
     expect(profile).toContain('Go developer');
-    expect(profile).toContain('ждёт подтверждения');
+    expect(profile).toContain('очки позже');
     expect(profile).toContain('ещё 100 до уровня');
 
     // The tier delay hides the lead from others, not from the person who brought it.
