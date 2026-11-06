@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.54.0
+
+- **Employers.** `/employers` lists who hires now, with search, and `/employers/<company>` gathers a company's open vacancies from every board, with what it hires for and where. The pages go into the sitemap with structured data, and a vacancy links to its employer.
+- A vacancy keeps its employer from now on. `radar reemployers` fills the stored ones. Orders never get one: openradar keeps no client names. Channel names, people and participants do not count as employers.
+
 ## 0.53.1
 
 - A long list of company boards no longer starts from the top after every deploy, so the boards at its end get read too.

@@ -9,7 +9,7 @@ import { escapeHtml, extractTechSkills, stripInvisible } from '../core/text.ts';
 import { renderRssFeed } from './feed.ts';
 import type { ParticipantRecord, UserRecord } from '../core/store.ts';
 import type { Lead, LeadStatus, LeadType, RawLead, SourceConfig, SourceKind, SourceRecord, Viewer, VoteSignal } from '../core/types.ts';
-import type { ListLeadsOptions } from '../core/store.ts';
+import type { EmployerSummary, ListLeadsOptions } from '../core/store.ts';
 import { pollAll, pollSource } from '../pipeline/poll.ts';
 import { ingestRawLead, type IngestDeps } from '../pipeline/ingest.ts';
 import type { UserTelegramDeps } from '../pipeline/user-telegram.ts';
@@ -83,6 +83,9 @@ import {
   renderContributePage,
   renderTrustPage,
   renderCatalogPage,
+  employerPath,
+  renderEmployerPage,
+  renderEmployersPage,
   renderFaqPage,
   renderLlmsTxt,
   renderRobotsTxt,
@@ -2797,7 +2800,9 @@ export function createApp(runtime: Runtime): Hono {
     const roles = runtime.env.RADAR_PUBLIC_READ
       ? ['/research/index', '/en/research', '/en/research/index', '/en/research/methodology', ...(await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY })).report.jobs.roles.map((r) => `/research/roles/${r.slug}`)]
       : [];
-    return c.text(renderSitemapXml(seoBaseUrl(c), leads, new Date(), roles), 200, {
+    const employers = runtime.env.RADAR_PUBLIC_READ ? ((await runtime.store.listEmployers?.({ limit: 500, minPosts: 3 })) ?? []) : [];
+    const employerPaths = runtime.env.RADAR_PUBLIC_READ ? ['/employers', ...employers.map((e) => employerPath(e.key))] : [];
+    return c.text(renderSitemapXml(seoBaseUrl(c), leads, new Date(), [...roles, ...employerPaths]), 200, {
       'content-type': 'application/xml; charset=utf-8',
     });
   });
@@ -2990,6 +2995,46 @@ export function createApp(runtime: Runtime): Hono {
     c.header('Cache-Control', 'public, max-age=600');
     return c.html(body);
   });
+  // Employers: who hires now, one page per company. What a guest may read, without contacts.
+  const EMPLOYER_MIN_POSTS = 2;
+  let employersCache: { at: number; rows: EmployerSummary[] } | undefined;
+  app.get('/employers', rateLimit({ windowMs: 60_000, max: 60 }), async (c) => {
+    if (!await canRead(c, runtime)) return c.redirect('/login?returnTo=/employers');
+    const lang = resolveLang(c);
+    const query = (c.req.query('q') ?? '').trim().slice(0, 80) || undefined;
+    let employers: EmployerSummary[];
+    if (query) {
+      employers = (await runtime.store.listEmployers?.({ limit: 100, minPosts: 1, query })) ?? [];
+    } else {
+      if (!employersCache || Date.now() - employersCache.at > 10 * 60_000) {
+        employersCache = { at: Date.now(), rows: (await runtime.store.listEmployers?.({ limit: 300, minPosts: EMPLOYER_MIN_POSTS })) ?? [] };
+      }
+      employers = employersCache.rows;
+    }
+    return c.html(renderEmployersPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime), lang, employers, query }));
+  });
+  app.get('/employers/:key', rateLimit({ windowMs: 60_000, max: 60 }), async (c) => {
+    if (!await canRead(c, runtime)) return c.redirect('/login?returnTo=/employers');
+    const lang = resolveLang(c);
+    const key = (c.req.param('key') as string).toLowerCase();
+    const stored = (await runtime.store.listEmployerLeads?.(key, 60)) ?? [];
+    const posts = stored.filter((lead) => viewerCanSeeLead({ tier: 'guest' }, lead, runtime.access)).map((lead) => projectContacts(lead, { tier: 'guest' }));
+    if (!posts.length) return c.html(renderNotFound(VERSION, lang, await getAuthDisplay(c, runtime)), 404);
+    const names = new Map<string, number>();
+    for (const lead of posts) if (lead.company) names.set(lead.company, (names.get(lead.company) ?? 0) + 1);
+    const name = [...names.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? key;
+    return c.html(renderEmployerPage({
+      baseUrl: seoBaseUrl(c),
+      version: VERSION,
+      auth: await getAuthDisplay(c, runtime),
+      lang,
+      employerKey: key,
+      name,
+      active: (await runtime.store.countEmployerLeads?.(key)) ?? posts.length,
+      posts: posts.slice(0, 30),
+    }));
+  });
+
   // A participant's public page: what they brought to the shared base. Only public posts,
   // and nothing for someone who left the rating.
   app.get('/u/:handle', rateLimit({ windowMs: 60_000, max: 60 }), async (c) => {

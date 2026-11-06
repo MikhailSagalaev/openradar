@@ -41,7 +41,7 @@ import type {
   UserSourceInput,
   UserSourceRecord,
 } from '../core/store.ts';
-import type { LeadFactsFill, LeadMoney, LeadSighting, ResearchDailyRow, SourceActivity } from '../core/store.ts';
+import type { EmployerRow, EmployerSummary, LeadFactsFill, LeadMoney, LeadSighting, ResearchDailyRow, SourceActivity } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
 import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
 import { BROKEN_AFTER, countFailedInRow } from '../core/source-health.ts';
@@ -398,7 +398,8 @@ export class PostgresStore implements Store {
           votes_up, votes_down, votes_scam, votes_closed, quality_score,
           raw_salary, payment_period, normalized_usd_min, normalized_usd_max,
           minhash_sketch, state, contacts_json,
-          source_platform, source_channel, source_channel_title, source_visibility, source_message_id
+          source_platform, source_channel, source_channel_title, source_visibility, source_message_id,
+          company, company_key
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7,
           $8, $9, $10, $11, $12, $13::jsonb, $14,
@@ -407,7 +408,8 @@ export class PostgresStore implements Store {
           $25, $26, $27, $28, $29,
           $30, $31, $32, $33,
           $34, $35, $36::jsonb,
-          $37, $38, $39, $40, $41
+          $37, $38, $39, $40, $41,
+          $42, $43
         ) ON CONFLICT DO NOTHING`,
         [
           lead.id,
@@ -451,6 +453,8 @@ export class PostgresStore implements Store {
           lead.sourceRef?.channelTitle ?? null,
           lead.sourceRef?.visibility ?? null,
           lead.sourceRef?.messageId ?? null,
+          lead.company ?? null,
+          lead.companyKey ?? null,
         ]
       );
 
@@ -489,6 +493,54 @@ export class PostgresStore implements Store {
       [afterId, limit],
     );
     return res.rows.map((r) => ({ id: String(r.id), title: String(r.title ?? ''), titleKey: String(r.title_key ?? '') }));
+  }
+
+  async listEmployers(options: { limit: number; minPosts: number; query?: string }): Promise<EmployerSummary[]> {
+    const res = await this.pool.query(
+      `SELECT company_key, mode() WITHIN GROUP (ORDER BY company) AS name, count(*)::int AS active, max(created_at) AS last_at
+         FROM leads
+        WHERE company_key IS NOT NULL AND type = 'job' AND state = 'active' AND status <> 'rejected'
+          AND ($3::text IS NULL OR position(lower($3::text) in lower(company)) > 0)
+        GROUP BY company_key
+       HAVING count(*) >= $2
+        ORDER BY active DESC, company_key
+        LIMIT $1`,
+      [options.limit, options.minPosts, options.query ?? null],
+    );
+    return res.rows.map((r) => ({ key: String(r.company_key), name: String(r.name), active: Number(r.active), lastAt: new Date(r.last_at).toISOString() }));
+  }
+
+  async listEmployerLeads(key: string, limit: number): Promise<Lead[]> {
+    const res = await this.pool.query(
+      `SELECT * FROM leads WHERE company_key = $1 AND type = 'job' AND state = 'active' AND status <> 'rejected' ORDER BY created_at DESC LIMIT $2`,
+      [key, limit],
+    );
+    return res.rows.map((r) => this.rowToLead(r));
+  }
+
+  async countEmployerLeads(key: string): Promise<number> {
+    const res = await this.pool.query(
+      `SELECT count(*)::int AS total FROM leads WHERE company_key = $1 AND type = 'job' AND state = 'active' AND status <> 'rejected'`,
+      [key],
+    );
+    return Number(res.rows[0].total);
+  }
+
+  async listLeadsForEmployers(afterId: string | null, limit: number): Promise<EmployerRow[]> {
+    const res = await this.pool.query(
+      `SELECT l.id, l.type, l.author, l.text, l.company, l.company_key, s.kind
+         FROM leads l LEFT JOIN sources s ON s.id = l.source_id
+        WHERE ($1::text IS NULL OR l.id > $1::text) ORDER BY l.id LIMIT $2`,
+      [afterId, limit],
+    );
+    return res.rows.map((r) => ({
+      id: String(r.id), type: String(r.type), author: r.author ?? undefined, text: r.text ?? undefined,
+      sourceKind: r.kind ?? undefined, company: r.company ?? undefined, companyKey: r.company_key ?? undefined,
+    }));
+  }
+
+  async setLeadEmployer(id: string, company: string | undefined, companyKey: string | undefined): Promise<void> {
+    await this.pool.query(`UPDATE leads SET company = $2, company_key = $3 WHERE id = $1`, [id, company ?? null, companyKey ?? null]);
   }
 
   async updateLeadTitleKey(id: string, titleKey: string): Promise<void> {
@@ -1036,6 +1088,8 @@ export class PostgresStore implements Store {
         : undefined,
       state: (r.state as LeadState) || 'active',
       confirmedAt: r.confirmed_at ? new Date(r.confirmed_at).toISOString() : undefined,
+      company: r.company ?? undefined,
+      companyKey: r.company_key ?? undefined,
       contacts: parseJsonArray(r.contacts_json),
       sourceRef: r.source_platform && r.source_channel
         ? {
