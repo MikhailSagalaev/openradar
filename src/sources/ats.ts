@@ -33,9 +33,13 @@ export function companiesOf(source: SourceRecord): Array<{ slug: string; name?: 
 /** Where the next poll of each source starts in its company list. */
 const cursors = new Map<string, number>();
 
-export function nextBatch<T>(sourceId: string, items: T[], size: number): T[] {
+/**
+ * `first` is where a list starts after a restart. A long list needs days to go round and the
+ * node restarts on every deploy: starting from the top each time, its tail is never read.
+ */
+export function nextBatch<T>(sourceId: string, items: T[], size: number, first = 0): T[] {
   if (!items.length) return [];
-  const start = (cursors.get(sourceId) ?? 0) % items.length;
+  const start = (cursors.get(sourceId) ?? first) % items.length;
   const batch = Array.from({ length: Math.min(size, items.length) }, (_, i) => items[(start + i) % items.length]!);
   cursors.set(sourceId, start + batch.length);
   return batch;
@@ -462,7 +466,8 @@ export const atsSource: SourceAdapter = {
     const boardCtx = { ...ctx, timeoutMs };
 
     const leads: RawLead[] = [];
-    for (const { slug, name } of nextBatch(source.id, companies, perPoll)) {
+    const hour = Math.floor(ctx.now().getTime() / 3_600_000);
+    for (const { slug, name } of nextBatch(source.id, companies, perPoll, hour * perPoll)) {
       try {
         const json = await fetchBoard(boardCtx, ENDPOINTS[provider](slug));
         const found = PARSERS[provider](source, slug, name, json)
