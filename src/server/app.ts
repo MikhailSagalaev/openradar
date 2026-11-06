@@ -3017,21 +3017,36 @@ export function createApp(runtime: Runtime): Hono {
     if (!await canRead(c, runtime)) return c.redirect('/login?returnTo=/employers');
     const lang = resolveLang(c);
     const key = (c.req.param('key') as string).toLowerCase();
-    const stored = (await runtime.store.listEmployerLeads?.(key, 60)) ?? [];
-    const posts = stored.filter((lead) => viewerCanSeeLead({ tier: 'guest' }, lead, runtime.access)).map((lead) => projectContacts(lead, { tier: 'guest' }));
-    if (!posts.length) return c.html(renderNotFound(VERSION, lang, await getAuthDisplay(c, runtime)), 404);
-    const names = new Map<string, number>();
-    for (const lead of posts) if (lead.company) names.set(lead.company, (names.get(lead.company) ?? 0) + 1);
-    const name = [...names.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? key;
+    // Enough to count from. The newest ones may be hidden from this reader for now, so what
+    // the reader may open is picked from the whole list, not from its head.
+    const open = (await runtime.store.listEmployerLeads?.(key, 300)) ?? [];
+    const known = open[0]?.company ?? (await runtime.store.employerName?.(key));
+    if (!known) return c.html(renderNotFound(VERSION, lang, await getAuthDisplay(c, runtime)), 404);
+    const viewer = await viewerFromRequest(c, runtime);
+    const visible = open.filter((lead) => viewerCanSeeLead(viewer, lead, runtime.access));
+    const often = (values: string[], limit: number): string[] => {
+      const counts = new Map<string, number>();
+      for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+      return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([value]) => value);
+    };
+    const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+    const active = (await runtime.store.countEmployerLeads?.(key)) ?? open.length;
     return c.html(renderEmployerPage({
       baseUrl: seoBaseUrl(c),
       version: VERSION,
       auth: await getAuthDisplay(c, runtime),
       lang,
       employerKey: key,
-      name,
-      active: (await runtime.store.countEmployerLeads?.(key)) ?? posts.length,
-      posts: posts.slice(0, 30),
+      name: often(open.flatMap((lead) => (lead.company ? [lead.company] : [])), 1)[0] ?? known,
+      active,
+      fresh: open.filter((lead) => lead.createdAt >= weekAgo).length,
+      remoteShare: open.length ? Math.round((open.filter((lead) => lead.isRemote).length / open.length) * 100) : 0,
+      boards: new Set(open.map((lead) => lead.sourceId)).size,
+      skills: often(open.flatMap((lead) => lead.skills ?? []), 6),
+      cities: often(open.flatMap((lead) => (lead.city ? [lead.city] : [])), 6),
+      posts: visible.slice(0, 40).map((lead) => projectContacts(lead, viewer)),
+      later: open.length - visible.length,
+      signedIn: viewer.tier !== 'guest',
     }));
   });
 

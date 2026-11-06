@@ -846,22 +846,57 @@ export function renderEmployerPage(options: {
   employerKey: string;
   name: string;
   active: number;
+  /** New in the last seven days. */
+  fresh: number;
+  remoteShare: number;
+  boards: number;
+  skills: string[];
+  cities: string[];
+  /** What this reader may open now. */
   posts: Lead[];
+  /** Open vacancies this reader sees later: fresh ones reach guests with a delay. */
+  later: number;
+  signedIn: boolean;
 }): string {
   const ru = options.lang !== 'en';
   const name = escapeHtml(options.name);
-  const top = (values: string[]): string[] => {
-    const counts = new Map<string, number>();
-    for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([value]) => value);
-  };
-  const skills = top(options.posts.flatMap((lead) => lead.skills ?? []));
-  const cities = top(options.posts.flatMap((lead) => (lead.city ? [lead.city] : [])));
-  const rows = options.posts.map((lead) => leadRow(lead, options.baseUrl)).join('\n');
   const url = `${options.baseUrl}${employerPath(options.employerKey)}`;
-  const description = ru
-    ? `Открытые вакансии ${options.name}: ${options.active} сейчас${skills.length ? `, чаще всего ${skills.slice(0, 3).join(', ')}` : ''}.`
-    : `Open vacancies at ${options.name}: ${options.active} now${skills.length ? `, mostly ${skills.slice(0, 3).join(', ')}` : ''}.`;
+  const rows = options.posts.map((lead) => leadRow(lead, options.baseUrl)).join('\n');
+  const hiring = options.skills.slice(0, 3).join(', ');
+  const description = options.active
+    ? (ru
+        ? `Открытые вакансии ${options.name}: ${options.active} сейчас${hiring ? `, чаще всего ${hiring}` : ''}.`
+        : `Open vacancies at ${options.name}: ${options.active} now${hiring ? `, mostly ${hiring}` : ''}.`)
+    : (ru ? `Сейчас у ${options.name} нет открытых вакансий.` : `${options.name} has no open vacancies now.`);
+  const tile = (value: string | number, label: string): string => `<div class="employer-stat"><strong>${escapeHtml(String(value))}</strong><span>${escapeHtml(label)}</span></div>`;
+  const stats = options.active
+    ? `<div class="employer-stats">
+    ${tile(options.active, ru ? 'открыто сейчас' : 'open now')}
+    ${tile(options.fresh, ru ? 'новых за 7 дней' : 'new in 7 days')}
+    ${tile(`${options.remoteShare}%`, ru ? 'удалённо' : 'remote')}
+    ${tile(options.boards, ru ? 'источников' : 'sources')}
+  </div>`
+    : '';
+  const facts = [
+    options.skills.length ? `<div><dt>${ru ? 'Чаще всего ищут' : 'Mostly hiring for'}</dt><dd>${escapeHtml(options.skills.join(', '))}</dd></div>` : '',
+    options.cities.length ? `<div><dt>${ru ? 'Города' : 'Cities'}</dt><dd>${escapeHtml(options.cities.join(', '))}</dd></div>` : '',
+  ].filter(Boolean).join('\n');
+  const later = options.later > 0
+    ? `<p class="muted">${ru ? `Ещё свежих вакансий: ${options.later}.` : `${options.later} more fresh vacancies.`} ${options.signedIn ? (ru ? 'Они откроются чуть позже.' : 'They open a little later.') : `<a href="/login?returnTo=${escapeHtml(encodeURIComponent(employerPath(options.employerKey)))}">${ru ? 'Войдите, чтобы видеть их раньше' : 'Sign in to see them sooner'}</a>.`}</p>`
+    : '';
+  const empty = !options.active ? `<p class="muted">${ru ? 'Сейчас открытых вакансий нет.' : 'No open vacancies now.'}</p>` : '';
+  const body = `
+<nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/employers">${ru ? 'Работодатели' : 'Employers'}</a> / ${name}</nav>
+<div class="page-head"><div>
+  <h1>${ru ? 'Вакансии' : 'Vacancies at'} ${name}</h1>
+</div></div>
+<section class="profile">
+  ${stats}
+  ${facts ? `<dl class="employer-facts">${facts}</dl>` : ''}
+  ${later}
+  ${empty}
+  ${rows ? `<div class="list">${rows}</div>` : ''}
+</section>`;
   const list = {
     '@context': 'https://schema.org',
     '@type': 'ItemList',
@@ -873,22 +908,13 @@ export function renderEmployerPage(options: {
       name: lead.title,
     })),
   };
-  const body = `
-<nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/employers">${ru ? 'Работодатели' : 'Employers'}</a> / ${name}</nav>
-<div class="page-head"><div>
-  <h1>${ru ? 'Вакансии' : 'Vacancies at'} ${name}</h1>
-  <p class="muted small">${ru ? 'Открыто сейчас' : 'Open now'}: ${options.active}</p>
-</div></div>
-<section class="profile">
-  ${skills.length ? `<p>${ru ? 'Чаще всего ищут' : 'Mostly hiring for'}: ${escapeHtml(skills.join(', '))}</p>` : ''}
-  ${cities.length ? `<p>${ru ? 'Города' : 'Cities'}: ${escapeHtml(cities.join(', '))}</p>` : ''}
-  <div class="list">${rows}</div>
-</section>`;
-  const head = `<link rel="canonical" href="${escapeHtml(url)}">
+  const head = options.posts.length
+    ? `<link rel="canonical" href="${escapeHtml(url)}">
 <meta name="description" content="${escapeHtml(description)}">
 <script type="application/ld+json">
 ${jsonForScript(list)}
-</script>`;
+</script>`
+    : '<meta name="robots" content="noindex">';
   return layout({ title: `${ru ? 'Вакансии' : 'Vacancies at'} ${options.name}`, version: options.version, active: 'employers', body, auth: options.auth, lang: options.lang, head });
 }
 

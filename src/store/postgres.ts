@@ -526,6 +526,11 @@ export class PostgresStore implements Store {
     return Number(res.rows[0].total);
   }
 
+  async employerName(key: string): Promise<string | null> {
+    const res = await this.pool.query(`SELECT company FROM leads WHERE company_key = $1 LIMIT 1`, [key]);
+    return res.rows[0]?.company ?? null;
+  }
+
   async listLeadsForEmployers(afterId: string | null, limit: number): Promise<EmployerRow[]> {
     const res = await this.pool.query(
       `SELECT l.id, l.type, l.author, l.text, l.company, l.company_key, s.kind
