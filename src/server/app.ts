@@ -28,14 +28,14 @@ import { renderAdminPage } from './admin.ts';
 import { analyticsFromEnv, contentSecurityPolicy } from './analytics.ts';
 import { filterOptions, parseFeedFilters, type FeedFilters } from './filters.ts';
 import { estimateMarket } from '../core/market.ts';
-import { COLLECTOR_MAX_ORDERS, COLLECTOR_PLATFORMS, collectedOrderToRaw, type CollectorPlatform } from './collector.ts';
+import { COLLECTOR_MAX_ORDERS, COLLECTOR_PLATFORMS, collectedOrderToRaw, type CollectorPlatform, COLLECTOR_SITES, collectedVacancyToRaw, type CollectorSite } from './collector.ts';
 import { rateLimit } from './ratelimit.ts';
 import { indexCsv, openradarIndex } from '../research/index.ts';
 import { qualityFlagsOf } from '../core/quality.ts';
 import { rubToUsd } from '../core/salary.ts';
 import { TelegramAuthService } from './tg-auth.ts';
 import { sourceState } from '../core/source-health.ts';
-import { scoreSource } from '../core/source-quality.ts';
+import { LABEL_VERDICTS, scoreSource } from '../core/source-quality.ts';
 import { assertSafeUrl } from '../core/ssrf.ts';
 import { robotsFor } from '../pipeline/robots-audit.ts';
 import { feedQuery, isEmptyFilter, MAX_SUBSCRIPTIONS_PER_USER, newWebhookSecret, savedFiltersFrom, subscriptionName, type SavedFilters, type SubscriptionRecord } from '../core/subscriptions.ts';
@@ -87,6 +87,7 @@ import {
   employerPath,
   renderEmployerPage,
   renderEmployersPage,
+  renderLabelPage,
   renderSourceQualityPage,
   renderFaqPage,
   renderLlmsTxt,
@@ -1282,6 +1283,25 @@ export function createApp(runtime: Runtime): Hono {
         githubEnabled: githubOAuthConfigured(runtime),
       }),
     );
+  });
+
+  // Posts checked by hand: a post at a time, the sources with the fewest answers first.
+  app.get('/admin/labels', async (c) => {
+    if (!await isAdmin(c, runtime)) return c.redirect('/login?returnTo=/admin/labels');
+    const [lead, stats] = await Promise.all([runtime.store.nextLeadToLabel?.(), runtime.store.labelStats?.()]);
+    const source = lead ? await runtime.store.getSource(lead.sourceId) : null;
+    return c.html(renderLabelPage({ version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c), lead: lead ?? undefined, sourceTitle: source?.title, stats: stats ?? {} }));
+  });
+  app.post('/admin/labels', async (c) => {
+    if (!await isAdmin(c, runtime)) return c.redirect('/login?returnTo=/admin/labels');
+    if (!sameOrigin(c)) return c.text('Forbidden', 403);
+    const form = await c.req.parseBody();
+    const id = typeof form.id === 'string' ? form.id : '';
+    const verdict = typeof form.verdict === 'string' ? form.verdict : '';
+    if (!id || !(LABEL_VERDICTS as readonly string[]).includes(verdict)) return c.text('Bad label', 400);
+    const user = await currentUser(c, runtime);
+    await runtime.store.saveLeadLabel?.(id, verdict, user?.id);
+    return c.redirect('/admin/labels');
   });
 
   app.get('/admin', async (c) => {
@@ -2574,6 +2594,34 @@ export function createApp(runtime: Runtime): Hono {
 
   // Orders the owner's browser read on boards behind a login. Only admins: these posts
   // stand under the board's name, so a stranger's could not be told from real ones.
+  // Vacancies of career sites the hub cannot read: drawn in a browser or closed to servers.
+  app.post('/api/ext/vacancies', rateLimit({ windowMs: 10 * 60_000, max: 120 }), async (c) => {
+    extensionCors(c);
+    const auth = await extensionUser(c);
+    if (!auth) return c.json({ error: 'unauthorized' }, 401);
+    if (!isGitHubAdmin(auth.user, runtime)) return c.json({ error: 'forbidden' }, 403);
+    const body = (await c.req.json().catch(() => null)) as { site?: unknown; vacancies?: unknown } | null;
+    const site = body?.site as CollectorSite;
+    if (!body || typeof site !== 'string' || !Object.hasOwn(COLLECTOR_SITES, site) || !Array.isArray(body.vacancies)) return c.json({ error: 'invalid_request' }, 400);
+    const title = `${COLLECTOR_SITES[site].company} — Вакансии (из браузера)`;
+    const source = (await runtime.store.listSources()).find((s) => s.config.collectorSite === site)
+      ?? await runtime.store.createSource({ kind: 'webhook', title, enabled: false, config: { collectorSite: site, company: COLLECTOR_SITES[site].company } });
+    const summary = { found: 0, inserted: 0, duplicates: 0, rejected: 0, skipped: 0 };
+    for (const page of body.vacancies.slice(0, 20)) {
+      const raw = page && typeof page === 'object' ? collectedVacancyToRaw(site, source.id, page as Record<string, unknown>) : undefined;
+      if (!raw) {
+        summary.skipped++;
+        continue;
+      }
+      summary.found++;
+      const outcome = await ingestRawLead(raw, source, deps(runtime));
+      if (outcome.status === 'inserted' || outcome.status === 'delivered') summary.inserted++;
+      else if (outcome.status === 'duplicate') summary.duplicates++;
+      else summary.rejected++;
+    }
+    return c.json(summary);
+  });
+
   app.post('/api/ext/orders', rateLimit({ windowMs: 10 * 60_000, max: 120 }), async (c) => {
     extensionCors(c);
     const auth = await extensionUser(c);

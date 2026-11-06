@@ -55,8 +55,14 @@ const AUTHOR_IS_A_PERSON = new Set(['telegram', 'webhook', 'imap']);
 export function employerOf(
   lead: { type?: string; author?: string | null; text?: string | null },
   sourceKind?: string,
+  /** A source that belongs to one company names it: its feed splits it into departments. */
+  owner?: string,
 ): { key: string; name: string } | undefined {
   if (lead.type !== 'job') return undefined;
+  if (owner?.trim()) {
+    const key = normalizeCompany(owner);
+    if (key) return { key, name: owner.trim() };
+  }
   const fromText = (): string | undefined => {
     for (const re of COMPANY_IN_TEXT) {
       const name = lead.text ? re.exec(lead.text)?.[1] : undefined;

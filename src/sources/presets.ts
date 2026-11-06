@@ -1,6 +1,6 @@
 import type { SourceConfig, SourceKind } from '../core/types.ts';
 import { ATS_COMPANIES } from './ats-companies.ts';
-import { CAREER_SITE_PRESETS } from './career-sites.ts';
+import { CAREER_SITE_PRESETS, HH_EMPLOYER_PRESETS } from './career-sites.ts';
 import { JSON_BOARD_PRESETS } from './json-boards.ts';
 
 export interface SourcePreset {
@@ -896,6 +896,7 @@ const BASE_PRESETS: SourcePreset[] = [
   },
   ...CAREER_SITE_PRESETS,
   ...JSON_BOARD_PRESETS,
+  ...HH_EMPLOYER_PRESETS,
 ];
 
 /** An ATS preset with the boards found since: a slug listed twice is read once. */

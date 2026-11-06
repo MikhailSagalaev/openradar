@@ -558,6 +558,36 @@ export class PostgresStore implements Store {
     }));
   }
 
+  async nextLeadToLabel(): Promise<Lead | null> {
+    const res = await this.pool.query(
+      `WITH counted AS (
+         SELECT l.source_id, count(b.lead_id) AS done
+           FROM leads l LEFT JOIN lead_labels b ON b.lead_id = l.id
+          WHERE l.created_at >= now() - interval '30 days' AND l.status <> 'rejected'
+          GROUP BY l.source_id
+          ORDER BY done, random() LIMIT 1
+       )
+       SELECT l.* FROM leads l JOIN counted USING (source_id)
+        WHERE l.created_at >= now() - interval '30 days' AND l.status <> 'rejected'
+          AND NOT EXISTS (SELECT 1 FROM lead_labels b WHERE b.lead_id = l.id)
+        ORDER BY random() LIMIT 1`,
+    );
+    return res.rows[0] ? this.rowToLead(res.rows[0]) : null;
+  }
+
+  async saveLeadLabel(id: string, verdict: string, userId?: number): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO lead_labels (lead_id, verdict, labelled_by) VALUES ($1, $2, $3)
+       ON CONFLICT (lead_id) DO UPDATE SET verdict = EXCLUDED.verdict, labelled_by = EXCLUDED.labelled_by, labelled_at = now()`,
+      [id, verdict, userId ?? null],
+    );
+  }
+
+  async labelStats(): Promise<Record<string, number>> {
+    const res = await this.pool.query(`SELECT verdict, count(*)::int AS total FROM lead_labels GROUP BY verdict`);
+    return Object.fromEntries(res.rows.map((r) => [String(r.verdict), Number(r.total)]));
+  }
+
   async employerName(key: string): Promise<string | null> {
     const res = await this.pool.query(`SELECT company FROM leads WHERE company_key = $1 LIMIT 1`, [key]);
     return res.rows[0]?.company ?? null;

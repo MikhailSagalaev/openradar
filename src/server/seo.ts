@@ -837,6 +837,39 @@ export function renderSourceQualityPage(options: {
   return layout({ title: ru ? 'Качество источников' : 'Source quality', version: options.version, active: 'sources', body, auth: options.auth, lang: options.lang });
 }
 
+export function renderLabelPage(options: {
+  version: string;
+  auth?: AuthDisplay;
+  lang?: SupportedLang;
+  lead?: Lead;
+  sourceTitle?: string;
+  stats: Record<string, number>;
+}): string {
+  const ru = options.lang !== 'en';
+  const names: Array<[string, string]> = ru
+    ? [['good', 'Хороший пост'], ['closed', 'Уже закрыт'], ['wrong_type', 'Не тот тип'], ['junk', 'Мусор']]
+    : [['good', 'Good post'], ['closed', 'Already closed'], ['wrong_type', 'Wrong type'], ['junk', 'Junk']];
+  const total = Object.values(options.stats).reduce((sum, count) => sum + count, 0);
+  const counts = names.map(([key, name]) => `${escapeHtml(name)}: ${options.stats[key] ?? 0}`).join(' · ');
+  const lead = options.lead;
+  const buttons = lead
+    ? names.map(([key, name]) => `<button class="btn" name="verdict" value="${key}" type="submit">${escapeHtml(name)}</button>`).join(' ')
+    : '';
+  const body = `
+<div class="page-head"><div>
+  <h1>${ru ? 'Ручная проверка постов' : 'Checking posts by hand'}</h1>
+  <p class="muted small">${ru ? `Проверено: ${total} из 300. ` : `Checked: ${total} of 300. `}${counts}</p>
+</div></div>
+<section class="profile">
+  ${lead ? `
+  <p class="muted small">${escapeHtml(options.sourceTitle ?? '')} · ${lead.type === 'job' ? (ru ? 'вакансия' : 'vacancy') : (ru ? 'заказ' : 'order')}${lead.url ? ` · <a href="${escapeHtml(lead.url)}" target="_blank" rel="noopener noreferrer">${ru ? 'Открыть оригинал' : 'Open the original'}</a>` : ''}</p>
+  <h2>${escapeHtml(lead.title)}</h2>
+  <p style="white-space:pre-wrap">${escapeHtml(lead.text.slice(0, 1500))}</p>
+  <form method="post" action="/admin/labels"><input type="hidden" name="id" value="${escapeHtml(lead.id)}">${buttons}</form>` : `<p class="muted">${ru ? 'Постов для проверки нет.' : 'Nothing to check.'}</p>`}
+</section>`;
+  return layout({ title: ru ? 'Ручная проверка' : 'Hand check', version: options.version, body, auth: options.auth, lang: options.lang, head: '<meta name="robots" content="noindex">' });
+}
+
 /** Where an employer's page lives. */
 export function employerPath(key: string): string {
   return `/employers/${encodeURIComponent(key)}`;

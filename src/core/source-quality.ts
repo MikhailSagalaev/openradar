@@ -74,3 +74,7 @@ export function scoreSource(input: SourceQualityInput): SourceQuality {
   const score = Math.round((known.reduce((sum, part) => sum + parts[part]! * QUALITY_WEIGHTS[part], 0) / weight) * 100);
   return { score, grade: score >= 80 ? 'A' : score >= 65 ? 'B' : score >= 45 ? 'C' : 'D', parts };
 }
+
+/** What a person may say about a post when checking it by hand. */
+export const LABEL_VERDICTS = ['good', 'closed', 'wrong_type', 'junk'] as const;
+export type LabelVerdict = (typeof LABEL_VERDICTS)[number];

@@ -3,6 +3,7 @@ import { scoreSource, type SourceQualityInput } from '../src/core/source-quality
 import { fillTemplate, jsonBoardSource, leadFromItem, valueAt } from '../src/sources/json-board.ts';
 import { SOURCE_PRESETS } from '../src/sources/presets.ts';
 import { createApp } from '../src/server/app.ts';
+import { collectedVacancyToRaw } from '../src/server/collector.ts';
 import { makeSource, makeTestRuntime } from './helpers.ts';
 
 const good: SourceQualityInput = {
@@ -96,5 +97,44 @@ describe('quality page', () => {
     const html = await page.text();
     expect(html).toContain('Лента');
     expect(html).not.toContain('Личный канал');
+  });
+});
+
+describe('career collector', () => {
+  const page = { url: 'https://wise.jobs/job/analyst-jid-1', title: 'Analyst', text: 'We need an analyst. '.repeat(20) };
+
+  it('takes a vacancy page of a known site', () => {
+    const lead = collectedVacancyToRaw('wise', 's', page);
+    expect(lead).toMatchObject({ type: 'job', author: 'Wise', externalId: 'career:wise:/job/analyst-jid-1' });
+    expect(lead?.text.startsWith('Компания: Wise')).toBe(true);
+  });
+
+  it('refuses another host, a closed vacancy and a thin page', () => {
+    expect(collectedVacancyToRaw('wise', 's', { ...page, url: 'https://evil.test/job/1' })).toBeUndefined();
+    expect(collectedVacancyToRaw('wise', 's', { ...page, text: `${page.text} This position has been closed.` })).toBeUndefined();
+    expect(collectedVacancyToRaw('wise', 's', { ...page, text: 'short' })).toBeUndefined();
+  });
+
+  it('scrubs contacts from the page', () => {
+    expect(collectedVacancyToRaw('wise', 's', { ...page, text: `${page.text} write hr@wise.test` })?.text).not.toContain('hr@wise.test');
+  });
+});
+
+describe('hand labels', () => {
+  it('are for admins only', async () => {
+    const app = createApp(makeTestRuntime({ RADAR_PUBLIC_READ: true }));
+    expect((await app.request('/admin/labels')).status).toBe(302);
+    expect((await app.request('/admin/labels', { method: 'POST', body: new URLSearchParams({ id: 'a', verdict: 'good' }) })).status).toBe(403);
+  });
+
+  it('store a verdict and move on', async () => {
+    const runtime = makeTestRuntime({ RADAR_ADMIN_TOKEN: 'secret' });
+    const store = runtime.store;
+    const source = await store.createSource({ kind: 'rss', title: 'Лента', config: {}, enabled: true });
+    await store.insertLead({ id: 'a', sourceId: source.id, type: 'job', title: 'Пост', text: 'Текст', fingerprint: 'f', titleKey: 'k', status: 'new', score: 50, reasons: [], skills: [], createdAt: new Date().toISOString() } as never);
+    expect((await store.nextLeadToLabel!())?.id).toBe('a');
+    await store.saveLeadLabel!('a', 'good');
+    expect(await store.nextLeadToLabel!()).toBeNull();
+    expect(await store.labelStats!()).toEqual({ good: 1 });
   });
 });

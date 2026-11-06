@@ -213,7 +213,8 @@ export async function ingestRawLead(
     skills = extractTechSkills(`${prepared.title}\n${prepared.text}`);
   }
 
-  const employer = employerOf({ type: prepared.type ?? 'gig', author: prepared.author, text: prepared.text }, source.kind);
+  const owner = typeof source.config.company === 'string' ? source.config.company : undefined;
+  const employer = employerOf({ type: prepared.type ?? 'gig', author: prepared.author, text: prepared.text }, source.kind, owner);
   const lead: Lead = {
     id: randomUUID(),
     sourceId: source.id,

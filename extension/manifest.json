@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extName__",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "description": "__MSG_extDescription__",
   "icons": {
     "16": "icon16.png",
@@ -20,7 +20,13 @@
   "host_permissions": [
     "https://profi.ru/*",
     "https://uslugi.yandex.ru/*",
-    "https://youdo.com/*"
+    "https://youdo.com/*",
+    "https://www.tbank.ru/*",
+    "https://wise.jobs/*",
+    "https://career.luxoft.com/*",
+    "https://vacancy.sberhealth.ru/*",
+    "https://top.co/*",
+    "https://plata.careers/*"
   ],
   "optional_host_permissions": [
     "http://*/*",

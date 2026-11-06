@@ -429,6 +429,10 @@ export interface Store extends HubStore {
   updateLeadTitleKey?(id: string, titleKey: string): Promise<void>;
   /** Counters behind each source's score, over the last `days`. */
   getSourceQuality?(days: number): Promise<Map<string, SourceQualityInput>>;
+  /** The next post to check by hand: from the source with the fewest answers so far. */
+  nextLeadToLabel?(): Promise<Lead | null>;
+  saveLeadLabel?(id: string, verdict: string, userId?: number): Promise<void>;
+  labelStats?(): Promise<Record<string, number>>;
   /** Employers with open vacancies, the busiest first. */
   listEmployers?(options: { limit: number; minPosts: number; query?: string }): Promise<EmployerSummary[]>;
   listEmployerLeads?(key: string, limit: number): Promise<Lead[]>;

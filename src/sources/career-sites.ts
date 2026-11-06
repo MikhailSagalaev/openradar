@@ -79,3 +79,30 @@ export const CAREER_SITE_PRESETS: SourcePreset[] = SITES.map((site) => ({
     maxAgeDays: 30,
   },
 }));
+
+/**
+ * Companies whose own site is closed to us, read through their page on hh.ru: the feed the
+ * employer publishes there, the same one anyone can subscribe to. It holds the newest 20.
+ */
+const HH_EMPLOYERS: Array<[id: string, name: string, employer: number]> = [
+  ['hh-ozon', 'Ozon', 2180],
+  ['hh-tbank', 'Т-Банк', 78638],
+  ['hh-x5', 'X5', 4233],
+  ['hh-rostelecom', 'Ростелеком', 2748],
+  ['hh-skyeng', 'Skyeng', 1122462],
+  ['hh-kontur', 'Контур', 41862],
+  ['hh-beeline', 'билайн', 4934],
+  ['hh-tutu', 'Туту', 5325],
+  ['hh-goldapple', 'Золотое Яблоко', 776314],
+  ['hh-t1', 'Т1', 4649269],
+  ['hh-12storeez', '12 STOREEZ', 2458132],
+  ['hh-tochka', 'Точка Банк', 2324020],
+];
+
+export const HH_EMPLOYER_PRESETS: SourcePreset[] = HH_EMPLOYERS.map(([id, name, employer]) => ({
+  id,
+  kind: 'rss',
+  title: `${name} — вакансии на hh.ru`,
+  description: `Лента вакансий компании ${name} на hh.ru`,
+  config: { url: `https://hh.ru/search/vacancy/rss?employer_id=${employer}&order_by=publication_time`, company: name },
+}));
