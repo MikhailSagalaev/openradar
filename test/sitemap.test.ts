@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { atsSource, companiesOf } from '../src/sources/ats.ts';
+import { atsSource, companiesOf, nextBatch } from '../src/sources/ats.ts';
 import { SOURCE_PRESETS } from '../src/sources/presets.ts';
 import { leadFromPage, pageLinks } from '../src/sources/sitemap.ts';
 import { makeSource } from './helpers.ts';
@@ -90,6 +90,14 @@ describe('ats boards without a description API', () => {
     const source = makeSource({ kind: 'ats', title: 'B', config: { provider: 'bamboohr', companies: ['acme=Acme'] } });
     const leads = await atsSource.poll!(source, ctx({ result: [{ id: '7', jobOpeningName: 'Manager', departmentLabel: 'Ops', location: { city: 'Paphos' } }] }));
     expect(leads[0]).toMatchObject({ title: 'Manager', url: 'https://acme.bamboohr.com/careers/7', city: 'Paphos' });
+  });
+});
+
+describe('ats rotation', () => {
+  it('starts a long list where the hour says after a restart, then goes on', () => {
+    const items = ['a', 'b', 'c', 'd', 'e'];
+    expect(nextBatch('rotation-test', items, 2, 3)).toEqual(['d', 'e']);
+    expect(nextBatch('rotation-test', items, 2, 3)).toEqual(['a', 'b']);
   });
 });
 
