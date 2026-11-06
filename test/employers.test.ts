@@ -74,6 +74,7 @@ describe('employer pages', () => {
     const html = await page.text();
     expect(html).toContain('Вакансии Riot Games');
     expect(html).toContain('rel="canonical"');
+    expect(html).toContain('<strong>0%</strong><span>удалённо</span>');
     expect(html).toContain('"ItemList"');
     expect(html).not.toContain('hr@riot.test');
   });
