@@ -346,4 +346,21 @@ describe('store', () => {
 
     await store.close();
   });
+
+  it('filters by publishedAt (falling back to createdAt) when publishedAfter is set', async () => {
+    const store = new MemoryStore();
+    const source = await store.createSource({ kind: 'rss', title: 'Feed' });
+    const day = 24 * 3600 * 1000;
+    const base = { sourceId: source.id, createdAt: TEST_NOW.toISOString() };
+    // Collected today, but posted a month ago: must not count as fresh.
+    await store.insertLead(makeLead({ ...base, id: 'old-post', fingerprint: 'fp-old', externalId: 'ext-old', titleKey: 'old', publishedAt: new Date(TEST_NOW.getTime() - 29 * day).toISOString() }));
+    await store.insertLead(makeLead({ ...base, id: 'new-post', fingerprint: 'fp-new', externalId: 'ext-new', titleKey: 'new', publishedAt: new Date(TEST_NOW.getTime() - 1 * day).toISOString() }));
+    // No publishedAt at all: the collection time is the best we know.
+    await store.insertLead(makeLead({ ...base, id: 'no-date', fingerprint: 'fp-nodate', externalId: 'ext-nodate', titleKey: 'nodate', publishedAt: undefined }));
+
+    const since = new Date(TEST_NOW.getTime() - 7 * day).toISOString();
+    const ids = (await store.listLeads({ publishedAfter: since })).map((l) => l.id).sort();
+    expect(ids).toEqual(['new-post', 'no-date']);
+    await store.close();
+  });
 });

@@ -649,6 +649,10 @@ export class MemoryStore implements Store {
       const since = options.createdAfter;
       result = result.filter((l) => l.createdAt >= since);
     }
+    if (options.publishedAfter) {
+      const since = Date.parse(options.publishedAfter);
+      result = result.filter((l) => Date.parse(l.publishedAt ?? l.createdAt) >= since);
+    }
     if (options.query?.trim()) {
       const q = options.query.trim().toLowerCase();
       const normQ = normalizeTechTokens(q).toLowerCase();
