@@ -41,26 +41,44 @@ function locationOf(posting: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
-/** One vacancy page to a lead, or nothing when the page has no JobPosting. */
+/** Vacancy links of a career page, as full addresses. */
+export function pageLinks(html: string, base: string): string[] {
+  const links = [...html.matchAll(/href\s*=\s*["']([^"'#]+)["']/gi)].flatMap((m) => {
+    try {
+      return [new URL(m[1]!.trim().replace(/&amp;/g, '&'), base).href];
+    } catch {
+      return [];
+    }
+  });
+  return [...new Set(links)];
+}
+
+/** Whose vacancy it is, for a company's own site: its pages rarely say so in the markup. */
+function ownerOf(source: SourceRecord): string | undefined {
+  const name = source.config.company;
+  return typeof name === 'string' && name.trim() ? name.trim() : undefined;
+}
+
+/** One vacancy page to a lead, or nothing when the page holds no vacancy. */
 export function leadFromPage(source: SourceRecord, url: string, key: string, html: string): RawLead | undefined {
   const posting = jsonLdObjects(html).find((node) => isType(node, 'JobPosting'));
-  if (posting) return leadFromPosting(source, url, key, html, posting);
+  if (posting && asText(posting.title, 200)) return leadFromPosting(source, url, key, html, posting);
   return leadFromPlainPage(source, url, key, html);
 }
 
 function leadFromPosting(source: SourceRecord, url: string, key: string, html: string, posting: Record<string, unknown>): RawLead {
   const title = asText(posting.title, 200)!;
   const facts = extractPageFacts(html);
-  const company = companyOf(posting);
+  const company = ownerOf(source) ?? companyOf(posting);
   const salary = salaryOf(posting);
   const remote = posting.jobLocationType === 'TELECOMMUTE';
   const city = locationOf(posting);
   // Some boards keep only a line in the markup and the pay in the page description.
   const meta = asText(html.match(/<meta\s+(?:name="description"|property="og:description")\s+content="([^"]*)"/i)?.[1], 1000) ?? '';
   const markup = asText(posting.description, MAX_TEXT) ?? '';
-  const description = meta.length > markup.length ? `${meta}
-
-${markup}` : markup;
+  // A line in the markup: the vacancy itself is on the page.
+  const page = markup.length < 400 ? visibleText(html) : '';
+  const description = [meta.length > markup.length ? meta : '', markup, page].filter(Boolean).join('\n\n');
   const head = [company && `Компания: ${company}`, city && `Город: ${city}`, remote && 'Удалённо'].filter(Boolean).join('\n');
   const per = salary && { month: 'в месяц', year: 'в год', hour: 'в час', project: 'за проект' }[salary.period];
   return {
@@ -80,7 +98,10 @@ ${markup}` : markup;
   };
 }
 
-const DEAD_PAGE = /40[43]|not[\s-]?found|страница не найдена|доступ ограничен|access denied/i;
+const DEAD_PAGE = /\b40[43]\b|not[\s-]?found|страница не найдена|доступ ограничен|access denied/i;
+/** A heading the site puts on every page, or on the list: it names no vacancy. */
+const NO_NAME = /^(?:детальная страница вакансии|(?:все )?вакансии|работа|карьера|(?:all )?jobs|careers?|open positions)(?:\s*[|—–-].*)?$/i;
+const CLOSED_PAGE = /вакансия (?:закрыта|в архиве|неактуальна|больше не актуальна)|(?:job|position|vacancy) (?:is|has been) (?:closed|filled)|no longer (?:available|accepting)/i;
 
 /**
  * Pages without JobPosting markup: most company career sites render the vacancy into plain
@@ -89,17 +110,14 @@ const DEAD_PAGE = /40[43]|not[\s-]?found|страница не найдена|д
  */
 function leadFromPlainPage(source: SourceRecord, url: string, key: string, html: string): RawLead | undefined {
   const h1 = asText(html.match(/<h1[^>]*>([\s\S]{1,300}?)<\/h1>/i)?.[1]?.replace(/<[^>]+>/g, ' '), 200);
-  const title = asText(html.match(/<title>([\s\S]{1,300}?)<\/title>/i)?.[1], 200);
-  const heading = (h1 && !DEAD_PAGE.test(h1) ? h1 : '') || '';
-  const pageTitle = title && !DEAD_PAGE.test(title) ? title : '';
+  const title = asText(html.match(/<title[^>]*>([\s\S]{1,300}?)<\/title>/i)?.[1], 200);
+  const usable = (name: string | undefined): string => (name && !DEAD_PAGE.test(name) && !NO_NAME.test(name) ? name : '');
+  const heading = usable(h1);
+  const pageTitle = usable(title);
   if (!heading && !pageTitle) return undefined;
   const meta = asText(html.match(/<meta\s+(?:name="description"|property="og:description")\s+content="([^"]*)"/i)?.[1], 800) ?? '';
-  const body = stripHtml(html
-    .replace(/<(script|style|nav|footer|header|svg)[\s\S]*?<\/\1>/gi, ' ')
-    .replace(/<h1[^>]*>([\s\S]*?)<\/h1>/i, ' '))
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (body.length < 200) return undefined;
+  const body = visibleText(html);
+  if (body.length < 200 || CLOSED_PAGE.test(body)) return undefined;
   const facts = extractPageFacts(html);
   const name = heading || pageTitle;
   return {
@@ -109,10 +127,22 @@ function leadFromPlainPage(source: SourceRecord, url: string, key: string, html:
     url,
     title: name,
     text: [name, meta, body.slice(0, MAX_TEXT)].filter(Boolean).join('\n\n').slice(0, MAX_TEXT),
-    publishedAt: html.match(/<meta\s+property="article:published_time"\s+content="([^"]+)"/i)?.[1],
+    author: ownerOf(source),
+    // On a career page the date is the page's, often years old; the list says it is open.
+    publishedAt: source.config.listUrl ? undefined : html.match(/<meta\s+property="article:published_time"\s+content="([^"]+)"/i)?.[1],
     metadata: { facts },
     raw: { sitemap: true, plain: true },
   };
+}
+
+/** The text a visitor sees: dialogs and blocks the page keeps hidden stay out. */
+function visibleText(html: string): string {
+  return stripHtml(html
+    .replace(/<(script|style|nav|footer|header|svg|dialog)[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<div[^>]*w-condition-invisible[^>]*>[\s\S]*?<\/div>/gi, ' ')
+    .replace(/<h1[^>]*>([\s\S]*?)<\/h1>/i, ' '))
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /** Pages already read, per source: each poll goes on to newer ones. */
@@ -133,20 +163,29 @@ export const sitemapSource: SourceAdapter = {
 
   async poll(source: SourceRecord, ctx: PollContext): Promise<RawLead[]> {
     const url = typeof source.config.url === 'string' ? source.config.url.trim() : '';
+    const listUrl = typeof source.config.listUrl === 'string' ? source.config.listUrl.trim() : '';
     const pattern = typeof source.config.pattern === 'string' ? source.config.pattern : '';
-    if (!url || !pattern) throw new Error('Sitemap source requires config.url and config.pattern');
+    if ((!url && !listUrl) || !pattern) throw new Error('Sitemap source requires config.pattern and config.url or config.listUrl');
     const re = new RegExp(pattern);
     const perPoll = Math.max(1, Math.min(Number(source.config.perPoll ?? 10), 50));
     const delayMs = Math.max(0, Number(source.config.delayMs ?? 1000));
     const maxAgeDays = Math.max(1, Number(source.config.maxAgeDays ?? 30));
     const since = new Date(ctx.now().getTime() - maxAgeDays * 86_400_000).toISOString();
 
-    let { pages, children } = sitemapLocs(await fetchText(ctx, url, { Accept: 'application/xml,text/xml' }));
-    for (const child of children.slice(0, 10)) pages = pages.concat(sitemapLocs(await fetchText(ctx, child, { Accept: 'application/xml,text/xml' })).pages);
+    let pages: string[] = [];
+    if (listUrl) {
+      pages = pageLinks(await fetchText(ctx, listUrl), listUrl);
+    } else {
+      const index = sitemapLocs(await fetchText(ctx, url, { Accept: 'application/xml,text/xml' }));
+      pages = index.pages;
+      for (const child of index.children.slice(0, 10)) pages = pages.concat(sitemapLocs(await fetchText(ctx, child, { Accept: 'application/xml,text/xml' })).pages);
+    }
 
     const done = seen.get(source.id) ?? new Set<string>();
     seen.set(source.id, done);
-    const queue = newestPages(pages, re).filter((p) => !done.has(p.url)).slice(0, perPoll);
+    // A sitemap may keep years of closed vacancies: config.maxPages stops at the newest.
+    const newest = newestPages(pages, re).slice(0, Math.max(1, Number(source.config.maxPages ?? 100_000)));
+    const queue = newest.filter((p) => !done.has(p.url)).slice(0, perPoll);
     const leads: RawLead[] = [];
     for (const [i, page] of queue.entries()) {
       if (i > 0 && delayMs) await sleep(delayMs);
