@@ -1,4 +1,5 @@
 import type { SourceConfig, SourceKind } from '../core/types.ts';
+import { ATS_COMPANIES } from './ats-companies.ts';
 import { CAREER_SITE_PRESETS } from './career-sites.ts';
 
 export interface SourcePreset {
@@ -20,7 +21,7 @@ export function presetSource<T extends { title: string; kind: string; config: So
   );
 }
 
-export const SOURCE_PRESETS: SourcePreset[] = [
+const BASE_PRESETS: SourcePreset[] = [
   {
     id: 'fl-all',
     kind: 'rss',
@@ -894,3 +895,15 @@ export const SOURCE_PRESETS: SourcePreset[] = [
   },
   ...CAREER_SITE_PRESETS,
 ];
+
+/** An ATS preset with the boards found since: a slug listed twice is read once. */
+function withBoards(preset: SourcePreset): SourcePreset {
+  const provider = preset.config.provider as keyof typeof ATS_COMPANIES | undefined;
+  const extra = preset.kind === 'ats' && provider ? ATS_COMPANIES[provider] : undefined;
+  if (!extra?.length) return preset;
+  const companies = [...(preset.config.companies as string[]), ...extra];
+  const unique = [...new Map(companies.reverse().map((entry) => [entry.split('=')[0]!.toLowerCase(), entry])).values()].reverse();
+  return { ...preset, config: { ...preset.config, companies: unique, perPoll: 15 } };
+}
+
+export const SOURCE_PRESETS: SourcePreset[] = BASE_PRESETS.map(withBoards);
