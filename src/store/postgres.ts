@@ -563,7 +563,7 @@ export class PostgresStore implements Store {
     const res = await this.pool.query(
       `SELECT l.id, l.title, l.text FROM leads l
          JOIN sources s ON s.id = l.source_id
-         LEFT JOIN lead_decisions d ON d.lead_id = l.id AND d.version = $2
+         LEFT JOIN model_decisions d ON d.lead_id = l.id AND d.version = $2
         WHERE d.lead_id IS NULL
           AND l.created_at >= now() - interval '30 days'
           AND COALESCE(l.source_visibility, 'public') <> 'private'
@@ -576,7 +576,7 @@ export class PostgresStore implements Store {
 
   async saveModelDecision(d: ModelDecision): Promise<void> {
     await this.pool.query(
-      `INSERT INTO lead_decisions (lead_id, version, model, kind, kind_confidence, closed, scam, fullness, tokens, decided_at)
+      `INSERT INTO model_decisions (lead_id, version, model, kind, kind_confidence, closed, scam, fullness, tokens, decided_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (lead_id) DO UPDATE SET version = EXCLUDED.version, model = EXCLUDED.model, kind = EXCLUDED.kind,
          kind_confidence = EXCLUDED.kind_confidence, closed = EXCLUDED.closed, scam = EXCLUDED.scam,
@@ -589,9 +589,9 @@ export class PostgresStore implements Store {
     const totals = await this.pool.query(
       `SELECT count(*)::int AS total, COALESCE(sum(tokens), 0)::bigint AS tokens,
               count(*) FILTER (WHERE closed >= 0.5)::int AS closed, count(*) FILTER (WHERE scam >= 0.5)::int AS scam, max(decided_at) AS last_at
-         FROM lead_decisions`,
+         FROM model_decisions`,
     );
-    const kinds = await this.pool.query(`SELECT kind, count(*)::int AS total FROM lead_decisions GROUP BY kind`);
+    const kinds = await this.pool.query(`SELECT kind, count(*)::int AS total FROM model_decisions GROUP BY kind`);
     const row = totals.rows[0];
     return {
       total: Number(row.total), tokens: Number(row.tokens), closed: Number(row.closed), scam: Number(row.scam),
@@ -611,7 +611,7 @@ export class PostgresStore implements Store {
     const res = await this.pool.query(
       `SELECT l.*, d.lead_id, d.version AS d_version, d.model AS d_model, d.kind AS d_kind, d.kind_confidence,
               d.closed AS d_closed, d.scam AS d_scam, d.fullness, d.tokens, d.decided_at
-         FROM lead_decisions d JOIN leads l ON l.id = d.lead_id
+         FROM model_decisions d JOIN leads l ON l.id = d.lead_id
         WHERE l.state = 'active' AND l.status <> 'rejected'
           AND NOT EXISTS (SELECT 1 FROM lead_labels b WHERE b.lead_id = l.id)
           AND (d.closed >= 0.5 OR d.scam >= 0.5 OR d.kind IN ('other', 'resume')
@@ -630,7 +630,7 @@ export class PostgresStore implements Store {
   async listLabelledDecisions(): Promise<LabelledDecision[]> {
     const res = await this.pool.query(
       `SELECT b.verdict, l.type, d.kind, d.kind_confidence, d.closed
-         FROM lead_labels b JOIN lead_decisions d ON d.lead_id = b.lead_id JOIN leads l ON l.id = b.lead_id`,
+         FROM lead_labels b JOIN model_decisions d ON d.lead_id = b.lead_id JOIN leads l ON l.id = b.lead_id`,
     );
     return res.rows.map((r) => ({ verdict: String(r.verdict), type: r.type ?? undefined, kind: String(r.kind), kindConfidence: Number(r.kind_confidence), closed: Number(r.closed) }));
   }
@@ -639,7 +639,7 @@ export class PostgresStore implements Store {
     // Half the time, where the model is least sure or differs from the node: such a label teaches most.
     if (Math.random() < 0.5) {
       const doubtful = await this.pool.query(
-        `SELECT l.* FROM lead_decisions d JOIN leads l ON l.id = d.lead_id
+        `SELECT l.* FROM model_decisions d JOIN leads l ON l.id = d.lead_id
           WHERE l.status <> 'rejected' AND NOT EXISTS (SELECT 1 FROM lead_labels b WHERE b.lead_id = l.id)
             AND (d.kind_confidence < 0.8 OR d.closed BETWEEN 0.2 AND 0.8 OR d.kind IN ('other', 'resume')
               OR (d.kind = 'vacancy' AND l.type = 'gig') OR (d.kind = 'order' AND l.type = 'job'))
