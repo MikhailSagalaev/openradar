@@ -61,12 +61,16 @@ function detectLeadType(raw: RawLead, title: string, url?: string): LeadType {
   return JOB_HINT.test(`${title} ${url ?? ''}`) ? 'job' : 'gig';
 }
 
-function parsePublishedAt(value: string | undefined, now: Date): Date {
-  if (!value) return now;
+/**
+ * The publication date, or the collection moment when the source gave none. The estimated
+ * flag lets the output say «~date» instead of passing a guess off as the real date.
+ */
+function parsePublishedAt(value: string | undefined, now: Date): { date: Date; estimated: boolean } {
+  if (!value) return { date: now, estimated: true };
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return now;
-  if (parsed.getTime() > now.getTime() + 60 * 60 * 1000) return now;
-  return parsed;
+  if (Number.isNaN(parsed.getTime())) return { date: now, estimated: true };
+  if (parsed.getTime() > now.getTime() + 60 * 60 * 1000) return { date: now, estimated: true };
+  return { date: parsed, estimated: false };
 }
 
 export function prepareRawLead(
@@ -113,7 +117,7 @@ export function prepareRawLead(
   const implausible = salaryInfo.implausible === true || payNotOffered({ url, title }, salaryInfo.normalizedUsdMax ?? salaryInfo.normalizedUsdMin);
   if (implausible) budget = undefined;
 
-  const publishedAtDate = parsePublishedAt(raw.publishedAt, now);
+  const { date: publishedAtDate, estimated: publishedEstimated } = parsePublishedAt(raw.publishedAt, now);
   const titleKey = titleKeyOf(title);
   // The same post (platform + channel + message id) is one lead whatever source delivered it.
   const postKey = raw.sourceRef ? postKeyOf(raw.sourceRef) : undefined;
@@ -127,6 +131,7 @@ export function prepareRawLead(
 
   return {
     ...raw,
+    metadata: { ...(raw.metadata ?? {}), ...(publishedEstimated ? { publishedAtEstimated: true } : {}) },
     author: cleanShortField(raw.author, 200),
     category: cleanShortField(raw.category, 100),
     title,

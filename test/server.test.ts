@@ -1295,7 +1295,7 @@ describe('http server', () => {
       status: 'new' as const,
       score: 50,
       reasons: [],
-      createdAt: new Date('2026-10-23T10:00:00Z').toISOString(),
+      createdAt: new Date(Date.now() - 12 * 86_400_000).toISOString(),
     };
     const jobLead = {
       id: 'lead-job-1',
@@ -1308,7 +1308,7 @@ describe('http server', () => {
       status: 'new' as const,
       score: 60,
       reasons: [],
-      createdAt: new Date('2026-10-23T11:00:00Z').toISOString(),
+      createdAt: new Date(Date.now() - 12 * 86_400_000 + 3_600_000).toISOString(),
     };
     await runtime.store.insertLead(gigLead);
     await runtime.store.insertLead(jobLead);

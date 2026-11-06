@@ -58,6 +58,13 @@ function cleanCity(location: string | undefined): string | undefined {
   return withoutCode.split(',')[0]!.trim() || trimmed;
 }
 
+/** The board sometimes names the company as the place («Deliveroo»): that is no city. */
+function cityFor(location: string | undefined, company: string | undefined, remote: boolean): string | undefined {
+  const city = cleanCity(location);
+  if (city && company && city.toLowerCase() === company.toLowerCase()) return undefined;
+  return remote ? 'Онлайн' : city;
+}
+
 const REMOTE = /\bremote\b|удал[её]нн/i;
 
 interface GreenhouseJob {
@@ -88,7 +95,7 @@ function fromGreenhouse(source: SourceRecord, slug: string, name: string | undef
       title,
       text: text(title, [company && `Company: ${company}`, location && `Location: ${location}`, j.departments?.[0]?.name && `Department: ${j.departments[0].name}`], body),
       author: company,
-      city: REMOTE.test(location) ? 'Онлайн' : cleanCity(location),
+      city: cityFor(location, company, REMOTE.test(location)),
       isRemote: REMOTE.test(location),
       publishedAt: j.first_published ?? j.updated_at,
       raw: { ats: 'greenhouse', board: slug },
@@ -132,7 +139,7 @@ function fromLever(source: SourceRecord, slug: string, name: string | undefined,
       title,
       text: text(title, [`Company: ${company}`, location && `Location: ${location}`, p.categories?.team && `Team: ${p.categories.team}`, p.categories?.commitment && `Type: ${p.categories.commitment}`], body),
       author: company,
-      city: remote ? 'Онлайн' : cleanCity(location),
+      city: cityFor(location, company, remote),
       isRemote: remote,
       rawSalary: withPay ? `${salary.min ?? ''}–${salary.max ?? ''} ${salary.currency} ${yearly ? 'per year' : monthly ? 'per month' : 'per hour'}` : undefined,
       publishedAt: p.createdAt ? new Date(p.createdAt).toISOString() : undefined,
@@ -182,7 +189,7 @@ function fromAshby(source: SourceRecord, slug: string, name: string | undefined,
       title,
       text: text(title, [`Company: ${company}`, location && `Location: ${location}`, j.department && `Department: ${j.department}`, j.employmentType && `Type: ${j.employmentType}`], j.descriptionPlain?.trim() ?? ''),
       author: company,
-      city: remote ? 'Онлайн' : cleanCity(location),
+      city: cityFor(location, company, remote),
       isRemote: remote,
       rawSalary: salary && per ? `${salary.minValue ?? ''}–${salary.maxValue ?? ''} ${salary.currencyCode} ${per}` : undefined,
       publishedAt: j.publishedAt,
@@ -220,7 +227,7 @@ function fromWorkable(source: SourceRecord, slug: string, name: string | undefin
       title,
       text: text(title, [`Company: ${company}`, location && `Location: ${location}`, j.department && `Department: ${j.department}`, j.employment_type && `Type: ${j.employment_type}`], stripHtml(j.description ?? '').trim()),
       author: company,
-      city: remote ? 'Онлайн' : j.city?.trim() || undefined,
+      city: remote ? 'Онлайн' : j.city?.trim().toLowerCase() === company?.toLowerCase() ? undefined : j.city?.trim() || undefined,
       isRemote: remote,
       publishedAt: j.published_on ?? j.created_at,
       raw: { ats: 'workable', board: slug },
@@ -264,7 +271,7 @@ function fromRecruitee(source: SourceRecord, slug: string, name: string | undefi
       title,
       text: text(title, [`Company: ${company}`, location && `Location: ${location}`, o.employment_type_code && `Type: ${o.employment_type_code}`], body),
       author: company,
-      city: remote ? 'Онлайн' : o.city?.trim() || cleanCity(location),
+      city: cityFor(o.city?.trim() || location, company, remote),
       isRemote: remote,
       rawSalary: s && (s.min || s.max) && s.currency && per ? `${s.min ?? ''}–${s.max ?? ''} ${s.currency} ${per}` : undefined,
       // Recruitee writes «2026-10-30 16:32:58 UTC».

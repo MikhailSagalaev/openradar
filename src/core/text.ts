@@ -246,7 +246,15 @@ const TECH_SKILL_PATTERNS: Array<[RegExp, string]> = [
   [/\bcomfy\s?ui\b/i, 'ComfyUI'],
   [/\bLoRA\b|\bLORA\b/, 'LoRA'],
   [/\bstable\s+diffusion\b/i, 'Stable Diffusion'],
-  // Trades, for posts that name no tool: «Тестировщик», «Маркетолог», «Recruiter».
+];
+
+/**
+ * Trades, for posts that name no tool: «Тестировщик», «Маркетолог», «Recruiter». A trade is
+ * the role itself, so extractSkills() reads these only in the title and the requirements —
+ * never in the company blurb or the benefits («наш HR поможет», «тестирование гипотез»,
+ * «developer platform» hang them on sales and management posts otherwise).
+ */
+const ROLE_SKILL_PATTERNS: Array<[RegExp, string]> = [
   [/тестировщик|тестировани|\bqa\b|\bsdet\b|автотест/i, 'Тестирование'],
   [/\bdevops\b|\bsre\b|девопс/i, 'DevOps'],
   [/системн\S*\s+администратор|сисадмин|system\s+administrator/i, 'Администрирование'],
@@ -261,14 +269,73 @@ const TECH_SKILL_PATTERNS: Array<[RegExp, string]> = [
   [/разработчик|программист|\bdeveloper\b|software\s+engineer|full[- ]?stack|back[- ]?end|front[- ]?end/i, 'Разработка'],
 ];
 
+const ALL_SKILL_PATTERNS = [...TECH_SKILL_PATTERNS, ...ROLE_SKILL_PATTERNS];
+
+/** Names of the trade tags, which only the title and the requirements may set. */
+export const ROLE_SKILLS: ReadonlySet<string> = new Set(ROLE_SKILL_PATTERNS.map(([, name]) => name));
+
+/** Every dictionary skill found anywhere in `input`: for short strings such as a title or a query. */
 export function extractTechSkills(input: string, max = 8): string[] {
   if (!input) return [];
   const found: string[] = [];
-  for (const [pattern, name] of TECH_SKILL_PATTERNS) {
+  for (const [pattern, name] of ALL_SKILL_PATTERNS) {
     if (pattern.test(input)) {
       found.push(name);
       if (found.length >= max) break;
     }
+  }
+  return found;
+}
+
+const REQUIREMENTS_HEAD = /^\s*(?:требования|требуется|мы\s+ждём|мы\s+ждем|ожидаем|что\s+(?:мы\s+)?ждём|что\s+(?:мы\s+)?ждем|кого\s+(?:мы\s+)?ищем|requirements|qualifications|what\s+you(?:'|’)?ll\s+need|what\s+we(?:'|’)?re\s+looking\s+for|who\s+you\s+are|you\s+have|must[- ]have)(?![a-zа-яё])/i;
+const OTHER_HEAD = /^\s*(?:условия|мы\s+предлагаем|что\s+(?:мы\s+)?предлагаем|о\s+(?:нас|компании)|обязанности|задачи|бонусы|плюсом|будет\s+плюсом|benefits|perks|we\s+offer|what\s+we\s+offer|about\s+(?:us|the\s+company)|responsibilities|nice\s+to\s+have)(?![a-zа-яё])/i;
+/** The same block headers without the start anchor: one-line posts pack the blocks together. */
+const OTHER_HEAD_ANY = new RegExp(OTHER_HEAD.source.replace(/^\^/, ''), 'i');
+
+/**
+ * Where a post names its role: the title, the requirements block and, when the title is only
+ * the post's own first line (Telegram), the lines right under it.
+ */
+function roleWindow(title: string, text: string): string {
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const parts = [title];
+  const firstLine = lines[0] ?? '';
+  if (title && firstLine && (firstLine.startsWith(title.replace(/[….]+$/, '').trim()) || title.startsWith(firstLine))) {
+    parts.push(...lines.slice(1, 3));
+  }
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!REQUIREMENTS_HEAD.test(lines[i]!) || lines[i]!.length > 80) continue;
+    // One-line posts pack «Требования: … Условия: …» together: cut at the next block's header.
+    let line = lines[i]!;
+    const headAt = line.search(REQUIREMENTS_HEAD);
+    const other = OTHER_HEAD_ANY.exec(line.slice(headAt));
+    if (other) line = line.slice(0, headAt + other.index);
+    parts.push(line);
+    for (let j = i + 1; j < lines.length && j <= i + 12; j += 1) {
+      if (REQUIREMENTS_HEAD.test(lines[j]!) || OTHER_HEAD.test(lines[j]!)) break;
+      parts.push(lines[j]!);
+    }
+  }
+  return parts.join('\n');
+}
+
+/**
+ * Skills of a post: tools and technologies from the whole text, trades (Тестирование,
+ * Рекрутинг, Разработка…) only from the title and the requirements.
+ */
+export function extractSkills(title: string, text: string, max = 8): string[] {
+  const all = `${title}\n${text}`;
+  const found: string[] = [];
+  // Technologies read anywhere in the post; trades wait for the role window below.
+  for (const [pattern, name] of TECH_SKILL_PATTERNS) {
+    if (!pattern.test(all)) continue;
+    found.push(name);
+    if (found.length >= max) break;
+  }
+  for (const name of extractTechSkills(roleWindow(title, text))) {
+    if (!ROLE_SKILLS.has(name) || found.includes(name)) continue;
+    found.push(name);
+    if (found.length >= max) break;
   }
   return found;
 }
