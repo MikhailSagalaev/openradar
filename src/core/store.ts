@@ -1,3 +1,4 @@
+import type { SourceQualityInput } from './source-quality.ts';
 import type { PageFacts } from '../research/facts.ts';
 import type { SubscriptionRecord } from './subscriptions.ts';
 import type {
@@ -309,6 +310,8 @@ export interface HubStore {
   getContactFlags(contacts: Contact[]): Promise<ContactFlag[]>;
 }
 
+export type { SourceQualityInput } from './source-quality.ts';
+
 export interface EmployerSummary {
   key: string;
   name: string;
@@ -424,6 +427,8 @@ export interface Store extends HubStore {
   /** Id, title and dedup key of stored leads with id above `afterId`, by id — the rekey pass's pages. */
   listTitleKeys?(afterId: string | null, limit: number): Promise<Array<{ id: string; title: string; titleKey: string }>>;
   updateLeadTitleKey?(id: string, titleKey: string): Promise<void>;
+  /** Counters behind each source's score, over the last `days`. */
+  getSourceQuality?(days: number): Promise<Map<string, SourceQualityInput>>;
   /** Employers with open vacancies, the busiest first. */
   listEmployers?(options: { limit: number; minPosts: number; query?: string }): Promise<EmployerSummary[]>;
   listEmployerLeads?(key: string, limit: number): Promise<Lead[]>;

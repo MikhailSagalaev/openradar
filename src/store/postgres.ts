@@ -41,7 +41,7 @@ import type {
   UserSourceInput,
   UserSourceRecord,
 } from '../core/store.ts';
-import type { EmployerRow, EmployerSummary, LeadFactsFill, LeadMoney, LeadSighting, ResearchDailyRow, SourceActivity } from '../core/store.ts';
+import type { EmployerRow, EmployerSummary, SourceQualityInput, LeadFactsFill, LeadMoney, LeadSighting, ResearchDailyRow, SourceActivity } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
 import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
 import { BROKEN_AFTER, countFailedInRow } from '../core/source-health.ts';
@@ -524,6 +524,38 @@ export class PostgresStore implements Store {
       [key],
     );
     return Number(res.rows[0].total);
+  }
+
+  async getSourceQuality(days: number): Promise<Map<string, SourceQualityInput>> {
+    const since = new Date(Date.now() - days * 86_400_000).toISOString();
+    const runs = await this.pool.query(
+      `SELECT source_id, count(*)::int AS runs, count(error)::int AS failed, COALESCE(sum(rejected), 0)::int AS rejected
+         FROM runs WHERE started_at >= $1::timestamptz GROUP BY source_id`,
+      [since],
+    );
+    const leads = await this.pool.query(
+      `SELECT source_id,
+              count(*)::int AS inserted,
+              count(*) FILTER (WHERE state = 'closed')::int AS closed,
+              count(*) FILTER (WHERE type = 'job')::int AS jobs,
+              count(*) FILTER (WHERE type = 'job' AND company_key IS NOT NULL)::int AS with_employer,
+              count(*) FILTER (WHERE budget IS NOT NULL OR raw_salary IS NOT NULL)::int AS with_pay,
+              count(*) FILTER (WHERE length(text) >= 300)::int AS full_text,
+              COALESCE(sum(votes_up), 0)::int AS useful,
+              COALESCE(sum(votes_down), 0)::int AS junk,
+              COALESCE(sum(votes_scam), 0)::int AS scam
+         FROM leads WHERE created_at >= $1::timestamptz GROUP BY source_id`,
+      [since],
+    );
+    const byId = new Map(leads.rows.map((r) => [String(r.source_id), r]));
+    return new Map(runs.rows.map((r) => {
+      const l = byId.get(String(r.source_id));
+      return [String(r.source_id), {
+        runs: r.runs, failedRuns: r.failed, rejected: r.rejected, inserted: l?.inserted ?? 0, closed: l?.closed ?? 0, jobs: l?.jobs ?? 0,
+        withEmployer: l?.with_employer ?? 0, withPay: l?.with_pay ?? 0, fullText: l?.full_text ?? 0,
+        useful: l?.useful ?? 0, junk: l?.junk ?? 0, scam: l?.scam ?? 0,
+      }];
+    }));
   }
 
   async employerName(key: string): Promise<string | null> {

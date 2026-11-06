@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.55.0
+
+- Sources: a career site drawn in the browser can be read from its own open JSON, set up with a few lines and no code. Sber (about 2,500 vacancies), Wildberries, Magnit Tech and IT_One join this way, and Yandex through its vacancy page.
+- **Source quality.** `/sources/quality` and `radar source quality` score each source over 14 days: does it answer, bring new posts, stay alive, carry full posts, and what readers said. [docs/QUALITY.md](docs/QUALITY.md) explains the count and the plan for learning from feedback.
+- [docs/SOURCES_COVERAGE.md](docs/SOURCES_COVERAGE.md): what each of 155 career sites needs.
+- Tests with fixed dates no longer age out of the feed.
+
 ## 0.54.3
 
 - Employer pages count a vacancy as remote only when the board says so, and name each city once.

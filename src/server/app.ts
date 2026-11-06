@@ -35,6 +35,7 @@ import { qualityFlagsOf } from '../core/quality.ts';
 import { rubToUsd } from '../core/salary.ts';
 import { TelegramAuthService } from './tg-auth.ts';
 import { sourceState } from '../core/source-health.ts';
+import { scoreSource } from '../core/source-quality.ts';
 import { assertSafeUrl } from '../core/ssrf.ts';
 import { robotsFor } from '../pipeline/robots-audit.ts';
 import { feedQuery, isEmptyFilter, MAX_SUBSCRIPTIONS_PER_USER, newWebhookSecret, savedFiltersFrom, subscriptionName, type SavedFilters, type SubscriptionRecord } from '../core/subscriptions.ts';
@@ -86,6 +87,7 @@ import {
   employerPath,
   renderEmployerPage,
   renderEmployersPage,
+  renderSourceQualityPage,
   renderFaqPage,
   renderLlmsTxt,
   renderRobotsTxt,
@@ -1660,6 +1662,25 @@ export function createApp(runtime: Runtime): Hono {
       return c.redirect(`/leads/${outcome.lead.id}`);
     }
     return c.redirect('/');
+  });
+
+  // How each source does by our own measure. Open to whoever may read the sources.
+  const QUALITY_WINDOW_DAYS = 14;
+  let qualityCache: { at: number; rows: Parameters<typeof renderSourceQualityPage>[0]['rows'] } | undefined;
+  app.get('/sources/quality', rateLimit({ windowMs: 60_000, max: 30 }), async (c) => {
+    if (!await canRead(c, runtime)) return c.redirect('/login');
+    if (!qualityCache || Date.now() - qualityCache.at > 10 * 60_000) {
+      const inputs = (await runtime.store.getSourceQuality?.(QUALITY_WINDOW_DAYS)) ?? new Map();
+      const rows = (await runtime.store.listSources())
+        .filter((source) => source.config.userTelegram !== true)
+        .map((source) => {
+          const input = inputs.get(source.id);
+          return { id: source.id, title: source.title, enabled: source.enabled, input, quality: input ? scoreSource(input) : { score: null, grade: 'new' as const, parts: {} } };
+        })
+        .sort((a, b) => Number(b.enabled) - Number(a.enabled) || (a.quality.score ?? 101) - (b.quality.score ?? 101));
+      qualityCache = { at: Date.now(), rows };
+    }
+    return c.html(renderSourceQualityPage({ version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c), days: QUALITY_WINDOW_DAYS, rows: qualityCache.rows }));
   });
 
   app.get('/sources', async (c) => {

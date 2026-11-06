@@ -2,6 +2,7 @@ import { escapeHtml, jsonForScript } from '../core/text.ts';
 import type { Lead, LeadType } from '../core/types.ts';
 import { layout, type AuthDisplay } from './ui.ts';
 import type { SupportedLang } from './i18n.ts';
+import type { SourceQuality, SourceQualityInput } from '../core/source-quality.ts';
 
 export interface CatalogEntry {
   slug: string;
@@ -798,6 +799,42 @@ export function renderParticipantPage(options: {
   ${rows ? `<div class="list">${rows}</div>` : `<p class="muted">${ru ? 'Пока нет публикаций, открытых всем.' : 'No public posts yet.'}</p>`}
 </section>`;
   return layout({ title: `@${options.handle}`, version: options.version, body, auth: options.auth, lang: options.lang });
+}
+
+export function renderSourceQualityPage(options: {
+  version: string;
+  auth?: AuthDisplay;
+  lang?: SupportedLang;
+  days: number;
+  rows: Array<{ id: string; title: string; enabled: boolean; quality: SourceQuality; input?: SourceQualityInput }>;
+}): string {
+  const ru = options.lang !== 'en';
+  const percent = (value: number | undefined): string => (value === undefined ? '—' : `${Math.round(value * 100)}%`);
+  const rows = options.rows.map(({ id, title, enabled, quality, input }) => `<tr>
+    <td><a href="/sources/${escapeHtml(encodeURIComponent(id))}">${escapeHtml(title)}</a>${enabled ? '' : ` <span class="muted small">${ru ? 'выключен' : 'off'}</span>`}</td>
+    <td class="num"><strong>${quality.score ?? '—'}</strong></td>
+    <td>${quality.grade === 'new' ? (ru ? 'мало данных' : 'too new') : quality.grade}</td>
+    <td class="num">${percent(quality.parts.access)}</td>
+    <td class="num">${input?.inserted ?? 0}</td>
+    <td class="num">${percent(quality.parts.alive)}</td>
+    <td class="num">${percent(quality.parts.complete)}</td>
+    <td class="num">${percent(quality.parts.trust)}</td>
+  </tr>`).join('\n');
+  const body = `
+<nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/sources">${ru ? 'Источники' : 'Sources'}</a> / ${ru ? 'Качество' : 'Quality'}</nav>
+<div class="page-head"><div>
+  <h1>${ru ? 'Качество источников' : 'Source quality'}</h1>
+  <p class="muted small">${ru
+    ? `За ${options.days} дней: отвечает ли источник, приносит ли новое, живы ли посты, полны ли они и что сказали читатели.`
+    : `Over ${options.days} days: does a source answer, bring new posts, stay alive, carry full posts, and what readers said.`} <a href="https://github.com/MikhailSagalaev/openradar/blob/main/docs/QUALITY.md" rel="noopener">${ru ? 'Как считается' : 'How it is counted'}</a></p>
+</div></div>
+<section class="profile">
+  <table class="profile-table">
+    <thead><tr><th>${ru ? 'Источник' : 'Source'}</th><th>${ru ? 'Оценка' : 'Score'}</th><th>${ru ? 'Класс' : 'Grade'}</th><th>${ru ? 'Отвечает' : 'Answers'}</th><th>${ru ? 'Новых' : 'New'}</th><th>${ru ? 'Живых' : 'Alive'}</th><th>${ru ? 'Полнота' : 'Complete'}</th><th>${ru ? 'Читатели' : 'Readers'}</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+</section>`;
+  return layout({ title: ru ? 'Качество источников' : 'Source quality', version: options.version, active: 'sources', body, auth: options.auth, lang: options.lang });
 }
 
 /** Where an employer's page lives. */

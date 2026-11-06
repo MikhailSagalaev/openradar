@@ -9,6 +9,7 @@ import type { Lead, LeadStatus, SourceConfig, SourceKind, SourceRecord } from '.
 import { pollAll, pollSource, type PollDeps, type PollSummary } from '../pipeline/poll.ts';
 import { retitleLeads } from '../pipeline/retitle.ts';
 import { rekeyTitles } from '../pipeline/rekey.ts';
+import { scoreSource } from '../core/source-quality.ts';
 import { fillEmployers } from '../pipeline/reemployers.ts';
 import { rescoreLeads } from '../pipeline/rescore.ts';
 import { auditSourceRobots, robotsMarkdown } from '../pipeline/robots-audit.ts';
@@ -451,6 +452,24 @@ function buildProgram(): Command {
         const deleted = await runtime.store.deleteSource(id);
         if (!deleted) fail(`source ${id} not found`);
         console.log(`Источник ${id} удалён`);
+      });
+    });
+
+  source
+    .command('quality')
+    .description('Score every source over the last days, the weakest first')
+    .option('--days <n>', 'Window in days', '14')
+    .action(async (options: { days: string }) => {
+      await withRuntime(async (runtime) => {
+        const inputs = (await runtime.store.getSourceQuality?.(Number(options.days) || 14)) ?? new Map();
+        const rows = (await runtime.store.listSources())
+          .filter((item) => item.enabled)
+          .map((item) => ({ item, input: inputs.get(item.id), quality: inputs.has(item.id) ? scoreSource(inputs.get(item.id)!) : undefined }))
+          .sort((a, b) => (a.quality?.score ?? 101) - (b.quality?.score ?? 101));
+        console.log(table(
+          ['Оценка', 'Класс', 'Источник', 'Опросов', 'Новых'],
+          rows.map(({ item, input, quality }) => [String(quality?.score ?? '—'), quality?.grade ?? 'new', item.title, String(input?.runs ?? 0), String(input?.inserted ?? 0)]),
+        ));
       });
     });
 

@@ -55,6 +55,7 @@ const SITES: CareerSite[] = [
   { id: 'career-azur', name: 'Azur Games', list: 'https://azurgames.com/ru/jobs/', pattern: String.raw`/ru/jobs/([a-z0-9-]+)/?$`, company: true },
   { id: 'career-kaspersky', name: 'Лаборатория Касперского', list: 'https://careers.kaspersky.ru/vacancy/', pattern: String.raw`/vacancy/(\d+)`, company: true },
   { id: 'career-aviasales', name: 'Aviasales', list: 'https://www.aviasales.ru/about/vacancies/', pattern: String.raw`/about/vacancies/(\d+)`, company: true },
+  { id: 'career-yandex', name: 'Яндекс', list: 'https://yandex.ru/jobs/vacancies', pattern: String.raw`/jobs/vacancies/([a-z0-9_-]+-\d+)`, company: true },
   { id: 'board-justjoin', name: 'Just Join IT', sitemap: 'https://justjoin.it/sitemaps/active-jobs/part0.xml', pattern: String.raw`/job-offer/([a-z0-9-]+)` },
   { id: 'board-workwithindies', name: 'Work With Indies', list: 'https://www.workwithindies.com/', pattern: String.raw`/careers/([a-z0-9-]+)$` },
   { id: 'board-agilefluent', name: 'AgileFluent', sitemap: 'https://jobboard.agilefluent.ru/sitemap.xml', pattern: String.raw`/jobs/(\d+)-` },
