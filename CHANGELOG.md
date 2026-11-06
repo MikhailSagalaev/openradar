@@ -1,17 +1,24 @@
 # Changelog
 
+## 0.52.0
+
+- Sources: 41 company career sites and niche boards join: Glovo, 2GIS, YADRO, Alfa-Bank, MTS, VK, IBS, CDEK, Kaspersky, Aviasales, Luxoft, Azur Games, CrowdStrike, Just Join IT and others. Each was checked against robots.txt and read through the real adapter first.
+- Pinpoint and BambooHR boards are read through their public lists: inDrive, Tabby and three more. Sporty Group, Fivetran, PubNub, Harvey, TRM Labs, Mayflower and People Can Fly join the ATS lists.
+- A career site can be read from its vacancy page when it has no usable sitemap (`listUrl`). A sitemap that keeps closed vacancies can be cut to its newest pages (`maxPages`).
+- Career-site posts now name their employer, closed vacancies are skipped, and a one-line JobPosting takes the text from the page.
+- Foxford reads its open vacancies only: its sitemap was mostly an archive. Avito, CROC and Solar read pages that exist. Andersen (robots.txt), Wise (refuses the hub) and Magnit Tech (nothing in the HTML) leave.
+
 ## 0.51.6
 
 - Sitemap sources read plain pages: most company career sites carry no JobPosting markup, so the adapter falls back to the h1 (else the title) with the meta description and the body text; dead and thin pages are rejected. The VK and T1 career presets leave — their pages are pure SPAs with nothing server-rendered.
 
 ## 0.51.5
 
-- Sources: nine more company career sites join as sitemap presets — VK, Andersen, Wise, T1, Magnit Tech, CROC, Nekki, Sber2B and Jahon School — from the systematic pass over the 155 career-site domains in the RocketHunt extraction. The rest were ATS hosts already read, aggregators, or sites whose sitemaps carry no per-vacancy URLs.
+- Sources: nine more company career sites join as sitemap presets — VK, Andersen, Wise, T1, Magnit Tech, CROC, Nekki, Sber2B and Jahon School.
 
 ## 0.51.4
 
-- Sources: the RocketHunt catalog read end to end — 25 companies join the Greenhouse, Ashby, Lever and Workable presets (Mistral AI, Mapbox, Voodoo, Mollie, Tenable, Oura, Wargaming, SonarSource, Pigment, StackAdapt and others), and three Russian company career sites come as sitemap presets: RT-Solar, Avito careers and CRPT («Честный знак»). Foxford's 721 vacancies ride along from the earlier PR.
-- The 402 recruiter Telegram handles from the same extraction are personal accounts: t.me serves them no public preview, so they are not sources — they stay a contact segment.
+- Sources: 25 companies join the Greenhouse, Ashby, Lever and Workable presets (Mistral AI, Mapbox, Voodoo, Mollie, Tenable, Oura, Wargaming, SonarSource, Pigment, StackAdapt and others), and three Russian company career sites come as sitemap presets: RT-Solar, Avito careers and CRPT («Честный знак»). Foxford's 721 vacancies ride along from the earlier PR.
 
 ## 0.51.3
 
