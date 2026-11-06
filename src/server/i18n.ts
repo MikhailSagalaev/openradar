@@ -81,7 +81,7 @@ export interface Translations {
   signalDirectEmployer: string;
   signalPossibleScam: string;
   /** Quality flags shown on a feed row (src/core/quality.ts). */
-  qualityFlag: Record<'channel_ad' | 'digest' | 'mlm' | 'outstaff', string>;
+  qualityFlag: Record<'channel_ad' | 'digest' | 'mlm' | 'outstaff' | 'mystery_shopper', string>;
   skipToFeed: string;
   // Voting
   useful: string;
@@ -264,7 +264,7 @@ export const RU: Translations = {
   salaryCheckHint: 'Сумма намного ниже обычной для такой работы — возможно, это ставка за час или за проект. Проверьте на сайте источника.',
   signalDirectEmployer: 'прямой заказчик',
   signalPossibleScam: 'возможен скам',
-  qualityFlag: { channel_ad: 'реклама канала', digest: 'подборка вакансий', mlm: 'похоже на набор в схему', outstaff: 'аутстафф' },
+  qualityFlag: { channel_ad: 'реклама канала', digest: 'подборка вакансий', mlm: 'похоже на набор в схему', outstaff: 'аутстафф', mystery_shopper: 'тайный покупатель' },
   skipToFeed: 'К содержимому',
   useful: 'Полезно',
   junk: 'Мусор',
@@ -441,7 +441,7 @@ export const EN: Translations = {
   salaryCheckHint: 'Far below the usual pay for this kind of job: possibly an hourly or per-task rate. Check it on the source site.',
   signalDirectEmployer: 'direct employer',
   signalPossibleScam: 'possible scam',
-  qualityFlag: { channel_ad: 'channel promo', digest: 'job roundup', mlm: 'looks like a scheme', outstaff: 'outstaffing' },
+  qualityFlag: { channel_ad: 'channel promo', digest: 'job roundup', mlm: 'looks like a scheme', outstaff: 'outstaffing', mystery_shopper: 'mystery shopper' },
   skipToFeed: 'Skip to content',
   useful: 'Useful',
   junk: 'Junk',

@@ -101,6 +101,8 @@ function leadFromPosting(source: SourceRecord, url: string, key: string, html: s
 const DEAD_PAGE = /\b40[43]\b|not[\s-]?found|страница не найдена|доступ ограничен|access denied/i;
 /** A heading the site puts on every page, or on the list: it names no vacancy. */
 const NO_NAME = /^(?:детальная страница вакансии|(?:все )?вакансии|работа|карьера|(?:all )?jobs|careers?|open positions)(?:\s*[|—–-].*)?$/i;
+/** A greeting is the site's hello, not the job («Привет! Это Фоксфорд»). */
+const GREETING = /^\s*(?:привет[!,.]?|здравствуйте|hello[!,.]?|welcome|добро пожаловать)\b/i;
 const CLOSED_PAGE = /вакансия (?:закрыта|в архиве|неактуальна|больше не актуальна)|(?:job|position|vacancy) (?:is|has been) (?:closed|filled)|no longer (?:available|accepting)/i;
 
 /**
@@ -111,8 +113,10 @@ const CLOSED_PAGE = /вакансия (?:закрыта|в архиве|неак
 function leadFromPlainPage(source: SourceRecord, url: string, key: string, html: string): RawLead | undefined {
   const h1 = asText(html.match(/<h1[^>]*>([\s\S]{1,300}?)<\/h1>/i)?.[1]?.replace(/<[^>]+>/g, ' '), 200);
   const title = asText(html.match(/<title[^>]*>([\s\S]{1,300}?)<\/title>/i)?.[1], 200);
-  const usable = (name: string | undefined): string => (name && !DEAD_PAGE.test(name) && !NO_NAME.test(name) ? name : '');
-  const heading = usable(h1);
+  const ogTitle = asText(html.match(/<meta\s+property="og:title"\s+content="([^"]*)"/i)?.[1], 200);
+  const usable = (name: string | undefined): string => (name && !DEAD_PAGE.test(name) && !NO_NAME.test(name) && !GREETING.test(name) ? name.trim() : '');
+  // The first heading may be the site's greeting («Привет! Это Фоксфорд»): the og:title names the job then.
+  const heading = usable(h1) || usable(ogTitle);
   const pageTitle = usable(title);
   if (!heading && !pageTitle) return undefined;
   const meta = asText(html.match(/<meta\s+(?:name="description"|property="og:description")\s+content="([^"]*)"/i)?.[1], 800) ?? '';

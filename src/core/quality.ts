@@ -14,7 +14,9 @@ export type QualityFlag =
   /** «Training, then income», age ranges, «no investment»: recruiting into a scheme. */
   | 'mlm'
   /** Outstaffing: the contractor is hired by an intermediary, not by the client. */
-  | 'outstaff';
+  | 'outstaff'
+  /** A paid evaluation visit («тайный покупатель», mystery shopper): a task, not work. */
+  | 'mystery_shopper';
 
 /** Points a flag takes from the ranked feed score; the rating fades by 4 points a day. */
 export const QUALITY_PENALTY: Record<QualityFlag, number> = {
@@ -22,6 +24,7 @@ export const QUALITY_PENALTY: Record<QualityFlag, number> = {
   mlm: 40,
   digest: 20,
   outstaff: 10,
+  mystery_shopper: 30,
 };
 
 /** Source kinds whose posts are free text with no type of their own: a channel says nothing about job or gig. */
@@ -99,6 +102,8 @@ const MLM: RegExp[] = [
 ];
 
 const OUTSTAFF = /аутстафф?|outstaff/iu;
+/** A paid evaluation visit: a task on a job board, not employment. */
+const MYSTERY_SHOPPER = /тайн\S*\s+покупат|тайн\S*\s+клиент|mystery[\s-]?shopper|тайн\S*\s+звонк\S*/iu;
 
 /** Channels that post vacancies and only vacancies: a post there is a job unless it says it is a task. */
 const JOB_CHANNELS = new Set([
@@ -193,6 +198,7 @@ export function assessQuality(lead: QualityInput, source: QualitySource): Qualit
   if (!flags.includes('channel_ad') && roundup) flags.push('digest');
   if (distinctMatches(head, MLM) > 0) flags.push('mlm');
   if (OUTSTAFF.test(head)) flags.push('outstaff');
+  if (MYSTERY_SHOPPER.test(text) && lead.type === 'gig') flags.push('mystery_shopper');
 
   return { type, flags, penalty: flags.reduce((sum, flag) => sum + QUALITY_PENALTY[flag], 0) };
 }

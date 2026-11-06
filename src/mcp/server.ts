@@ -172,6 +172,7 @@ function leadCompact(lead: Lead): Record<string, unknown> {
     flags: qualityFlagsOf(lead).length ? qualityFlagsOf(lead) : undefined,
     url: lead.canonicalUrl || lead.url,
     published_at: lead.publishedAt || lead.createdAt,
+    published_at_estimated: (lead.metadata as Record<string, unknown> | undefined)?.publishedAtEstimated === true || undefined,
   };
 }
 
@@ -200,6 +201,7 @@ function leadSummary(lead: Lead): Record<string, unknown> {
     flags: qualityFlagsOf(lead).length ? qualityFlagsOf(lead) : undefined,
     url: lead.canonicalUrl || lead.url,
     published_at: lead.publishedAt || lead.createdAt,
+    published_at_estimated: (lead.metadata as Record<string, unknown> | undefined)?.publishedAtEstimated === true || undefined,
   };
 }
 
@@ -275,7 +277,10 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend): Pr
         skill: skills.length === 1 ? skills[0] : undefined,
         minBudgetUsd: Number.isFinite(minRub) && minRub > 0 ? rubToUsd(minRub) : undefined,
         sort,
-        createdAfter: since ?? (sort === 'new' ? undefined : new Date(Date.now() - 7 * 86_400_000).toISOString()),
+        // `since` is about when the post was published, not when a node first saw it: boards
+        // re-listed today (Greenhouse, Ashby) keep their real date and must not pass as new.
+        publishedAfter: since,
+        createdAfter: (since || sort === 'new') ? undefined : new Date(Date.now() - 7 * 86_400_000).toISOString(),
         offset: filteredHere ? 0 : offset,
         limit: filteredHere ? 500 : limit + 1,
       };
