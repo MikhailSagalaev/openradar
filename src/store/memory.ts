@@ -25,7 +25,7 @@ import type {
   UserSourceInput,
   UserSourceRecord,
 } from '../core/store.ts';
-import type { LeadFactsFill, LeadMoney, LeadSighting, ResearchDailyRow, SourceActivity } from '../core/store.ts';
+import type { EmployerRow, EmployerSummary, LeadFactsFill, LeadMoney, LeadSighting, ResearchDailyRow, SourceActivity } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
 import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
 import { computeSalaryMedians } from '../core/salary-sanity.ts';
@@ -264,6 +264,57 @@ export class MemoryStore implements Store {
       .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
       .slice(0, limit)
       .map((l) => ({ id: l.id, title: l.title, titleKey: l.titleKey }));
+  }
+
+  private openVacancies(): Lead[] {
+    return [...this.leads.values()].filter((l) => l.companyKey && l.type === 'job' && (l.state ?? 'active') === 'active' && l.status !== 'rejected');
+  }
+
+  async listEmployers(options: { limit: number; minPosts: number; query?: string }): Promise<EmployerSummary[]> {
+    const groups = new Map<string, Lead[]>();
+    for (const lead of this.openVacancies()) groups.set(lead.companyKey!, [...(groups.get(lead.companyKey!) ?? []), lead]);
+    const wanted = options.query?.toLowerCase();
+    return [...groups.entries()]
+      .filter(([, leads]) => leads.length >= options.minPosts && (!wanted || leads.some((l) => l.company?.toLowerCase().includes(wanted))))
+      .map(([key, leads]) => ({
+        key,
+        name: leads[0]!.company ?? key,
+        active: leads.length,
+        lastAt: leads.map((l) => l.createdAt).sort().at(-1)!,
+      }))
+      .sort((a, b) => b.active - a.active || a.key.localeCompare(b.key))
+      .slice(0, options.limit);
+  }
+
+  async listEmployerLeads(key: string, limit: number): Promise<Lead[]> {
+    return this.openVacancies()
+      .filter((l) => l.companyKey === key)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit)
+      .map((l) => ({ ...l }));
+  }
+
+  async countEmployerLeads(key: string): Promise<number> {
+    return this.openVacancies().filter((l) => l.companyKey === key).length;
+  }
+
+  async listLeadsForEmployers(afterId: string | null, limit: number): Promise<EmployerRow[]> {
+    return [...this.leads.values()]
+      .filter((l) => afterId === null || l.id > afterId)
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .slice(0, limit)
+      .map((l) => ({
+        id: l.id, type: l.type ?? 'gig', author: l.author, text: l.text,
+        sourceKind: this.sources.get(l.sourceId)?.kind, company: l.company, companyKey: l.companyKey,
+      }));
+  }
+
+  async setLeadEmployer(id: string, company: string | undefined, companyKey: string | undefined): Promise<void> {
+    const lead = this.leads.get(id);
+    if (lead) {
+      lead.company = company;
+      lead.companyKey = companyKey;
+    }
   }
 
   async updateLeadTitleKey(id: string, titleKey: string): Promise<void> {

@@ -205,6 +205,9 @@ export interface Lead extends RawLead {
   /** MinHash sketch of the text (base64url), used for near-duplicate clustering. */
   minhash_sketch?: string;
   state?: LeadState;
+  /** The employer of a vacancy: the name to show and the form employer pages group by. */
+  company?: string;
+  companyKey?: string;
   /** Hub: when the lead was first confirmed (another observer or useful signals); sticky. */
   confirmedAt?: string;
 }

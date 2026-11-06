@@ -9,6 +9,7 @@ import type { Lead, LeadStatus, SourceConfig, SourceKind, SourceRecord } from '.
 import { pollAll, pollSource, type PollDeps, type PollSummary } from '../pipeline/poll.ts';
 import { retitleLeads } from '../pipeline/retitle.ts';
 import { rekeyTitles } from '../pipeline/rekey.ts';
+import { fillEmployers } from '../pipeline/reemployers.ts';
 import { rescoreLeads } from '../pipeline/rescore.ts';
 import { auditSourceRobots, robotsMarkdown } from '../pipeline/robots-audit.ts';
 import { PollRunner } from '../pipeline/runner.ts';
@@ -233,6 +234,16 @@ function buildProgram(): Command {
       await withRuntime(async (runtime) => {
         const summary = await retitleLeads(runtime.store, { limit: Number(options.limit) || 5000 });
         console.log(`Проверено ${summary.checked}, переименовано ${summary.retitled}.`);
+      });
+    });
+
+  program
+    .command('reemployers')
+    .description('Fill the employer of every stored vacancy with the current rule')
+    .action(async () => {
+      await withRuntime(async (runtime) => {
+        const summary = await fillEmployers(runtime.store);
+        console.log(`Проверено ${summary.checked}, обновлено ${summary.updated}.`);
       });
     });
 

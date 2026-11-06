@@ -45,6 +45,33 @@ const COMPANY_IN_TEXT = [
   /^(?:Компания|Company):\s*([^\n]{2,80})/mu,
 ];
 
+/** Sources whose author is a person or a participant, not the employer. */
+const AUTHOR_IS_A_PERSON = new Set(['telegram', 'webhook', 'imap']);
+
+/**
+ * The employer of a vacancy, to show and to group by. Only vacancies: the customer of an
+ * order is a private person, and openradar keeps no client names.
+ */
+export function employerOf(
+  lead: { type?: string; author?: string | null; text?: string | null },
+  sourceKind?: string,
+): { key: string; name: string } | undefined {
+  if (lead.type !== 'job') return undefined;
+  const fromText = (): string | undefined => {
+    for (const re of COMPANY_IN_TEXT) {
+      const name = lead.text ? re.exec(lead.text)?.[1] : undefined;
+      if (name) return name;
+    }
+    return undefined;
+  };
+  const author = lead.author?.trim();
+  const named = author && !AUTHOR_IS_A_PERSON.has(sourceKind ?? '') ? author : fromText();
+  const name = named?.trim().slice(0, 80);
+  if (!name || isOutletName(name)) return undefined;
+  const key = normalizeCompany(name);
+  return key ? { key, name } : undefined;
+}
+
 /** The company key of a lead: from its address on boards that name the company, else its author or text. */
 export function companyKeyOf(lead: { url?: string; author?: string; text?: string }): string | undefined {
   if (lead.url) {
