@@ -9,7 +9,7 @@ import { RUB_PER } from '../core/fx.ts';
 import { isGigBoardUrl, isJobBoardUrl } from '../core/prepare.ts';
 import { qualityFlagsOf, offersNoPay } from '../core/quality.ts';
 import { normalizeMoneyText } from '../core/salary.ts';
-import { extractTechSkills, normalizeWhitespace } from '../core/text.ts';
+import { extractSkills, normalizeWhitespace } from '../core/text.ts';
 import type { Lead, LeadType } from '../core/types.ts';
 import type { PageFacts, PageSalary } from './facts.ts';
 import type { ModelFacts, StoredModelFacts } from './model.ts';
@@ -464,7 +464,7 @@ export function deriveRecord(lead: Lead, options: DeriveOptions = {}): ResearchR
   // Boards that publish only vacancies, whatever type an older post was stored with.
   const type = isJobBoardUrl(lead.url) ? 'job' : isGigBoardUrl(lead.url) ? 'gig' : (lead.type ?? 'gig');
   const head = lead.text.slice(0, 3000);
-  const skills = Array.from(new Set([...(lead.skills ?? []), ...(facts?.skills ?? []), ...extractTechSkills(`${lead.title}\n${head}`, 12), ...(model?.skills ?? [])]));
+  const skills = Array.from(new Set([...(lead.skills ?? []), ...(facts?.skills ?? []), ...extractSkills(lead.title, head, 12), ...(model?.skills ?? [])]));
   // Rules and page markup first; the model fills what they left open.
   // A vague vacancy title («Специалист») gets help from the opening of the text, past the feed's own header.
   const opening = head.replace(/^Вакансия компании:[^\n]*\n?|^Создана:[^\n]*\n?|^Регион:[^\n]*\n?/gmu, '').slice(0, 250);

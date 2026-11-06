@@ -779,6 +779,11 @@ export class PostgresStore implements Store {
       conditions.push(`created_at >= $${idx++}::timestamptz`);
       params.push(options.createdAfter);
     }
+    if (options.publishedAfter) {
+      // Same expression as idx_leads_published (migration 020).
+      conditions.push(`COALESCE(published_at, created_at) >= $${idx++}::timestamptz`);
+      params.push(options.publishedAfter);
+    }
     if (options.query && options.query.trim().length > 0) {
       const trimmed = options.query.trim();
       const normQuery = normalizeTechTokens(trimmed);

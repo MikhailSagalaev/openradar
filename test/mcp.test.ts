@@ -113,7 +113,9 @@ describe('MCP server', () => {
     expect(first.next_offset).toBe(10);
     expect(seen[0]).toMatchObject({ language: 'ru', remote: true, skill: 'Python', limit: 11, offset: 0 });
     expect(seen[0]!.minBudgetUsd).toBeGreaterThan(0);
-    expect(Date.now() - Date.parse(seen[0]!.createdAfter!)).toBeLessThan(24 * 3_600_000 + 60_000);
+    // `since` means "posted since", not "collected since" (issue #71).
+    expect(Date.now() - Date.parse(seen[0]!.publishedAfter!)).toBeLessThan(24 * 3_600_000 + 60_000);
+    expect(seen[0]!.createdAfter).toBeUndefined();
     expect(sinceInstant('7d', new Date('2026-10-29T00:00:00Z'))).toBe('2026-10-22T00:00:00.000Z');
     expect(sinceInstant('nonsense')).toBeUndefined();
   });

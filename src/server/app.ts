@@ -5,7 +5,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { escapeHtml, extractTechSkills, stripInvisible } from '../core/text.ts';
+import { escapeHtml, extractSkills, stripInvisible } from '../core/text.ts';
 import { renderRssFeed } from './feed.ts';
 import type { ParticipantRecord, UserRecord } from '../core/store.ts';
 import type { Lead, LeadStatus, LeadType, RawLead, SourceConfig, SourceKind, SourceRecord, Viewer, VoteSignal } from '../core/types.ts';
@@ -1151,7 +1151,7 @@ export function createApp(runtime: Runtime): Hono {
     });
     const counts = new Map<string, number>();
     for (const lead of recent) {
-      const skills = lead.skills?.length ? lead.skills : extractTechSkills(`${lead.title}\n${lead.text}`);
+      const skills = lead.skills?.length ? lead.skills : extractSkills(lead.title, lead.text);
       for (const skill of skills) {
         counts.set(skill, (counts.get(skill) ?? 0) + 1);
       }

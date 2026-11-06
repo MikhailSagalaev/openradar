@@ -57,6 +57,12 @@ export interface ListLeadsOptions {
   skillsAny?: string[];
   /** Only leads first seen at or after this instant. */
   createdAfter?: string;
+  /**
+   * Only leads published at or after this instant (the source's own date, falling back to
+   * the first-seen time when the source gave none). A board re-listed into the base today
+   * keeps its old publish date and does not pass a "last 7 days" filter.
+   */
+  publishedAfter?: string;
   sort?: LeadSort;
   /** Only leads whose title is in Russian (Cyrillic) or in English (no Cyrillic). */
   language?: 'ru' | 'en';
