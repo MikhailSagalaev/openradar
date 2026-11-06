@@ -207,6 +207,7 @@ export const KIND_ACCESS: Record<string, AccessKind> = {
   hn: 'official',
   ats: 'official',
   sitemap: 'public',
+  json: 'public',
 };
 
 /** A webhook counts as a direct channel only when the operator trusts it this much. */
@@ -3540,6 +3541,7 @@ export function renderSourcesPage(data: SourcesPageData): string {
 <div class="page-head">
   <div>
     <h1>${escapeHtml(t.navSources)}</h1>
+    <p class="muted small"><a href="/sources/quality">${lang === 'ru' ? 'Качество источников' : 'Source quality'}</a></p>
     <p class="muted small">${subtitle}</p>
   </div>
   <div class="actions"><a class="btn ghost" href="/sources/catalog">Каталог площадок</a><a class="btn" href="/sources/new">${escapeHtml(t.addSource)}</a></div>

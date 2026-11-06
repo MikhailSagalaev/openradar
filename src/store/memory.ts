@@ -25,7 +25,7 @@ import type {
   UserSourceInput,
   UserSourceRecord,
 } from '../core/store.ts';
-import type { EmployerRow, EmployerSummary, LeadFactsFill, LeadMoney, LeadSighting, ResearchDailyRow, SourceActivity } from '../core/store.ts';
+import type { EmployerRow, EmployerSummary, SourceQualityInput, LeadFactsFill, LeadMoney, LeadSighting, ResearchDailyRow, SourceActivity } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
 import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
 import { computeSalaryMedians } from '../core/salary-sanity.ts';
@@ -296,6 +296,26 @@ export class MemoryStore implements Store {
 
   async countEmployerLeads(key: string): Promise<number> {
     return this.openVacancies().filter((l) => l.companyKey === key).length;
+  }
+
+  async getSourceQuality(days: number): Promise<Map<string, SourceQualityInput>> {
+    const since = new Date(Date.now() - days * 86_400_000).toISOString();
+    const result = new Map<string, SourceQualityInput>();
+    for (const source of this.sources.values()) {
+      const leads = [...this.leads.values()].filter((l) => l.sourceId === source.id && l.createdAt >= since);
+      result.set(source.id, {
+        runs: 0, failedRuns: 0, rejected: 0, inserted: leads.length,
+        closed: leads.filter((l) => l.state === 'closed').length,
+        jobs: leads.filter((l) => l.type === 'job').length,
+        withEmployer: leads.filter((l) => l.type === 'job' && l.companyKey).length,
+        withPay: leads.filter((l) => l.budget !== undefined || l.rawSalary).length,
+        fullText: leads.filter((l) => l.text.length >= 300).length,
+        useful: leads.reduce((sum, l) => sum + (l.votes_up ?? 0), 0),
+        junk: leads.reduce((sum, l) => sum + (l.votes_down ?? 0), 0),
+        scam: leads.reduce((sum, l) => sum + (l.votes_scam ?? 0), 0),
+      });
+    }
+    return result;
   }
 
   async employerName(key: string): Promise<string | null> {

@@ -1403,7 +1403,7 @@ describe('http server', () => {
   describe('public view for readers who are not the operator', () => {
     async function seed(runtime: Runtime) {
       const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed' });
-      const base = { sourceId: source.id, reasons: [], score: 70, createdAt: '2026-10-23T14:00:00Z' };
+      const base = { sourceId: source.id, reasons: [], score: 70, createdAt: new Date(Date.now() - 2 * 86_400_000).toISOString() };
       await runtime.store.insertLead({
         ...base, id: 'lead-ok', title: 'Python bot', text: 'Telegram bot in Python', fingerprint: 'fp-ok', titleKey: 'python-bot', status: 'delivered',
       });
@@ -1490,7 +1490,7 @@ describe('http server', () => {
       status: 'new',
       score: 85,
       reasons: [],
-      createdAt: '2026-10-23T14:00:00Z',
+      createdAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
     });
     const app = createApp(runtime);
 
@@ -1518,7 +1518,7 @@ describe('http server', () => {
       status: 'new',
       score: 90,
       reasons: [],
-      createdAt: '2026-10-23T14:30:00Z',
+      createdAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
     });
     const app = createApp(runtime);
 

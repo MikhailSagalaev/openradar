@@ -1,6 +1,7 @@
 import type { SourceAdapter, SourceKind } from '../core/types.ts';
 import { atsSource } from './ats.ts';
 import { sitemapSource } from './sitemap.ts';
+import { jsonBoardSource } from './json-board.ts';
 import { hhSource } from './hh.ts';
 import { adzunaSource } from './adzuna.ts';
 import { hnSource } from './hn.ts';
@@ -36,6 +37,7 @@ export class SourceRegistry {
 export function createSourceRegistry(): SourceRegistry {
   return new SourceRegistry()
     .register(rssSource)
+    .register(jsonBoardSource)
     .register(telegramSource)
     .register(telegramAccountSource)
     .register(kworkSource)
