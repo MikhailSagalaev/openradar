@@ -1,4 +1,5 @@
 import type { SourceConfig, SourceKind } from '../core/types.ts';
+import { CAREER_SITE_PRESETS } from './career-sites.ts';
 
 export interface SourcePreset {
   id: string;
@@ -325,6 +326,9 @@ export const SOURCE_PRESETS: SourcePreset[] = [
       perPoll: 5,
       maxAgeDays: 30,
       companies: [
+        'sportygroup=Sporty Group',
+        'fivetran=Fivetran',
+        'pubnub=PubNub',
         'databricks',
         'stripe',
         'anthropic',
@@ -417,6 +421,8 @@ export const SOURCE_PRESETS: SourcePreset[] = [
       perPoll: 5,
       maxAgeDays: 30,
       companies: [
+        'harvey=Harvey',
+        'trm-labs=TRM Labs',
         'openai=OpenAI',
         'harvey=Harvey',
         'snowflake=Snowflake',
@@ -512,7 +518,8 @@ export const SOURCE_PRESETS: SourcePreset[] = [
     title: 'RT-Solar — Вакансии',
     description: 'Вакансии ИБ-компании RT-Solar из карты сайта team.rt-solar.ru',
     config: {
-      url: 'https://team.rt-solar.ru/sitemap.xml',
+      company: 'Солар',
+      listUrl: 'https://team.rt-solar.ru/vacancies/',
       pattern: String.raw`/vacancies/(\d+)`,
       perPoll: 10,
       delayMs: 1500,
@@ -525,8 +532,9 @@ export const SOURCE_PRESETS: SourcePreset[] = [
     title: 'Авито — Карьерные вакансии',
     description: 'Вакансии Авито из карты сайта career.avito.com: страницы вакансий по направлениям',
     config: {
-      url: 'https://career.avito.com/sitemap-files.xml',
-      pattern: String.raw`/vacancies/([a-z0-9-]+)/(\d+)`,
+      company: 'Авито',
+      url: 'https://career.avito.com/sitemap-iblock-2.xml',
+      pattern: String.raw`/vacancies/[a-z0-9_-]+/(\d+)`,
       perPoll: 10,
       delayMs: 1500,
       maxAgeDays: 30,
@@ -538,46 +546,8 @@ export const SOURCE_PRESETS: SourcePreset[] = [
     title: 'Честный Знак (CRPT) — Вакансии',
     description: 'Вакансии ЦРПТ («Честный знак») из карты сайта career.crpt.ru',
     config: {
+      company: 'Честный Знак',
       url: 'https://career.crpt.ru/sitemap.xml',
-      pattern: String.raw`/vacancies/([a-z0-9-]+)`,
-      perPoll: 10,
-      delayMs: 1500,
-      maxAgeDays: 30,
-    },
-  },
-  {
-    id: 'andersenlab',
-    kind: 'sitemap',
-    title: 'Andersen — Вакансии',
-    description: 'Вакансии Andersen из карты сайта people-andersenlab.com',
-    config: {
-      url: 'https://people-andersenlab.com/sitemap.xml',
-      pattern: String.raw`/vacancies/([a-z0-9-]+)`,
-      perPoll: 10,
-      delayMs: 1500,
-      maxAgeDays: 30,
-    },
-  },
-  {
-    id: 'wise-jobs',
-    kind: 'sitemap',
-    title: 'Wise — Вакансии',
-    description: 'Вакансии Wise из карты сайта wise.jobs',
-    config: {
-      url: 'https://wise.jobs/sitemap.xml',
-      pattern: String.raw`/job/([a-z0-9-]+-jid-\d+)`,
-      perPoll: 10,
-      delayMs: 1500,
-      maxAgeDays: 30,
-    },
-  },
-  {
-    id: 'magnit-tech',
-    kind: 'sitemap',
-    title: 'Магнит Tech — Вакансии',
-    description: 'Технологические вакансии Магнита из карты сайта magnit.tech',
-    config: {
-      url: 'https://magnit.tech/sitemap.xml',
       pattern: String.raw`/vacancies/([a-z0-9-]+)`,
       perPoll: 10,
       delayMs: 1500,
@@ -590,8 +560,9 @@ export const SOURCE_PRESETS: SourcePreset[] = [
     title: 'КРОК — Вакансии',
     description: 'Вакансии КРОК из карты сайта careers.croc.ru',
     config: {
-      url: 'https://careers.croc.ru/sitemap.xml',
-      pattern: String.raw`/vacancies/([a-z0-9-]+)`,
+      company: 'КРОК',
+      listUrl: 'https://careers.croc.ru/vacancies/',
+      pattern: String.raw`/vacancies/([a-z0-9-]+)/?$`,
       perPoll: 10,
       delayMs: 1500,
       maxAgeDays: 30,
@@ -603,6 +574,7 @@ export const SOURCE_PRESETS: SourcePreset[] = [
     title: 'Nekki — Вакансии',
     description: 'Вакансии Nekki из карты сайта nekki.com',
     config: {
+      company: 'Nekki',
       url: 'https://nekki.com/sitemap.xml',
       pattern: String.raw`/vacancy/([a-z0-9-]+)`,
       perPoll: 10,
@@ -616,6 +588,7 @@ export const SOURCE_PRESETS: SourcePreset[] = [
     title: 'Сбер2Б — Вакансии',
     description: 'Вакансии Сбер2Б из карты сайта sber2b.huntflow.io',
     config: {
+      company: 'Сбер2Б',
       url: 'https://sber2b.huntflow.io/sitemap.xml',
       pattern: String.raw`/vacancy/([a-z0-9-]+)`,
       perPoll: 10,
@@ -629,6 +602,7 @@ export const SOURCE_PRESETS: SourcePreset[] = [
     title: 'Jahon School — Вакансии',
     description: 'Вакансии Jahon School из карты сайта huntflow-борда',
     config: {
+      company: 'Jahon School',
       url: 'https://jahonschoolhrdepartment.huntflow.io/sitemap.xml',
       pattern: String.raw`/vacancy/([a-z0-9-]+)`,
       perPoll: 10,
@@ -645,7 +619,41 @@ export const SOURCE_PRESETS: SourcePreset[] = [
       provider: 'recruitee',
       perPoll: 3,
       maxAgeDays: 30,
-      companies: ['tether=Tether', 'bunq=bunq', 'centreon=Centreon'],
+      companies: ['tether=Tether', 'bunq=bunq', 'centreon=Centreon', 'mayflower=Mayflower', 'infomedijidoo=Infomedia'],
+    },
+  },
+  {
+    id: 'ats-smartrecruiters',
+    kind: 'ats',
+    title: 'Карьерные страницы компаний — SmartRecruiters',
+    description: 'Публичный API системы найма SmartRecruiters: вакансии компаний из списка.',
+    config: {
+      provider: 'smartrecruiters',
+      perPoll: 3,
+      maxAgeDays: 30,
+      companies: ['PeopleCanFly=People Can Fly'],
+    },
+  },
+  {
+    id: 'ats-pinpoint',
+    kind: 'ats',
+    title: 'Карьерные страницы компаний — Pinpoint',
+    description: 'Публичная лента вакансий системы найма Pinpoint: компании из списка.',
+    config: {
+      provider: 'pinpoint',
+      perPoll: 3,
+      companies: ['indrive=inDrive', 'tabby=Tabby'],
+    },
+  },
+  {
+    id: 'ats-bamboohr',
+    kind: 'ats',
+    title: 'Карьерные страницы компаний — BambooHR',
+    description: 'Публичный список вакансий BambooHR: компании из списка, без описаний.',
+    config: {
+      provider: 'bamboohr',
+      perPoll: 3,
+      companies: ['inexgroup=INEX Group', 'torrero=Torrero', 'welltory=Welltory'],
     },
   },
   {
@@ -667,7 +675,8 @@ export const SOURCE_PRESETS: SourcePreset[] = [
     title: 'Фоксфорд — Вакансии',
     description: 'Вакансии онлайн-школы «Фоксфорд» из карты сайта jobs.foxford.ru: страницы без разметки JobPosting, зарплата — текстом на странице',
     config: {
-      url: 'https://jobs.foxford.ru/sitemap-0.xml',
+      company: 'Фоксфорд',
+      listUrl: 'https://jobs.foxford.ru/vacancies',
       pattern: String.raw`/vacancies/([a-z0-9-]+)`,
       perPoll: 10,
       delayMs: 1500,
@@ -883,4 +892,5 @@ export const SOURCE_PRESETS: SourcePreset[] = [
       channel: 'vacancysmm',
     },
   },
+  ...CAREER_SITE_PRESETS,
 ];

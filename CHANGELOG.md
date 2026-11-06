@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.52.0
+
+- Sources: 41 company career sites and niche boards join: Glovo, 2GIS, YADRO, Alfa-Bank, MTS, VK, IBS, CDEK, Kaspersky, Aviasales, Luxoft, Azur Games, CrowdStrike, Just Join IT and others. Each was checked against robots.txt and read through the real adapter first.
+- Pinpoint and BambooHR boards are read through their public lists: inDrive, Tabby and three more. Sporty Group, Fivetran, PubNub, Harvey, TRM Labs, Mayflower and People Can Fly join the ATS lists.
+- A career site can be read from its vacancy page when it has no usable sitemap (`listUrl`). A sitemap that keeps closed vacancies can be cut to its newest pages (`maxPages`).
+- Career-site posts now name their employer, closed vacancies are skipped, and a one-line JobPosting takes the text from the page.
+- Foxford reads its open vacancies only: its sitemap was mostly an archive. Avito, CROC and Solar read pages that exist. Andersen (robots.txt), Wise (refuses the hub) and Magnit Tech (nothing in the HTML) leave.
+
 ## 0.51.6
 
 - Sitemap sources read plain pages: most company career sites carry no JobPosting markup, so the adapter falls back to the h1 (else the title) with the meta description and the body text; dead and thin pages are rejected. The VK and T1 career presets leave — their pages are pure SPAs with nothing server-rendered.

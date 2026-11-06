@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { leadFromPage } from '../src/sources/sitemap.ts';
+import { atsSource } from '../src/sources/ats.ts';
+import { leadFromPage, pageLinks } from '../src/sources/sitemap.ts';
 import { makeSource } from './helpers.ts';
 
 const source = makeSource({ kind: 'sitemap', title: 'Test — Вакансии' });
@@ -34,5 +35,59 @@ describe('sitemap lead extraction', () => {
     expect(leadFromPage(source, 'https://x.test/v/3', '3', dead)).toBeUndefined();
     const thin = '<html><head><title>Job</title></head><body><h1>Job</h1><p>Коротко.</p></body></html>';
     expect(leadFromPage(source, 'https://x.test/v/4', '4', thin)).toBeUndefined();
+  });
+});
+
+describe('career pages', () => {
+  const owned = makeSource({ kind: 'sitemap', title: 'Co — Вакансии', config: { company: 'Co' } });
+  const long = 'Обязанности: сопровождать сервисы, писать код, разбирать инциденты и помогать коллегам. '.repeat(4);
+
+  it('names the owner of a career site', () => {
+    const lead = leadFromPage(owned, 'https://x.test/v/3', '3', `<html><body><h1>Инженер</h1><p>${long}</p></body></html>`);
+    expect(lead?.author).toBe('Co');
+  });
+
+  it('skips a closed vacancy but not a hidden notice', () => {
+    const closed = `<html><body><h1>Инженер</h1><h4>Вакансия закрыта</h4><p>${long}</p></body></html>`;
+    expect(leadFromPage(owned, 'https://x.test/v/4', '4', closed)).toBeUndefined();
+    const hidden = `<html><body><h1>Инженер</h1><dialog><p>Вакансия в архиве</p></dialog><div class="note w-condition-invisible"><div>This position has been closed.</div></div><p>${long}</p></body></html>`;
+    expect(leadFromPage(owned, 'https://x.test/v/5', '5', hidden)?.title).toBe('Инженер');
+  });
+
+  it('takes the page title when the heading names no vacancy', () => {
+    const html = `<html><head><title data-rh="true">Менеджер в Саратов</title></head><body><h1>Детальная страница вакансии</h1><p>${long}</p></body></html>`;
+    expect(leadFromPage(owned, 'https://x.test/v/6', '6', html)?.title).toBe('Менеджер в Саратов');
+    const list = `<html><head><title>Вакансии</title></head><body><p>${long}</p></body></html>`;
+    expect(leadFromPage(owned, 'https://x.test/v/7', '7', list)).toBeUndefined();
+  });
+
+  it('adds the page text to a one-line JobPosting', () => {
+    const html = `<html><body><script type="application/ld+json">{"@type":"JobPosting","title":"Инженер","description":"Ищем инженера"}</script><p>${long}</p></body></html>`;
+    expect(leadFromPage(owned, 'https://x.test/v/8', '8', html)?.text).toContain('разбирать инциденты');
+  });
+
+  it('reads vacancy links from a career page', () => {
+    const links = pageLinks('<a href="/v/1 ">a</a><a href="https://x.test/v/2">b</a><a href="/v/1">c</a>', 'https://x.test/jobs/');
+    expect(links).toEqual(['https://x.test/v/1', 'https://x.test/v/2']);
+  });
+});
+
+describe('ats boards without a description API', () => {
+  const ctx = (body: unknown) => ({
+    fetchImpl: (async () => new Response(JSON.stringify(body), { status: 200 })) as typeof fetch,
+    userAgent: 'test', timeoutMs: 1000, now: () => new Date('2026-11-06'),
+    logger: { info() {}, warn() {}, error() {}, debug() {} },
+  }) as never;
+
+  it('reads a Pinpoint board', async () => {
+    const source = makeSource({ kind: 'ats', title: 'P', config: { provider: 'pinpoint', companies: ['acme=Acme'] } });
+    const leads = await atsSource.poll!(source, ctx({ data: [{ id: '1', title: 'Analyst', url: 'https://acme.pinpointhq.com/en/postings/1', description: '<p>Work</p>', location: { city: 'Limassol', name: 'Cyprus' } }] }));
+    expect(leads[0]).toMatchObject({ title: 'Analyst', author: 'Acme', city: 'Limassol', externalId: 'pinpoint:acme:1' });
+  });
+
+  it('reads a BambooHR board', async () => {
+    const source = makeSource({ kind: 'ats', title: 'B', config: { provider: 'bamboohr', companies: ['acme=Acme'] } });
+    const leads = await atsSource.poll!(source, ctx({ result: [{ id: '7', jobOpeningName: 'Manager', departmentLabel: 'Ops', location: { city: 'Paphos' } }] }));
+    expect(leads[0]).toMatchObject({ title: 'Manager', url: 'https://acme.bamboohr.com/careers/7', city: 'Paphos' });
   });
 });

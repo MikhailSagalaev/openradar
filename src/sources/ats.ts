@@ -8,11 +8,11 @@ import { fetchText } from './http.ts';
  * to read, without a key. One source holds a list of companies of one system; each poll
  * reads a few of them in turn.
  */
-export type AtsProvider = 'greenhouse' | 'lever' | 'ashby' | 'workable' | 'recruitee' | 'smartrecruiters';
+export type AtsProvider = 'greenhouse' | 'lever' | 'ashby' | 'workable' | 'recruitee' | 'smartrecruiters' | 'pinpoint' | 'bamboohr';
 
-export const ATS_PROVIDERS: AtsProvider[] = ['greenhouse', 'lever', 'ashby', 'workable', 'recruitee', 'smartrecruiters'];
+export const ATS_PROVIDERS: AtsProvider[] = ['greenhouse', 'lever', 'ashby', 'workable', 'recruitee', 'smartrecruiters', 'pinpoint', 'bamboohr'];
 export const ATS_LABELS: Record<AtsProvider, string> = {
-  greenhouse: 'Greenhouse', lever: 'Lever', ashby: 'Ashby', workable: 'Workable', recruitee: 'Recruitee', smartrecruiters: 'SmartRecruiters',
+  greenhouse: 'Greenhouse', lever: 'Lever', ashby: 'Ashby', workable: 'Workable', recruitee: 'Recruitee', smartrecruiters: 'SmartRecruiters', pinpoint: 'Pinpoint', bamboohr: 'BambooHR',
 };
 const PROVIDERS = ATS_PROVIDERS;
 const MAX_TEXT = 8000;
@@ -308,6 +308,85 @@ function fromSmartRecruiters(source: SourceRecord, slug: string, name: string | 
   });
 }
 
+interface PinpointPosting {
+  id?: string;
+  title?: string;
+  url?: string;
+  description?: string;
+  key_responsibilities?: string;
+  skills_knowledge_expertise?: string;
+  benefits?: string;
+  employment_type_text?: string;
+  workplace_type?: string;
+  compensation_visible?: boolean;
+  compensation_minimum?: number | null;
+  compensation_maximum?: number | null;
+  compensation_currency?: string | null;
+  compensation_frequency?: string | null;
+  location?: { city?: string | null; name?: string | null };
+}
+
+function fromPinpoint(source: SourceRecord, slug: string, name: string | undefined, json: string): RawLead[] {
+  const postings = (JSON.parse(json) as { data?: PinpointPosting[] }).data ?? [];
+  return postings.filter((p) => p.id && p.title?.trim() && p.url).map((p) => {
+    const title = p.title!.trim();
+    const company = name ?? slug;
+    const location = [p.location?.city, p.location?.name].filter(Boolean).join(', ');
+    const remote = p.workplace_type === 'remote' || REMOTE.test(location);
+    const body = [p.description, p.key_responsibilities, p.skills_knowledge_expertise, p.benefits].map((part) => stripHtml(part ?? '').trim()).filter(Boolean).join('\n\n');
+    const per = p.compensation_frequency === 'year' ? 'per year' : p.compensation_frequency === 'month' ? 'per month' : undefined;
+    const pay = p.compensation_visible && (p.compensation_minimum || p.compensation_maximum) && p.compensation_currency && per;
+    return {
+      sourceId: source.id,
+      type: 'job',
+      externalId: `pinpoint:${slug}:${p.id}`,
+      url: p.url!,
+      title,
+      text: text(title, [`Company: ${company}`, location && `Location: ${location}`, p.employment_type_text && `Type: ${p.employment_type_text}`], body),
+      author: company,
+      city: remote ? 'Онлайн' : p.location?.city?.trim() || undefined,
+      isRemote: remote,
+      rawSalary: pay ? `${p.compensation_minimum ?? ''}–${p.compensation_maximum ?? ''} ${p.compensation_currency} ${per}` : undefined,
+      raw: { ats: 'pinpoint', board: slug },
+    } satisfies RawLead;
+  });
+}
+
+interface BambooOpening {
+  id?: string;
+  jobOpeningName?: string;
+  departmentLabel?: string | null;
+  employmentStatusLabel?: string | null;
+  isRemote?: boolean | null;
+  location?: { city?: string | null; state?: string | null };
+}
+
+/** The listing has no description: the title, department and place are what the post says. */
+function fromBambooHr(source: SourceRecord, slug: string, name: string | undefined, json: string): RawLead[] {
+  const openings = (JSON.parse(json) as { result?: BambooOpening[] }).result ?? [];
+  return openings.filter((o) => o.id && o.jobOpeningName?.trim()).map((o) => {
+    const title = o.jobOpeningName!.trim();
+    const company = name ?? slug;
+    const location = [o.location?.city, o.location?.state].filter(Boolean).join(', ');
+    const remote = o.isRemote === true || REMOTE.test(location);
+    return {
+      sourceId: source.id,
+      type: 'job',
+      externalId: `bamboohr:${slug}:${o.id}`,
+      url: `https://${slug}.bamboohr.com/careers/${o.id}`,
+      title,
+      text: text(title, [
+        `Company: ${company}`, location && `Location: ${location}`, o.departmentLabel ? `Department: ${o.departmentLabel}` : undefined,
+        o.employmentStatusLabel ? `Type: ${o.employmentStatusLabel}` : undefined,
+      ], ''),
+      author: company,
+      city: remote ? 'Онлайн' : o.location?.city?.trim() || undefined,
+      isRemote: remote,
+      raw: { ats: 'bamboohr', board: slug },
+    } satisfies RawLead;
+  });
+}
+
 const ENDPOINTS: Record<AtsProvider, (slug: string) => string> = {
   greenhouse: (slug) => `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(slug)}/jobs?content=true`,
   lever: (slug) => `https://api.lever.co/v0/postings/${encodeURIComponent(slug)}?mode=json`,
@@ -316,6 +395,8 @@ const ENDPOINTS: Record<AtsProvider, (slug: string) => string> = {
   recruitee: (slug) => `https://${encodeURIComponent(slug)}.recruitee.com/api/offers/`,
   // Newest first; the listing pages by 100.
   smartrecruiters: (slug) => `https://api.smartrecruiters.com/v1/companies/${encodeURIComponent(slug)}/postings?limit=100`,
+  pinpoint: (slug) => `https://${encodeURIComponent(slug)}.pinpointhq.com/postings.json`,
+  bamboohr: (slug) => `https://${encodeURIComponent(slug)}.bamboohr.com/careers/list`,
 };
 
 /**
@@ -350,6 +431,8 @@ const PARSERS: Record<AtsProvider, (source: SourceRecord, slug: string, name: st
   workable: fromWorkable,
   recruitee: fromRecruitee,
   smartrecruiters: fromSmartRecruiters,
+  pinpoint: fromPinpoint,
+  bamboohr: fromBambooHr,
 };
 
 export const atsSource: SourceAdapter = {
