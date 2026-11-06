@@ -45,6 +45,13 @@ const envSchema = z.object({
   // Answers are saved either way; figures use them only once their quality is checked.
   RADAR_EXTRACT_APPLY: booleanFromEnv(false),
   RADAR_USER_TELEGRAM: booleanFromEnv(false),
+  // A decision model answers fixed questions about each post; nothing in the feed reads it yet.
+  RADAR_DECIDE_ENABLED: booleanFromEnv(false),
+  RADAR_DECIDE_URL: z.string().url().default('https://api.subq.ai/v1/systemone'),
+  RADAR_DECIDE_MODEL: z.string().default('subq-snap-1.1'),
+  RADAR_DECIDE_PER_HOUR: z.coerce.number().int().nonnegative().default(600),
+  RADAR_DECIDE_KEY: optionalString,
+  SUBQ_API_KEY: optionalString,
   RADAR_EXTRACT_PROVIDER: z.enum(['openai', 'gigachat']).default('openai'),
   GIGACHAT_AUTH_KEY: optionalString,
   GIGACHAT_SCOPE: z.string().default('GIGACHAT_API_PERS'),

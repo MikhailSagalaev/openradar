@@ -1,3 +1,4 @@
+import { decisionsEnabled, runDecisions } from './decide.ts';
 import { webPubkey } from '../hub/web-key.ts';
 import type { Logger } from '../core/types.ts';
 import { pollAll, type PollDeps } from './poll.ts';
@@ -31,6 +32,8 @@ export class PollRunner {
   private lastMaintenanceAt = 0;
   private lastExtractionAt = 0;
   private extractionRunning = false;
+  private decisionsRunning = false;
+  private nextDecisionsAt = 0;
   private lastUserTelegramAt = 0;
   private userTelegramRunning = false;
 
@@ -98,6 +101,7 @@ export class PollRunner {
       await this.runMaintenanceIfDue();
       await this.runLivenessIfDue();
       this.runExtractionIfDue();
+      this.runDecisionsIfDue();
       this.runUserTelegramIfDue();
       // Keeps the live research report built, so no visitor waits the seconds it takes.
       const useModel = this.deps.env.RADAR_EXTRACT_APPLY;
@@ -177,6 +181,28 @@ export class PollRunner {
       })
       .finally(() => {
         this.userTelegramRunning = false;
+      });
+  }
+
+  /** A batch of decisions every ten minutes, sized to RADAR_DECIDE_PER_HOUR. */
+  private runDecisionsIfDue(): void {
+    const env = this.deps.env;
+    const perHour = env.RADAR_DECIDE_PER_HOUR ?? 0;
+    if (!decisionsEnabled(env) || this.decisionsRunning || perHour <= 0) return;
+    if (Date.now() < this.nextDecisionsAt) return;
+    this.nextDecisionsAt = Date.now() + EXTRACTION_INTERVAL_MS;
+    this.decisionsRunning = true;
+    void runDecisions({ store: this.deps.store, env, logger: this.deps.logger.child('decide'), fetchImpl: fetch }, Math.max(1, Math.round(perHour / 6)))
+      .then((summary) => {
+        if (summary.asked) this.logger.info('decisions finished', { ...summary });
+        // No credits or too many requests: an hour's pause, not a request every ten minutes.
+        if (summary.stopped) this.nextDecisionsAt = Date.now() + 60 * 60 * 1000;
+      })
+      .catch((error) => {
+        this.logger.warn('decisions failed', { error: error instanceof Error ? error.message : String(error) });
+      })
+      .finally(() => {
+        this.decisionsRunning = false;
       });
   }
 

@@ -238,6 +238,30 @@ function buildProgram(): Command {
       });
     });
 
+  const decide = program.command('decide').description('Decision model: answers about posts, kept apart from the feed');
+  decide
+    .command('run')
+    .description('Ask the model about new posts now')
+    .option('--limit <n>', 'Posts', '100')
+    .action(async (options: { limit: string }) => {
+      await withRuntime(async (runtime) => {
+        const { runDecisions, decisionsEnabled } = await import('../pipeline/decide.ts');
+        if (!decisionsEnabled(runtime.env)) fail('Set RADAR_DECIDE_ENABLED=true and a key');
+        const summary = await runDecisions({ store: runtime.store, env: runtime.env, logger: runtime.logger, fetchImpl: fetch }, Number(options.limit) || 100);
+        console.log(`Спрошено ${summary.asked}, сохранено ${summary.saved}, ошибок ${summary.failed}, токенов ${summary.tokens}${summary.stopped ? `, остановлено: HTTP ${summary.stopped}` : ''}`);
+      });
+    });
+  decide
+    .command('eval')
+    .description('Compare the answers with posts checked by hand')
+    .action(async () => {
+      await withRuntime(async (runtime) => {
+        const { scoreDecisions } = await import('../core/decisions.ts');
+        const score = scoreDecisions((await runtime.store.listLabelledDecisions?.()) ?? []);
+        console.log(JSON.stringify(score, null, 2));
+      });
+    });
+
   program
     .command('reemployers')
     .description('Fill the employer of every stored vacancy with the current rule')

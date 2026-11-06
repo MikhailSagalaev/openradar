@@ -1,3 +1,4 @@
+import type { LabelledDecision, ModelDecision } from './decisions.ts';
 import type { SourceQualityInput } from './source-quality.ts';
 import type { PageFacts } from '../research/facts.ts';
 import type { SubscriptionRecord } from './subscriptions.ts';
@@ -433,6 +434,14 @@ export interface Store extends HubStore {
   nextLeadToLabel?(): Promise<Lead | null>;
   saveLeadLabel?(id: string, verdict: string, userId?: number): Promise<void>;
   labelStats?(): Promise<Record<string, number>>;
+  /** New posts the model has not answered yet. Posts of private channels are left out. */
+  listLeadsToDecide?(limit: number): Promise<Array<{ id: string; title: string; text: string }>>;
+  saveModelDecision?(decision: ModelDecision): Promise<void>;
+  decisionStats?(): Promise<{ total: number; tokens: number; byKind: Record<string, number>; closed: number; scam: number; lastAt?: string }>;
+  /** Posts where the model and the node differ, the surest first. */
+  listDecisionDisagreements?(limit: number): Promise<Array<{ lead: Lead; decision: ModelDecision; reason: string }>>;
+  /** Decisions of posts a person checked. */
+  listLabelledDecisions?(): Promise<LabelledDecision[]>;
   /** Employers with open vacancies, the busiest first. */
   listEmployers?(options: { limit: number; minPosts: number; query?: string }): Promise<EmployerSummary[]>;
   listEmployerLeads?(key: string, limit: number): Promise<Lead[]>;

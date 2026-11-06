@@ -25,6 +25,7 @@ import type {
   UserSourceInput,
   UserSourceRecord,
 } from '../core/store.ts';
+import { disagreement, type LabelledDecision, type ModelDecision } from '../core/decisions.ts';
 import type { EmployerRow, EmployerSummary, SourceQualityInput, LeadFactsFill, LeadMoney, LeadSighting, ResearchDailyRow, SourceActivity } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
 import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
@@ -319,6 +320,44 @@ export class MemoryStore implements Store {
   }
 
   private labels = new Map<string, string>();
+  private modelDecisions = new Map<string, ModelDecision>();
+
+  async listLeadsToDecide(limit: number): Promise<Array<{ id: string; title: string; text: string }>> {
+    return [...this.leads.values()]
+      .filter((l) => !this.modelDecisions.has(l.id) && l.sourceRef?.visibility !== 'private' && this.sources.get(l.sourceId)?.config.userTelegram !== true)
+      .slice(0, limit)
+      .map((l) => ({ id: l.id, title: l.title, text: l.text }));
+  }
+
+  async saveModelDecision(decision: ModelDecision): Promise<void> {
+    this.modelDecisions.set(decision.leadId, decision);
+  }
+
+  async decisionStats(): Promise<{ total: number; tokens: number; byKind: Record<string, number>; closed: number; scam: number; lastAt?: string }> {
+    const all = [...this.modelDecisions.values()];
+    const byKind: Record<string, number> = {};
+    for (const d of all) byKind[d.kind] = (byKind[d.kind] ?? 0) + 1;
+    return {
+      total: all.length, tokens: all.reduce((sum, d) => sum + d.tokens, 0), byKind,
+      closed: all.filter((d) => d.closed >= 0.5).length, scam: all.filter((d) => d.scam >= 0.5).length,
+      lastAt: all.map((d) => d.decidedAt).sort().at(-1),
+    };
+  }
+
+  async listDecisionDisagreements(limit: number): Promise<Array<{ lead: Lead; decision: ModelDecision; reason: string }>> {
+    return [...this.modelDecisions.values()].flatMap((decision) => {
+      const lead = this.leads.get(decision.leadId);
+      const reason = lead && !this.labels.has(lead.id) ? disagreement(decision, lead) : undefined;
+      return lead && reason ? [{ lead: { ...lead }, decision, reason }] : [];
+    }).slice(0, limit);
+  }
+
+  async listLabelledDecisions(): Promise<LabelledDecision[]> {
+    return [...this.labels.entries()].flatMap(([id, verdict]) => {
+      const decision = this.modelDecisions.get(id);
+      return decision ? [{ verdict, type: this.leads.get(id)?.type, kind: decision.kind, kindConfidence: decision.kindConfidence, closed: decision.closed }] : [];
+    });
+  }
 
   async nextLeadToLabel(): Promise<Lead | null> {
     const open = [...this.leads.values()].filter((l) => l.status !== 'rejected' && !this.labels.has(l.id));

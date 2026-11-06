@@ -36,6 +36,7 @@ import { rubToUsd } from '../core/salary.ts';
 import { TelegramAuthService } from './tg-auth.ts';
 import { sourceState } from '../core/source-health.ts';
 import { LABEL_VERDICTS, scoreSource } from '../core/source-quality.ts';
+import { scoreDecisions } from '../core/decisions.ts';
 import { assertSafeUrl } from '../core/ssrf.ts';
 import { robotsFor } from '../pipeline/robots-audit.ts';
 import { feedQuery, isEmptyFilter, MAX_SUBSCRIPTIONS_PER_USER, newWebhookSecret, savedFiltersFrom, subscriptionName, type SavedFilters, type SubscriptionRecord } from '../core/subscriptions.ts';
@@ -87,6 +88,7 @@ import {
   employerPath,
   renderEmployerPage,
   renderEmployersPage,
+  renderDecisionsPage,
   renderLabelPage,
   renderSourceQualityPage,
   renderFaqPage,
@@ -1283,6 +1285,21 @@ export function createApp(runtime: Runtime): Hono {
         githubEnabled: githubOAuthConfigured(runtime),
       }),
     );
+  });
+
+  app.get('/admin/decisions', async (c) => {
+    if (!await isAdmin(c, runtime)) return c.redirect('/login?returnTo=/admin/decisions');
+    const [stats, labelled, rows] = await Promise.all([
+      runtime.store.decisionStats?.(),
+      runtime.store.listLabelledDecisions?.(),
+      runtime.store.listDecisionDisagreements?.(100),
+    ]);
+    return c.html(renderDecisionsPage({
+      version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c),
+      stats: stats ?? { total: 0, tokens: 0, byKind: {}, closed: 0, scam: 0 },
+      score: scoreDecisions(labelled ?? []),
+      rows: rows ?? [],
+    }));
   });
 
   // Posts checked by hand: a post at a time, the sources with the fewest answers first.
