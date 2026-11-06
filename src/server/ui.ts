@@ -2154,7 +2154,7 @@ export { STYLE };
 export function layout(input: {
   title: string;
   version: string;
-  active?: 'leads' | 'sources' | 'extension' | 'research' | 'network';
+  active?: 'leads' | 'sources' | 'extension' | 'research' | 'network' | 'employers';
   body: string;
   actions?: string;
   script?: string;
@@ -2165,7 +2165,7 @@ export function layout(input: {
 }): string {
   const lang = input.lang ?? 'ru';
   const t = getTranslations(lang);
-  const nav = (key: 'leads' | 'sources' | 'extension' | 'research' | 'network', label: string, href: string): string =>
+  const nav = (key: 'leads' | 'sources' | 'extension' | 'research' | 'network' | 'employers', label: string, href: string): string =>
     `<a href="${href}"${input.active === key ? ' class="active"' : ''}>${label}</a>`;
 
   const isMember = Boolean(input.auth?.handle || input.auth?.isAdmin);
@@ -2232,6 +2232,7 @@ ${analyticsBodyHtml}
     ${nav('leads', t.navLeads, '/')}
     ${nav('research', lang === 'ru' ? 'Исследования' : 'Research', '/research')}
     ${nav('sources', t.navSources, '/sources')}
+    ${nav('employers', lang === 'ru' ? 'Работодатели' : 'Employers', '/employers')}
     ${nav('network', lang === 'ru' ? 'Участники' : 'Participants', '/network')}
   </nav>
   <div class="actions">${input.actions ?? ''}${authWidget}</div>
@@ -3287,7 +3288,7 @@ ${cautionBanner}
       <div><dt>${escapeHtml(t.score)}</dt><dd>${scoreCell(lead.score, lang)}</dd></div>
       <div><dt>${escapeHtml(t.published)}</dt><dd>${formatDate(lead.publishedAt, lang)}</dd></div>
       ${Math.abs(Date.parse(lead.createdAt) - Date.parse(lead.publishedAt ?? lead.createdAt)) > 30 * 60_000 ? `<div><dt>${escapeHtml(t.added)}</dt><dd>${formatDate(lead.createdAt, lang)}</dd></div>` : ''}
-      ${lead.author ? `<div><dt>${escapeHtml(t.author)}</dt><dd>${escapeHtml(lead.author)}</dd></div>` : ''}
+      ${lead.author ? `<div><dt>${escapeHtml(t.author)}</dt><dd>${lead.companyKey ? `<a href="/employers/${escapeHtml(encodeURIComponent(lead.companyKey))}">${escapeHtml(lead.author)}</a>` : escapeHtml(lead.author)}</dd></div>` : ''}
       ${alsoPublished(data.sightings, t.alsoPublished)}
       ${lead.sourceRef ? `<div><dt>${escapeHtml(t.channel)}</dt><dd>${escapeHtml(lead.sourceRef.channelTitle || lead.sourceRef.channel)}${lead.sourceRef.visibility !== 'public' ? ` (${escapeHtml(t.privateChannel)})` : ''}</dd></div>` : ''}
       ${data.contactsHidden

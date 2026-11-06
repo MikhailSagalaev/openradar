@@ -1,3 +1,4 @@
+import { employerOf } from '../core/company.ts';
 import { randomUUID } from 'node:crypto';
 import { prepareRawLead } from '../core/prepare.ts';
 import { applyRules } from '../core/rules.ts';
@@ -212,6 +213,7 @@ export async function ingestRawLead(
     skills = extractTechSkills(`${prepared.title}\n${prepared.text}`);
   }
 
+  const employer = employerOf({ type: prepared.type ?? 'gig', author: prepared.author, text: prepared.text }, source.kind);
   const lead: Lead = {
     id: randomUUID(),
     sourceId: source.id,
@@ -222,6 +224,8 @@ export async function ingestRawLead(
     title: prepared.title,
     text: prepared.text,
     author: prepared.author,
+    company: employer?.name,
+    companyKey: employer?.key,
     city,
     budget: prepared.budget,
     currency: prepared.currency ?? 'RUB',

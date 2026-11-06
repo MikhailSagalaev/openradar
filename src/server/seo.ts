@@ -800,6 +800,98 @@ export function renderParticipantPage(options: {
   return layout({ title: `@${options.handle} · openradar`, version: options.version, body, auth: options.auth, lang: options.lang });
 }
 
+/** Where an employer's page lives. */
+export function employerPath(key: string): string {
+  return `/employers/${encodeURIComponent(key)}`;
+}
+
+export function renderEmployersPage(options: {
+  baseUrl: string;
+  version: string;
+  auth?: AuthDisplay;
+  lang?: SupportedLang;
+  employers: Array<{ key: string; name: string; active: number; lastAt: string }>;
+  query?: string;
+}): string {
+  const ru = options.lang !== 'en';
+  const rows = options.employers.map((e, index) => `<tr><td>${index + 1}</td><td><a href="${escapeHtml(employerPath(e.key))}">${escapeHtml(e.name)}</a></td><td class="num">${e.active}</td><td>${escapeHtml(e.lastAt.slice(0, 10))}</td></tr>`).join('\n');
+  const description = ru
+    ? 'Компании с открытыми вакансиями: сколько позиций открыто сейчас и когда появилась последняя. Каждая страница собирает вакансии компании с разных площадок.'
+    : 'Companies with open vacancies: how many roles are open now and when the latest appeared. Each page gathers the company\'s vacancies from every board.';
+  const body = `
+<div class="page-head"><div>
+  <h1>${ru ? 'Работодатели' : 'Employers'}</h1>
+  <p class="muted small">${escapeHtml(description)}</p>
+</div></div>
+<section class="profile">
+  <form method="get" action="/employers" class="form" role="search">
+    <input type="search" name="q" value="${escapeHtml(options.query ?? '')}" placeholder="${ru ? 'Название компании' : 'Company name'}" aria-label="${ru ? 'Поиск компании' : 'Find a company'}">
+  </form>
+  ${rows ? `<table class="profile-table">
+    <thead><tr><th>#</th><th>${ru ? 'Компания' : 'Company'}</th><th>${ru ? 'Открыто' : 'Open'}</th><th>${ru ? 'Последняя' : 'Latest'}</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>` : `<p class="muted">${ru ? 'Таких компаний пока нет.' : 'No such companies yet.'}</p>`}
+</section>`;
+  const head = options.query
+    ? '<meta name="robots" content="noindex">'
+    : `<link rel="canonical" href="${escapeHtml(`${options.baseUrl}/employers`)}">\n<meta name="description" content="${escapeHtml(description)}">`;
+  return layout({ title: `${ru ? 'Работодатели' : 'Employers'} · openradar`, version: options.version, active: 'employers', body, auth: options.auth, lang: options.lang, head });
+}
+
+export function renderEmployerPage(options: {
+  baseUrl: string;
+  version: string;
+  auth?: AuthDisplay;
+  lang?: SupportedLang;
+  employerKey: string;
+  name: string;
+  active: number;
+  posts: Lead[];
+}): string {
+  const ru = options.lang !== 'en';
+  const name = escapeHtml(options.name);
+  const top = (values: string[]): string[] => {
+    const counts = new Map<string, number>();
+    for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([value]) => value);
+  };
+  const skills = top(options.posts.flatMap((lead) => lead.skills ?? []));
+  const cities = top(options.posts.flatMap((lead) => (lead.city ? [lead.city] : [])));
+  const rows = options.posts.map((lead) => leadRow(lead, options.baseUrl)).join('\n');
+  const url = `${options.baseUrl}${employerPath(options.employerKey)}`;
+  const description = ru
+    ? `Открытые вакансии ${options.name}: ${options.active} сейчас${skills.length ? `, чаще всего ${skills.slice(0, 3).join(', ')}` : ''}.`
+    : `Open vacancies at ${options.name}: ${options.active} now${skills.length ? `, mostly ${skills.slice(0, 3).join(', ')}` : ''}.`;
+  const list = {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: `${ru ? 'Вакансии' : 'Vacancies at'} ${options.name}`,
+    itemListElement: options.posts.slice(0, 20).map((lead, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      url: `${options.baseUrl}/leads/${encodeURIComponent(lead.id)}`,
+      name: lead.title,
+    })),
+  };
+  const body = `
+<nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/employers">${ru ? 'Работодатели' : 'Employers'}</a> / ${name}</nav>
+<div class="page-head"><div>
+  <h1>${ru ? 'Вакансии' : 'Vacancies at'} ${name}</h1>
+  <p class="muted small">${ru ? 'Открыто сейчас' : 'Open now'}: ${options.active}</p>
+</div></div>
+<section class="profile">
+  ${skills.length ? `<p>${ru ? 'Чаще всего ищут' : 'Mostly hiring for'}: ${escapeHtml(skills.join(', '))}</p>` : ''}
+  ${cities.length ? `<p>${ru ? 'Города' : 'Cities'}: ${escapeHtml(cities.join(', '))}</p>` : ''}
+  <div class="list">${rows}</div>
+</section>`;
+  const head = `<link rel="canonical" href="${escapeHtml(url)}">
+<meta name="description" content="${escapeHtml(description)}">
+<script type="application/ld+json">
+${jsonForScript(list)}
+</script>`;
+  return layout({ title: `${ru ? 'Вакансии' : 'Vacancies at'} ${options.name} · openradar`, version: options.version, active: 'employers', body, auth: options.auth, lang: options.lang, head });
+}
+
 export function renderNetworkPage(options: {
   baseUrl: string;
   version: string;

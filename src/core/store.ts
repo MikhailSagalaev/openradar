@@ -309,6 +309,24 @@ export interface HubStore {
   getContactFlags(contacts: Contact[]): Promise<ContactFlag[]>;
 }
 
+export interface EmployerSummary {
+  key: string;
+  name: string;
+  active: number;
+  lastAt: string;
+}
+
+/** What the employer rule reads of a stored lead. */
+export interface EmployerRow {
+  id: string;
+  type: string;
+  author?: string;
+  text?: string;
+  sourceKind?: string;
+  company?: string;
+  companyKey?: string;
+}
+
 /** Pay and employer taken from the page when the post itself had none. */
 /** Posts of one day by type, platform, role and market scope (the index's raw material). */
 export interface ResearchDailyRow {
@@ -406,6 +424,12 @@ export interface Store extends HubStore {
   /** Id, title and dedup key of stored leads with id above `afterId`, by id — the rekey pass's pages. */
   listTitleKeys?(afterId: string | null, limit: number): Promise<Array<{ id: string; title: string; titleKey: string }>>;
   updateLeadTitleKey?(id: string, titleKey: string): Promise<void>;
+  /** Employers with open vacancies, the busiest first. */
+  listEmployers?(options: { limit: number; minPosts: number; query?: string }): Promise<EmployerSummary[]>;
+  listEmployerLeads?(key: string, limit: number): Promise<Lead[]>;
+  countEmployerLeads?(key: string): Promise<number>;
+  listLeadsForEmployers?(afterId: string | null, limit: number): Promise<EmployerRow[]>;
+  setLeadEmployer?(id: string, company: string | undefined, companyKey: string | undefined): Promise<void>;
   /** Stores the quality stage's verdict: the corrected type and the flags (metadata.qualityFlags). */
   updateLeadQuality?(id: string, type: LeadType, flags: string[]): Promise<void>;
   /** Stores pay and skills worked out again from the post's text; undefined fields are cleared. */
