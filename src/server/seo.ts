@@ -797,7 +797,7 @@ export function renderParticipantPage(options: {
   <h2>${ru ? 'Последние публикации' : 'Latest posts'}</h2>
   ${rows ? `<div class="list">${rows}</div>` : `<p class="muted">${ru ? 'Пока нет публикаций, открытых всем.' : 'No public posts yet.'}</p>`}
 </section>`;
-  return layout({ title: `@${options.handle} · openradar`, version: options.version, body, auth: options.auth, lang: options.lang });
+  return layout({ title: `@${options.handle}`, version: options.version, body, auth: options.auth, lang: options.lang });
 }
 
 /** Where an employer's page lives. */
@@ -835,7 +835,7 @@ export function renderEmployersPage(options: {
   const head = options.query
     ? '<meta name="robots" content="noindex">'
     : `<link rel="canonical" href="${escapeHtml(`${options.baseUrl}/employers`)}">\n<meta name="description" content="${escapeHtml(description)}">`;
-  return layout({ title: `${ru ? 'Работодатели' : 'Employers'} · openradar`, version: options.version, active: 'employers', body, auth: options.auth, lang: options.lang, head });
+  return layout({ title: `${ru ? 'Работодатели' : 'Employers'}`, version: options.version, active: 'employers', body, auth: options.auth, lang: options.lang, head });
 }
 
 export function renderEmployerPage(options: {
@@ -889,7 +889,7 @@ export function renderEmployerPage(options: {
 <script type="application/ld+json">
 ${jsonForScript(list)}
 </script>`;
-  return layout({ title: `${ru ? 'Вакансии' : 'Vacancies at'} ${options.name} · openradar`, version: options.version, active: 'employers', body, auth: options.auth, lang: options.lang, head });
+  return layout({ title: `${ru ? 'Вакансии' : 'Vacancies at'} ${options.name}`, version: options.version, active: 'employers', body, auth: options.auth, lang: options.lang, head });
 }
 
 export function renderNetworkPage(options: {
