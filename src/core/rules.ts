@@ -1,6 +1,6 @@
 import { SERVICE_OFFER } from './quality.ts';
 import { budgetUsd } from './salary.ts';
-import { extractTechSkills, normalizeForMatch } from './text.ts';
+import { extractSkills, normalizeForMatch } from './text.ts';
 import type { LeadStatus, SourceRecord } from './types.ts';
 import type { PreparedLead } from './prepare.ts';
 
@@ -198,7 +198,7 @@ export function scoreLead(
 
   // Dictionary skills of any trade (code, design, video, texts, marketing, accounting…);
   // board tags such as RemoteOK «senior» or «exec» are not skills.
-  const skills = extractTechSkills(`${lead.title}\n${lead.text}`);
+  const skills = extractSkills(lead.title, lead.text);
   score += skills.length >= 3 ? 12 : skills.length === 2 ? 9 : skills.length === 1 ? 6 : 0;
 
   score += moneyPoints(lead);

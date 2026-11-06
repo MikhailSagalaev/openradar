@@ -5,7 +5,7 @@ import { assessQuality, offersNoPay, qualityFlagsOf, type QualityFlag } from '..
 import { scoreLead } from '../core/rules.ts';
 import { normalizeSalary } from '../core/salary.ts';
 import type { LeadMoney, Store } from '../core/store.ts';
-import { decodeHtmlEntities, extractTechSkills } from '../core/text.ts';
+import { ROLE_SKILLS, decodeHtmlEntities, extractSkills } from '../core/text.ts';
 import type { Lead, LeadType, SourceRecord } from '../core/types.ts';
 
 /** Leads read per store call: the stores cap a listing at 5000. */
@@ -20,7 +20,11 @@ export interface RescoreSummary {
   repriced: number;
 }
 
-/** Skills the dictionary used to read off a mere mention: kept only if it still finds them. */
+/**
+ * Skills the dictionary used to read off a mere mention: kept only if it still finds them.
+ * Trades (ROLE_SKILLS) too: one the title and requirements no longer carry came from the
+ * company blurb under the older rule.
+ */
 const MENTION_SKILLS = new Set(['Авито', 'Маркетплейсы', 'GPT']);
 
 /** The rawSalary normalizeSalary writes itself, as opposed to what a board published. */
@@ -33,8 +37,8 @@ const GENERATED_SALARY = /^\d+(?:–\d+)? [A-Z]{3,4}(?: per year)?$/;
  */
 function moneyOf(lead: Lead, type: LeadType, flags: QualityFlag[], source: SourceRecord): LeadMoney {
   const post = `${lead.title}\n${lead.text}`;
-  const found = extractTechSkills(post, 12);
-  const skills = Array.from(new Set([...(lead.skills ?? []).filter((skill) => !MENTION_SKILLS.has(skill) || found.includes(skill)), ...found]));
+  const found = extractSkills(lead.title, lead.text, 12);
+  const skills = Array.from(new Set([...(lead.skills ?? []).filter((skill) => !(MENTION_SKILLS.has(skill) || ROLE_SKILLS.has(skill)) || found.includes(skill)), ...found]));
   if (offersNoPay(flags)) return { skills };
 
   // A Telegram post has no budget field: whatever it holds came from its text. A webhook may send one.
