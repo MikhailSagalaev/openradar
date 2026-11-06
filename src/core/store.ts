@@ -428,6 +428,8 @@ export interface Store extends HubStore {
   listEmployers?(options: { limit: number; minPosts: number; query?: string }): Promise<EmployerSummary[]>;
   listEmployerLeads?(key: string, limit: number): Promise<Lead[]>;
   countEmployerLeads?(key: string): Promise<number>;
+  /** The employer's name, open vacancies or not. */
+  employerName?(key: string): Promise<string | null>;
   listLeadsForEmployers?(afterId: string | null, limit: number): Promise<EmployerRow[]>;
   setLeadEmployer?(id: string, company: string | undefined, companyKey: string | undefined): Promise<void>;
   /** Stores the quality stage's verdict: the corrected type and the flags (metadata.qualityFlags). */

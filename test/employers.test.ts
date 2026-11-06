@@ -99,6 +99,31 @@ describe('employer pages', () => {
     expect(xml).not.toContain('/employers/tiny');
   });
 
+  it('opens a company whose vacancies are all fresh or closed', async () => {
+    const { runtime, app } = await setup();
+    const source = (await runtime.store.listSources()).find((s) => s.title === 'Board')!;
+    for (const id of ['f1', 'f2']) await runtime.store.insertLead(lead(id, source.id, { author: 'Freshly', createdAt: new Date().toISOString() }));
+    await runtime.store.insertLead(lead('x', source.id, { author: 'Gonely', state: 'closed' }));
+    await fillEmployers(runtime.store);
+    const fresh = await app.request('/employers/freshly');
+    expect(fresh.status).toBe(200);
+    expect(await fresh.text()).toContain('Вакансии Freshly');
+    const gone = await app.request('/employers/gonely');
+    expect(gone.status).toBe(200);
+    const html = await gone.text();
+    expect(html).toContain('открытых вакансий нет');
+    expect(html).toContain('noindex');
+  });
+
+  it('links a vacancy to its employer and keeps the header short', async () => {
+    const { app } = await setup();
+    const html = await (await app.request('/leads/a')).text();
+    expect(html).toContain('<p class="lead-company"><a href="/employers/riotgames">Riot Games</a></p>');
+    const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
+    expect(header).not.toContain('/employers');
+    expect(html.slice(html.indexOf('<footer'))).toContain('href="/employers"');
+  });
+
   it('stays closed on a private node', async () => {
     const app = createApp(makeTestRuntime({ RADAR_PUBLIC_READ: false }));
     expect((await app.request('/employers')).status).toBe(302);

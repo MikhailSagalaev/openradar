@@ -1888,6 +1888,14 @@ footer {
   font-size: 12px;
   color: var(--muted);
 }
+.lead-company { margin: 4px 0 2px; font-size: 15px; }
+.employer-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 0 0 20px; }
+.employer-stat { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.employer-stat strong { display: block; font-size: 22px; font-weight: 600; line-height: 1.2; }
+.employer-stat span { color: var(--muted); font-size: 12.5px; }
+.employer-facts { margin: 0 0 20px; display: grid; gap: 6px; font-size: 14px; }
+.employer-facts dt { display: inline; color: var(--muted); }
+.employer-facts dd { display: inline; margin: 0 0 0 6px; }
 .footer-lang { display: inline-flex; gap: 6px; align-items: center; }
 .footer-lang a { color: var(--muted); text-decoration: none; }
 .footer-lang a.current { color: var(--ink); font-weight: 600; }
@@ -2232,7 +2240,6 @@ ${analyticsBodyHtml}
     ${nav('leads', t.navLeads, '/')}
     ${nav('research', lang === 'ru' ? 'Исследования' : 'Research', '/research')}
     ${nav('sources', t.navSources, '/sources')}
-    ${nav('employers', lang === 'ru' ? 'Работодатели' : 'Employers', '/employers')}
     ${nav('network', lang === 'ru' ? 'Участники' : 'Participants', '/network')}
   </nav>
   <div class="actions">${input.actions ?? ''}${authWidget}</div>
@@ -2258,6 +2265,7 @@ ${input.body}
       <div class="footer-links-grid">
         <a href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md" target="_blank" rel="noopener noreferrer">${escapeHtml(t.guideLink)}</a>
         <a href="/research">${escapeHtml(lang === 'ru' ? 'Исследования рынка' : 'Market research')}</a>
+        <a href="/employers">${escapeHtml(lang === 'ru' ? 'Работодатели' : 'Employers')}</a>
         <a href="/about">${escapeHtml(lang === 'ru' ? 'О проекте' : 'About')}</a>
         <a href="/trust">${escapeHtml(lang === 'ru' ? 'Данные и доверие' : 'Trust & data')}</a>
         <a href="/faq">${escapeHtml(lang === 'ru' ? 'Вопросы и ответы' : 'FAQ')}</a>
@@ -3247,6 +3255,7 @@ document.getElementById('share-lead')?.addEventListener('click', async (event) =
 <div class="page-head">
   <div>
     <h1>${escapeHtml(leadTitle(lead))}</h1>
+    ${lead.companyKey && lead.company ? `<p class="lead-company"><a href="/employers/${escapeHtml(encodeURIComponent(lead.companyKey))}">${escapeHtml(lead.company)}</a></p>` : ''}
     <p class="muted small">${isAdminSession ? `${statusDot(lead.status, lang)} · ` : ''}${formatRelative(lead.createdAt, lang)}</p>
     ${lead.state === 'closed' ? `<p class="notice lead-state-notice">${escapeHtml(t.leadClosedNotice)}</p>` : data.expired ? `<p class="notice lead-state-notice">${escapeHtml(t.leadExpiredNotice)}</p>` : ''}
   </div>

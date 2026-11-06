@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.54.2
+
+- Employer pages open for every company a vacancy links to. A company whose newest vacancies were still hidden from guests answered «not found», and so did one with only closed vacancies.
+- An employer page shows what is open, what is new this week, the remote share, what the company hires for and where. Guests see how many fresh vacancies wait for them.
+- A vacancy names its employer under the title, as a link. The list of employers moves from the header to the footer.
+
 ## 0.54.1
 
 - Employer and participant pages name openradar once in their title.

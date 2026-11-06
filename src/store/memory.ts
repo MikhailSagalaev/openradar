@@ -298,6 +298,10 @@ export class MemoryStore implements Store {
     return this.openVacancies().filter((l) => l.companyKey === key).length;
   }
 
+  async employerName(key: string): Promise<string | null> {
+    return [...this.leads.values()].find((l) => l.companyKey === key)?.company ?? null;
+  }
+
   async listLeadsForEmployers(afterId: string | null, limit: number): Promise<EmployerRow[]> {
     return [...this.leads.values()]
       .filter((l) => afterId === null || l.id > afterId)
