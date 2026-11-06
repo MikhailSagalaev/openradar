@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { atsSource } from '../src/sources/ats.ts';
+import { atsSource, companiesOf } from '../src/sources/ats.ts';
+import { SOURCE_PRESETS } from '../src/sources/presets.ts';
 import { leadFromPage, pageLinks } from '../src/sources/sitemap.ts';
 import { makeSource } from './helpers.ts';
 
@@ -89,5 +90,16 @@ describe('ats boards without a description API', () => {
     const source = makeSource({ kind: 'ats', title: 'B', config: { provider: 'bamboohr', companies: ['acme=Acme'] } });
     const leads = await atsSource.poll!(source, ctx({ result: [{ id: '7', jobOpeningName: 'Manager', departmentLabel: 'Ops', location: { city: 'Paphos' } }] }));
     expect(leads[0]).toMatchObject({ title: 'Manager', url: 'https://acme.bamboohr.com/careers/7', city: 'Paphos' });
+  });
+});
+
+describe('ats presets', () => {
+  it('list each board once, in a form the adapter accepts', () => {
+    for (const preset of SOURCE_PRESETS.filter((p) => p.kind === 'ats')) {
+      const raw = preset.config.companies as string[];
+      const companies = companiesOf(makeSource({ kind: 'ats', title: preset.title, config: preset.config }));
+      expect(companies).toHaveLength(raw.length);
+      expect(new Set(companies.map((c) => c.slug)).size).toBe(companies.length);
+    }
   });
 });

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.53.0
+
+- Sources: 1079 more company boards on Greenhouse, Ashby, Lever, Recruitee and Workable: Riot Games, SpaceX, Verkada, Scopely, ICEYE and others. Every board was read first, and its open jobs matched the company. A poll now reads 15 boards in turn, so the whole list goes round in about a day.
+- Luxoft leaves: its site refuses the hub.
+
 ## 0.52.0
 
 - Sources: 41 company career sites and niche boards join: Glovo, 2GIS, YADRO, Alfa-Bank, MTS, VK, IBS, CDEK, Kaspersky, Aviasales, Luxoft, Azur Games, CrowdStrike, Just Join IT and others. Each was checked against robots.txt and read through the real adapter first.
