@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.54.3
+
+- Employer pages count a vacancy as remote only when the board says so, and name each city once.
+
 ## 0.54.2
 
 - Employer pages open for every company a vacancy links to. A company whose newest vacancies were still hidden from guests answered «not found», and so did one with only closed vacancies.

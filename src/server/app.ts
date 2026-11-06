@@ -3040,10 +3040,11 @@ export function createApp(runtime: Runtime): Hono {
       name: often(open.flatMap((lead) => (lead.company ? [lead.company] : [])), 1)[0] ?? known,
       active,
       fresh: open.filter((lead) => lead.createdAt >= weekAgo).length,
-      remoteShare: open.length ? Math.round((open.filter((lead) => lead.isRemote).length / open.length) * 100) : 0,
+      // isRemote defaults to true for a post that does not say; «Онлайн» is what a board stated.
+      remoteShare: open.length ? Math.round((open.filter((lead) => lead.city === 'Онлайн').length / open.length) * 100) : 0,
       boards: new Set(open.map((lead) => lead.sourceId)).size,
       skills: often(open.flatMap((lead) => lead.skills ?? []), 6),
-      cities: often(open.flatMap((lead) => (lead.city ? [lead.city] : [])), 6),
+      cities: often(open.flatMap((lead) => (lead.city && lead.city !== 'Онлайн' ? [lead.city.split(',')[0]!.trim()] : [])), 6),
       posts: visible.slice(0, 40).map((lead) => projectContacts(lead, viewer)),
       later: open.length - visible.length,
       signedIn: viewer.tier !== 'guest',
