@@ -1,0 +1,145 @@
+/**
+ * Decisions: a fast model that answers fixed questions about a post with probabilities instead
+ * of writing text. Any service with the `/v1/systemone` shape fits: SubQ Snap, Jev, or a Laya or
+ * Kev running on your own machine. An answer is advice. A post's author writes the text the
+ * model reads, and a sentence can steer it, so an answer never removes a post by itself.
+ * See docs/DECISIONS.md.
+ */
+
+/** Raised when the questions change: older answers then no longer compare. */
+export const DECISION_VERSION = 1;
+
+export const DECISION_KINDS = ['vacancy', 'order', 'resume', 'other'] as const;
+export type DecisionKind = (typeof DECISION_KINDS)[number];
+
+export const DECISION_QUESTIONS = {
+  kind: {
+    type: 'choice',
+    instructions: 'Что это за пост?',
+    criteria: {
+      vacancy: 'Работодатель ищет сотрудника в штат или на постоянную работу',
+      order: 'Заказчик ищет исполнителя на разовую задачу или проект',
+      resume: 'Человек сам ищет работу или предлагает свои услуги',
+      other: 'Реклама, курс, новость, опрос или текст без предложения работы',
+    },
+  },
+  closed: {
+    type: 'noul',
+    instructions: 'Пост прямо говорит, что вакансия или заказ уже закрыты?',
+    criteria: { true: 'Есть слова вроде «вакансия закрыта», «в архиве», «исполнитель найден»', false: 'Такого нет' },
+  },
+  scam: {
+    type: 'noul',
+    instructions: 'Похоже на мошенничество?',
+    criteria: { true: 'Деньги вперёд, лёгкий заработок без навыков, сомнительная схема', false: 'Обычное предложение работы' },
+  },
+  fullness: {
+    type: 'score',
+    instructions: 'Насколько полно пост описывает работу?',
+    criteria: ['Почти ничего', 'Только название и общие слова', 'Есть задачи и условия', 'Подробно: задачи, требования, условия, оплата'],
+  },
+} as const;
+
+export interface ModelDecision {
+  leadId: string;
+  version: number;
+  model: string;
+  kind: DecisionKind;
+  kindConfidence: number;
+  closed: number;
+  scam: number;
+  fullness: number;
+  tokens: number;
+  decidedAt: string;
+}
+
+/** Above this the model is taken to say yes. To be set from labels, not guessed: see below. */
+export const FLAG_AT = 0.5;
+
+/** The answer as the service sent it, or undefined when it is not the shape asked for. */
+export function parseDecision(body: unknown, leadId: string, model: string, decidedAt: string): ModelDecision | undefined {
+  const answers = (body as { answers?: Record<string, Record<string, unknown>> } | null)?.answers;
+  const kind = answers?.kind?.choice;
+  const confidence = answers?.kind?.confidence;
+  const closed = answers?.closed?.noul;
+  const scam = answers?.scam?.noul;
+  const fullness = answers?.fullness?.score;
+  if (typeof kind !== 'string' || !(DECISION_KINDS as readonly string[]).includes(kind)) return undefined;
+  if (typeof closed !== 'number' || typeof scam !== 'number' || typeof fullness !== 'number') return undefined;
+  const tokens = (body as { usage?: { input_tokens?: unknown } }).usage?.input_tokens;
+  return {
+    leadId, version: DECISION_VERSION, model, kind: kind as DecisionKind,
+    kindConfidence: typeof confidence === 'number' ? confidence : 0,
+    closed, scam, fullness, tokens: typeof tokens === 'number' ? tokens : 0, decidedAt,
+  };
+}
+
+/** Does the model disagree with what the node believes about the post? */
+export function disagreement(decision: Pick<ModelDecision, 'kind' | 'closed' | 'scam'>, lead: { type?: string; state?: string }): string | undefined {
+  if (decision.closed >= FLAG_AT && lead.state !== 'closed') return 'closed';
+  if (decision.scam >= FLAG_AT) return 'scam';
+  if (decision.kind === 'other' || decision.kind === 'resume') return decision.kind;
+  if (decision.kind === 'vacancy' && lead.type === 'gig') return 'type';
+  if (decision.kind === 'order' && lead.type === 'job') return 'type';
+  return undefined;
+}
+
+export interface LabelledDecision {
+  verdict: string;
+  type?: string;
+  kind: string;
+  kindConfidence: number;
+  closed: number;
+}
+
+export interface FlagScore {
+  /** Posts the model flagged, of which a person agreed. */
+  flagged: number;
+  right: number;
+  /** Posts a person flagged, of which the model caught. */
+  actual: number;
+  caught: number;
+}
+
+export interface DecisionScore {
+  n: number;
+  closed: FlagScore;
+  junk: FlagScore;
+  type: FlagScore;
+  /** Mean squared gap between the closed probability and the truth: 0 is perfect, 0.25 a coin. */
+  closedBrier: number | null;
+  /** Share of posts the model answers with this confidence or more, and how many it gets right. */
+  byConfidence: Array<{ at: number; answered: number; right: number }>;
+}
+
+const flag = (): FlagScore => ({ flagged: 0, right: 0, actual: 0, caught: 0 });
+
+function count(score: FlagScore, said: boolean, truth: boolean): void {
+  if (said) score.flagged++;
+  if (truth) score.actual++;
+  if (said && truth) {
+    score.right++;
+    score.caught++;
+  }
+}
+
+/** The model against posts a person checked. */
+export function scoreDecisions(rows: LabelledDecision[]): DecisionScore {
+  const score: DecisionScore = { n: rows.length, closed: flag(), junk: flag(), type: flag(), closedBrier: null, byConfidence: [] };
+  let brier = 0;
+  for (const row of rows) {
+    const isClosed = row.verdict === 'closed';
+    count(score.closed, row.closed >= FLAG_AT, isClosed);
+    brier += (row.closed - (isClosed ? 1 : 0)) ** 2;
+    count(score.junk, row.kind === 'other' || row.kind === 'resume', row.verdict === 'junk');
+    const typed = row.kind === 'vacancy' ? 'job' : row.kind === 'order' ? 'gig' : undefined;
+    count(score.type, Boolean(typed && row.type && typed !== row.type), row.verdict === 'wrong_type');
+  }
+  if (rows.length) score.closedBrier = brier / rows.length;
+  for (const at of [0.5, 0.7, 0.8, 0.9, 0.95]) {
+    const sure = rows.filter((row) => row.kindConfidence >= at);
+    const right = sure.filter((row) => (row.kind === 'other' || row.kind === 'resume') === (row.verdict === 'junk')).length;
+    score.byConfidence.push({ at, answered: sure.length, right });
+  }
+  return score;
+}

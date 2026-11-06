@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.57.0
+
+- **Decisions.** A fast model can answer fixed questions about each post: what it is, is it closed, does it look like a scam, how full it is. Any `/v1/systemone` service fits. Answers are only stored: the feed does not read them until hand labels show they can be trusted. Contacts are cut first and posts of private channels stay on the node. [docs/DECISIONS.md](docs/DECISIONS.md).
+- `/admin/decisions` shows where the model disagrees with the feed and how it scores against hand labels. `radar decide run` and `radar decide eval` do the same from the command line. Doubtful posts now come first for hand checking.
+
 ## 0.56.0
 
 - Extension 0.21.0: career sites the hub cannot read have a switch each. The browser reads new vacancies a few per walk: T-Bank, Wise, Luxoft, SberHealth, TOP and Plata.

@@ -3,6 +3,7 @@ import type { Lead, LeadType } from '../core/types.ts';
 import { layout, type AuthDisplay } from './ui.ts';
 import type { SupportedLang } from './i18n.ts';
 import type { SourceQuality, SourceQualityInput } from '../core/source-quality.ts';
+import type { DecisionScore, FlagScore, ModelDecision } from '../core/decisions.ts';
 
 export interface CatalogEntry {
   slug: string;
@@ -868,6 +869,44 @@ export function renderLabelPage(options: {
   <form method="post" action="/admin/labels"><input type="hidden" name="id" value="${escapeHtml(lead.id)}">${buttons}</form>` : `<p class="muted">${ru ? 'Постов для проверки нет.' : 'Nothing to check.'}</p>`}
 </section>`;
   return layout({ title: ru ? 'Ручная проверка' : 'Hand check', version: options.version, body, auth: options.auth, lang: options.lang, head: '<meta name="robots" content="noindex">' });
+}
+
+export function renderDecisionsPage(options: {
+  version: string;
+  auth?: AuthDisplay;
+  lang?: SupportedLang;
+  stats: { total: number; tokens: number; byKind: Record<string, number>; closed: number; scam: number; lastAt?: string };
+  score: DecisionScore;
+  rows: Array<{ lead: Lead; decision: ModelDecision; reason: string }>;
+}): string {
+  const { stats, score } = options;
+  const share = (part: number, whole: number): string => (whole ? `${Math.round((part / whole) * 100)}% (${part} из ${whole})` : '—');
+  const names: Record<string, string> = { closed: 'Похоже закрыт', scam: 'Похоже на мошенничество', other: 'Не работа', resume: 'Резюме', type: 'Другой тип' };
+  const flags = ([['Закрытые', score.closed], ['Мусор', score.junk], ['Тип поста', score.type]] as Array<[string, FlagScore]>)
+    .map(([name, flag]) => `<tr><td>${name}</td><td class="num">${share(flag.right, flag.flagged)}</td><td class="num">${share(flag.caught, flag.actual)}</td></tr>`).join('\n');
+  const rows = options.rows.map(({ lead, decision, reason }) => `<tr>
+    <td><a href="/leads/${escapeHtml(encodeURIComponent(lead.id))}">${escapeHtml(lead.title.slice(0, 90))}</a></td>
+    <td>${escapeHtml(names[reason] ?? reason)}</td>
+    <td class="num">${decision.kindConfidence.toFixed(2)}</td>
+    <td class="num">${decision.closed.toFixed(2)}</td>
+    <td class="num">${decision.scam.toFixed(2)}</td>
+  </tr>`).join('\n');
+  const cost = (stats.tokens * 0.04) / 1_000_000;
+  const body = `
+<div class="page-head"><div>
+  <h1>Решения модели</h1>
+  <p class="muted small">Ответы только сохраняются, лента их не читает. <a href="/admin/labels">Проверить посты вручную</a></p>
+</div></div>
+<section class="profile">
+  <p>Отвечено постов: <strong>${stats.total}</strong> · токенов: ${stats.tokens} · примерно $${cost.toFixed(3)} · закрытых: ${stats.closed} · мошенничество: ${stats.scam}</p>
+  <p class="muted small">${Object.entries(stats.byKind).map(([kind, total]) => `${escapeHtml(kind)}: ${total}`).join(' · ')}</p>
+  <h2>Сверка с ручными метками: ${score.n}</h2>
+  ${score.n ? `<table class="profile-table"><thead><tr><th>Флаг</th><th>Модель права</th><th>Находит</th></tr></thead><tbody>${flags}</tbody></table>
+  <p class="muted small">Ошибка вероятности закрытия (Brier): ${score.closedBrier?.toFixed(3) ?? '—'}. Ниже лучше, 0,25 это монетка.</p>` : '<p class="muted">Пока нет ручных меток на постах с ответом модели.</p>'}
+  <h2>Где модель спорит с лентой</h2>
+  ${rows ? `<table class="profile-table"><thead><tr><th>Пост</th><th>Причина</th><th>Уверенность</th><th>Закрыт</th><th>Мошенн.</th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="muted">Расхождений нет.</p>'}
+</section>`;
+  return layout({ title: 'Решения модели', version: options.version, body, auth: options.auth, lang: options.lang, head: '<meta name="robots" content="noindex">' });
 }
 
 /** Where an employer's page lives. */
