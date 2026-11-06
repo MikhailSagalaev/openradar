@@ -298,6 +298,79 @@ async function walkPage(board, url) {
   }
 }
 
+/** Vacancy pages read per site in one walk. */
+const VACANCIES_PER_WALK = 8;
+const SEEN_PER_SITE = 500;
+
+/** Runs inside a career page: the links that lead to vacancies. */
+function readVacancyLinks(pattern) {
+  const re = new RegExp(pattern);
+  return [...new Set([...document.querySelectorAll('a[href]')].map((a) => a.href.split('#')[0]))].filter((href) => re.test(href));
+}
+
+/** Runs inside a vacancy page: what a visitor sees. */
+function readVacancyPage() {
+  const heading = document.querySelector('h1')?.innerText?.trim();
+  const body = document.querySelector('main, article, [role="main"]') ?? document.body;
+  return { url: location.href.split('#')[0], title: heading || document.title, text: body.innerText };
+}
+
+async function inTab(url, read, args = []) {
+  const tab = await chrome.tabs.create({ url, active: false });
+  try {
+    await tabLoaded(tab.id);
+    await collectorWait(PAGE_SETTLE_MS);
+    const [result] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: read, args });
+    return result?.result;
+  } finally {
+    await chrome.tabs.remove(tab.id).catch(() => {});
+  }
+}
+
+async function sendVacancies(site, vacancies) {
+  const { radarAccount: account } = await chrome.storage.local.get(['radarAccount']);
+  if (!account?.token) return { ok: false, error: 'not_signed_in' };
+  const response = await fetch(`${account.base.replace(/\/+$/, '')}/api/ext/vacancies`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${account.token}` },
+    body: JSON.stringify({ site, vacancies }),
+  });
+  const json = await response.json().catch(() => ({}));
+  return response.ok ? { ...json, ok: true } : { ok: false, error: json.error ?? `http_${response.status}` };
+}
+
+/** One career site: the new vacancies of its list, a few per walk. */
+async function walkCareerSite(site) {
+  const status = { at: new Date().toISOString(), found: 0, inserted: 0 };
+  await saveBoardStatus(site.id, status);
+  try {
+    const { radarCareerSeen: seen = {} } = await chrome.storage.local.get(['radarCareerSeen']);
+    const done = new Set(seen[site.id] ?? []);
+    const links = (await inTab(site.list, readVacancyLinks, [site.link])) ?? [];
+    const fresh = links.filter((link) => !done.has(link)).slice(0, VACANCIES_PER_WALK);
+    const pages = [];
+    for (const link of fresh) {
+      const page = await inTab(link, readVacancyPage);
+      if (page) pages.push({ ...page, url: link });
+      await collectorWait(READ_PAUSE_MS);
+    }
+    if (pages.length) {
+      const sent = await sendVacancies(site.id, pages);
+      if (sent.ok === false) status.error = sent.error;
+      else {
+        status.found = sent.found ?? pages.length;
+        status.inserted = sent.inserted ?? 0;
+        const kept = [...done, ...fresh].slice(-SEEN_PER_SITE);
+        await chrome.storage.local.set({ radarCareerSeen: { ...seen, [site.id]: kept } });
+      }
+    }
+  } catch (error) {
+    status.error = String(error?.message ?? error);
+  }
+  status.at = new Date().toISOString();
+  await saveBoardStatus(site.id, status);
+}
+
 let collectorBusy = false;
 
 /** One walk over the boards the owner switched on, a page at a time. */
@@ -329,6 +402,9 @@ async function walkBoards() {
         if (status.error || (board.id === 'youdo' && youdoLeft <= 0)) break;
         await collectorWait(PAUSE_BETWEEN_PAGES_MS);
       }
+    }
+    for (const site of CAREER_SITES) {
+      if (settings?.sites?.[site.id]) await walkCareerSite(site);
     }
   } finally {
     clearInterval(keepAlive);

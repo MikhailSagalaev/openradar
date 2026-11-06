@@ -356,6 +356,9 @@
   "collectorTitle": {
     "message": "Order collector"
   },
+  "collectorSites": {
+    "message": "Career sites"
+  },
   "collectorNow": {
     "message": "Collect now"
   },

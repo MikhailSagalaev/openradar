@@ -318,6 +318,23 @@ export class MemoryStore implements Store {
     return result;
   }
 
+  private labels = new Map<string, string>();
+
+  async nextLeadToLabel(): Promise<Lead | null> {
+    const open = [...this.leads.values()].filter((l) => l.status !== 'rejected' && !this.labels.has(l.id));
+    return open[0] ? { ...open[0] } : null;
+  }
+
+  async saveLeadLabel(id: string, verdict: string): Promise<void> {
+    this.labels.set(id, verdict);
+  }
+
+  async labelStats(): Promise<Record<string, number>> {
+    const stats: Record<string, number> = {};
+    for (const verdict of this.labels.values()) stats[verdict] = (stats[verdict] ?? 0) + 1;
+    return stats;
+  }
+
   async employerName(key: string): Promise<string | null> {
     return [...this.leads.values()].find((l) => l.companyKey === key)?.company ?? null;
   }

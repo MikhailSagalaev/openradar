@@ -356,6 +356,9 @@
   "collectorTitle": {
     "message": "Сбор заказов"
   },
+  "collectorSites": {
+    "message": "Карьерные сайты"
+  },
   "collectorNow": {
     "message": "Собрать сейчас"
   },

@@ -754,11 +754,42 @@ function renderBoards() {
     if (block) row.append(block);
     collector.boards.append(row);
   }
+  renderCareerSites();
+}
+
+/** Career sites the hub cannot read: a switch each, the choice is the owner's. */
+function renderCareerSites() {
+  const title = document.createElement('p');
+  title.className = 'board-group';
+  title.textContent = t('collectorSites');
+  collector.boards.append(title);
+  for (const site of CAREER_SITES) {
+    const row = document.createElement('div');
+    row.className = 'board';
+    const head = document.createElement('label');
+    head.className = 'switch-row board-head';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = Boolean(collectorSettings.sites?.[site.id]);
+    input.addEventListener('change', async () => {
+      collectorSettings.sites = { ...collectorSettings.sites, [site.id]: input.checked };
+      await saveCollector();
+    });
+    const knob = document.createElement('span');
+    knob.className = 'switch';
+    const name = document.createElement('strong');
+    name.textContent = site.title;
+    head.append(input, knob, name);
+    row.append(head);
+    const status = collectorData.statuses?.[site.id];
+    if (status) row.append(runLine(status));
+    collector.boards.append(row);
+  }
 }
 
 async function refreshCollector() {
   const stored = await chrome.storage.local.get(['radarCollector', 'radarCollectorStatus', 'radarCollectorRunning', 'radarBoardCatalog', 'radarBoardState']);
-  collectorSettings = { auto: false, minutes: 30, boards: {}, ...stored.radarCollector };
+  collectorSettings = { auto: false, minutes: 30, boards: {}, sites: {}, ...stored.radarCollector };
   collectorData = { statuses: stored.radarCollectorStatus, catalogs: stored.radarBoardCatalog, states: stored.radarBoardState };
   collector.auto.checked = Boolean(collectorSettings.auto);
   collector.minutes.value = String(collectorSettings.minutes);

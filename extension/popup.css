@@ -672,3 +672,9 @@ button.chip.on {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+.board-group {
+  margin: 12px 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+}

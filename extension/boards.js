@@ -106,3 +106,17 @@ const BOARDS = [
     isSignIn: () => false,
   },
 ];
+
+/**
+ * Career sites drawn in the browser or closed to servers. The collector opens the list, takes
+ * the vacancy links and reads each page as a visitor sees it. Sites whose robots.txt closes the
+ * vacancies and sites with a bot check are not here.
+ */
+const CAREER_SITES = [
+  { id: 'tbank', title: 'Т-Банк', list: 'https://www.tbank.ru/career/vacancies/', link: '/career/[a-z-]+/vacancy/[^/]+/[^/]+/[0-9a-f-]{36}/$' },
+  { id: 'wise', title: 'Wise', list: 'https://wise.jobs/jobs', link: '/job/.+-jid-\\d+' },
+  { id: 'luxoft', title: 'Luxoft', list: 'https://career.luxoft.com/jobs/', link: '/jobs/[a-z0-9-]+-\\d+' },
+  { id: 'sberhealth', title: 'СберЗдоровье', list: 'https://vacancy.sberhealth.ru/vacancies', link: '/vacancies/\\d+$' },
+  { id: 'top', title: 'TOP', list: 'https://top.co/careers', link: '/careers/\\d+$' },
+  { id: 'plata', title: 'Plata', list: 'https://plata.careers/vacancy', link: '/vacancy/details\\?id=\\d+' },
+];

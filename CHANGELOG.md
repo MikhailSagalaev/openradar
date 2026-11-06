@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.56.0
+
+- Extension 0.21.0: career sites the hub cannot read have a switch each. The browser reads new vacancies a few per walk: T-Bank, Wise, Luxoft, SberHealth, TOP and Plata.
+- Sources: twelve companies whose own site is closed join through their hh.ru feed: Ozon, T-Bank, X5, Rostelecom, Skyeng, Kontur, beeline, Tutu, Gold Apple, T1, 12 STOREEZ and Tochka.
+- `/admin/labels`: checking posts by hand, evenly across sources, as the measure for the source score, the rules and any model.
+
 ## 0.55.0
 
 - Sources: a career site drawn in the browser can be read from its own open JSON, set up with a few lines and no code. Sber (about 2,500 vacancies), Wildberries, Magnit Tech and IT_One join this way, and Yandex through its vacancy page.
