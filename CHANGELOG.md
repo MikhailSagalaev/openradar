@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.54.1
+
+- Employer and participant pages name openradar once in their title.
+
 ## 0.54.0
 
 - **Employers.** `/employers` lists who hires now, with search, and `/employers/<company>` gathers a company's open vacancies from every board, with what it hires for and where. The pages go into the sitemap with structured data, and a vacancy links to its employer.
