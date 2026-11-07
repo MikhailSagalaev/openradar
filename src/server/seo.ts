@@ -1,6 +1,7 @@
 import { escapeHtml, jsonForScript } from '../core/text.ts';
 import type { Lead, LeadType } from '../core/types.ts';
-import { layout, type AuthDisplay, formatBudget, salaryRange, safeHttpUrl } from './ui.ts';
+import { layout, type AuthDisplay, formatBudget, salaryRange, safeHttpUrl, leadTitle, formatRelative } from './ui.ts';
+import { formatLeadText } from './format.ts';
 import type { SupportedLang } from './i18n.ts';
 import type { SourceQuality, SourceQualityInput } from '../core/source-quality.ts';
 import type { DecisionScore, FlagScore, ModelDecision } from '../core/decisions.ts';
@@ -1044,41 +1045,37 @@ export function renderReviewPage(options: {
   const host = lead?.url ? safeHttpUrl(lead.url)?.replace(/^https?:\/\//, '')?.split('/')[0]?.replace(/^www\./, '') : '';
   const remote = lead?.isRemote ? 'Удалённо' : '';
   const location = [lead?.city, remote].filter(Boolean).join(' · ');
+  const relativeDate = lead ? formatRelative(lead.createdAt, options.lang ?? 'ru') : '';
+  const metaLine = [host, salary, location, relativeDate].filter(Boolean).join(' · ');
+  const formatted = lead ? formatLeadText(lead.text) : { html: '', tags: [] };
 
-  const cockpit = lead ? `
-<div class="review-cockpit">
-  <div class="review-pane-lead">
-    <div class="review-lead-head">
-      <div class="review-lead-meta">
-        <div class="review-lead-pills">
-          ${host ? `<span class="review-meta-pill">${escapeHtml(host)}</span>` : ''}
-          ${salary ? `<span class="review-meta-pill review-salary-pill">${escapeHtml(salary)}</span>` : ''}
-          ${location ? `<span class="review-meta-pill">${escapeHtml(location)}</span>` : ''}
-        </div>
-        ${lead.url ? `<a class="review-original" href="${escapeHtml(lead.url)}" target="_blank" rel="noopener noreferrer">Открыть оригинал ↗</a>` : ''}
-      </div>
-      <h2 class="review-lead-title">${escapeHtml(lead.title)}</h2>
-      ${company ? `<p class="review-lead-company">${escapeHtml(company)}</p>` : ''}
-    </div>
-    <div class="review-lead-scroll">
-      <p class="review-text">${escapeHtml(lead.text)}</p>
-    </div>
+  const content = lead ? `
+<div class="page-head review-head">
+  <div>
+    <h1>${escapeHtml(leadTitle(lead))}</h1>
+    ${company ? `<p class="lead-company">${escapeHtml(company)}</p>` : ''}
+    ${metaLine ? `<p class="muted small">${escapeHtml(metaLine)}</p>` : ''}
   </div>
+  <div class="actions lead-actions">
+    ${lead.url ? `<a class="btn review-original" href="${escapeHtml(lead.url)}" target="_blank" rel="noopener noreferrer">Открыть оригинал ↗</a>` : ''}
+  </div>
+</div>
 
-  <div class="review-pane-actions">
+<div class="detail-grid review-grid">
+  <section class="review-lead-col">
+    <h2>${lead.type === 'job' ? 'Текст вакансии' : 'Текст заказа'}</h2>
+    <div class="lead-text review-lead-scroll">${formatted.html}</div>
+  </section>
+
+  <aside class="review-actions-col">
     <form method="post" action="/review" class="review-form">
       <input type="hidden" name="id" value="${escapeHtml(lead.id)}">
       <input type="hidden" name="bucket" value="${escapeHtml(options.bucket ?? '')}">
       <input type="hidden" name="c" value="${escapeHtml(options.direction)}">
 
-      <div class="review-box review-shown-box">
-        <div class="review-box-head">
-          <span>Мы показали это как:</span>
-        </div>
-        <div class="review-shown-pills">
-          <span class="review-shown-tag">${typeName}</span>
-          <span class="review-shown-tag">${escapeHtml(shown)}</span>
-        </div>
+      <h2>Решение</h2>
+      <div class="review-shown">
+        <div class="review-shown-line">Мы показали это как: <strong>${typeName}</strong> · <strong>${escapeHtml(shown)}</strong></div>
         <details class="review-fix">
           <summary>Исправить тип или направление</summary>
           <div class="review-fix-body">
@@ -1090,7 +1087,7 @@ export function renderReviewPage(options: {
       </div>
 
       <div class="review-answers">
-        <button class="btn review-main review-ans-btn" name="verdict" value="ok" type="submit" title="Реальная работа. Мало текста не беда, если оригинал в порядке.">
+        <button class="review-ans-btn review-ans-btn-primary" name="verdict" value="ok" type="submit" title="Реальная работа. Мало текста не беда, если оригинал в порядке.">
           <span class="review-ans-num">1</span>
           <span class="review-ans-text">
             <strong>Всё верно</strong>
@@ -1098,14 +1095,14 @@ export function renderReviewPage(options: {
           </span>
         </button>
         ${REVIEW_ANSWERS.map(([key, name, hint], index) => `
-        <button class="btn review-ans-btn" name="verdict" value="${key}" type="submit" title="${escapeHtml(hint)}">
+        <button class="review-ans-btn" name="verdict" value="${key}" type="submit" title="${escapeHtml(hint)}">
           <span class="review-ans-num">${index + 2}</span>
           <span class="review-ans-text">
             <strong>${escapeHtml(name)}</strong>
-            <small>${escapeHtml(hint.slice(0, 36))}</small>
+            <small>${escapeHtml(hint.slice(0, 38))}</small>
           </span>
         </button>`).join('')}
-        <button class="btn review-ans-btn review-ans-skip" name="verdict" value="unsure" type="submit" title="Пост пропускается, ответ не считается">
+        <button class="review-ans-btn review-ans-btn-skip" name="verdict" value="unsure" type="submit" title="Пост пропускается, ответ не считается">
           <span class="review-ans-num">5</span>
           <span class="review-ans-text">
             <strong>Не знаю</strong>
@@ -1114,36 +1111,37 @@ export function renderReviewPage(options: {
         </button>
       </div>
 
-      <div class="review-box review-issues-box">
-        <div class="review-box-head">
-          <span>Что не так со сбором:</span>
-        </div>
-        <div class="review-chips">
-          ${Object.entries(ISSUE_NAMES).map(([key, name]) => `
-          <label class="review-chip">
-            <input type="checkbox" name="issues" value="${key}">
-            <span>${escapeHtml(name)}</span>
-          </label>`).join('')}
-        </div>
-        <input type="text" name="note" class="review-note" maxlength="300" placeholder="Комментарий к сбору, если нужно" aria-label="Комментарий">
+      <h2 class="review-issues-title">Что не так со сбором</h2>
+      <div class="review-chips">
+        ${Object.entries(ISSUE_NAMES).map(([key, name]) => `
+        <label class="review-chip">
+          <input type="checkbox" name="issues" value="${key}">
+          <span>${escapeHtml(name)}</span>
+        </label>`).join('')}
       </div>
+      <input type="text" name="note" class="review-note" maxlength="300" placeholder="Комментарий к сбору, если нужно" aria-label="Комментарий">
     </form>
-  </div>
-</div>` : '<div class="review-empty"><p class="muted">В этом направлении пока нечего разбирать. Выберите другое.</p></div>';
+  </aside>
+</div>` : `
+<div class="empty review-empty">
+  <h2>Пока нечего разбирать</h2>
+  <p>В этом направлении все посты разобраны. Выберите другое направление выше или загляните позже.</p>
+</div>`;
 
   const body = `
-<div class="review-bar">
-  <div class="review-bar-left">
-    <h1 class="review-page-title">Разбор постов</h1>
+<div class="review-nav">
+  <div class="review-nav-left">
+    <a class="back" href="/">← Все заказы</a>
+    <span class="review-nav-sep">·</span>
     ${directionPicker('c', 'Все направления', [{ slug: '', label: 'Все направления' }, ...directions], options.direction, true)}
   </div>
-  <div class="review-bar-right">
+  <div class="review-nav-right">
     <span class="review-counter">Вы разобрали: <strong>${options.mine}</strong></span>
     <button type="button" class="link-btn review-help-trigger" title="Справка по оценке (?)">Как оценивать (?)</button>
     ${options.last ? `<form method="post" action="/review/undo" class="review-undo-inline"><input type="hidden" name="id" value="${escapeHtml(options.last)}"><button class="link-btn review-undo-btn" type="submit" title="Отменить последний ответ (Z)">Отменить ответ (Z)</button></form>` : ''}
   </div>
 </div>
-${cockpit}
+${content}
 <div id="review-help-modal" class="review-modal" style="display:none">
   <div class="review-modal-backdrop"></div>
   <div class="review-modal-card">
@@ -1163,7 +1161,7 @@ ${cockpit}
     </ul>
   </div>
 </div>`;
-  return layout({ title: 'Разбор постов', version: options.version, body, auth: options.auth, lang: options.lang, head: '<meta name="robots" content="noindex">', script: REVIEW_SCRIPT });
+  return layout({ title: lead ? `${leadTitle(lead)} · Разбор постов` : 'Разбор постов', version: options.version, body, auth: options.auth, lang: options.lang, head: '<meta name="robots" content="noindex">', script: REVIEW_SCRIPT });
 }
 
 /** Where an employer's page lives. */
