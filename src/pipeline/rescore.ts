@@ -5,7 +5,7 @@ import { assessQuality, offersNoPay, qualityFlagsOf, type QualityFlag } from '..
 import { scoreLead } from '../core/rules.ts';
 import { normalizeSalary } from '../core/salary.ts';
 import type { LeadMoney, Store } from '../core/store.ts';
-import { decodeHtmlEntities, extractTechSkills } from '../core/text.ts';
+import { decodeHtmlEntities, extractSkills } from '../core/text.ts';
 import type { Lead, LeadType, SourceRecord } from '../core/types.ts';
 
 /** Leads read per store call: the stores cap a listing at 5000. */
@@ -33,7 +33,9 @@ const GENERATED_SALARY = /^\d+(?:–\d+)? [A-Z]{3,4}(?: per year)?$/;
  */
 function moneyOf(lead: Lead, type: LeadType, flags: QualityFlag[], source: SourceRecord): LeadMoney {
   const post = `${lead.title}\n${lead.text}`;
-  const found = extractTechSkills(post, 12);
+  // The role/technology split of 0.57.0: trades are read from the title and the requirements,
+  // so «тестирование гипотез» or «developer platform» in the blurb stops re-tagging sales posts.
+  const found = extractSkills(lead.title, lead.text, 12);
   const skills = Array.from(new Set([...(lead.skills ?? []).filter((skill) => !MENTION_SKILLS.has(skill) || found.includes(skill)), ...found]));
   if (offersNoPay(flags)) return { skills };
 
