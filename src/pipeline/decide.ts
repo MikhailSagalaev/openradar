@@ -1,17 +1,20 @@
-import { DECISION_QUESTIONS, parseDecision, type ModelDecision } from '../core/decisions.ts';
+import { DECISION_QUESTIONS, decisionAction, parseDecision, scoreShift, type ModelDecision } from '../core/decisions.ts';
 import type { Store } from '../core/store.ts';
 import type { Env, Logger } from '../core/types.ts';
 import { scrubContacts } from '../server/collector.ts';
 
 /**
- * Asks the decision model about new posts in the background. It only stores answers: the feed
- * does not read them. Contacts are cut before a post leaves the node, and posts of private
- * channels never leave it.
+ * Asks the decision model about new posts in the background. Contacts are cut before a post
+ * leaves the node, and posts of private channels never leave it. With RADAR_DECIDE_APPLY sure
+ * answers act on the feed, and every step can be taken back on /admin/decisions.
  */
 
 /** Enough to tell what a post is, and it keeps the bill small. */
 const MAX_TEXT = 2500;
 const PARALLEL = 4;
+/** An answer takes under a second. A silent connection stays silent, so a new one is quicker. */
+const REQUEST_MS = 10_000;
+const ATTEMPTS = 3;
 
 function decideKey(env: Env): string | undefined {
   return env.RADAR_DECIDE_KEY ?? env.SUBQ_API_KEY;
@@ -47,11 +50,44 @@ async function askOne(lead: { id: string; title: string; text: string }, deps: D
     method: 'POST',
     headers: { authorization: `Bearer ${decideKey(env)}`, 'content-type': 'application/json' },
     body: JSON.stringify({ model: env.RADAR_DECIDE_MODEL, state, questions: DECISION_QUESTIONS }),
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(REQUEST_MS),
   });
   if (!response.ok) return response.status;
   const decidedAt = (deps.now?.() ?? new Date()).toISOString();
   return parseDecision(await response.json(), lead.id, env.RADAR_DECIDE_MODEL!, decidedAt);
+}
+
+async function withRetry<T>(ask: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await ask();
+    } catch (error) {
+      if (attempt >= ATTEMPTS) throw error;
+    }
+  }
+}
+
+/** Acts on stored answers. Each post once: an answer a person overruled stays overruled. */
+export async function applyDecisions(deps: DecideDeps, limit: number): Promise<{ hidden: number; closed: number; moved: number }> {
+  const summary = { hidden: 0, closed: 0, moved: 0 };
+  const { store, env } = deps;
+  if (!env.RADAR_DECIDE_APPLY || !store.listDecisionsToApply || !store.markDecisionApplied) return summary;
+  for (const { decision, score } of await store.listDecisionsToApply(limit)) {
+    const action = decisionAction(decision);
+    const shift = scoreShift(decision);
+    if (action) {
+      await store.setLeadDecision(decision.leadId, { state: action, decidedBy: 'model', reason: `model ${decision.model}: scam ${decision.scam.toFixed(2)}, closed ${decision.closed.toFixed(2)}, ${decision.kind}` });
+      await store.updateLeadState!(decision.leadId, action);
+      if (action === 'closed') summary.closed++;
+      else summary.hidden++;
+    }
+    if (shift) {
+      await store.updateLeadScore?.(decision.leadId, Math.max(0, Math.min(100, score + shift)));
+      summary.moved++;
+    }
+    await store.markDecisionApplied(decision.leadId, action ?? 'scored');
+  }
+  return summary;
 }
 
 export async function runDecisions(deps: DecideDeps, limit: number): Promise<DecideSummary> {
@@ -64,7 +100,7 @@ export async function runDecisions(deps: DecideDeps, limit: number): Promise<Dec
       const lead = leads[next++]!;
       summary.asked++;
       try {
-        const answer = await askOne(lead, deps);
+        const answer = await withRetry(() => askOne(lead, deps));
         if (typeof answer === 'number') {
           summary.failed++;
           if (STOP.has(answer)) summary.stopped = answer;

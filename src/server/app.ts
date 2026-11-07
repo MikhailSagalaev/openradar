@@ -35,7 +35,7 @@ import { qualityFlagsOf } from '../core/quality.ts';
 import { rubToUsd } from '../core/salary.ts';
 import { TelegramAuthService } from './tg-auth.ts';
 import { sourceState } from '../core/source-health.ts';
-import { LABEL_VERDICTS, scoreSource } from '../core/source-quality.ts';
+import { LABEL_VERDICTS, normalizeReviewVerdict, scoreSource } from '../core/source-quality.ts';
 import { scoreDecisions } from '../core/decisions.ts';
 import { assertSafeUrl } from '../core/ssrf.ts';
 import { robotsFor } from '../pipeline/robots-audit.ts';
@@ -90,6 +90,7 @@ import {
   renderEmployersPage,
   renderDecisionsPage,
   renderLabelPage,
+  renderReviewPage,
   renderSourceQualityPage,
   renderFaqPage,
   renderLlmsTxt,
@@ -1301,7 +1302,40 @@ export function createApp(runtime: Runtime): Hono {
       stats: stats ?? { total: 0, tokens: 0, byKind: {}, closed: 0, scam: 0 },
       score: scoreDecisions(labelled ?? []),
       rows: rows ?? [],
+      applied: (await runtime.store.listAppliedDecisions?.(100)) ?? [],
+      reviews: (await runtime.store.reviewStats?.()) ?? { total: 0, reviewers: 0 },
     }));
+  });
+  app.post('/admin/decisions/overrule', async (c) => {
+    if (!await isAdmin(c, runtime)) return c.redirect('/login?returnTo=/admin/decisions');
+    if (!sameOrigin(c)) return c.text('Forbidden', 403);
+    const form = await c.req.parseBody();
+    if (typeof form.id !== 'string' || !form.id) return c.text('Bad request', 400);
+    await runtime.store.overruleDecision?.(form.id, (await currentUser(c, runtime))?.id);
+    return c.redirect('/admin/decisions');
+  });
+
+  // Readers rate posts one by one. Answers stay apart from the hand-checked set until they agree.
+  app.get('/review', rateLimit({ windowMs: 60_000, max: 120 }), async (c) => {
+    const user = await currentUser(c, runtime);
+    if (!user) return c.redirect('/login?returnTo=/review');
+    const viewer = await viewerFromRequest(c, runtime);
+    const lead = await runtime.store.nextLeadToReview?.(user.id);
+    const stats = await runtime.store.reviewStats?.(user.id);
+    return c.html(renderReviewPage({
+      version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c),
+      lead: lead ? projectContacts(lead, { ...viewer, tier: 'guest' }) : undefined, mine: stats?.mine ?? 0,
+    }));
+  });
+  app.post('/review', rateLimit({ windowMs: 60_000, max: 60 }), async (c) => {
+    const user = await currentUser(c, runtime);
+    if (!user) return c.redirect('/login?returnTo=/review');
+    if (!sameOrigin(c)) return c.text('Forbidden', 403);
+    const form = await c.req.parseBody();
+    const verdict = normalizeReviewVerdict(form.verdict);
+    if (typeof form.id !== 'string' || !form.id || !verdict) return c.text('Bad review', 400);
+    await runtime.store.saveLeadReview?.(form.id, user.id, verdict);
+    return c.redirect('/review');
   });
 
   // Posts checked by hand: a post at a time, the sources with the fewest answers first.

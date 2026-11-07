@@ -1,9 +1,9 @@
 /**
  * Decisions: a fast model that answers fixed questions about a post with probabilities instead
  * of writing text. Any service with the `/v1/systemone` shape fits: SubQ Snap, Jev, or a Laya or
- * Kev running on your own machine. An answer is advice. A post's author writes the text the
- * model reads, and a sentence can steer it, so an answer never removes a post by itself.
- * See docs/DECISIONS.md.
+ * Kev running on your own machine. With RADAR_DECIDE_APPLY a sure answer hides a post and moves
+ * its score. Each such step is kept, and a person can take it back: a post's author writes the
+ * text the model reads, and a sentence can steer it. See docs/DECISIONS.md.
  */
 
 /** Raised when the questions change: older answers then no longer compare. */
@@ -51,10 +51,33 @@ export interface ModelDecision {
   fullness: number;
   tokens: number;
   decidedAt: string;
+  /** What the node did on this answer. */
+  applied?: string;
+  overruled?: boolean;
 }
 
 /** Above this the model is taken to say yes. To be set from labels, not guessed: see below. */
 export const FLAG_AT = 0.5;
+
+/** How sure the model must be before a post leaves the feed. */
+export const HIDE_SCAM_AT = 0.75;
+export const HIDE_JUNK_AT = 0.9;
+export const CLOSE_AT = 0.9;
+
+export type DecisionAction = 'hidden_scam' | 'hidden_junk' | 'closed';
+
+/** What the node does with an answer, if anything. */
+export function decisionAction(d: Pick<ModelDecision, 'kind' | 'kindConfidence' | 'closed' | 'scam'>): DecisionAction | undefined {
+  if (d.scam >= HIDE_SCAM_AT) return 'hidden_scam';
+  if ((d.kind === 'other' || d.kind === 'resume') && d.kindConfidence >= HIDE_JUNK_AT) return 'hidden_junk';
+  if (d.closed >= CLOSE_AT) return 'closed';
+  return undefined;
+}
+
+/** Points a post gains or loses in the feed: a full description lifts it, doubt sinks it. */
+export function scoreShift(d: Pick<ModelDecision, 'fullness' | 'scam'>): number {
+  return Math.round((d.fullness - 1.5) * 4 - d.scam * 30);
+}
 
 /** The answer as the service sent it, or undefined when it is not the shape asked for. */
 export function parseDecision(body: unknown, leadId: string, model: string, decidedAt: string): ModelDecision | undefined {

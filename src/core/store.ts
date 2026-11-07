@@ -221,7 +221,7 @@ export interface LeadDecision {
   leadId: string;
   state: 'active' | 'hidden_junk' | 'hidden_scam' | 'closed';
   /** `source`: the board itself shows the post as closed or removed (liveness check). */
-  decidedBy: 'moderator' | 'author' | 'source';
+  decidedBy: 'moderator' | 'author' | 'source' | 'model';
   pubkey?: string;
   reason: string;
   decidedAt: string;
@@ -444,6 +444,20 @@ export interface Store extends HubStore {
   listLeadsToDecide?(limit: number): Promise<Array<{ id: string; title: string; text: string }>>;
   saveModelDecision?(decision: ModelDecision): Promise<void>;
   decisionStats?(): Promise<{ total: number; tokens: number; byKind: Record<string, number>; closed: number; scam: number; lastAt?: string }>;
+  /** Answers not acted on yet, with the post's score. */
+  listDecisionsToApply?(limit: number): Promise<Array<{ decision: ModelDecision; score: number }>>;
+  markDecisionApplied?(leadId: string, applied: string): Promise<void>;
+  /** Posts the model took off the feed, the newest first. */
+  listAppliedDecisions?(limit: number): Promise<Array<{ lead: Lead; decision: ModelDecision }>>;
+  /** A person says the model was wrong: the post comes back and counts as a good one. */
+  overruleDecision?(leadId: string, userId?: number): Promise<void>;
+  /** Short posts of these hosts, not read yet. */
+  listLeadsToEnrich?(limit: number, hosts: string[], shortText: number): Promise<Array<{ id: string; url: string; text: string }>>;
+  saveLeadEnrichment?(id: string, text?: string): Promise<void>;
+  /** The next post for a signed-in reader. */
+  nextLeadToReview?(userId: number): Promise<Lead | null>;
+  saveLeadReview?(leadId: string, userId: number, verdict: string): Promise<void>;
+  reviewStats?(userId?: number): Promise<{ total: number; reviewers: number; mine: number }>;
   /** Posts where the model and the node differ, the surest first. */
   listDecisionDisagreements?(limit: number): Promise<Array<{ lead: Lead; decision: ModelDecision; reason: string }>>;
   /** Decisions of posts a person checked. */

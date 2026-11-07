@@ -602,7 +602,7 @@ export class PostgresStore implements Store {
 
   private rowToDecision(r: any): ModelDecision {
     return {
-      leadId: String(r.lead_id), version: Number(r.d_version), model: String(r.d_model), kind: r.d_kind, kindConfidence: Number(r.kind_confidence),
+      applied: r.applied ?? undefined, leadId: String(r.lead_id), version: Number(r.d_version), model: String(r.d_model), kind: r.d_kind, kindConfidence: Number(r.kind_confidence),
       closed: Number(r.d_closed), scam: Number(r.d_scam), fullness: Number(r.fullness), tokens: Number(r.tokens), decidedAt: new Date(r.decided_at).toISOString(),
     };
   }
@@ -625,6 +625,96 @@ export class PostgresStore implements Store {
       const reason = disagreement(decision, lead);
       return reason ? [{ lead, decision, reason }] : [];
     });
+  }
+
+  async listDecisionsToApply(limit: number): Promise<Array<{ decision: ModelDecision; score: number }>> {
+    const res = await this.pool.query(
+      `SELECT d.lead_id, d.version AS d_version, d.model AS d_model, d.kind AS d_kind, d.kind_confidence,
+              d.closed AS d_closed, d.scam AS d_scam, d.fullness, d.tokens, d.decided_at, l.score
+         FROM model_decisions d JOIN leads l ON l.id = d.lead_id
+        WHERE d.applied IS NULL AND NOT d.overruled AND l.state = 'active' AND l.status <> 'rejected'
+        ORDER BY d.decided_at DESC LIMIT $1`,
+      [limit],
+    );
+    return res.rows.map((r) => ({ decision: this.rowToDecision(r), score: Number(r.score) || 0 }));
+  }
+
+  async markDecisionApplied(leadId: string, applied: string): Promise<void> {
+    await this.pool.query(`UPDATE model_decisions SET applied = $2 WHERE lead_id = $1`, [leadId, applied]);
+  }
+
+  async listAppliedDecisions(limit: number): Promise<Array<{ lead: Lead; decision: ModelDecision }>> {
+    const res = await this.pool.query(
+      `SELECT l.*, d.lead_id, d.version AS d_version, d.model AS d_model, d.kind AS d_kind, d.kind_confidence,
+              d.closed AS d_closed, d.scam AS d_scam, d.fullness, d.tokens, d.decided_at
+         FROM model_decisions d JOIN leads l ON l.id = d.lead_id
+        WHERE d.applied IN ('hidden_scam', 'hidden_junk', 'closed') AND NOT d.overruled
+        ORDER BY d.decided_at DESC LIMIT $1`,
+      [limit],
+    );
+    return res.rows.map((r) => ({ lead: this.rowToLead(r), decision: this.rowToDecision(r) }));
+  }
+
+  async overruleDecision(leadId: string, userId?: number): Promise<void> {
+    await this.pool.query(`UPDATE model_decisions SET overruled = TRUE WHERE lead_id = $1`, [leadId]);
+    await this.pool.query(`DELETE FROM lead_decisions WHERE lead_id = $1 AND decided_by = 'model'`, [leadId]);
+    await this.pool.query(`UPDATE leads SET state = 'active' WHERE id = $1`, [leadId]);
+    await this.saveLeadLabel(leadId, 'good', userId);
+  }
+
+  async listLeadsToEnrich(limit: number, hosts: string[], shortText: number): Promise<Array<{ id: string; url: string; text: string }>> {
+    const res = await this.pool.query(
+      `SELECT id, url, text FROM leads
+        WHERE type = 'job' AND state = 'active' AND status <> 'rejected' AND url IS NOT NULL
+          AND length(text) < $3 AND substring(url from 'https?://(?:www\.)?([^/]+)') = ANY($2)
+          AND created_at >= now() - interval '30 days' AND NOT metadata_json ? 'enrichedAt'
+        ORDER BY created_at DESC LIMIT $1`,
+      [limit, hosts, shortText],
+    );
+    return res.rows.map((r) => ({ id: String(r.id), url: String(r.url), text: String(r.text ?? '') }));
+  }
+
+  async saveLeadEnrichment(id: string, text?: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE leads SET text = COALESCE($2, text), metadata_json = metadata_json || jsonb_build_object('enrichedAt', now()) WHERE id = $1`,
+      [id, text ?? null],
+    );
+  }
+
+  async nextLeadToReview(userId: number): Promise<Lead | null> {
+    // Posts few readers saw come first, and among them those the model doubts.
+    const res = await this.pool.query(
+      `SELECT l.* FROM leads l
+         JOIN sources s ON s.id = l.source_id
+         LEFT JOIN model_decisions d ON d.lead_id = l.id
+        WHERE l.state = 'active' AND l.status <> 'rejected'
+          AND l.created_at BETWEEN now() - interval '14 days' AND now() - interval '12 hours'
+          AND COALESCE(l.source_visibility, 'public') <> 'private'
+          AND COALESCE((s.config_json->>'userTelegram')::boolean, false) = false
+          AND NOT EXISTS (SELECT 1 FROM lead_reviews r WHERE r.lead_id = l.id AND r.user_id = $1)
+          AND (SELECT count(*) FROM lead_reviews r WHERE r.lead_id = l.id) < 3
+        ORDER BY (d.kind_confidence IS NOT NULL AND d.kind_confidence < 0.9) DESC, random()
+        LIMIT 1`,
+      [userId],
+    );
+    return res.rows[0] ? this.rowToLead(res.rows[0]) : null;
+  }
+
+  async saveLeadReview(leadId: string, userId: number, verdict: string): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO lead_reviews (lead_id, user_id, verdict) VALUES ($1, $2, $3)
+       ON CONFLICT (lead_id, user_id) DO UPDATE SET verdict = EXCLUDED.verdict, reviewed_at = now()`,
+      [leadId, userId, verdict],
+    );
+  }
+
+  async reviewStats(userId?: number): Promise<{ total: number; reviewers: number; mine: number }> {
+    const res = await this.pool.query(
+      `SELECT count(*)::int AS total, count(DISTINCT user_id)::int AS reviewers,
+              count(*) FILTER (WHERE user_id = $1)::int AS mine FROM lead_reviews`,
+      [userId ?? -1],
+    );
+    return { total: Number(res.rows[0].total), reviewers: Number(res.rows[0].reviewers), mine: Number(res.rows[0].mine) };
   }
 
   async listLabelledDecisions(): Promise<LabelledDecision[]> {

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.58.0
+
+- **Decisions act.** With `RADAR_DECIDE_APPLY` a sure answer hides a scam or junk post, closes a closed one and moves the score. Every step shows on `/admin/decisions` and goes back with one button.
+- **Readers rate posts.** `/review` shows signed-in readers one post at a time. An answer counts when two of three agree.
+- Fuller posts: feeds give their full text and fields (Jobicy, Himalayas), and short posts of hh.ru, Dribbble and Jobicy are read from their page markup where robots.txt allows. Career pages and Telegram posts keep their lines.
+- A stalled request to the decision model is retried on a new connection.
+
 ## 0.57.0
 
 - **Decisions.** A fast model can answer fixed questions about each post: what it is, is it closed, does it look like a scam, how full it is. Any `/v1/systemone` service fits. Answers are only stored: the feed does not read them until hand labels show they can be trusted. Contacts are cut first and posts of private channels stay on the node. [docs/DECISIONS.md](docs/DECISIONS.md).

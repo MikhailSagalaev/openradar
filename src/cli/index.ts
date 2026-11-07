@@ -252,6 +252,17 @@ function buildProgram(): Command {
       });
     });
   decide
+    .command('apply')
+    .description('Act on stored answers: needs RADAR_DECIDE_APPLY')
+    .option('--limit <n>', 'Answers', '20000')
+    .action(async (options: { limit: string }) => {
+      await withRuntime(async (runtime) => {
+        const { applyDecisions } = await import('../pipeline/decide.ts');
+        const done = await applyDecisions({ store: runtime.store, env: runtime.env, logger: runtime.logger, fetchImpl: fetch }, Number(options.limit) || 20000);
+        console.log(`Скрыто ${done.hidden}, закрыто ${done.closed}, оценка изменена у ${done.moved}`);
+      });
+    });
+  decide
     .command('eval')
     .description('Compare the answers with posts checked by hand')
     .action(async () => {

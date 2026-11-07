@@ -352,6 +352,66 @@ export class MemoryStore implements Store {
     }).slice(0, limit);
   }
 
+  async listDecisionsToApply(limit: number): Promise<Array<{ decision: ModelDecision; score: number }>> {
+    return [...this.modelDecisions.values()].flatMap((decision) => {
+      const lead = this.leads.get(decision.leadId);
+      return lead && !decision.applied && !decision.overruled && (lead.state ?? 'active') === 'active' ? [{ decision, score: lead.score }] : [];
+    }).slice(0, limit);
+  }
+
+  async markDecisionApplied(leadId: string, applied: string): Promise<void> {
+    const decision = this.modelDecisions.get(leadId);
+    if (decision) decision.applied = applied;
+  }
+
+  async listAppliedDecisions(limit: number): Promise<Array<{ lead: Lead; decision: ModelDecision }>> {
+    return [...this.modelDecisions.values()].flatMap((decision) => {
+      const lead = this.leads.get(decision.leadId);
+      return lead && decision.applied && decision.applied !== 'scored' && !decision.overruled ? [{ lead: { ...lead }, decision }] : [];
+    }).slice(0, limit);
+  }
+
+  async overruleDecision(leadId: string): Promise<void> {
+    const decision = this.modelDecisions.get(leadId);
+    if (decision) decision.overruled = true;
+    if (this.decisions.get(leadId)?.decidedBy === 'model') this.decisions.delete(leadId);
+    const lead = this.leads.get(leadId);
+    if (lead) lead.state = 'active';
+    this.labels.set(leadId, 'good');
+  }
+
+  async listLeadsToEnrich(limit: number, hosts: string[], shortText: number): Promise<Array<{ id: string; url: string; text: string }>> {
+    return [...this.leads.values()].filter((l) => {
+      const host = l.url ? new URL(l.url).hostname.replace(/^www\./, '') : '';
+      return hosts.includes(host) && l.text.length < shortText && !(l.metadata as Record<string, unknown> | undefined)?.enrichedAt;
+    }).slice(0, limit).map((l) => ({ id: l.id, url: l.url!, text: l.text }));
+  }
+
+  async saveLeadEnrichment(id: string, text?: string): Promise<void> {
+    const lead = this.leads.get(id);
+    if (!lead) return;
+    if (text) lead.text = text;
+    lead.metadata = { ...lead.metadata, enrichedAt: new Date().toISOString() };
+  }
+
+  private reviews = new Map<string, Map<number, string>>();
+
+  async nextLeadToReview(userId: number): Promise<Lead | null> {
+    const lead = [...this.leads.values()].find((l) => (l.state ?? 'active') === 'active' && l.status !== 'rejected' && !this.reviews.get(l.id)?.has(userId));
+    return lead ? { ...lead } : null;
+  }
+
+  async saveLeadReview(leadId: string, userId: number, verdict: string): Promise<void> {
+    const votes = this.reviews.get(leadId) ?? new Map<number, string>();
+    votes.set(userId, verdict);
+    this.reviews.set(leadId, votes);
+  }
+
+  async reviewStats(userId?: number): Promise<{ total: number; reviewers: number; mine: number }> {
+    const all = [...this.reviews.values()].flatMap((votes) => [...votes.keys()]);
+    return { total: all.length, reviewers: new Set(all).size, mine: all.filter((id) => id === userId).length };
+  }
+
   async listLabelledDecisions(): Promise<LabelledDecision[]> {
     return [...this.labels.entries()].flatMap(([id, verdict]) => {
       const decision = this.modelDecisions.get(id);

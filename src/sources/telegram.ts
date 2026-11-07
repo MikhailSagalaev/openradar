@@ -43,7 +43,8 @@ export const telegramSource: SourceAdapter = {
           timeoutMs: ctx.timeoutMs,
         })
       : await fetchText(ctx, `https://t.me/s/${channel}`);
-    const $ = cheerio.load(html);
+    // As text, before parsing: a replaced node can be lost next to inline tags.
+    const $ = cheerio.load(html.replace(/<br\s*\/?>/gi, '\n'));
     const channelTitle = $('.tgme_channel_info_header_title').text().trim() || channel;
     const limit = Math.max(1, Math.min(Number(source.config.limit ?? 30), 100));
     const leads: RawLead[] = [];
@@ -52,7 +53,6 @@ export const telegramSource: SourceAdapter = {
       if (leads.length >= limit) return;
       const message = $(element).find('.tgme_widget_message');
       const textEl = $(element).find('.tgme_widget_message_text');
-      textEl.find('br').replaceWith('\n');
       // text() joins blocks with nothing between them: «рублейПредстоит».
       textEl.find('p, div, li, blockquote, pre, h1, h2, h3, h4').after('\n');
       const text = textEl.text().trim();

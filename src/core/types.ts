@@ -40,6 +40,8 @@ export interface Env {
   RADAR_DECIDE_MODEL?: string;
   RADAR_DECIDE_PER_HOUR?: number;
   RADAR_DECIDE_KEY?: string;
+  RADAR_DECIDE_APPLY?: boolean;
+  RADAR_ENRICH_PER_HOUR?: number;
   SUBQ_API_KEY?: string;
   /** Site visitors may link their own Telegram account by QR (sessions stored encrypted). */
   RADAR_USER_TELEGRAM: boolean;
