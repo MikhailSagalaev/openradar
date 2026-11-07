@@ -1890,82 +1890,23 @@ footer {
   color: var(--muted);
 }
 .lead-company { margin: 4px 0 2px; font-size: 15px; }
-.review-picker { display: inline-block; min-width: 200px; }
-.review-picker .custom-dropdown-menu { max-height: 320px; min-width: 260px; }
+.review-picker { display: inline-block; min-width: 240px; margin-bottom: 8px; }
+.review-picker .custom-dropdown-menu { max-height: 320px; min-width: 280px; }
 .review-picker a.custom-dropdown-item { text-decoration: none; color: inherit; }
 .review-picker-search { width: 100%; box-sizing: border-box; margin-bottom: 4px; }
-.review-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 4px 0 12px; border-bottom: 1px solid var(--line); margin-bottom: 14px; flex-shrink: 0; }
-.review-bar-left { display: flex; align-items: center; gap: 14px; }
-.review-page-title { font-size: 17px; font-weight: 600; margin: 0; letter-spacing: -0.02em; }
-.review-bar-right { display: flex; align-items: center; gap: 14px; font-size: 13px; color: var(--muted); }
-.review-counter strong { color: var(--ink); }
-.review-undo-inline { display: inline-flex; margin: 0; }
-.review-undo-inline .link-btn, .review-help-trigger { background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font: inherit; }
-.review-undo-inline .link-btn:hover, .review-help-trigger:hover { color: var(--ink); }
-.review-cockpit { display: flex; gap: 18px; flex: 1 1 auto; min-height: 0; overflow: hidden; margin-bottom: 8px; }
-.review-pane-lead { flex: 1 1 60%; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 18px 20px; overflow: hidden; }
-.review-lead-head { flex-shrink: 0; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
-.review-lead-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; margin-bottom: 8px; }
-.review-lead-pills { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.review-meta-pill { border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; font-size: 12px; background: var(--bg); color: var(--ink); }
-.review-meta-pill.review-salary-pill { font-weight: 600; }
-.review-original { color: var(--ink); text-decoration: underline; font-weight: 500; font-size: 12.5px; }
-.review-lead-title { font-size: 19px; line-height: 1.35; margin: 4px 0 2px; font-weight: 600; letter-spacing: -0.02em; }
-.review-lead-company { font-size: 13.5px; color: var(--muted); margin: 0; }
-.review-lead-scroll { flex: 1 1 auto; overflow-y: auto; padding-right: 8px; }
-.review-text { white-space: pre-wrap; font-size: 13.5px; line-height: 1.6; margin: 0; }
-.review-pane-actions { flex: 0 0 360px; min-width: 310px; max-width: 380px; display: flex; flex-direction: column; overflow-y: auto; gap: 10px; }
-.review-form { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; border: 0; }
-.review-box { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--surface); }
-.review-box-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-.review-shown-pills { display: flex; align-items: center; gap: 6px; }
-.review-shown-tag { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; font-size: 12.5px; font-weight: 600; color: var(--ink); }
-.review-fix { margin-top: 8px; font-size: 12.5px; }
-.review-fix summary { cursor: pointer; color: var(--muted); font-size: 12px; }
-.review-fix-body { display: grid; gap: 6px; padding: 8px 0 0; }
-.review-answers { display: flex; flex-direction: column; gap: 6px; }
-.review-ans-btn { display: flex; align-items: center; gap: 10px; text-align: left; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); cursor: pointer; transition: all .15s ease; width: 100%; box-sizing: border-box; }
-.review-ans-btn:hover { border-color: var(--ink); }
-.review-ans-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 5px; font-size: 12px; font-weight: 700; font-family: ui-monospace, SFMono-Regular, monospace; background: var(--bg); border: 1px solid var(--line); flex-shrink: 0; }
-.review-ans-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
-.review-ans-text strong { font-size: 13px; font-weight: 600; }
-.review-ans-text small { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
-.review-ans-btn.review-main { background: var(--ink); color: var(--surface); border-color: var(--ink); }
-.review-ans-btn.review-main .review-ans-num { background: var(--surface); color: var(--ink); border-color: transparent; }
-.review-ans-btn.review-main .review-ans-text small { color: color-mix(in srgb, var(--surface) 75%, transparent); }
-.review-ans-skip { border-style: dashed; }
-.review-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0 8px; }
-.review-chip { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; font-size: 11.5px; cursor: pointer; user-select: none; background: var(--bg); color: var(--muted); transition: all .15s ease; }
-.review-chip input { display: none; }
-.review-chip:has(input:checked) { background: var(--ink); color: var(--surface); border-color: var(--ink); }
-.review-chip:hover { border-color: var(--muted); color: var(--ink); }
-.review-note { width: 100%; box-sizing: border-box; padding: 6px 10px; font-size: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font-family: inherit; }
-.review-modal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 16px; }
-.review-modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.45); backdrop-filter: blur(2px); }
-.review-modal-card { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; max-width: 480px; width: 100%; padding: 20px 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); }
-.review-modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
-.review-modal-head h3 { margin: 0; font-size: 16px; font-weight: 600; }
-.review-help-list { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; line-height: 1.5; color: var(--ink); }
-.review-empty { border: 1px dashed var(--line); border-radius: 10px; padding: 32px 20px; text-align: center; }
-
-@media (min-width: 860px) {
-  body.page-review, body:has(.review-cockpit) { overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
-  body.page-review .top, body:has(.review-cockpit) .top { margin-bottom: 0; padding-bottom: 8px; flex-shrink: 0; }
-  body.page-review main, body:has(.review-cockpit) main { padding-top: 0; padding-bottom: 0; min-height: 0; flex: 1 1 auto; display: flex; flex-direction: column; overflow: hidden; }
-  body.page-review footer, body:has(.review-cockpit) footer { display: none; }
-}
-
-@media (max-width: 859px) {
-  .review-bar { flex-direction: column; align-items: stretch; gap: 8px; }
-  .review-bar-left { flex-direction: column; align-items: flex-start; gap: 8px; }
-  .review-bar-right { justify-content: space-between; }
-  .review-cockpit { flex-direction: column; height: auto; overflow: visible; gap: 14px; }
-  .review-pane-lead { overflow: visible; }
-  .review-lead-scroll { max-height: 240px; }
-  .review-pane-actions { flex: none; max-width: none; overflow: visible; }
-  .review-answers { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-  .review-ans-btn.review-main { grid-column: 1 / -1; }
-}
+.review-help { margin: 8px 0 16px; font-size: 14px; }
+.review-help summary, .review-fix summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+.review-help ul { margin: 8px 0 0; padding-left: 18px; }
+.review-text { white-space: pre-wrap; }
+.review-form { display: grid; gap: 10px; margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+.review-shown { margin: 0; font-size: 14px; }
+.review-answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.review-answers .btn { justify-content: center; min-height: 44px; }
+.review-answers .review-main { background: var(--ink); color: var(--surface); }
+.review-fix-body { display: grid; gap: 8px; padding: 8px 0 0; font-size: 14px; }
+.review-fix-body input[type="text"] { max-width: 520px; }
+.review-undo { margin-top: 14px; }
+.review-undo .link-btn { background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font: inherit; }
 .employer-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 0 0 20px; }
 .employer-stat { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
 .employer-stat strong { display: block; font-size: 22px; font-weight: 600; line-height: 1.2; }
@@ -2546,7 +2487,7 @@ function formatDate(value: string | undefined, lang: SupportedLang = 'ru'): stri
 
 const CURRENCY_SIGNS: Record<string, string> = { RUB: '₽', RUR: '₽', USD: '$', EUR: '€', GBP: '£', UAH: '₴', KZT: '₸', BYN: 'Br' };
 
-export function formatBudget(value: number | undefined, currency = 'RUB'): string {
+function formatBudget(value: number | undefined, currency = 'RUB'): string {
   if (typeof value !== 'number') return '—';
   const code = currency.toUpperCase();
   return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value)} ${CURRENCY_SIGNS[code] ?? code}`;
@@ -3190,7 +3131,7 @@ ${jsonForScript(websiteSchema)}
   });
 }
 
-export function safeHttpUrl(url: string | undefined): string | undefined {
+function safeHttpUrl(url: string | undefined): string | undefined {
   if (!url) return undefined;
   try {
     const parsed = new URL(url);
@@ -3202,7 +3143,7 @@ export function safeHttpUrl(url: string | undefined): string | undefined {
 }
 
 /** «184 800–302 500 $ в год» from a stored range; one sum alone is left to formatBudget. */
-export function salaryRange(lead: Lead, lang: SupportedLang): string | undefined {
+function salaryRange(lead: Lead, lang: SupportedLang): string | undefined {
   const match = /^(\d+)[–-](\d+)\s+([A-Z]{3})(\s+per year)?/.exec(lead.rawSalary ?? '');
   if (!match) return undefined;
   const year = match[4] ? (lang === 'en' ? ' a year' : ' в год') : '';
