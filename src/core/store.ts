@@ -1,3 +1,4 @@
+import type { LeadReview, ReviewBucket } from './reviews.ts';
 import type { LabelledDecision, ModelDecision } from './decisions.ts';
 import type { SourceQualityInput } from './source-quality.ts';
 import type { PageFacts } from '../research/facts.ts';
@@ -438,7 +439,7 @@ export interface Store extends HubStore {
   getSourceQuality?(days: number): Promise<Map<string, SourceQualityInput>>;
   /** The next post to check by hand: from the source with the fewest answers so far. */
   nextLeadToLabel?(): Promise<Lead | null>;
-  saveLeadLabel?(id: string, verdict: string, userId?: number): Promise<void>;
+  saveLeadLabel?(id: string, verdict: string, userId?: number, note?: string): Promise<void>;
   labelStats?(): Promise<Record<string, number>>;
   /** New posts the model has not answered yet. Posts of private channels are left out. */
   listLeadsToDecide?(limit: number): Promise<Array<{ id: string; title: string; text: string }>>;
@@ -454,9 +455,19 @@ export interface Store extends HubStore {
   /** Short posts of these hosts, not read yet. */
   listLeadsToEnrich?(limit: number, hosts: string[], shortText: number): Promise<Array<{ id: string; url: string; text: string }>>;
   saveLeadEnrichment?(id: string, text?: string): Promise<void>;
-  /** The next post for a signed-in reader. */
-  nextLeadToReview?(userId: number): Promise<Lead | null>;
-  saveLeadReview?(leadId: string, userId: number, verdict: string): Promise<void>;
+  /** The next post for a signed-in reader, of a direction if chosen. */
+  nextLeadToReview?(userId: number, options: { direction?: string; bucket: ReviewBucket }): Promise<Lead | null>;
+  saveLeadReview?(review: LeadReview): Promise<void>;
+  deleteLeadReview?(leadId: string, userId: number): Promise<void>;
+  /** Directions with open posts, the fullest first. */
+  listDirections?(): Promise<Array<{ slug: string; total: number }>>;
+  listLeadsForDirections?(afterId: string | null, limit: number): Promise<Lead[]>;
+  setLeadDirection?(id: string, direction: string): Promise<void>;
+  /** Posts readers finished, with the answers of those who still count. */
+  listReviewedLeads?(limit: number): Promise<Array<{ lead: Lead; verdicts: string[] }>>;
+  /** What readers said is wrong with what we collected, by source. */
+  reviewIssuesBySource?(): Promise<Map<string, number>>;
+  listReviewNotes?(limit: number): Promise<Array<{ leadId: string; title: string; source: string; issues: string[]; note?: string }>>;
   reviewStats?(userId?: number): Promise<{ total: number; reviewers: number; mine: number }>;
   /** Posts where the model and the node differ, the surest first. */
   listDecisionDisagreements?(limit: number): Promise<Array<{ lead: Lead; decision: ModelDecision; reason: string }>>;

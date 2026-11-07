@@ -41,6 +41,7 @@ import type {
   UserSourceInput,
   UserSourceRecord,
 } from '../core/store.ts';
+import { TRUST_MIN_AGREEMENT, TRUST_MIN_CONTROLS, type LeadReview, type ReviewBucket } from '../core/reviews.ts';
 import { DECISION_VERSION, disagreement, type LabelledDecision, type ModelDecision } from '../core/decisions.ts';
 import type { EmployerRow, EmployerSummary, SourceQualityInput, LeadFactsFill, LeadMoney, LeadSighting, ResearchDailyRow, SourceActivity } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
@@ -400,7 +401,7 @@ export class PostgresStore implements Store {
           raw_salary, payment_period, normalized_usd_min, normalized_usd_max,
           minhash_sketch, state, contacts_json,
           source_platform, source_channel, source_channel_title, source_visibility, source_message_id,
-          company, company_key
+          company, company_key, direction
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7,
           $8, $9, $10, $11, $12, $13::jsonb, $14,
@@ -410,7 +411,7 @@ export class PostgresStore implements Store {
           $30, $31, $32, $33,
           $34, $35, $36::jsonb,
           $37, $38, $39, $40, $41,
-          $42, $43
+          $42, $43, $44
         ) ON CONFLICT DO NOTHING`,
         [
           lead.id,
@@ -456,6 +457,7 @@ export class PostgresStore implements Store {
           lead.sourceRef?.messageId ?? null,
           lead.company ?? null,
           lead.companyKey ?? null,
+          lead.direction ?? null,
         ]
       );
 
@@ -681,37 +683,104 @@ export class PostgresStore implements Store {
     );
   }
 
-  async nextLeadToReview(userId: number): Promise<Lead | null> {
-    // Posts few readers saw come first, and among them those the model doubts.
-    const res = await this.pool.query(
-      `SELECT l.* FROM leads l
-         JOIN sources s ON s.id = l.source_id
-         LEFT JOIN model_decisions d ON d.lead_id = l.id
-        WHERE l.state = 'active' AND l.status <> 'rejected'
+  async nextLeadToReview(userId: number, options: { direction?: string; bucket: ReviewBucket }): Promise<Lead | null> {
+    const base = `l.state = 'active' AND l.status <> 'rejected'
           AND l.created_at BETWEEN now() - interval '14 days' AND now() - interval '12 hours'
           AND COALESCE(l.source_visibility, 'public') <> 'private'
           AND COALESCE((s.config_json->>'userTelegram')::boolean, false) = false
-          AND NOT EXISTS (SELECT 1 FROM lead_reviews r WHERE r.lead_id = l.id AND r.user_id = $1)
-          AND (SELECT count(*) FROM lead_reviews r WHERE r.lead_id = l.id) < 3
-        ORDER BY (d.kind_confidence IS NOT NULL AND d.kind_confidence < 0.9) DESC, random()
-        LIMIT 1`,
-      [userId],
-    );
-    return res.rows[0] ? this.rowToLead(res.rows[0]) : null;
+          AND ($2::text IS NULL OR l.direction = $2)
+          AND NOT EXISTS (SELECT 1 FROM lead_reviews r WHERE r.lead_id = l.id AND r.user_id = $1)`;
+    const open = `AND (SELECT count(*) FROM lead_reviews r WHERE r.lead_id = l.id AND r.verdict <> 'unsure') < 3`;
+    const queries: Record<ReviewBucket, string> = {
+      control: `SELECT l.* FROM lead_labels b JOIN leads l ON l.id = b.lead_id JOIN sources s ON s.id = l.source_id
+                 WHERE b.verdict <> 'skip' AND ${base} ORDER BY random() LIMIT 1`,
+      doubt: `SELECT l.* FROM model_decisions d JOIN leads l ON l.id = d.lead_id JOIN sources s ON s.id = l.source_id
+               WHERE (d.kind_confidence < 0.8 OR d.scam BETWEEN 0.2 AND 0.75 OR d.closed BETWEEN 0.2 AND 0.9) AND ${base} ${open} ORDER BY random() LIMIT 1`,
+      random: `SELECT l.* FROM leads l JOIN sources s ON s.id = l.source_id WHERE ${base} ${open} ORDER BY random() LIMIT 1`,
+    };
+    for (const bucket of [options.bucket, 'random'] as ReviewBucket[]) {
+      const res = await this.pool.query(queries[bucket], [userId, options.direction ?? null]);
+      if (res.rows[0]) return this.rowToLead(res.rows[0]);
+    }
+    return null;
   }
 
-  async saveLeadReview(leadId: string, userId: number, verdict: string): Promise<void> {
+  async saveLeadReview(r: LeadReview): Promise<void> {
     await this.pool.query(
-      `INSERT INTO lead_reviews (lead_id, user_id, verdict) VALUES ($1, $2, $3)
-       ON CONFLICT (lead_id, user_id) DO UPDATE SET verdict = EXCLUDED.verdict, reviewed_at = now()`,
-      [leadId, userId, verdict],
+      `INSERT INTO lead_reviews (lead_id, user_id, verdict, type_fix, direction_fix, issues, note, shown_type, shown_direction, bucket)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       ON CONFLICT (lead_id, user_id) DO UPDATE SET verdict = EXCLUDED.verdict, type_fix = EXCLUDED.type_fix,
+         direction_fix = EXCLUDED.direction_fix, issues = EXCLUDED.issues, note = EXCLUDED.note, reviewed_at = now()`,
+      [r.leadId, r.userId, r.verdict, r.typeFix ?? null, r.directionFix ?? null, r.issues, r.note ?? null, r.shownType ?? null, r.shownDirection ?? null, r.bucket ?? null],
     );
+  }
+
+  async deleteLeadReview(leadId: string, userId: number): Promise<void> {
+    await this.pool.query(`DELETE FROM lead_reviews WHERE lead_id = $1 AND user_id = $2`, [leadId, userId]);
+  }
+
+  async listDirections(): Promise<Array<{ slug: string; total: number }>> {
+    const res = await this.pool.query(
+      `SELECT direction, count(*)::int AS total FROM leads
+        WHERE direction IS NOT NULL AND state = 'active' AND status <> 'rejected' GROUP BY direction ORDER BY total DESC`,
+    );
+    return res.rows.map((r) => ({ slug: String(r.direction), total: Number(r.total) }));
+  }
+
+  async listLeadsForDirections(afterId: string | null, limit: number): Promise<Lead[]> {
+    const res = await this.pool.query(`SELECT * FROM leads WHERE ($1::text IS NULL OR id > $1::text) ORDER BY id LIMIT $2`, [afterId, limit]);
+    return res.rows.map((r) => this.rowToLead(r));
+  }
+
+  async setLeadDirection(id: string, direction: string): Promise<void> {
+    await this.pool.query(`UPDATE leads SET direction = $2 WHERE id = $1`, [id, direction]);
+  }
+
+  async listReviewedLeads(limit: number): Promise<Array<{ lead: Lead; verdicts: string[] }>> {
+    // A reader counts until the control posts show they answer at random.
+    const res = await this.pool.query(
+      `WITH trust AS (
+         SELECT r.user_id, count(*) AS controls,
+                count(*) FILTER (WHERE (r.verdict = 'ok' AND b.verdict = 'good') OR (r.verdict = 'not_work' AND b.verdict = 'junk')
+                  OR (r.verdict = 'suspicious' AND b.verdict = 'scam') OR (r.verdict = 'closed' AND b.verdict = 'closed')) AS agreed
+           FROM lead_reviews r JOIN lead_labels b ON b.lead_id = r.lead_id
+          WHERE r.verdict <> 'unsure' AND b.verdict <> 'skip' GROUP BY r.user_id
+       ), votes AS (
+         SELECT r.lead_id, array_agg(r.verdict) AS verdicts
+           FROM lead_reviews r LEFT JOIN trust t ON t.user_id = r.user_id
+          WHERE r.verdict <> 'unsure' AND (t.controls IS NULL OR t.controls < $2 OR t.agreed::float / t.controls >= $3)
+          GROUP BY r.lead_id HAVING count(*) >= 3
+       )
+       SELECT l.*, v.verdicts FROM votes v JOIN leads l ON l.id = v.lead_id
+        WHERE l.state = 'active' AND NOT EXISTS (SELECT 1 FROM lead_labels b WHERE b.lead_id = l.id)
+        ORDER BY l.created_at DESC LIMIT $1`,
+      [limit, TRUST_MIN_CONTROLS, TRUST_MIN_AGREEMENT],
+    );
+    return res.rows.map((r) => ({ lead: this.rowToLead(r), verdicts: r.verdicts as string[] }));
+  }
+
+  async reviewIssuesBySource(): Promise<Map<string, number>> {
+    const res = await this.pool.query(
+      `SELECT l.source_id, count(*)::int AS total FROM lead_reviews r JOIN leads l ON l.id = r.lead_id
+        WHERE cardinality(r.issues) > 0 GROUP BY l.source_id`,
+    );
+    return new Map(res.rows.map((r) => [String(r.source_id), Number(r.total)]));
+  }
+
+  async listReviewNotes(limit: number): Promise<Array<{ leadId: string; title: string; source: string; issues: string[]; note?: string }>> {
+    const res = await this.pool.query(
+      `SELECT r.lead_id, r.issues, r.note, l.title, s.title AS source
+         FROM lead_reviews r JOIN leads l ON l.id = r.lead_id JOIN sources s ON s.id = l.source_id
+        WHERE cardinality(r.issues) > 0 OR r.note IS NOT NULL ORDER BY r.reviewed_at DESC LIMIT $1`,
+      [limit],
+    );
+    return res.rows.map((r) => ({ leadId: String(r.lead_id), title: String(r.title ?? ''), source: String(r.source ?? ''), issues: (r.issues as string[]) ?? [], note: r.note ?? undefined }));
   }
 
   async reviewStats(userId?: number): Promise<{ total: number; reviewers: number; mine: number }> {
     const res = await this.pool.query(
       `SELECT count(*)::int AS total, count(DISTINCT user_id)::int AS reviewers,
-              count(*) FILTER (WHERE user_id = $1)::int AS mine FROM lead_reviews`,
+              count(*) FILTER (WHERE user_id = $1)::int AS mine FROM lead_reviews WHERE verdict <> 'unsure'`,
       [userId ?? -1],
     );
     return { total: Number(res.rows[0].total), reviewers: Number(res.rows[0].reviewers), mine: Number(res.rows[0].mine) };
@@ -719,10 +788,10 @@ export class PostgresStore implements Store {
 
   async listLabelledDecisions(): Promise<LabelledDecision[]> {
     const res = await this.pool.query(
-      `SELECT b.verdict, l.type, d.kind, d.kind_confidence, d.closed
+      `SELECT b.verdict, l.type, d.kind, d.kind_confidence, d.closed, d.scam
          FROM lead_labels b JOIN model_decisions d ON d.lead_id = b.lead_id JOIN leads l ON l.id = b.lead_id`,
     );
-    return res.rows.map((r) => ({ verdict: String(r.verdict), type: r.type ?? undefined, kind: String(r.kind), kindConfidence: Number(r.kind_confidence), closed: Number(r.closed) }));
+    return res.rows.map((r) => ({ verdict: String(r.verdict), type: r.type ?? undefined, kind: String(r.kind), kindConfidence: Number(r.kind_confidence), closed: Number(r.closed), scam: Number(r.scam) }));
   }
 
   async nextLeadToLabel(): Promise<Lead | null> {
@@ -753,11 +822,11 @@ export class PostgresStore implements Store {
     return res.rows[0] ? this.rowToLead(res.rows[0]) : null;
   }
 
-  async saveLeadLabel(id: string, verdict: string, userId?: number): Promise<void> {
+  async saveLeadLabel(id: string, verdict: string, userId?: number, note?: string): Promise<void> {
     await this.pool.query(
-      `INSERT INTO lead_labels (lead_id, verdict, labelled_by) VALUES ($1, $2, $3)
-       ON CONFLICT (lead_id) DO UPDATE SET verdict = EXCLUDED.verdict, labelled_by = EXCLUDED.labelled_by, labelled_at = now()`,
-      [id, verdict, userId ?? null],
+      `INSERT INTO lead_labels (lead_id, verdict, labelled_by, note) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (lead_id) DO UPDATE SET verdict = EXCLUDED.verdict, labelled_by = EXCLUDED.labelled_by, note = EXCLUDED.note, labelled_at = now()`,
+      [id, verdict, userId ?? null, note ?? null],
     );
   }
 
@@ -1340,6 +1409,7 @@ export class PostgresStore implements Store {
       confirmedAt: r.confirmed_at ? new Date(r.confirmed_at).toISOString() : undefined,
       company: r.company ?? undefined,
       companyKey: r.company_key ?? undefined,
+      direction: r.direction ?? undefined,
       contacts: parseJsonArray(r.contacts_json),
       sourceRef: r.source_platform && r.source_channel
         ? {

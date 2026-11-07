@@ -216,6 +216,8 @@ export interface Lead extends RawLead {
   /** The employer of a vacancy: the name to show and the form employer pages group by. */
   company?: string;
   companyKey?: string;
+  /** Field of work: the research role, what readers pick and correct. */
+  direction?: string;
   /** Hub: when the lead was first confirmed (another observer or useful signals); sticky. */
   confirmedAt?: string;
 }

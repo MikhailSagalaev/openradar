@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.59.0
+
+- **Post review.** `/review`, linked in the footer: pick a direction from a searchable list, see how we showed a post and answer in one click. A reader can correct the type and direction, mark what we read badly, leave a note and take the last answer back. A short guide explains each answer.
+- Posts mix at random, doubtful and control ones. Two of three alike make a decision, and a reader who keeps missing control posts stops counting. Readers never hide a post: decisions go to a queue on `/admin/decisions`, and reading issues show on `/sources/quality`.
+- Posts keep their direction (`radar redirections` fills stored ones). The model's scam flag is scored against hand labels too.
+
 ## 0.58.0
 
 - **Decisions act.** With `RADAR_DECIDE_APPLY` a sure answer hides a scam or junk post, closes a closed one and moves the score. Every step shows on `/admin/decisions` and goes back with one button.
