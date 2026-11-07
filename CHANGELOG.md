@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.59.3
+
+- **Review layout aligned with site design.** Removed extra headings and container cards; the lead title serves as the primary header and lead description renders flat with native typography and formatting.
+- **Left-aligned verdict buttons.** Action buttons 1–5 align cleanly to the left margin without staggered numbers or centering.
+- Navigation bar with back link, direction selector, reviewer counter, undo, and evaluation guide in OpenRadar minimalist style.
+
 ## 0.59.2
 
 - **Review cockpit.** Single-screen layout for `/review`: on desktop the post description scrolls inside its own pane while verdicts and classification stay fixed in view.
