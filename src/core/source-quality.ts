@@ -78,3 +78,17 @@ export function scoreSource(input: SourceQualityInput): SourceQuality {
 /** What a person may say about a post when checking it by hand. */
 export const LABEL_VERDICTS = ['good', 'closed', 'wrong_type', 'junk'] as const;
 export type LabelVerdict = (typeof LABEL_VERDICTS)[number];
+
+/** A reader's answer, if it is one of the four. */
+export function normalizeReviewVerdict(value: unknown): LabelVerdict | undefined {
+  return (LABEL_VERDICTS as readonly unknown[]).includes(value) ? (value as LabelVerdict) : undefined;
+}
+
+/** What readers agree on: three answers at least and two of three alike. One answer is an opinion. */
+export function reviewConsensus(verdicts: string[]): string | undefined {
+  if (verdicts.length < 3) return undefined;
+  const counts = new Map<string, number>();
+  for (const verdict of verdicts) counts.set(verdict, (counts.get(verdict) ?? 0) + 1);
+  const [top, votes] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]!;
+  return votes / verdicts.length >= 2 / 3 ? top : undefined;
+}

@@ -1,4 +1,5 @@
-import { decisionsEnabled, runDecisions } from './decide.ts';
+import { applyDecisions, decisionsEnabled, runDecisions } from './decide.ts';
+import { runEnrichment } from './enrich.ts';
 import { webPubkey } from '../hub/web-key.ts';
 import type { Logger } from '../core/types.ts';
 import { pollAll, type PollDeps } from './poll.ts';
@@ -34,6 +35,8 @@ export class PollRunner {
   private extractionRunning = false;
   private decisionsRunning = false;
   private nextDecisionsAt = 0;
+  private enrichmentRunning = false;
+  private nextEnrichmentAt = 0;
   private lastUserTelegramAt = 0;
   private userTelegramRunning = false;
 
@@ -102,6 +105,7 @@ export class PollRunner {
       await this.runLivenessIfDue();
       this.runExtractionIfDue();
       this.runDecisionsIfDue();
+      this.runEnrichmentIfDue();
       this.runUserTelegramIfDue();
       // Keeps the live research report built, so no visitor waits the seconds it takes.
       const useModel = this.deps.env.RADAR_EXTRACT_APPLY;
@@ -184,6 +188,25 @@ export class PollRunner {
       });
   }
 
+  /** Pages of short posts, every ten minutes, sized to RADAR_ENRICH_PER_HOUR. */
+  private runEnrichmentIfDue(): void {
+    const env = this.deps.env;
+    const perHour = env.RADAR_ENRICH_PER_HOUR ?? 0;
+    if (perHour <= 0 || this.enrichmentRunning || Date.now() < this.nextEnrichmentAt) return;
+    this.nextEnrichmentAt = Date.now() + EXTRACTION_INTERVAL_MS;
+    this.enrichmentRunning = true;
+    void runEnrichment({ store: this.deps.store, env, logger: this.deps.logger.child('enrich'), fetchImpl: fetch }, Math.max(1, Math.round(perHour / 6)))
+      .then((summary) => {
+        if (summary.checked) this.logger.info('pages read', { ...summary });
+      })
+      .catch((error) => {
+        this.logger.warn('page reading failed', { error: error instanceof Error ? error.message : String(error) });
+      })
+      .finally(() => {
+        this.enrichmentRunning = false;
+      });
+  }
+
   /** A batch of decisions every ten minutes, sized to RADAR_DECIDE_PER_HOUR. */
   private runDecisionsIfDue(): void {
     const env = this.deps.env;
@@ -195,6 +218,12 @@ export class PollRunner {
     void runDecisions({ store: this.deps.store, env, logger: this.deps.logger.child('decide'), fetchImpl: fetch }, Math.max(1, Math.round(perHour / 6)))
       .then((summary) => {
         if (summary.asked) this.logger.info('decisions finished', { ...summary });
+        return applyDecisions({ store: this.deps.store, env, logger: this.deps.logger.child('decide'), fetchImpl: fetch }, 500).then((done) => {
+          if (done.hidden || done.closed || done.moved) this.logger.info('decisions applied', { ...done });
+          return summary;
+        });
+      })
+      .then((summary) => {
         // No credits or too many requests: an hour's pause, not a request every ten minutes.
         if (summary.stopped) this.nextDecisionsAt = Date.now() + 60 * 60 * 1000;
       })

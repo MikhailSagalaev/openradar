@@ -3,7 +3,32 @@ import { firstLine, stripBudgetTitleSuffix, toPlainText } from '../core/text.ts'
 import type { RawLead, SourceAdapter } from '../core/types.ts';
 import { fetchText } from './http.ts';
 
-const parser = new Parser();
+interface BoardFields {
+  id?: string;
+  author?: string;
+  contentEncoded?: string;
+  himalayasCompany?: string;
+  jobCompany?: string;
+  jobLocation?: string;
+  jobType?: string;
+  jobCategory?: string;
+}
+
+/** Job boards put the employer, place and type into their own feed tags. */
+const parser = new Parser<Record<string, unknown>, BoardFields>({
+  customFields: {
+    item: [
+      ['content:encoded', 'contentEncoded'],
+      ['himalayasJobs:companyName', 'himalayasCompany'],
+      ['job_listing:company', 'jobCompany'],
+      ['job_listing:location', 'jobLocation'],
+      ['job_listing:job_type', 'jobType'],
+      ['job_listing:category', 'jobCategory'],
+    ],
+  },
+});
+
+const MAX_TEXT = 8000;
 
 /**
  * A bare «&» («R&D», «?a=1&b=2» in a link) is not XML, and the strict parser drops the whole
@@ -27,9 +52,16 @@ export const rssSource: SourceAdapter = {
     const limit = Math.max(1, Math.min(Number(source.config.limit ?? 30), 100));
 
     return (feed.items ?? []).slice(0, limit).map((item) => {
-      const text = toPlainText(
-        item.contentSnippet || item.content || item.summary || item.title || '',
-      );
+      // HTML first: a snippet has lost the paragraphs.
+      const body = toPlainText(item.contentEncoded || item.content || item.contentSnippet || item.summary || item.title || '');
+      const company = item.jobCompany || item.himalayasCompany;
+      const head = [
+        company && `Company: ${company}`,
+        item.jobLocation && `Location: ${item.jobLocation}`,
+        item.jobType && `Type: ${item.jobType}`,
+        item.jobCategory && `Category: ${item.jobCategory}`,
+      ].filter(Boolean).join('\n');
+      const text = `${head}${head ? '\n\n' : ''}${body}`.slice(0, MAX_TEXT);
       const title = firstLine(stripBudgetTitleSuffix(item.title || text), 140);
       return {
         sourceId: source.id,
@@ -37,7 +69,7 @@ export const rssSource: SourceAdapter = {
         url: item.link || undefined,
         title,
         text: text || title,
-        author: item.creator || item.author || undefined,
+        author: company || item.creator || item.author || undefined,
         publishedAt: item.isoDate || item.pubDate || undefined,
         raw: { feedTitle: feed.title, feedUrl: url },
       } satisfies RawLead;

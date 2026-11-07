@@ -2267,6 +2267,7 @@ ${input.body}
         <a href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md" target="_blank" rel="noopener noreferrer">${escapeHtml(t.guideLink)}</a>
         <a href="/research">${escapeHtml(lang === 'ru' ? 'Исследования рынка' : 'Market research')}</a>
         <a href="/employers">${escapeHtml(lang === 'ru' ? 'Работодатели' : 'Employers')}</a>
+        <a href="/review">${escapeHtml(lang === 'ru' ? 'Оценить посты' : 'Rate posts')}</a>
         <a href="/about">${escapeHtml(lang === 'ru' ? 'О проекте' : 'About')}</a>
         <a href="/trust">${escapeHtml(lang === 'ru' ? 'Данные и доверие' : 'Trust & data')}</a>
         <a href="/faq">${escapeHtml(lang === 'ru' ? 'Вопросы и ответы' : 'FAQ')}</a>

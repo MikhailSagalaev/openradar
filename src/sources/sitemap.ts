@@ -1,6 +1,6 @@
 import type { PollContext, RawLead, SourceAdapter, SourceRecord } from '../core/types.ts';
 import { asText, companyOf, extractPageFacts, isType, jsonLdObjects, salaryOf } from '../research/facts.ts';
-import { stripHtml } from '../core/text.ts';
+import { normalizeWhitespace, stripHtml } from '../core/text.ts';
 import { fetchText } from './http.ts';
 
 /**
@@ -75,7 +75,8 @@ function leadFromPosting(source: SourceRecord, url: string, key: string, html: s
   const city = locationOf(posting);
   // Some boards keep only a line in the markup and the pay in the page description.
   const meta = asText(html.match(/<meta\s+(?:name="description"|property="og:description")\s+content="([^"]*)"/i)?.[1], 1000) ?? '';
-  const markup = asText(posting.description, MAX_TEXT) ?? '';
+  // Lines stay: the post reads as the board wrote it.
+  const markup = typeof posting.description === 'string' ? normalizeWhitespace(stripHtml(stripHtml(posting.description))).slice(0, MAX_TEXT) : '';
   // A line in the markup: the vacancy itself is on the page.
   const page = markup.length < 400 ? visibleText(html) : '';
   const description = [meta.length > markup.length ? meta : '', markup, page].filter(Boolean).join('\n\n');
@@ -141,12 +142,10 @@ function leadFromPlainPage(source: SourceRecord, url: string, key: string, html:
 
 /** The text a visitor sees: dialogs and blocks the page keeps hidden stay out. */
 function visibleText(html: string): string {
-  return stripHtml(html
+  return normalizeWhitespace(stripHtml(html
     .replace(/<(script|style|nav|footer|header|svg|dialog)[\s\S]*?<\/\1>/gi, ' ')
     .replace(/<div[^>]*w-condition-invisible[^>]*>[\s\S]*?<\/div>/gi, ' ')
-    .replace(/<h1[^>]*>([\s\S]*?)<\/h1>/i, ' '))
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/<h1[^>]*>([\s\S]*?)<\/h1>/i, ' ')));
 }
 
 /** Pages already read, per source: each poll goes on to newer ones. */

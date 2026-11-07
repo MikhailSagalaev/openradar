@@ -878,6 +878,8 @@ export function renderDecisionsPage(options: {
   stats: { total: number; tokens: number; byKind: Record<string, number>; closed: number; scam: number; lastAt?: string };
   score: DecisionScore;
   rows: Array<{ lead: Lead; decision: ModelDecision; reason: string }>;
+  applied: Array<{ lead: Lead; decision: ModelDecision }>;
+  reviews: { total: number; reviewers: number };
 }): string {
   const { stats, score } = options;
   const share = (part: number, whole: number): string => (whole ? `${Math.round((part / whole) * 100)}% (${part} из ${whole})` : '—');
@@ -895,7 +897,7 @@ export function renderDecisionsPage(options: {
   const body = `
 <div class="page-head"><div>
   <h1>Решения модели</h1>
-  <p class="muted small">Ответы только сохраняются, лента их не читает. <a href="/admin/labels">Проверить посты вручную</a></p>
+  <p class="muted small">Уверенные ответы убирают посты и меняют оценку. Любое действие можно вернуть. <a href="/admin/labels">Проверить посты вручную</a></p>
 </div></div>
 <section class="profile">
   <p>Отвечено постов: <strong>${stats.total}</strong> · токенов: ${stats.tokens} · примерно $${cost.toFixed(3)} · закрытых: ${stats.closed} · мошенничество: ${stats.scam}</p>
@@ -903,10 +905,44 @@ export function renderDecisionsPage(options: {
   <h2>Сверка с ручными метками: ${score.n}</h2>
   ${score.n ? `<table class="profile-table"><thead><tr><th>Флаг</th><th>Модель права</th><th>Находит</th></tr></thead><tbody>${flags}</tbody></table>
   <p class="muted small">Ошибка вероятности закрытия (Brier): ${score.closedBrier?.toFixed(3) ?? '—'}. Ниже лучше, 0,25 это монетка.</p>` : '<p class="muted">Пока нет ручных меток на постах с ответом модели.</p>'}
+  <h2>Что модель убрала из ленты: ${options.applied.length}</h2>
+  ${options.applied.length ? `<table class="profile-table"><thead><tr><th>Пост</th><th>Действие</th><th>Мошенн.</th><th>Закрыт</th><th></th></tr></thead><tbody>${options.applied.map(({ lead, decision }) => `<tr>
+    <td><a href="/leads/${escapeHtml(encodeURIComponent(lead.id))}">${escapeHtml(lead.title.slice(0, 80))}</a></td>
+    <td>${escapeHtml(decision.applied ?? '')}</td><td class="num">${decision.scam.toFixed(2)}</td><td class="num">${decision.closed.toFixed(2)}</td>
+    <td><form method="post" action="/admin/decisions/overrule"><input type="hidden" name="id" value="${escapeHtml(lead.id)}"><button class="btn" type="submit">Вернуть</button></form></td>
+  </tr>`).join('\n')}</tbody></table>` : '<p class="muted">Пока ничего.</p>'}
+  <p class="muted small">Оценок читателей: ${options.reviews.total}, читателей: ${options.reviews.reviewers}.</p>
   <h2>Где модель спорит с лентой</h2>
   ${rows ? `<table class="profile-table"><thead><tr><th>Пост</th><th>Причина</th><th>Уверенность</th><th>Закрыт</th><th>Мошенн.</th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="muted">Расхождений нет.</p>'}
 </section>`;
   return layout({ title: 'Решения модели', version: options.version, body, auth: options.auth, lang: options.lang, head: '<meta name="robots" content="noindex">' });
+}
+
+export function renderReviewPage(options: {
+  version: string;
+  auth?: AuthDisplay;
+  lang?: SupportedLang;
+  lead?: Lead;
+  mine: number;
+}): string {
+  const ru = options.lang !== 'en';
+  const names: Array<[string, string]> = ru
+    ? [['good', 'Хороший пост'], ['closed', 'Уже закрыт'], ['wrong_type', 'Не тот тип'], ['junk', 'Мусор или скам']]
+    : [['good', 'Good post'], ['closed', 'Already closed'], ['wrong_type', 'Wrong type'], ['junk', 'Junk or scam']];
+  const lead = options.lead;
+  const body = `
+<div class="page-head"><div>
+  <h1>${ru ? 'Оцените посты' : 'Rate the posts'}</h1>
+  <p class="muted small">${ru ? 'Один клик, и следующий пост. Так лента становится чище для всех.' : 'One click and the next post comes. It makes the feed cleaner for everyone.'} ${ru ? 'Вы оценили' : 'Rated by you'}: ${options.mine}</p>
+</div></div>
+<section class="profile">
+  ${lead ? `
+  <p class="muted small">${lead.type === 'job' ? (ru ? 'Вакансия' : 'Vacancy') : (ru ? 'Заказ' : 'Order')}${lead.url ? ` · <a href="${escapeHtml(lead.url)}" target="_blank" rel="noopener noreferrer">${ru ? 'Открыть оригинал' : 'Open the original'}</a>` : ''}</p>
+  <h2>${escapeHtml(lead.title)}</h2>
+  <p style="white-space:pre-wrap">${escapeHtml(lead.text.slice(0, 1500))}</p>
+  <form method="post" action="/review"><input type="hidden" name="id" value="${escapeHtml(lead.id)}">${names.map(([key, name]) => `<button class="btn" name="verdict" value="${key}" type="submit">${escapeHtml(name)}</button>`).join(' ')}</form>` : `<p class="muted">${ru ? 'Новых постов для оценки пока нет.' : 'No new posts to rate yet.'}</p>`}
+</section>`;
+  return layout({ title: ru ? 'Оцените посты' : 'Rate the posts', version: options.version, body, auth: options.auth, lang: options.lang, head: '<meta name="robots" content="noindex">' });
 }
 
 /** Where an employer's page lives. */
