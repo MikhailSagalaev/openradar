@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.59.1
+
+- The quality pass reads skills by the 0.57.0 rules: rescore still went through the whole-text extractor and re-hung «Рекрутинг» and «Тестирование» on sales and management posts while re-running. The split holds everywhere now.
+- MCP search_leads narrows `since` by the publication date (the collection moment only as a fallback), and the output says `published_at_estimated` when the source never gave a date. Mystery-shopper tasks carry their own flag; a greeting h1 and a board naming itself as the place stop becoming the title and the city. From the audit in issue 71 by obsiown.
+
 ## 0.59.0
 
 - **Post review.** `/review`, linked in the footer: pick a direction from a searchable list, see how we showed a post and answer in one click. A reader can correct the type and direction, mark what we read badly, leave a note and take the last answer back. A short guide explains each answer.
