@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { decisionAction, scoreShift } from '../src/core/decisions.ts';
-import { normalizeReviewVerdict, reviewConsensus } from '../src/core/source-quality.ts';
+import { isReviewVerdict, labelOfReview, pickBucket, reviewConsensus, trusted } from '../src/core/reviews.ts';
+import { fillDirections } from '../src/pipeline/redirections.ts';
 import { applyDecisions, runDecisions } from '../src/pipeline/decide.ts';
 import { pageVacancyText, runEnrichment } from '../src/pipeline/enrich.ts';
 import { createApp } from '../src/server/app.ts';
@@ -111,33 +112,63 @@ describe('fuller posts', () => {
 });
 
 describe('reader reviews', () => {
-  it('take only known verdicts', () => {
-    expect(normalizeReviewVerdict('good')).toBe('good');
-    expect(normalizeReviewVerdict('anything')).toBeUndefined();
+  it('know their answers', () => {
+    expect(isReviewVerdict('ok')).toBe(true);
+    expect(isReviewVerdict('anything')).toBe(false);
+    expect(labelOfReview('ok', 'gig')).toBe('wrong_type');
+    expect(labelOfReview('suspicious')).toBe('scam');
   });
 
   it('agree only when most readers do', () => {
-    expect(reviewConsensus(['good', 'good', 'junk'])).toBe('good');
-    expect(reviewConsensus(['good', 'junk'])).toBeUndefined();
-    expect(reviewConsensus(['good', 'good'])).toBeUndefined();
+    expect(reviewConsensus(['ok', 'ok', 'not_work'])).toBe('ok');
+    expect(reviewConsensus(['ok', 'not_work'])).toBeUndefined();
+    expect(reviewConsensus(['ok', 'not_work', 'closed'])).toBeUndefined();
+    expect(reviewConsensus(['ok', 'ok', 'unsure'])).toBeUndefined();
   });
 
-  it('ask a guest to sign in and walk a member through posts', async () => {
+  it('mix most posts at random, some doubtful, a few control', () => {
+    expect([0.05, 0.2, 0.7].map(pickBucket)).toEqual(['control', 'doubt', 'random']);
+  });
+
+  it('stop trusting a reader only after enough control posts', () => {
+    expect(trusted(3, 0)).toBe(true);
+    expect(trusted(10, 5)).toBe(false);
+    expect(trusted(10, 8)).toBe(true);
+  });
+
+  it('walk a member through posts of a direction, with fixes, issues and undo', async () => {
     const { runtime, insert } = await setup();
-    await insert('a', { contacts: [{ type: 'email', value: 'hr@a.test' }] });
-    await insert('b');
+    await insert('a', { title: 'Backend-разработчик', direction: 'backend', contacts: [{ type: 'email', value: 'hr@a.test' }] });
+    await insert('b', { title: 'Дизайнер логотипов', direction: 'design' });
     const app = createApp(runtime);
     expect((await app.request('/review')).status).toBe(302);
     const session = await makeUserSession(runtime as never);
     const cookie = { cookie: `radar_session=${session}` };
-    const first = await (await app.request('/review', { headers: cookie })).text();
-    expect(first).toContain('name="verdict"');
-    expect(first).not.toContain('hr@a.test');
-    const id = /name="id" value="([^"]+)"/.exec(first)![1]!;
-    const post = (verdict: string) => app.request('/review', { method: 'POST', headers: { ...cookie, origin: 'http://localhost', 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ id, verdict }).toString() });
-    expect((await post('nonsense')).status).toBe(400);
-    expect((await post('good')).status).toBe(302);
-    const second = await (await app.request('/review', { headers: cookie })).text();
-    expect(second).not.toContain(`value="${id}"`);
+    const first = await (await app.request('/review?c=design', { headers: cookie })).text();
+    expect(first).toContain('Дизайнер логотипов');
+    expect(first).not.toContain('Backend-разработчик</h2>');
+    expect(first).toContain('Как оценивать');
+    expect(first).toContain('review-picker-search');
+    expect(first).toContain('Мы показали это как');
+    const post = (fields: Record<string, string>) => app.request('/review', { method: 'POST', headers: { ...cookie, origin: 'http://localhost', 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(fields).toString() });
+    expect((await post({ id: 'b', verdict: 'nonsense' })).status).toBe(400);
+    expect((await post({ id: 'nope', verdict: 'ok' })).status).toBe(400);
+    const saved = await post({ id: 'b', verdict: 'ok', issues: 'text_cut', direction_fix: 'content', note: 'мало текста', c: 'design' });
+    expect(saved.headers.get('location')).toBe('/review?last=b&c=design');
+    expect((await runtime.store.listReviewNotes!(5))[0]).toMatchObject({ issues: ['text_cut'], note: 'мало текста' });
+    const page = await (await app.request('/review', { headers: cookie })).text();
+    expect(page).toContain('Backend-разработчик');
+    expect(page).not.toContain('hr@a.test');
+    const undo = await app.request('/review/undo', { method: 'POST', headers: { ...cookie, origin: 'http://localhost', 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ id: 'b' }).toString() });
+    expect(undo.headers.get('location')).toBe('/review?show=b');
+    expect(await runtime.store.listReviewNotes!(5)).toHaveLength(0);
+  });
+
+  it('fill directions of stored posts', async () => {
+    const { runtime, insert } = await setup();
+    await insert('a', { title: 'Backend-разработчик на Go' });
+    expect((await fillDirections(runtime.store)).updated).toBe(1);
+    expect((await runtime.store.getLead('a'))?.direction).toBe('backend');
+    expect((await fillDirections(runtime.store)).updated).toBe(0);
   });
 });

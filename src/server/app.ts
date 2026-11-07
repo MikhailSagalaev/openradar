@@ -35,7 +35,9 @@ import { qualityFlagsOf } from '../core/quality.ts';
 import { rubToUsd } from '../core/salary.ts';
 import { TelegramAuthService } from './tg-auth.ts';
 import { sourceState } from '../core/source-health.ts';
-import { LABEL_VERDICTS, normalizeReviewVerdict, scoreSource } from '../core/source-quality.ts';
+import { LABEL_VERDICTS, scoreSource } from '../core/source-quality.ts';
+import { REVIEW_ISSUES, isReviewVerdict, pickBucket, reviewConsensus, type ReviewIssue } from '../core/reviews.ts';
+import { roleDef, roleLabel } from '../research/derive.ts';
 import { scoreDecisions } from '../core/decisions.ts';
 import { assertSafeUrl } from '../core/ssrf.ts';
 import { robotsFor } from '../pipeline/robots-audit.ts';
@@ -1304,6 +1306,11 @@ export function createApp(runtime: Runtime): Hono {
       rows: rows ?? [],
       applied: (await runtime.store.listAppliedDecisions?.(100)) ?? [],
       reviews: (await runtime.store.reviewStats?.()) ?? { total: 0, reviewers: 0 },
+      queue: ((await runtime.store.listReviewedLeads?.(200)) ?? []).flatMap(({ lead, verdicts }) => {
+        const verdict = reviewConsensus(verdicts);
+        return verdict && verdict !== 'ok' ? [{ lead, verdict }] : [];
+      }),
+      notes: (await runtime.store.listReviewNotes?.(50)) ?? [],
     }));
   });
   app.post('/admin/decisions/overrule', async (c) => {
@@ -1315,27 +1322,62 @@ export function createApp(runtime: Runtime): Hono {
     return c.redirect('/admin/decisions');
   });
 
-  // Readers rate posts one by one. Answers stay apart from the hand-checked set until they agree.
+  // Readers go through posts of a direction. Answers are data: they never hide a post.
+  const directionItems = async (): Promise<Array<{ slug: string; label: string; total: number }>> =>
+    ((await runtime.store.listDirections?.()) ?? []).map((item) => ({ ...item, label: roleLabel(item.slug) }));
   app.get('/review', rateLimit({ windowMs: 60_000, max: 120 }), async (c) => {
     const user = await currentUser(c, runtime);
     if (!user) return c.redirect('/login?returnTo=/review');
-    const viewer = await viewerFromRequest(c, runtime);
-    const lead = await runtime.store.nextLeadToReview?.(user.id);
+    const directions = await directionItems();
+    const asked = c.req.query('c') ?? '';
+    const direction = directions.some((item) => item.slug === asked) ? asked : '';
+    const bucket = pickBucket(Math.random());
+    // After an undo the same post comes back.
+    const again = c.req.query('show');
+    const shown = again ? await runtime.store.getLead(again) : null;
+    const lead = shown && viewerCanSeeLead({ tier: 'guest' }, shown, runtime.access)
+      ? shown
+      : await runtime.store.nextLeadToReview?.(user.id, { direction: direction || undefined, bucket });
     const stats = await runtime.store.reviewStats?.(user.id);
     return c.html(renderReviewPage({
       version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c),
-      lead: lead ? projectContacts(lead, { ...viewer, tier: 'guest' }) : undefined, mine: stats?.mine ?? 0,
+      lead: lead ? projectContacts(lead, { tier: 'guest' }) : undefined,
+      bucket, directions, direction, mine: stats?.mine ?? 0, last: c.req.query('last'),
     }));
   });
   app.post('/review', rateLimit({ windowMs: 60_000, max: 60 }), async (c) => {
     const user = await currentUser(c, runtime);
     if (!user) return c.redirect('/login?returnTo=/review');
     if (!sameOrigin(c)) return c.text('Forbidden', 403);
+    const form = await c.req.parseBody({ all: true });
+    const one = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() ? value.trim() : undefined);
+    const id = one(form.id);
+    if (!id || !isReviewVerdict(form.verdict)) return c.text('Bad review', 400);
+    const lead = await runtime.store.getLead(id);
+    if (!lead) return c.text('Bad review', 400);
+    const typeFix = one(form.type_fix);
+    const directionFix = one(form.direction_fix);
+    const bucket = one(form.bucket);
+    await runtime.store.saveLeadReview?.({
+      leadId: id, userId: user.id, verdict: form.verdict,
+      typeFix: typeFix === 'job' || typeFix === 'gig' ? typeFix : undefined,
+      directionFix: directionFix && roleDef(directionFix) ? directionFix : undefined,
+      issues: ([] as unknown[]).concat(form.issues ?? []).filter((issue): issue is ReviewIssue => (REVIEW_ISSUES as readonly unknown[]).includes(issue)),
+      note: one(form.note)?.slice(0, 300),
+      shownType: lead.type, shownDirection: lead.direction,
+      bucket: bucket === 'random' || bucket === 'doubt' || bucket === 'control' ? bucket : undefined,
+    });
+    const direction = one(form.c);
+    return c.redirect(`/review?last=${encodeURIComponent(id)}${direction ? `&c=${encodeURIComponent(direction)}` : ''}`);
+  });
+  app.post('/review/undo', rateLimit({ windowMs: 60_000, max: 60 }), async (c) => {
+    const user = await currentUser(c, runtime);
+    if (!user) return c.redirect('/login?returnTo=/review');
+    if (!sameOrigin(c)) return c.text('Forbidden', 403);
     const form = await c.req.parseBody();
-    const verdict = normalizeReviewVerdict(form.verdict);
-    if (typeof form.id !== 'string' || !form.id || !verdict) return c.text('Bad review', 400);
-    await runtime.store.saveLeadReview?.(form.id, user.id, verdict);
-    return c.redirect('/review');
+    if (typeof form.id !== 'string' || !form.id) return c.text('Bad request', 400);
+    await runtime.store.deleteLeadReview?.(form.id, user.id);
+    return c.redirect(`/review?show=${encodeURIComponent(form.id)}`);
   });
 
   // Posts checked by hand: a post at a time, the sources with the fewest answers first.
@@ -1353,7 +1395,7 @@ export function createApp(runtime: Runtime): Hono {
     const verdict = typeof form.verdict === 'string' ? form.verdict : '';
     if (!id || !(LABEL_VERDICTS as readonly string[]).includes(verdict)) return c.text('Bad label', 400);
     const user = await currentUser(c, runtime);
-    await runtime.store.saveLeadLabel?.(id, verdict, user?.id);
+    await runtime.store.saveLeadLabel?.(id, verdict, user?.id, typeof form.note === 'string' && form.note.trim() ? form.note.trim().slice(0, 300) : undefined);
     return c.redirect('/admin/labels');
   });
 
@@ -1744,11 +1786,12 @@ export function createApp(runtime: Runtime): Hono {
     if (!await canRead(c, runtime)) return c.redirect('/login');
     if (!qualityCache || Date.now() - qualityCache.at > 10 * 60_000) {
       const inputs = (await runtime.store.getSourceQuality?.(QUALITY_WINDOW_DAYS)) ?? new Map();
+      const issues = (await runtime.store.reviewIssuesBySource?.()) ?? new Map<string, number>();
       const rows = (await runtime.store.listSources())
         .filter((source) => source.config.userTelegram !== true)
         .map((source) => {
           const input = inputs.get(source.id);
-          return { id: source.id, title: source.title, enabled: source.enabled, input, quality: input ? scoreSource(input) : { score: null, grade: 'new' as const, parts: {} } };
+          return { id: source.id, title: source.title, enabled: source.enabled, input, issues: issues.get(source.id), quality: input ? scoreSource(input) : { score: null, grade: 'new' as const, parts: {} } };
         })
         .sort((a, b) => Number(b.enabled) - Number(a.enabled) || (a.quality.score ?? 101) - (b.quality.score ?? 101));
       qualityCache = { at: Date.now(), rows };

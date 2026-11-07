@@ -25,6 +25,7 @@ import type {
   UserSourceInput,
   UserSourceRecord,
 } from '../core/store.ts';
+import type { LeadReview, ReviewBucket } from '../core/reviews.ts';
 import { disagreement, type LabelledDecision, type ModelDecision } from '../core/decisions.ts';
 import type { EmployerRow, EmployerSummary, SourceQualityInput, LeadFactsFill, LeadMoney, LeadSighting, ResearchDailyRow, SourceActivity } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
@@ -394,28 +395,59 @@ export class MemoryStore implements Store {
     lead.metadata = { ...lead.metadata, enrichedAt: new Date().toISOString() };
   }
 
-  private reviews = new Map<string, Map<number, string>>();
+  private reviews = new Map<string, Map<number, LeadReview>>();
 
-  async nextLeadToReview(userId: number): Promise<Lead | null> {
-    const lead = [...this.leads.values()].find((l) => (l.state ?? 'active') === 'active' && l.status !== 'rejected' && !this.reviews.get(l.id)?.has(userId));
+  async nextLeadToReview(userId: number, options: { direction?: string; bucket: ReviewBucket }): Promise<Lead | null> {
+    const lead = [...this.leads.values()].find((l) => (l.state ?? 'active') === 'active' && l.status !== 'rejected'
+      && (!options.direction || l.direction === options.direction) && !this.reviews.get(l.id)?.has(userId));
     return lead ? { ...lead } : null;
   }
 
-  async saveLeadReview(leadId: string, userId: number, verdict: string): Promise<void> {
-    const votes = this.reviews.get(leadId) ?? new Map<number, string>();
-    votes.set(userId, verdict);
-    this.reviews.set(leadId, votes);
+  async saveLeadReview(review: LeadReview): Promise<void> {
+    const votes = this.reviews.get(review.leadId) ?? new Map<number, LeadReview>();
+    votes.set(review.userId, review);
+    this.reviews.set(review.leadId, votes);
+  }
+
+  async deleteLeadReview(leadId: string, userId: number): Promise<void> {
+    this.reviews.get(leadId)?.delete(userId);
+  }
+
+  async listReviewedLeads(limit: number): Promise<Array<{ lead: Lead; verdicts: string[] }>> {
+    return [...this.reviews.entries()].flatMap(([id, votes]) => {
+      const lead = this.leads.get(id);
+      const verdicts = [...votes.values()].map((v) => v.verdict as string).filter((v) => v !== 'unsure');
+      return lead && verdicts.length >= 3 && !this.labels.has(id) ? [{ lead: { ...lead }, verdicts }] : [];
+    }).slice(0, limit);
+  }
+
+  async reviewIssuesBySource(): Promise<Map<string, number>> {
+    const counts = new Map<string, number>();
+    for (const [id, votes] of this.reviews) {
+      const source = this.leads.get(id)?.sourceId;
+      if (!source) continue;
+      const flagged = [...votes.values()].filter((v) => v.issues.length).length;
+      if (flagged) counts.set(source, (counts.get(source) ?? 0) + flagged);
+    }
+    return counts;
+  }
+
+  async listReviewNotes(limit: number): Promise<Array<{ leadId: string; title: string; source: string; issues: string[]; note?: string }>> {
+    return [...this.reviews.values()].flatMap((votes) => [...votes.values()]).filter((v) => v.issues.length || v.note).slice(0, limit).map((v) => {
+      const lead = this.leads.get(v.leadId);
+      return { leadId: v.leadId, title: lead?.title ?? '', source: (lead && this.sources.get(lead.sourceId)?.title) ?? '', issues: v.issues, note: v.note };
+    });
   }
 
   async reviewStats(userId?: number): Promise<{ total: number; reviewers: number; mine: number }> {
-    const all = [...this.reviews.values()].flatMap((votes) => [...votes.keys()]);
+    const all = [...this.reviews.values()].flatMap((votes) => [...votes.values()].filter((v) => v.verdict !== 'unsure').map((v) => v.userId));
     return { total: all.length, reviewers: new Set(all).size, mine: all.filter((id) => id === userId).length };
   }
 
   async listLabelledDecisions(): Promise<LabelledDecision[]> {
     return [...this.labels.entries()].flatMap(([id, verdict]) => {
       const decision = this.modelDecisions.get(id);
-      return decision ? [{ verdict, type: this.leads.get(id)?.type, kind: decision.kind, kindConfidence: decision.kindConfidence, closed: decision.closed }] : [];
+      return decision ? [{ verdict, type: this.leads.get(id)?.type, kind: decision.kind, kindConfidence: decision.kindConfidence, closed: decision.closed, scam: decision.scam }] : [];
     });
   }
 
@@ -426,6 +458,21 @@ export class MemoryStore implements Store {
 
   async saveLeadLabel(id: string, verdict: string): Promise<void> {
     this.labels.set(id, verdict);
+  }
+
+  async listDirections(): Promise<Array<{ slug: string; total: number }>> {
+    const counts = new Map<string, number>();
+    for (const lead of this.leads.values()) if (lead.direction && (lead.state ?? 'active') === 'active') counts.set(lead.direction, (counts.get(lead.direction) ?? 0) + 1);
+    return [...counts.entries()].map(([slug, total]) => ({ slug, total })).sort((a, b) => b.total - a.total);
+  }
+
+  async listLeadsForDirections(afterId: string | null, limit: number): Promise<Lead[]> {
+    return [...this.leads.values()].filter((l) => afterId === null || l.id > afterId).sort((a, b) => (a.id < b.id ? -1 : 1)).slice(0, limit).map((l) => ({ ...l }));
+  }
+
+  async setLeadDirection(id: string, direction: string): Promise<void> {
+    const lead = this.leads.get(id);
+    if (lead) lead.direction = direction;
   }
 
   async labelStats(): Promise<Record<string, number>> {

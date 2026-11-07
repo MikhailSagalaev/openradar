@@ -274,6 +274,17 @@ function buildProgram(): Command {
     });
 
   program
+    .command('redirections')
+    .description('Fill the direction of every stored post with the current rule')
+    .action(async () => {
+      await withRuntime(async (runtime) => {
+        const { fillDirections } = await import('../pipeline/redirections.ts');
+        const summary = await fillDirections(runtime.store);
+        console.log(`Проверено ${summary.checked}, обновлено ${summary.updated}.`);
+      });
+    });
+
+  program
     .command('reemployers')
     .description('Fill the employer of every stored vacancy with the current rule')
     .action(async () => {

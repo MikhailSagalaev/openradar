@@ -1890,6 +1890,23 @@ footer {
   color: var(--muted);
 }
 .lead-company { margin: 4px 0 2px; font-size: 15px; }
+.review-picker { display: inline-block; min-width: 240px; margin-bottom: 8px; }
+.review-picker .custom-dropdown-menu { max-height: 320px; min-width: 280px; }
+.review-picker a.custom-dropdown-item { text-decoration: none; color: inherit; }
+.review-picker-search { width: 100%; box-sizing: border-box; margin-bottom: 4px; }
+.review-help { margin: 8px 0 16px; font-size: 14px; }
+.review-help summary, .review-fix summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+.review-help ul { margin: 8px 0 0; padding-left: 18px; }
+.review-text { white-space: pre-wrap; }
+.review-form { display: grid; gap: 10px; margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+.review-shown { margin: 0; font-size: 14px; }
+.review-answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.review-answers .btn { justify-content: center; min-height: 44px; }
+.review-answers .review-main { background: var(--ink); color: var(--surface); }
+.review-fix-body { display: grid; gap: 8px; padding: 8px 0 0; font-size: 14px; }
+.review-fix-body input[type="text"] { max-width: 520px; }
+.review-undo { margin-top: 14px; }
+.review-undo .link-btn { background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font: inherit; }
 .employer-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 0 0 20px; }
 .employer-stat { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
 .employer-stat strong { display: block; font-size: 22px; font-weight: 600; line-height: 1.2; }
@@ -2267,7 +2284,7 @@ ${input.body}
         <a href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md" target="_blank" rel="noopener noreferrer">${escapeHtml(t.guideLink)}</a>
         <a href="/research">${escapeHtml(lang === 'ru' ? 'Исследования рынка' : 'Market research')}</a>
         <a href="/employers">${escapeHtml(lang === 'ru' ? 'Работодатели' : 'Employers')}</a>
-        <a href="/review">${escapeHtml(lang === 'ru' ? 'Оценить посты' : 'Rate posts')}</a>
+        <a href="/review">${escapeHtml(lang === 'ru' ? 'Разбор постов' : 'Review posts')}</a>
         <a href="/about">${escapeHtml(lang === 'ru' ? 'О проекте' : 'About')}</a>
         <a href="/trust">${escapeHtml(lang === 'ru' ? 'Данные и доверие' : 'Trust & data')}</a>
         <a href="/faq">${escapeHtml(lang === 'ru' ? 'Вопросы и ответы' : 'FAQ')}</a>

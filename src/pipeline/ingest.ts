@@ -1,3 +1,4 @@
+import { classifyRole } from '../research/derive.ts';
 import { employerOf } from '../core/company.ts';
 import { randomUUID } from 'node:crypto';
 import { prepareRawLead } from '../core/prepare.ts';
@@ -227,6 +228,7 @@ export async function ingestRawLead(
     author: prepared.author,
     company: employer?.name,
     companyKey: employer?.key,
+    direction: classifyRole(prepared.type ?? 'gig', prepared.title, prepared.text.slice(0, 600)),
     city,
     budget: prepared.budget,
     currency: prepared.currency ?? 'RUB',

@@ -113,6 +113,7 @@ export interface LabelledDecision {
   kind: string;
   kindConfidence: number;
   closed: number;
+  scam?: number;
 }
 
 export interface FlagScore {
@@ -128,6 +129,7 @@ export interface DecisionScore {
   n: number;
   closed: FlagScore;
   junk: FlagScore;
+  scam: FlagScore;
   type: FlagScore;
   /** Mean squared gap between the closed probability and the truth: 0 is perfect, 0.25 a coin. */
   closedBrier: number | null;
@@ -147,14 +149,17 @@ function count(score: FlagScore, said: boolean, truth: boolean): void {
 }
 
 /** The model against posts a person checked. */
-export function scoreDecisions(rows: LabelledDecision[]): DecisionScore {
-  const score: DecisionScore = { n: rows.length, closed: flag(), junk: flag(), type: flag(), closedBrier: null, byConfidence: [] };
+export function scoreDecisions(labelled: LabelledDecision[]): DecisionScore {
+  // «Не знаю» says nothing about the post.
+  const rows = labelled.filter((row) => row.verdict !== 'skip');
+  const score: DecisionScore = { n: rows.length, closed: flag(), junk: flag(), scam: flag(), type: flag(), closedBrier: null, byConfidence: [] };
   let brier = 0;
   for (const row of rows) {
     const isClosed = row.verdict === 'closed';
     count(score.closed, row.closed >= FLAG_AT, isClosed);
     brier += (row.closed - (isClosed ? 1 : 0)) ** 2;
     count(score.junk, row.kind === 'other' || row.kind === 'resume', row.verdict === 'junk');
+    count(score.scam, (row.scam ?? 0) >= FLAG_AT, row.verdict === 'scam');
     const typed = row.kind === 'vacancy' ? 'job' : row.kind === 'order' ? 'gig' : undefined;
     count(score.type, Boolean(typed && row.type && typed !== row.type), row.verdict === 'wrong_type');
   }
