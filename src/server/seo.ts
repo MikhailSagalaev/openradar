@@ -1,6 +1,6 @@
 import { escapeHtml, jsonForScript } from '../core/text.ts';
 import type { Lead, LeadType } from '../core/types.ts';
-import { layout, type AuthDisplay } from './ui.ts';
+import { layout, type AuthDisplay, formatBudget, salaryRange, safeHttpUrl } from './ui.ts';
 import type { SupportedLang } from './i18n.ts';
 import type { SourceQuality, SourceQualityInput } from '../core/source-quality.ts';
 import type { DecisionScore, FlagScore, ModelDecision } from '../core/decisions.ts';
@@ -956,12 +956,30 @@ function directionPicker(name: string, label: string, items: DirectionItem[], se
 
 const REVIEW_SCRIPT = `<script>
 (() => {
+  document.body.classList.add('page-review');
   const closeAll = () => {
     document.querySelectorAll('.review-picker .custom-dropdown-menu').forEach((m) => { m.style.display = 'none'; });
     document.querySelectorAll('.review-picker .custom-dropdown-btn').forEach((b) => b.setAttribute('aria-expanded', 'false'));
   };
+  const closeHelp = () => {
+    const modal = document.getElementById('review-help-modal');
+    if (modal) modal.style.display = 'none';
+  };
+  const toggleHelp = () => {
+    const modal = document.getElementById('review-help-modal');
+    if (!modal) return;
+    modal.style.display = modal.style.display === 'none' ? 'flex' : 'none';
+  };
   document.addEventListener('click', (event) => {
     const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest('.review-help-trigger')) {
+      toggleHelp();
+      return;
+    }
+    if (target?.closest('.review-modal-close') || target?.classList.contains('review-modal-backdrop')) {
+      closeHelp();
+      return;
+    }
     const trigger = target?.closest('.review-picker .custom-dropdown-btn');
     if (trigger) {
       const menu = trigger.parentElement.querySelector('.custom-dropdown-menu');
@@ -992,11 +1010,16 @@ const REVIEW_SCRIPT = `<script>
     });
   });
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') closeAll();
+    if (event.key === 'Escape') {
+      closeAll();
+      closeHelp();
+    }
     if (event.ctrlKey || event.metaKey || event.altKey || /INPUT|TEXTAREA|SELECT/.test(event.target.tagName)) return;
     const buttons = document.querySelectorAll('.review-answers button[name="verdict"]');
     if (/^[1-5]$/.test(event.key)) buttons[Number(event.key) - 1]?.click();
     if (/^[oOоО]$/.test(event.key)) document.querySelector('.review-original')?.click();
+    if (/^[zZяЯ]$/.test(event.key)) document.querySelector('.review-undo-btn')?.click();
+    if (event.key === '?') toggleHelp();
   });
 })();
 </script>`;
@@ -1016,60 +1039,130 @@ export function renderReviewPage(options: {
   const { lead, directions } = options;
   const shown = directions.find((item) => item.slug === lead?.direction)?.label ?? 'Другое';
   const typeName = lead?.type === 'job' ? 'Вакансия' : 'Заказ';
-  const meta = lead ? [lead.company ?? lead.author, lead.city].filter(Boolean).join(' · ') : '';
-  const card = lead ? `
-  <p class="muted small">${escapeHtml(meta)}${lead.url ? `${meta ? ' · ' : ''}<a class="review-original" href="${escapeHtml(lead.url)}" target="_blank" rel="noopener noreferrer">Открыть оригинал</a>` : ''}</p>
-  <h2>${escapeHtml(lead.title)}</h2>
-  <p class="review-text">${escapeHtml(lead.text.slice(0, 1500))}</p>
-  <form method="post" action="/review" class="review-form">
-    <input type="hidden" name="id" value="${escapeHtml(lead.id)}">
-    <input type="hidden" name="bucket" value="${escapeHtml(options.bucket ?? '')}">
-    <input type="hidden" name="c" value="${escapeHtml(options.direction)}">
-    <p class="review-shown">Мы показали это как: <strong>${typeName}</strong> · <strong>${escapeHtml(shown)}</strong></p>
-    <details class="review-fix">
-      <summary>Исправить тип или направление</summary>
-      <div class="review-fix-body">
-        <label><input type="radio" name="type_fix" value="" checked> Тип верный</label>
-        <label><input type="radio" name="type_fix" value="${lead.type === 'job' ? 'gig' : 'job'}"> На самом деле ${lead.type === 'job' ? 'заказ' : 'вакансия'}</label>
-        ${directionPicker('direction_fix', 'Другое направление', directions.filter((item) => item.slug), '', false)}
+  const company = lead ? (lead.company ?? lead.author) : '';
+  const salary = lead ? (salaryRange(lead, options.lang ?? 'ru') ?? (typeof lead.budget === 'number' ? formatBudget(lead.budget, lead.currency) : (lead.rawSalary ?? ''))) : '';
+  const host = lead?.url ? safeHttpUrl(lead.url)?.replace(/^https?:\/\//, '')?.split('/')[0]?.replace(/^www\./, '') : '';
+  const remote = lead?.isRemote ? 'Удалённо' : '';
+  const location = [lead?.city, remote].filter(Boolean).join(' · ');
+
+  const cockpit = lead ? `
+<div class="review-cockpit">
+  <div class="review-pane-lead">
+    <div class="review-lead-head">
+      <div class="review-lead-meta">
+        <div class="review-lead-pills">
+          ${host ? `<span class="review-meta-pill">${escapeHtml(host)}</span>` : ''}
+          ${salary ? `<span class="review-meta-pill review-salary-pill">${escapeHtml(salary)}</span>` : ''}
+          ${location ? `<span class="review-meta-pill">${escapeHtml(location)}</span>` : ''}
+        </div>
+        ${lead.url ? `<a class="review-original" href="${escapeHtml(lead.url)}" target="_blank" rel="noopener noreferrer">Открыть оригинал ↗</a>` : ''}
       </div>
-    </details>
-    <div class="review-answers">
-      <button class="btn review-main" name="verdict" value="ok" type="submit" title="Реальная работа. Мало текста не беда, если оригинал в порядке.">1. Всё верно</button>
-      ${REVIEW_ANSWERS.map(([key, name, hint], index) => `<button class="btn" name="verdict" value="${key}" type="submit" title="${escapeHtml(hint)}">${index + 2}. ${escapeHtml(name)}</button>`).join('\n      ')}
-      <button class="btn" name="verdict" value="unsure" type="submit" title="Пост пропускается, ответ не считается">5. Не знаю</button>
+      <h2 class="review-lead-title">${escapeHtml(lead.title)}</h2>
+      ${company ? `<p class="review-lead-company">${escapeHtml(company)}</p>` : ''}
     </div>
-    <details class="review-fix">
-      <summary>Что-то не так с постом</summary>
-      <div class="review-fix-body">
-        ${Object.entries(ISSUE_NAMES).map(([key, name]) => `<label><input type="checkbox" name="issues" value="${key}"> ${escapeHtml(name)}</label>`).join('\n        ')}
-        <input type="text" name="note" maxlength="300" placeholder="Комментарий, если нужно" aria-label="Комментарий">
+    <div class="review-lead-scroll">
+      <p class="review-text">${escapeHtml(lead.text)}</p>
+    </div>
+  </div>
+
+  <div class="review-pane-actions">
+    <form method="post" action="/review" class="review-form">
+      <input type="hidden" name="id" value="${escapeHtml(lead.id)}">
+      <input type="hidden" name="bucket" value="${escapeHtml(options.bucket ?? '')}">
+      <input type="hidden" name="c" value="${escapeHtml(options.direction)}">
+
+      <div class="review-box review-shown-box">
+        <div class="review-box-head">
+          <span>Мы показали это как:</span>
+        </div>
+        <div class="review-shown-pills">
+          <span class="review-shown-tag">${typeName}</span>
+          <span class="review-shown-tag">${escapeHtml(shown)}</span>
+        </div>
+        <details class="review-fix">
+          <summary>Исправить тип или направление</summary>
+          <div class="review-fix-body">
+            <label><input type="radio" name="type_fix" value="" checked> Тип верный</label>
+            <label><input type="radio" name="type_fix" value="${lead.type === 'job' ? 'gig' : 'job'}"> На самом деле ${lead.type === 'job' ? 'заказ' : 'вакансия'}</label>
+            ${directionPicker('direction_fix', 'Другое направление', directions.filter((item) => item.slug), '', false)}
+          </div>
+        </details>
       </div>
-    </details>
-  </form>` : '<p class="muted">В этом направлении пока нечего разбирать. Выберите другое.</p>';
+
+      <div class="review-answers">
+        <button class="btn review-main review-ans-btn" name="verdict" value="ok" type="submit" title="Реальная работа. Мало текста не беда, если оригинал в порядке.">
+          <span class="review-ans-num">1</span>
+          <span class="review-ans-text">
+            <strong>Всё верно</strong>
+            <small>Реальная работа, верный тип</small>
+          </span>
+        </button>
+        ${REVIEW_ANSWERS.map(([key, name, hint], index) => `
+        <button class="btn review-ans-btn" name="verdict" value="${key}" type="submit" title="${escapeHtml(hint)}">
+          <span class="review-ans-num">${index + 2}</span>
+          <span class="review-ans-text">
+            <strong>${escapeHtml(name)}</strong>
+            <small>${escapeHtml(hint.slice(0, 36))}</small>
+          </span>
+        </button>`).join('')}
+        <button class="btn review-ans-btn review-ans-skip" name="verdict" value="unsure" type="submit" title="Пост пропускается, ответ не считается">
+          <span class="review-ans-num">5</span>
+          <span class="review-ans-text">
+            <strong>Не знаю</strong>
+            <small>Пропустить без оценки</small>
+          </span>
+        </button>
+      </div>
+
+      <div class="review-box review-issues-box">
+        <div class="review-box-head">
+          <span>Что не так со сбором:</span>
+        </div>
+        <div class="review-chips">
+          ${Object.entries(ISSUE_NAMES).map(([key, name]) => `
+          <label class="review-chip">
+            <input type="checkbox" name="issues" value="${key}">
+            <span>${escapeHtml(name)}</span>
+          </label>`).join('')}
+        </div>
+        <input type="text" name="note" class="review-note" maxlength="300" placeholder="Комментарий к сбору, если нужно" aria-label="Комментарий">
+      </div>
+    </form>
+  </div>
+</div>` : '<div class="review-empty"><p class="muted">В этом направлении пока нечего разбирать. Выберите другое.</p></div>';
+
   const body = `
-<div class="page-head"><div>
-  <h1>Разбор постов</h1>
-  <p class="muted small">Один клик, и следующий пост. Так лента становится чище для всех. Вы разобрали: ${options.mine}</p>
-</div></div>
-<section class="profile">
-  ${directionPicker('c', 'Все направления', [{ slug: '', label: 'Все направления' }, ...directions], options.direction, true)}
-  <details class="review-help"${options.mine < 5 ? ' open' : ''}>
-    <summary>Как оценивать</summary>
-    <ul>
+<div class="review-bar">
+  <div class="review-bar-left">
+    <h1 class="review-page-title">Разбор постов</h1>
+    ${directionPicker('c', 'Все направления', [{ slug: '', label: 'Все направления' }, ...directions], options.direction, true)}
+  </div>
+  <div class="review-bar-right">
+    <span class="review-counter">Вы разобрали: <strong>${options.mine}</strong></span>
+    <button type="button" class="link-btn review-help-trigger" title="Справка по оценке (?)">Как оценивать (?)</button>
+    ${options.last ? `<form method="post" action="/review/undo" class="review-undo-inline"><input type="hidden" name="id" value="${escapeHtml(options.last)}"><button class="link-btn review-undo-btn" type="submit" title="Отменить последний ответ (Z)">Отменить ответ (Z)</button></form>` : ''}
+  </div>
+</div>
+${cockpit}
+<div id="review-help-modal" class="review-modal" style="display:none">
+  <div class="review-modal-backdrop"></div>
+  <div class="review-modal-card">
+    <div class="review-modal-head">
+      <h3>Как оценивать</h3>
+      <button type="button" class="link-btn review-modal-close">Закрыть</button>
+    </div>
+    <ul class="review-help-list">
       <li>Оценивайте саму работу, а не то, как мы её показали.</li>
       <li>Если текста мало, сначала откройте оригинал.</li>
-      <li>Оригинал хороший, а у нас плохо считалось: это «Всё верно», а что не так, отметьте ниже.</li>
+      <li>Оригинал хороший, а у нас плохо считалось: это «Всё верно», а что не так, отметьте в проблемах сбора.</li>
       <li><strong>Не работа:</strong> реклама, курс, резюме, новость.</li>
       <li><strong>Подозрительно:</strong> деньги вперёд, большой заработок без навыков, накрутки, подделка документов.</li>
       <li><strong>Уже закрыта:</strong> на оригинале снята, заказ занят или страница не открывается.</li>
       <li>Сомневаетесь? Нажмите «Не знаю»: это честнее, чем угадывать.</li>
-      <li>Клавиши 1–5 выбирают ответ, О открывает оригинал.</li>
+      <li>Клавиши 1–5 выбирают ответ, О открывает оригинал, Z отменяет, ? открывает эту справку.</li>
     </ul>
-  </details>
-  ${card}
-  ${options.last ? `<form method="post" action="/review/undo" class="review-undo"><input type="hidden" name="id" value="${escapeHtml(options.last)}"><button class="link-btn" type="submit">Отменить последний ответ</button></form>` : ''}
-</section>`;
+  </div>
+</div>`;
   return layout({ title: 'Разбор постов', version: options.version, body, auth: options.auth, lang: options.lang, head: '<meta name="robots" content="noindex">', script: REVIEW_SCRIPT });
 }
 

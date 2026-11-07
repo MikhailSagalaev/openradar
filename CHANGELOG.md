@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.59.2
+
+- **Review cockpit.** Single-screen layout for `/review`: on desktop the post description scrolls inside its own pane while verdicts and classification stay fixed in view.
+- Hotkeys 1–5 for answers, O for original link, Z for undo, ? for the guide modal.
+- Clean badges for source, salary, remote and location; quick issue chips for parsing problems; compact layout for mobile.
+
 ## 0.59.1
 
 - The quality pass reads skills by the 0.57.0 rules: rescore still went through the whole-text extractor and re-hung «Рекрутинг» and «Тестирование» on sales and management posts while re-running. The split holds everywhere now.
