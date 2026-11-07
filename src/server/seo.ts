@@ -1014,13 +1014,56 @@ const REVIEW_SCRIPT = `<script>
     if (event.key === 'Escape') {
       closeAll();
       closeHelp();
+      return;
     }
-    if (event.ctrlKey || event.metaKey || event.altKey || /INPUT|TEXTAREA|SELECT/.test(event.target.tagName)) return;
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const isEditing = /INPUT|TEXTAREA|SELECT/.test(event.target.tagName);
     const buttons = document.querySelectorAll('.review-answers button[name="verdict"]');
-    if (/^[1-5]$/.test(event.key)) buttons[Number(event.key) - 1]?.click();
-    if (/^[oOоО]$/.test(event.key)) document.querySelector('.review-original')?.click();
-    if (/^[zZяЯ]$/.test(event.key)) document.querySelector('.review-undo-btn')?.click();
-    if (event.key === '?') toggleHelp();
+
+    if (event.key === 'Enter') {
+      if (event.target.classList.contains('review-picker-search')) return;
+      event.preventDefault();
+      const focused = document.activeElement && document.activeElement.matches('.review-ans-btn') ? document.activeElement : buttons[0];
+      focused?.click();
+      return;
+    }
+
+    if (isEditing) return;
+
+    const numMatch = event.key.match(/^[1-5]$/) || (event.code && event.code.match(/^(?:Digit|Numpad)([1-5])$/));
+    if (numMatch) {
+      event.preventDefault();
+      const idx = Number(numMatch[1] || event.key) - 1;
+      buttons[idx]?.click();
+      return;
+    }
+
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const currentIdx = Array.from(buttons).indexOf(document.activeElement);
+      const nextIdx = event.key === 'ArrowDown'
+        ? (currentIdx + 1) % buttons.length
+        : (currentIdx <= 0 ? buttons.length - 1 : currentIdx - 1);
+      buttons[nextIdx]?.focus();
+      return;
+    }
+
+    if (/^[oOоО]$/.test(event.key)) {
+      event.preventDefault();
+      document.querySelector('.review-original')?.click();
+      return;
+    }
+
+    if (/^[zZяЯ]$/.test(event.key)) {
+      event.preventDefault();
+      document.querySelector('.review-undo-btn')?.click();
+      return;
+    }
+
+    if (event.key === '?') {
+      event.preventDefault();
+      toggleHelp();
+    }
   });
 })();
 </script>`;
@@ -1079,9 +1122,13 @@ export function renderReviewPage(options: {
         <details class="review-fix">
           <summary>Исправить тип или направление</summary>
           <div class="review-fix-body">
-            <label><input type="radio" name="type_fix" value="" checked> Тип верный</label>
-            <label><input type="radio" name="type_fix" value="${lead.type === 'job' ? 'gig' : 'job'}"> На самом деле ${lead.type === 'job' ? 'заказ' : 'вакансия'}</label>
-            ${directionPicker('direction_fix', 'Другое направление', directions.filter((item) => item.slug), '', false)}
+            <div class="review-fix-row">
+              <label class="review-fix-label">
+                <input type="checkbox" name="type_fix" value="${lead.type === 'job' ? 'gig' : 'job'}">
+                Это ${lead.type === 'job' ? 'заказ' : 'вакансия'}
+              </label>
+              ${directionPicker('direction_fix', 'Другое направление', directions.filter((item) => item.slug), '', false)}
+            </div>
           </div>
         </details>
       </div>
@@ -1091,7 +1138,7 @@ export function renderReviewPage(options: {
           <span class="review-ans-num">1</span>
           <span class="review-ans-text">
             <strong>Всё верно</strong>
-            <small>Реальная работа, верный тип</small>
+            <small>Реальная работа, верный тип · Enter</small>
           </span>
         </button>
         ${REVIEW_ANSWERS.map(([key, name, hint], index) => `
@@ -1157,11 +1204,11 @@ ${content}
       <li><strong>Подозрительно:</strong> деньги вперёд, большой заработок без навыков, накрутки, подделка документов.</li>
       <li><strong>Уже закрыта:</strong> на оригинале снята, заказ занят или страница не открывается.</li>
       <li>Сомневаетесь? Нажмите «Не знаю»: это честнее, чем угадывать.</li>
-      <li>Клавиши 1–5 выбирают ответ, О открывает оригинал, Z отменяет, ? открывает эту справку.</li>
+      <li>Клавиши 1–5 или Enter выбирают ответ, стрелки ↑↓ переключают, О открывает оригинал, Z отменяет, ? открывает эту справку.</li>
     </ul>
   </div>
 </div>`;
-  return layout({ title: lead ? `${leadTitle(lead)} · Разбор постов` : 'Разбор постов', version: options.version, body, auth: options.auth, lang: options.lang, head: '<meta name="robots" content="noindex">', script: REVIEW_SCRIPT });
+  return layout({ title: lead ? `${leadTitle(lead)} · Разбор постов` : 'Разбор постов', version: options.version, body, auth: options.auth, lang: options.lang, head: '<meta name="robots" content="noindex">', script: REVIEW_SCRIPT, bodyClass: 'page-review' });
 }
 
 /** Where an employer's page lives. */

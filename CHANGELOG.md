@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.59.4
+
+- **Review keyboard controls.** Enter accepts the first choice («Всё верно») or the focused verdict; arrow keys ↑↓ navigate through options; numbers 1–5 trigger answers across numpad and top row.
+- **Compact fix panel.** Inline type and direction corrections preventing scrollbars on details toggle.
+
 ## 0.59.3
 
 - **Review layout aligned with site design.** Removed extra headings and container cards; the lead title serves as the primary header and lead description renders flat with native typography and formatting.
