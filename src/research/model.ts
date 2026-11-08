@@ -8,6 +8,8 @@
  * vLLM), and GigaChat.
  */
 import type { Env, Lead, Logger } from '../core/types.ts';
+import { getProxyAgent } from '../net/proxy.ts';
+import { fetch as undiciFetch } from 'undici';
 import { GRADE_ORDER, MIN_CONFIDENCE, ROLES, type Grade } from './derive.ts';
 import { GigachatBusyError, gigachatFetch, gigachatToken, markGigachatBusy, resetGigachatToken, retryAfterMs } from './gigachat.ts';
 
@@ -138,7 +140,9 @@ export async function extractWithModel(
   // The runtime hands everyone the global fetch, which does not trust GigaChat's root:
   // only a substitute (a test's) replaces gigachatFetch.
   const injected = deps.fetchImpl && deps.fetchImpl !== globalThis.fetch ? deps.fetchImpl : undefined;
-  const fetchImpl = injected ?? (gigachat ? gigachatFetch : fetch);
+  const proxyUrl = env.RADAR_PROXY_URL?.trim();
+  const dispatcher = (!gigachat && !injected && proxyUrl) ? getProxyAgent(proxyUrl) : undefined;
+  const fetchImpl = injected ?? (gigachat ? gigachatFetch : (dispatcher ? (undiciFetch as unknown as typeof fetch) : fetch));
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30_000);
   try {
@@ -148,6 +152,7 @@ export async function extractWithModel(
       method: 'POST',
       signal: controller.signal,
       headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+      ...(dispatcher ? { dispatcher } : {}),
       body: JSON.stringify({
         model: modelName(env),
         // GigaChat wants a temperature above zero and has no JSON mode: the prompt asks for JSON.
