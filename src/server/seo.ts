@@ -1260,7 +1260,7 @@ export function renderReviewPage(options: {
   </div>
   <div class="review-nav-right">
     ${signedIn ? `<span class="review-counter">${ru ? `Вы разобрали: <strong>${options.mine}</strong>` : `You reviewed: <strong>${options.mine}</strong>`}</span>` : `<span class="review-counter">${ru ? 'Разбор постов' : 'Post review'}</span>`}
-    <button type="button" class="link-btn review-help-trigger" title="${ru ? 'Справка по оценке (?)' : 'Review guide (?)}'}">${ru ? 'Как оценивать (?)' : 'How to review (?)'}</button>
+    <button type="button" class="link-btn review-help-trigger" title="${ru ? 'Справка по оценке (?)' : 'Review guide (?)'}">${ru ? 'Как оценивать (?)' : 'How to review (?)'}</button>
     ${options.last ? `<form method="post" action="/review/undo" class="review-undo-inline"><input type="hidden" name="id" value="${escapeHtml(options.last)}"><button class="link-btn review-undo-btn" type="submit" title="${ru ? 'Отменить последний ответ (Z)' : 'Undo last answer (Z)'}">${ru ? 'Отменить ответ (Z)' : 'Undo answer (Z)'}</button></form>` : ''}
   </div>
 </div>
