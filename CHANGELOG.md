@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.62.0
+
+- **Workplace arrangement classification (remote, hybrid, onsite).** Replaced naive boolean `isRemote` assumptions with a 3-step cascade classifier adhering to Google Jobs and schema.org guidelines.
+- **Physical Feasibility Gate.** Occupations requiring physical presence (drivers, couriers, forklift operators, cooks, cleaners, mechanics, installers, cashiers) are classified as on-site by default, preventing them from contaminating remote feeds.
+- **Contextual Linguistic Gate.** Filters linguistic false positives (e.g. «удаленное подключение к таксопарку», «удаление зубов», «на удаленку не рассматриваем») and detects hybrid arrangements («3 дня в офисе», «офис / удаленка»).
+- **Migration 036.** Added `workplace_type` column and index on `leads`, and corrected existing driver and courier leads incorrectly marked as remote.
+
 ## 0.61.0
 
 - **Decide v2 with research direction, remote and grade.** Expanded fast classification questions with 35 research roles, remote probability, and experience grades (intern, junior, middle, senior, lead).

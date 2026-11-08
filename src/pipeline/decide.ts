@@ -90,6 +90,10 @@ export async function applyDecisions(deps: DecideDeps, limit: number): Promise<{
       await store.applyLeadDirection(decision.leadId, decision.direction);
       summary.directed++;
     }
+    if (decision.remote && store.applyLeadWorkplace) {
+      const wp = decision.remote === 'office' ? 'onsite' : (decision.remote === 'hybrid' ? 'hybrid' : 'remote');
+      await store.applyLeadWorkplace(decision.leadId, wp, wp === 'remote');
+    }
     await store.markDecisionApplied(decision.leadId, action ?? 'scored');
   }
   return summary;

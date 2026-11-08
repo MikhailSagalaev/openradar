@@ -2642,11 +2642,15 @@ function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru', 
   // An absurd salary stays off the feed: the row says «проверить» instead of the number.
   const salarySuspect = salaryLooksWrong(lead);
   const money = typeof lead.budget === 'number' ? formatBudget(lead.budget, lead.currency) : lead.rawSalary;
+  const locationLabel = lead.workplaceType === 'hybrid'
+    ? (lead.city ? `${lead.city} (${t.hybridFormat})` : t.hybridFormat)
+    : (lead.isRemote ? (lead.city ?? t.remote) : lead.city);
+
   const meta = [
     lead.type === 'job' ? t.jobType : t.gigType,
     source?.title,
     lead.category,
-    lead.city ?? (lead.isRemote !== false ? t.remote : undefined),
+    locationLabel,
     salarySuspect ? undefined : money,
     formatRelative(lead.createdAt, lang),
   ]
@@ -3369,8 +3373,8 @@ ${cautionBanner}
       <div><dt>${escapeHtml(t.type)}</dt><dd>${lead.type === 'job' ? escapeHtml(t.jobType) : escapeHtml(t.gigType)}</dd></div>
       <div><dt>${escapeHtml(t.source)}</dt><dd>${source ? `<a href="/sources/${escapeHtml(source.id)}">${escapeHtml(source.title)}</a>` : escapeHtml(lead.sourceId)}</dd></div>
       ${lead.category ? `<div><dt>${escapeHtml(t.category)}</dt><dd><b>${escapeHtml(lead.category)}</b></dd></div>` : ''}
-      <div><dt>${escapeHtml(t.location)}</dt><dd>${escapeHtml(lead.city ?? (lead.isRemote !== false ? t.remote : '—'))}</dd></div>
-      <div><dt>${escapeHtml(t.format)}</dt><dd>${lead.isRemote !== false ? escapeHtml(t.remoteFormat) : escapeHtml(t.onsiteFormat)}</dd></div>
+      <div><dt>${escapeHtml(t.location)}</dt><dd>${escapeHtml(lead.city ?? (lead.isRemote ? t.remote : '—'))}</dd></div>
+      <div><dt>${escapeHtml(t.format)}</dt><dd>${lead.workplaceType === 'hybrid' ? escapeHtml(t.hybridFormat) : (lead.isRemote ? escapeHtml(t.remoteFormat) : escapeHtml(t.onsiteFormat))}</dd></div>
       <div><dt>${escapeHtml(t.budget)}</dt><dd>${salaryDisplay}${usdEstimate}</dd></div>
       <div><dt>${escapeHtml(t.score)}</dt><dd>${scoreCell(lead.score, lang)}</dd></div>
       <div><dt>${escapeHtml(t.published)}</dt><dd>${formatDate(lead.publishedAt, lang)}</dd></div>
@@ -3426,7 +3430,7 @@ ${jsonForScript({
   datePosted: posted,
   validThrough: new Date(Date.parse(posted) + 30 * 86_400_000).toISOString(),
   employmentType: lead.type === 'gig' ? 'CONTRACTOR' : 'FULL_TIME',
-  jobLocationType: lead.isRemote !== false && !lead.city ? 'TELECOMMUTE' : undefined,
+  jobLocationType: lead.isRemote && !lead.city ? 'TELECOMMUTE' : undefined,
   hiringOrganization: { '@type': 'Organization', name: hiringOrgName },
   jobLocation: lead.city ? { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: lead.city } } : undefined,
   baseSalary: typeof lead.budget === 'number' ? {

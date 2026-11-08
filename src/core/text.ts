@@ -132,13 +132,112 @@ export function stripBudgetTitleSuffix(input: string): string {
   return input.replace(/\s*\(\s*(?:Бюджет|Budget)\s*:[^)]*\)\s*$/i, '').trim();
 }
 
-/** Remote work mentioned in a title or text. Kept in sync with the SQL filter in the Postgres store. */
-export const REMOTE_TEXT_RE = /удал[её]нн|удал[её]нк|можно\s+удал|remote/i;
+export type WorkplaceType = 'remote' | 'hybrid' | 'onsite';
 
-/** A lead can be done remotely: no city, an «Онлайн»/«Удалённо» city, or remote work in the text. */
-export function isRemoteLead(lead: { city?: string; title: string; text: string }): boolean {
-  if (!lead.city || /^(онлайн|удал)/i.test(lead.city)) return true;
-  return REMOTE_TEXT_RE.test(`${lead.title}\n${lead.text}`);
+/** Physical / in-field occupations that require physical presence and cannot be remote. */
+export const PHYSICAL_ONSITE_ROLE_RE =
+  /(?:водитель|шофер|курьер|погрузчик|грузчик|экспедитор|повар|бариста|официант|бармен|монтажн|сантехник|электрик|сварщик|охранник|сторож|уборщиц|клинер|автослесар|механик|маляр|парикмахер|массажист|кассир|мерчендайзер|промоутер|кладовщик|комплектовщик|фасовщик|закройщик|швея|слесарь|токарь|сборщик|разнорабоч|разгрузк|дворник)/i;
+
+/** Technical, medical, administrative, or linguistic false-positive occurrences of "удален...". */
+export const REMOTE_FALSE_POSITIVE_RE =
+  /(?:не\s+(?:рассматриваем\s+)?удал[её]н|удал[её]н(?:но|ка|ная|ный|ное|ную)?\s+(?:не\s+рассматрива|не\s+предусмотрен|не\s+предлага|исключен)|удал[её]нн\w+\s+(?:оформлен|собеседован|инструктаж|обучен|подключен)|удал[её]нн\w+\s+(?:склад|объект|район|доступ|сервер|управлен)|удал[её]ни[ея]\s+(?:зуб|вмятин|катализатор|тату|дерев|волос|волокон|образован|глаз|новообразован|аппендикс))/i;
+
+/** Explicit on-site presence or field travel markers. */
+export const ONSITE_TEXT_RE =
+  /(?:только\s+(?:в\s+)?офис|строго\s+(?:в\s+)?офис|работа\s+(?:в\s+)?офисе|очный\s+(?:формат|режим|график)|разъездн\w+\s+(?:характер|режим|график|работ)|поездки\s+по\s+клиентам|посещение\s+клиентов|работа\s+на\s+объектах|работа\s+на\s+складе|работа\s+на\s+производстве|на\s+территории\s+работодателя)/i;
+
+/** Explicit hybrid work markers (office + remote mix). */
+export const HYBRID_TEXT_RE =
+  /(?:гибрид(?:ный|но|ная|ное)?|hybrid|офис\s*\/\s*удал[её]н|удал[её]нка\s*\/\s*офис|\d\s*(?:дня|дней|днях|дн\.)\s*(?:в\s*офисе|из\s*дома)|выезд\w*\s+в\s+офис|периодическ\w*\s+(?:выезд\w*|посещен\w*)\s+(?:в\s+)?офис)/i;
+
+/** Explicit positive remote work markers. */
+export const REMOTE_POSITIVE_RE =
+  /(?:полная\s+удал[её]нка|строго\s+удал[её]н|100%\s+remote|удал[её]нн(?:ая|ое|ый|ую)\s+(?:работ|формат|график|занятост|ваканси)|remote\s+work|work\s+from\s+home|\btelecommute\b|из\s+любой\s+точки(?:\s+мира|\s+рф)?|можно\s+удал[её]н|только\s+удал[её]н|дистанционн(?:ая|ое|ый|ую)\s+(?:работ|формат|график|занятост)|работа\s+из\s+дома)/i;
+
+/** Remote work mentioned in a title or text. Kept in sync with the SQL filter in the Postgres store. */
+export const REMOTE_TEXT_RE = REMOTE_POSITIVE_RE;
+
+/**
+ * Classifies workplace arrangements into 'remote', 'hybrid', or 'onsite'.
+ * Implements a 3-step cascade:
+ * 1. Physical Feasibility Gate: roles requiring in-person presence (driver, courier, cleaner).
+ * 2. Contextual Linguistic Gate: false positives, negations, hybrid, and positive remote markers.
+ * 3. Default Arbitration: vacancies without remote markers default to onsite; digital freelance to remote.
+ */
+export function classifyWorkplace(lead: {
+  title: string;
+  text?: string;
+  city?: string;
+  type?: 'job' | 'gig';
+  explicitRemote?: boolean;
+}): { workplaceType: WorkplaceType; isRemote: boolean } {
+  const fullText = `${lead.title}\n${lead.text ?? ''}`;
+
+  // 1. Physical / In-Field Feasibility Gate:
+  if (PHYSICAL_ONSITE_ROLE_RE.test(lead.title)) {
+    const isDeskCoordinator = /(?:диспетчер|координатор|логист|менеджер|оператор)/i.test(lead.title);
+    if (!isDeskCoordinator) {
+      return { workplaceType: 'onsite', isRemote: false };
+    }
+  }
+
+  // 2. Explicit source indicator (e.g. from structured board fields)
+  if (lead.explicitRemote === false) {
+    return { workplaceType: 'onsite', isRemote: false };
+  }
+
+  const hasFalsePositive = REMOTE_FALSE_POSITIVE_RE.test(fullText);
+  const hasPositiveRemote = REMOTE_POSITIVE_RE.test(fullText);
+  const hasHybrid = HYBRID_TEXT_RE.test(fullText);
+  const hasOnsite = ONSITE_TEXT_RE.test(fullText);
+  const isCityOnline = Boolean(lead.city && /^(онлайн|удал)/i.test(lead.city));
+
+  if (hasHybrid) {
+    return { workplaceType: 'hybrid', isRemote: false };
+  }
+
+  if (hasOnsite && !hasPositiveRemote) {
+    return { workplaceType: 'onsite', isRemote: false };
+  }
+
+  if (hasPositiveRemote && !hasFalsePositive) {
+    return { workplaceType: 'remote', isRemote: true };
+  }
+
+  if (isCityOnline && !hasFalsePositive && !hasOnsite) {
+    return { workplaceType: 'remote', isRemote: true };
+  }
+
+  if (lead.explicitRemote === true && !hasFalsePositive && !hasOnsite) {
+    return { workplaceType: 'remote', isRemote: true };
+  }
+
+  // 3. Defaults:
+  // Vacancies (jobs) are on-site unless explicitly stated as remote.
+  if (lead.type === 'job') {
+    return { workplaceType: 'onsite', isRemote: false };
+  }
+
+  // Gigs (freelance): digital tasks without an explicit physical city default to remote.
+  if (!lead.city || isCityOnline) {
+    return { workplaceType: 'remote', isRemote: true };
+  }
+
+  return { workplaceType: 'onsite', isRemote: false };
+}
+
+/** A lead can be done remotely. Replaces legacy binary checks. */
+export function isRemoteLead(lead: {
+  city?: string;
+  title: string;
+  text?: string;
+  isRemote?: boolean;
+  workplaceType?: WorkplaceType;
+  type?: 'job' | 'gig';
+}): boolean {
+  if (typeof lead.isRemote === 'boolean') return lead.isRemote;
+  if (lead.workplaceType) return lead.workplaceType === 'remote';
+  return classifyWorkplace({ title: lead.title, text: lead.text ?? '', city: lead.city, type: lead.type }).isRemote;
 }
 
 

@@ -452,6 +452,8 @@ export interface Store extends HubStore {
   markDecisionApplied?(leadId: string, applied: string): Promise<void>;
   /** Fills the research direction of a lead that has none: a model answer is data, not a feed action. */
   applyLeadDirection?(leadId: string, direction: string): Promise<void>;
+  /** Updates the workplace arrangement (onsite, hybrid, remote) of a lead. */
+  applyLeadWorkplace?(leadId: string, workplaceType: 'remote' | 'hybrid' | 'onsite', isRemote: boolean): Promise<void>;
   /** Posts the model took off the feed, the newest first. */
   listAppliedDecisions?(limit: number): Promise<Array<{ lead: Lead; decision: ModelDecision }>>;
   /** A person says the model was wrong: the post comes back and counts as a good one. */

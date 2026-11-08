@@ -57,6 +57,7 @@ export interface Translations {
   remote: string;
   format: string;
   remoteFormat: string;
+  hybridFormat: string;
   onsiteFormat: string;
   budget: string;
   score: string;
@@ -242,6 +243,7 @@ export const RU: Translations = {
   remote: 'Удалённо',
   format: 'Формат',
   remoteFormat: 'Удалённая работа',
+  hybridFormat: 'Гибридный формат',
   onsiteFormat: 'На объекте / Офлайн',
   budget: 'Бюджет',
   score: 'Рейтинг',
@@ -419,6 +421,7 @@ export const EN: Translations = {
   remote: 'Remote',
   format: 'Format',
   remoteFormat: 'Remote work',
+  hybridFormat: 'Hybrid',
   onsiteFormat: 'On-site / Offline',
   budget: 'Budget',
   score: 'Score',
