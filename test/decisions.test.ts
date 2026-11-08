@@ -157,6 +157,37 @@ describe('applying decisions', () => {
     await applyDecisions({ store: runtime.store, env: { ...env, RADAR_DECIDE_APPLY: true } as never, logger, fetchImpl: fetch }, 10);
     expect((await runtime.store.getLead('b'))?.direction).toBe('frontend');
   });
+
+  it('applies workplace decision when remote score is high or low', async () => {
+    const runtime = await withLeads(['c', 'd'], { workplaceType: 'onsite', isRemote: false });
+    const d1 = parseDecision({
+      answers: {
+        kind: { type: 'choice', choice: 'vacancy', confidence: 0.97 },
+        remote: { type: 'noul', noul: 0.9 },
+        closed: { type: 'noul', noul: 0.01 },
+        scam: { type: 'noul', noul: 0 },
+        fullness: { type: 'score', score: 2.0 },
+      },
+    }, 'c', 'm', 'now')!;
+    const d2 = parseDecision({
+      answers: {
+        kind: { type: 'choice', choice: 'vacancy', confidence: 0.97 },
+        remote: { type: 'noul', noul: 0.1 },
+        closed: { type: 'noul', noul: 0.01 },
+        scam: { type: 'noul', noul: 0 },
+        fullness: { type: 'score', score: 2.0 },
+      },
+    }, 'd', 'm', 'now')!;
+    await runtime.store.saveModelDecision!(d1);
+    await runtime.store.saveModelDecision!(d2);
+    await applyDecisions({ store: runtime.store, env: { ...env, RADAR_DECIDE_APPLY: true } as never, logger, fetchImpl: fetch }, 10);
+    const updatedC = await runtime.store.getLead('c');
+    expect(updatedC?.workplaceType).toBe('remote');
+    expect(updatedC?.isRemote).toBe(true);
+    const updatedD = await runtime.store.getLead('d');
+    expect(updatedD?.workplaceType).toBe('onsite');
+    expect(updatedD?.isRemote).toBe(false);
+  });
 });
 
 describe('admin page', () => {

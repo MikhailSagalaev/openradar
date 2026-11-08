@@ -90,9 +90,22 @@ export async function applyDecisions(deps: DecideDeps, limit: number): Promise<{
       await store.applyLeadDirection(decision.leadId, decision.direction);
       summary.directed++;
     }
-    if (decision.remote && store.applyLeadWorkplace) {
-      const wp = decision.remote === 'office' ? 'onsite' : (decision.remote === 'hybrid' ? 'hybrid' : 'remote');
-      await store.applyLeadWorkplace(decision.leadId, wp, wp === 'remote');
+    if (decision.remote !== undefined && store.applyLeadWorkplace) {
+      let wp: 'remote' | 'hybrid' | 'onsite' | undefined;
+      if (typeof decision.remote === 'string') {
+        const val = decision.remote.toLowerCase();
+        wp = val === 'office' || val === 'onsite'
+          ? 'onsite'
+          : val === 'hybrid'
+          ? 'hybrid'
+          : 'remote';
+      } else if (typeof decision.remote === 'number') {
+        if (decision.remote >= 0.8) wp = 'remote';
+        else if (decision.remote <= 0.2) wp = 'onsite';
+      }
+      if (wp) {
+        await store.applyLeadWorkplace(decision.leadId, wp, wp === 'remote');
+      }
     }
     await store.markDecisionApplied(decision.leadId, action ?? 'scored');
   }

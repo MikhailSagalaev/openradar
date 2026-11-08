@@ -105,7 +105,7 @@ export interface ModelDecision {
   /** v2: the research direction the post describes, with how sure the answer is. */
   direction?: string;
   directionConfidence?: number;
-  remote?: number;
+  remote?: number | string;
   grade?: string;
   closed: number;
   scam: number;
@@ -154,14 +154,15 @@ export function parseDecision(body: unknown, leadId: string, model: string, deci
   // v2 answers are optional: a service that only knows the v1 questions still parses.
   const direction = answers?.direction?.choice;
   const directionConfidence = answers?.direction?.confidence;
-  const remote = answers?.remote?.noul;
+  const rawRemote = answers?.remote?.noul ?? (typeof answers?.remote?.choice === 'string' ? answers.remote.choice : undefined);
+  const remote = typeof rawRemote === 'number' || typeof rawRemote === 'string' ? rawRemote : undefined;
   const grade = answers?.grade?.choice;
   return {
     leadId, version: DECISION_VERSION, model, kind: kind as DecisionKind,
     kindConfidence: typeof confidence === 'number' ? confidence : 0,
     direction: typeof direction === 'string' && direction in DECISION_ROLES ? direction : undefined,
     directionConfidence: typeof directionConfidence === 'number' ? directionConfidence : undefined,
-    remote: typeof remote === 'number' ? remote : undefined,
+    remote,
     grade: typeof grade === 'string' && (DECISION_GRADES as readonly string[]).includes(grade) ? grade : undefined,
     closed, scam, fullness, tokens: typeof tokens === 'number' ? tokens : 0, decidedAt,
   };
