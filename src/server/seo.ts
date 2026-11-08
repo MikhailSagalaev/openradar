@@ -946,17 +946,29 @@ export function renderDecisionsPage(options: {
   return layout({ title: 'Решения модели', version: options.version, body, auth: options.auth, lang: options.lang, head: '<meta name="robots" content="noindex">' });
 }
 
-const REVIEW_ANSWERS: Array<[string, string, string]> = [
+const REVIEW_ANSWERS_RU: Array<[string, string, string]> = [
   ['not_work', 'Не работа', 'Реклама, курс, резюме, новость, текст без предложения работы'],
   ['suspicious', 'Подозрительно', 'Деньги вперёд, большой заработок без навыков, накрутки, подделка документов'],
   ['closed', 'Уже закрыта', 'На оригинале вакансия снята, заказ занят или страница не открывается'],
 ];
-const ISSUE_NAMES: Record<string, string> = { text_cut: 'Обрезан текст', no_pay: 'Нет оплаты, хотя она есть', no_company: 'Нет компании', format: 'Плохое форматирование', duplicate: 'Дубль' };
+
+const REVIEW_ANSWERS_EN: Array<[string, string, string]> = [
+  ['not_work', 'Not work', 'Ad, course, resume, news, or post with no job offer'],
+  ['suspicious', 'Suspicious', 'Upfront fee, high pay with no skills, fake reviews, scam'],
+  ['closed', 'Closed', 'Listing expired, gig assigned, or page not found'],
+];
+
+const REVIEW_ANSWERS = REVIEW_ANSWERS_RU;
+
+const ISSUE_NAMES_RU: Record<string, string> = { text_cut: 'Обрезан текст', no_pay: 'Нет оплаты, хотя она есть', no_company: 'Нет компании', format: 'Плохое форматирование', duplicate: 'Дубль' };
+const ISSUE_NAMES_EN: Record<string, string> = { text_cut: 'Text truncated', no_pay: 'Pay missing', no_company: 'Company missing', format: 'Bad formatting', duplicate: 'Duplicate' };
+const ISSUE_NAMES = ISSUE_NAMES_RU;
 
 interface DirectionItem { slug: string; label: string; total?: number }
 
 /** The site's own dropdown, with a search box: long lists are read by typing. */
-function directionPicker(name: string, label: string, items: DirectionItem[], selected: string, asLink: boolean): string {
+function directionPicker(name: string, label: string, items: DirectionItem[], selected: string, asLink: boolean, lang?: SupportedLang): string {
+  const ru = (lang ?? 'ru') !== 'en';
   const current = items.find((item) => item.slug === selected);
   const rows = items.map((item) => {
     const text = `<span class="custom-dropdown-item-text">${escapeHtml(item.label)}</span>${item.total !== undefined ? `<span class="custom-dropdown-count">${item.total}</span>` : ''}`;
@@ -969,7 +981,7 @@ function directionPicker(name: string, label: string, items: DirectionItem[], se
     ${asLink ? '' : `<input type="hidden" name="${escapeHtml(name)}" value="">`}
     <button type="button" class="custom-dropdown-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="${escapeHtml(label)}"><span class="custom-dropdown-label">${escapeHtml(current?.label ?? label)}</span></button>
     <div class="custom-dropdown-menu" role="listbox" style="display:none">
-      <input type="search" class="review-picker-search" placeholder="Найти" aria-label="Найти">
+      <input type="search" class="review-picker-search" placeholder="${ru ? 'Найти' : 'Search'}" aria-label="${ru ? 'Найти' : 'Search'}">
       ${rows}
     </div>
   </div>`;
@@ -1140,18 +1152,21 @@ export function renderReviewPage(options: {
   /** The post just answered, for taking the answer back. */
   last?: string;
 }): string {
+  const ru = (options.lang ?? 'ru') !== 'en';
   const { lead, directions } = options;
   const signedIn = Boolean(options.auth?.handle || options.auth?.isAdmin);
-  const shown = directions.find((item) => item.slug === lead?.direction)?.label ?? 'Другое';
-  const typeName = lead?.type === 'job' ? 'Вакансия' : 'Заказ';
+  const shown = directions.find((item) => item.slug === lead?.direction)?.label ?? (ru ? 'Другое' : 'Other');
+  const typeName = lead?.type === 'job' ? (ru ? 'Вакансия' : 'Job') : (ru ? 'Заказ' : 'Gig');
   const company = lead ? (lead.company ?? lead.author) : '';
   const salary = lead ? (salaryRange(lead, options.lang ?? 'ru') ?? (typeof lead.budget === 'number' ? formatBudget(lead.budget, lead.currency) : (lead.rawSalary ?? ''))) : '';
   const host = lead?.url ? safeHttpUrl(lead.url)?.replace(/^https?:\/\//, '')?.split('/')[0]?.replace(/^www\./, '') : '';
-  const remote = lead?.isRemote ? 'Удалённо' : '';
+  const remote = lead?.isRemote ? (ru ? 'Удалённо' : 'Remote') : '';
   const location = [lead?.city, remote].filter(Boolean).join(' · ');
   const relativeDate = lead ? formatRelative(lead.createdAt, options.lang ?? 'ru') : '';
   const metaLine = [host, salary, location, relativeDate].filter(Boolean).join(' · ');
   const formatted = lead ? formatLeadText(lead.text) : { html: '', tags: [] };
+  const reviewAnswers = ru ? REVIEW_ANSWERS_RU : REVIEW_ANSWERS_EN;
+  const issueNames = ru ? ISSUE_NAMES_RU : ISSUE_NAMES_EN;
 
   const content = lead ? `
 <div class="page-head review-head">
@@ -1161,13 +1176,13 @@ export function renderReviewPage(options: {
     ${metaLine ? `<p class="muted small">${escapeHtml(metaLine)}</p>` : ''}
   </div>
   <div class="actions lead-actions">
-    ${lead.url ? `<a class="btn review-original" href="${escapeHtml(lead.url)}" target="_blank" rel="noopener noreferrer">Открыть оригинал ↗</a>` : ''}
+    ${lead.url ? `<a class="btn review-original" href="${escapeHtml(lead.url)}" target="_blank" rel="noopener noreferrer">${ru ? 'Открыть оригинал ↗' : 'Open original ↗'}</a>` : ''}
   </div>
 </div>
 
 <div class="detail-grid review-grid">
   <section class="review-lead-col">
-    <h2>${lead.type === 'job' ? 'Текст вакансии' : 'Текст заказа'}</h2>
+    <h2>${lead.type === 'job' ? (ru ? 'Текст вакансии' : 'Job description') : (ru ? 'Текст заказа' : 'Gig description')}</h2>
     <div class="lead-text review-lead-scroll">${formatted.html}</div>
   </section>
 
@@ -1177,32 +1192,32 @@ export function renderReviewPage(options: {
       <input type="hidden" name="bucket" value="${escapeHtml(options.bucket ?? '')}">
       <input type="hidden" name="c" value="${escapeHtml(options.direction)}">
 
-      <h2>Решение</h2>
+      <h2>${ru ? 'Решение' : 'Verdict'}</h2>
       <div class="review-shown">
-        <div class="review-shown-line">Мы показали это как: <strong>${typeName}</strong> · <strong>${escapeHtml(shown)}</strong></div>
+        <div class="review-shown-line">${ru ? 'Мы показали это как:' : 'Shown as:'} <strong>${typeName}</strong> · <strong>${escapeHtml(shown)}</strong></div>
         <details class="review-fix">
-          <summary>Исправить тип или направление</summary>
+          <summary>${ru ? 'Исправить тип или направление' : 'Fix type or direction'}</summary>
           <div class="review-fix-body">
             <div class="review-fix-row">
               <label class="review-fix-label">
                 <input type="checkbox" name="type_fix" value="${lead.type === 'job' ? 'gig' : 'job'}">
-                Это ${lead.type === 'job' ? 'заказ' : 'вакансия'}
+                ${ru ? (lead.type === 'job' ? 'Это заказ' : 'Это вакансия') : (lead.type === 'job' ? 'This is a gig' : 'This is a job')}
               </label>
-              ${directionPicker('direction_fix', 'Другое направление', directions.filter((item) => item.slug), '', false)}
+              ${directionPicker('direction_fix', ru ? 'Другое направление' : 'Other direction', directions.filter((item) => item.slug), '', false, options.lang)}
             </div>
           </div>
         </details>
       </div>
 
       <div class="review-answers">
-        <button class="review-ans-btn review-ans-btn-primary" name="verdict" value="ok" type="submit" title="Реальная работа. Мало текста не беда, если оригинал в порядке.">
+        <button class="review-ans-btn review-ans-btn-primary" name="verdict" value="ok" type="submit" title="${ru ? 'Реальная работа. Мало текста не беда, если оригинал в порядке.' : 'Legitimate work. Brief text is fine if the original is valid.'}">
           <span class="review-ans-num">1</span>
           <span class="review-ans-text">
-            <strong>Всё верно</strong>
-            <small>Реальная работа, верный тип · Enter</small>
+            <strong>${ru ? 'Всё верно' : 'Looks good'}</strong>
+            <small>${ru ? 'Реальная работа, верный тип · Enter' : 'Legitimate work, correct type · Enter'}</small>
           </span>
         </button>
-        ${REVIEW_ANSWERS.map(([key, name, hint], index) => `
+        ${reviewAnswers.map(([key, name, hint], index) => `
         <button class="review-ans-btn" name="verdict" value="${key}" type="submit" title="${escapeHtml(hint)}">
           <span class="review-ans-num">${index + 2}</span>
           <span class="review-ans-text">
@@ -1210,43 +1225,43 @@ export function renderReviewPage(options: {
             <small>${escapeHtml(hint.slice(0, 38))}</small>
           </span>
         </button>`).join('')}
-        <button class="review-ans-btn review-ans-btn-skip" name="verdict" value="unsure" type="submit" title="Пост пропускается, ответ не считается">
+        <button class="review-ans-btn review-ans-btn-skip" name="verdict" value="unsure" type="submit" title="${ru ? 'Пост пропускается, ответ не считается' : 'Skip this post without grading'}">
           <span class="review-ans-num">5</span>
           <span class="review-ans-text">
-            <strong>Не знаю</strong>
-            <small>Пропустить без оценки</small>
+            <strong>${ru ? 'Не знаю' : 'Skip'}</strong>
+            <small>${ru ? 'Пропустить без оценки' : 'Skip without grading'}</small>
           </span>
         </button>
       </div>
 
-      <h2 class="review-issues-title">Что не так со сбором</h2>
+      <h2 class="review-issues-title">${ru ? 'Что не так со сбором' : 'Ingestion issues'}</h2>
       <div class="review-chips">
-        ${Object.entries(ISSUE_NAMES).map(([key, name]) => `
+        ${Object.entries(issueNames).map(([key, name]) => `
         <label class="review-chip">
           <input type="checkbox" name="issues" value="${key}">
           <span>${escapeHtml(name)}</span>
         </label>`).join('')}
       </div>
-      <input type="text" name="note" class="review-note" maxlength="300" placeholder="Комментарий к сбору, если нужно" aria-label="Комментарий">
+      <input type="text" name="note" class="review-note" maxlength="300" placeholder="${ru ? 'Комментарий к сбору, если нужно' : 'Optional note about parsing issues'}" aria-label="${ru ? 'Комментарий' : 'Comment'}">
     </form>
   </aside>
 </div>` : `
 <div class="empty review-empty">
-  <h2>Пока нечего разбирать</h2>
-  <p>В этом направлении все посты разобраны. Выберите другое направление выше или загляните позже.</p>
+  <h2>${ru ? 'Пока нечего разбирать' : 'Nothing to review yet'}</h2>
+  <p>${ru ? 'В этом направлении все посты разобраны. Выберите другое направление выше или загляните позже.' : 'All posts in this direction have been reviewed. Choose another direction above or check back later.'}</p>
 </div>`;
 
   const body = `
 <div class="review-nav">
   <div class="review-nav-left">
-    <a class="back" href="/">← Все заказы</a>
+    <a class="back" href="/">${ru ? '← Все заказы' : '← All leads'}</a>
     <span class="review-nav-sep">·</span>
-    ${directionPicker('c', 'Все направления', [{ slug: '', label: 'Все направления' }, ...directions], options.direction, true)}
+    ${directionPicker('c', ru ? 'Все направления' : 'All directions', [{ slug: '', label: ru ? 'Все направления' : 'All directions' }, ...directions], options.direction, true, options.lang)}
   </div>
   <div class="review-nav-right">
-    ${signedIn ? `<span class="review-counter">Вы разобрали: <strong>${options.mine}</strong></span>` : `<span class="review-counter">Разбор постов</span>`}
-    <button type="button" class="link-btn review-help-trigger" title="Справка по оценке (?)">Как оценивать (?)</button>
-    ${options.last ? `<form method="post" action="/review/undo" class="review-undo-inline"><input type="hidden" name="id" value="${escapeHtml(options.last)}"><button class="link-btn review-undo-btn" type="submit" title="Отменить последний ответ (Z)">Отменить ответ (Z)</button></form>` : ''}
+    ${signedIn ? `<span class="review-counter">${ru ? `Вы разобрали: <strong>${options.mine}</strong>` : `You reviewed: <strong>${options.mine}</strong>`}</span>` : `<span class="review-counter">${ru ? 'Разбор постов' : 'Post review'}</span>`}
+    <button type="button" class="link-btn review-help-trigger" title="${ru ? 'Справка по оценке (?)' : 'Review guide (?)}'}">${ru ? 'Как оценивать (?)' : 'How to review (?)'}</button>
+    ${options.last ? `<form method="post" action="/review/undo" class="review-undo-inline"><input type="hidden" name="id" value="${escapeHtml(options.last)}"><button class="link-btn review-undo-btn" type="submit" title="${ru ? 'Отменить последний ответ (Z)' : 'Undo last answer (Z)'}">${ru ? 'Отменить ответ (Z)' : 'Undo answer (Z)'}</button></form>` : ''}
   </div>
 </div>
 ${content}
@@ -1254,22 +1269,23 @@ ${content}
   <div class="review-modal-backdrop"></div>
   <div class="review-modal-card">
     <div class="review-modal-head">
-      <h3>Как оценивать</h3>
-      <button type="button" class="link-btn review-modal-close">Закрыть</button>
+      <h3>${ru ? 'Как оценивать' : 'How to review'}</h3>
+      <button type="button" class="link-btn review-modal-close">${ru ? 'Закрыть' : 'Close'}</button>
     </div>
     <ul class="review-help-list">
-      <li>Оценивайте саму работу, а не то, как мы её показали.</li>
-      <li>Если текста мало, сначала откройте оригинал.</li>
-      <li>Оригинал хороший, а у нас плохо считалось: это «Всё верно», а что не так, отметьте в проблемах сбора.</li>
-      <li><strong>Не работа:</strong> реклама, курс, резюме, новость.</li>
-      <li><strong>Подозрительно:</strong> деньги вперёд, большой заработок без навыков, накрутки, подделка документов.</li>
-      <li><strong>Уже закрыта:</strong> на оригинале снята, заказ занят или страница не открывается.</li>
-      <li>Сомневаетесь? Нажмите «Не знаю»: это честнее, чем угадывать.</li>
-      <li>Клавиши 1–5 или Enter выбирают ответ, стрелки ↑↓ переключают, О открывает оригинал, Z отменяет, ? открывает эту справку.</li>
+      <li>${ru ? 'Оценивайте саму работу, а не то, как мы её показали.' : 'Evaluate the job/gig itself, not how openradar rendered it.'}</li>
+      <li>${ru ? 'Если текста мало, сначала откройте оригинал.' : 'If the description is brief, check the original link first.'}</li>
+      <li>${ru ? 'Оригинал хороший, а у нас плохо считалось: это «Всё верно», а что не так, отметьте в проблемах сбора.' : 'If the original is legitimate but openradar parsed it poorly, select "Looks good" and mark parsing issues below.'}</li>
+      <li>${ru ? '<strong>Не работа:</strong> реклама, курс, резюме, новость.' : '<strong>Not work:</strong> ads, courses, resumes, news, promos.'}</li>
+      <li>${ru ? '<strong>Подозрительно:</strong> деньги вперёд, большой заработок без навыков, накрутки, подделка документов.' : '<strong>Suspicious:</strong> upfront fees, high pay with no skills, fake reviews, scam.'}</li>
+      <li>${ru ? '<strong>Уже закрыта:</strong> на оригинале снята, заказ занят или страница не открывается.' : '<strong>Already closed:</strong> position filled, listing archived, or link dead.'}</li>
+      <li>${ru ? 'Сомневаетесь? Нажмите «Не знаю»: это честнее, чем угадывать.' : 'Unsure? Click "Skip": it is better than guessing.'}</li>
+      <li>${ru ? 'Клавиши 1–5 или Enter выбирают ответ, стрелки ↑↓ переключают, О открывает оригинал, Z отменяет, ? открывает эту справку.' : 'Keys 1–5 or Enter choose an answer, ↑↓ arrows switch, O opens original, Z undoes, ? toggles this help.'}</li>
     </ul>
   </div>
 </div>`;
-  return layout({ title: lead ? `${leadTitle(lead)} · Разбор постов` : 'Разбор постов', version: options.version, body, auth: options.auth, lang: options.lang, head: '<meta name="robots" content="noindex">', script: REVIEW_SCRIPT, bodyClass: 'page-review' });
+  const pageTitle = lead ? `${leadTitle(lead)} · ${ru ? 'Разбор постов' : 'Post review'}` : (ru ? 'Разбор постов' : 'Post review');
+  return layout({ title: pageTitle, version: options.version, body, auth: options.auth, lang: options.lang, head: '<meta name="robots" content="noindex">', script: REVIEW_SCRIPT, bodyClass: 'page-review' });
 }
 
 /** Where an employer's page lives. */

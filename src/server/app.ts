@@ -1323,11 +1323,12 @@ export function createApp(runtime: Runtime): Hono {
   });
 
   // Readers go through posts of a direction. Answers are data: they never hide a post.
-  const directionItems = async (): Promise<Array<{ slug: string; label: string; total: number }>> =>
-    ((await runtime.store.listDirections?.()) ?? []).map((item) => ({ ...item, label: roleLabel(item.slug) }));
+  const directionItems = async (lang: SupportedLang = 'ru'): Promise<Array<{ slug: string; label: string; total: number }>> =>
+    ((await runtime.store.listDirections?.()) ?? []).map((item) => ({ ...item, label: roleLabel(item.slug, lang) }));
   app.get('/review', rateLimit({ windowMs: 60_000, max: 120 }), async (c) => {
     const user = await currentUser(c, runtime);
-    const directions = await directionItems();
+    const lang = resolveLang(c);
+    const directions = await directionItems(lang);
     const asked = c.req.query('c') ?? '';
     const direction = directions.some((item) => item.slug === asked) ? asked : '';
     const bucket = pickBucket(Math.random());
@@ -1339,7 +1340,7 @@ export function createApp(runtime: Runtime): Hono {
       : await runtime.store.nextLeadToReview?.(user?.id ?? 0, { direction: direction || undefined, bucket });
     const stats = user ? await runtime.store.reviewStats?.(user.id) : undefined;
     return c.html(renderReviewPage({
-      version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c),
+      version: VERSION, auth: await getAuthDisplay(c, runtime), lang,
       lead: lead ? projectContacts(lead, { tier: 'guest' }) : undefined,
       bucket, directions, direction, mine: stats?.mine ?? 0, last: user ? c.req.query('last') : undefined,
     }));

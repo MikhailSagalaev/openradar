@@ -146,6 +146,17 @@ describe('reader reviews', () => {
     const guestHtml = await guest.text();
     expect(guestHtml).toContain('data-guest="true"');
     expect(guestHtml).toContain('Разбор постов');
+
+    const enReq = await app.request('/review?lang=en');
+    expect(enReq.status).toBe(200);
+    const enHtml = await enReq.text();
+    expect(enHtml).toContain('Post review');
+    expect(enHtml).toContain('Looks good');
+    expect(enHtml).toContain('How to review');
+    expect(enHtml).toContain('Shown as:');
+    expect(enHtml).toContain('All directions');
+    expect(enHtml).toContain('Ingestion issues');
+
     const guestPost = await app.request('/review', { method: 'POST', headers: { origin: 'http://localhost', 'content-type': 'application/x-www-form-urlencoded' }, body: 'id=b&verdict=ok' });
     expect(guestPost.status).toBe(302);
     expect(guestPost.headers.get('location')).toBe('/login?returnTo=/review');
