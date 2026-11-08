@@ -517,7 +517,7 @@ export interface Store extends HubStore {
   /** Newest posts with no model answer of this version yet, those without pay first (or with pay first, to calibrate). */
   listLeadsForModel?(options: { limit: number; since: string; version: number; withPayFirst?: boolean }): Promise<Array<Pick<Lead, 'id' | 'title' | 'text' | 'type'>>>;
   /** Stores the model's answer as metadata.model. */
-  saveLeadModelFacts?(id: string, stored: unknown): Promise<void>;
+  saveLeadModelFacts?(id: string, stored: unknown, options?: { applyToLead?: boolean }): Promise<void>;
   getResearchSnapshot?(period: string): Promise<{ report: unknown; createdAt: string } | null>;
   saveResearchSnapshot?(period: string, report: unknown): Promise<void>;
   listResearchSnapshots?(): Promise<Array<{ period: string; createdAt: string }>>;

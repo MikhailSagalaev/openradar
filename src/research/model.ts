@@ -225,7 +225,7 @@ export async function runModelExtraction(
         continue;
       }
       const stored: StoredModelFacts = { v: MODEL_EXTRACT_VERSION, model: modelName(deps.env), at: new Date().toISOString(), facts };
-      await store.saveLeadModelFacts!(lead.id, stored);
+      await store.saveLeadModelFacts!(lead.id, stored, { applyToLead: deps.env.RADAR_EXTRACT_APPLY });
       summary.saved++;
       summary.ids.push(lead.id);
     }
