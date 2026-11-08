@@ -5,9 +5,9 @@
  * Runs on Cloudflare Edge (100,000 requests/day free).
  *
  * Deployment:
- * 1. Open Cloudflare Dashboard -> Compute (Workers) -> Create application -> Create Worker
+ * 1. Open Cloudflare Dashboard -> Compute (Workers) -> Click your worker -> Edit Code
  * 2. Paste this code into the editor, click "Deploy"
- * 3. Copy your worker URL: https://<worker-name>.<subdomain>.workers.dev
+ * 3. (Optional) Set GROQ_API_KEY in Worker Settings -> Variables and Secrets -> Add GROQ_API_KEY
  * 4. In .env on the server:
  *    GROQ_BASE_URL=https://<worker-name>.<subdomain>.workers.dev/openai/v1
  *    GROQ_API_KEY=gsk_...
@@ -25,10 +25,15 @@ export default {
       });
     }
 
-    // Require Authorization header to prevent public abuse
-    const auth = request.headers.get('authorization');
+    // Determine the Groq API key:
+    // Can be passed via Authorization header OR configured in Worker secret GROQ_API_KEY.
+    let auth = request.headers.get('authorization');
+    if (!auth && env?.GROQ_API_KEY) {
+      auth = `Bearer ${env.GROQ_API_KEY}`;
+    }
+
     if (!auth) {
-      return new Response(JSON.stringify({ error: { message: 'Missing Authorization header' } }), {
+      return new Response(JSON.stringify({ error: { message: 'Missing Authorization header or GROQ_API_KEY secret' } }), {
         status: 401,
         headers: { 'content-type': 'application/json' },
       });
@@ -37,17 +42,24 @@ export default {
     const url = new URL(request.url);
     const targetUrl = new URL(url.pathname + url.search, 'https://api.groq.com');
 
-    const headers = new Headers(request.headers);
-    headers.set('host', 'api.groq.com');
-    headers.delete('cf-connecting-ip');
-    headers.delete('cf-ray');
-    headers.delete('cf-visitor');
+    // Build completely clean headers to avoid leaking client IP / country (CF-IPCountry / X-Forwarded-For)
+    // to Groq's Cloudflare WAF.
+    const cleanHeaders = new Headers();
+    cleanHeaders.set('host', 'api.groq.com');
+    cleanHeaders.set('authorization', auth);
+    cleanHeaders.set('user-agent', 'openradar/1.0');
+
+    const contentType = request.headers.get('content-type');
+    if (contentType) cleanHeaders.set('content-type', contentType);
+
+    const accept = request.headers.get('accept');
+    if (accept) cleanHeaders.set('accept', accept);
 
     try {
       const response = await fetch(targetUrl, {
         method: request.method,
-        headers,
-        body: request.body,
+        headers: cleanHeaders,
+        body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : undefined,
         redirect: 'follow',
       });
       return response;
