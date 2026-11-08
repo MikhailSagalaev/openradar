@@ -1105,6 +1105,10 @@ export class PostgresStore implements Store {
         `(is_remote = true OR workplace_type = 'remote' OR city ~* '^(онлайн|удал)' OR (title || ' ' || text) ~* 'удал[её]нн(?:ая|ое|ый|ую)\\s+(?:работ|формат|график)|100%\\s+remote|\\btelecommute\\b|работа\\s+из\\s+дома')`,
       );
     }
+    if (options.workplaceType) {
+      conditions.push(`workplace_type = $${idx++}`);
+      params.push(options.workplaceType);
+    }
     if (options.skill && options.skill.trim()) {
       conditions.push(
         `EXISTS (SELECT 1 FROM jsonb_array_elements_text(skills_json) AS s(skill) WHERE lower(s.skill) = lower($${idx++}))`,

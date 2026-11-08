@@ -35,6 +35,8 @@ export function renderOpenApi(baseUrl: string): Record<string, unknown> {
             { name: 'budget', in: 'query', schema: { type: 'number' }, description: 'Minimum budget in roubles; converted to USD internally' },
             { name: 'language', in: 'query', schema: { type: 'string', enum: ['ru', 'en'] }, description: 'Title language' },
             { name: 'remote', in: 'query', schema: { type: 'string', enum: ['1'] }, description: 'Remote only' },
+            { name: 'workplace', in: 'query', schema: { type: 'string', enum: ['remote', 'hybrid', 'onsite'] }, description: 'Workplace arrangement: remote, hybrid, or onsite' },
+            { name: 'direction', in: 'query', schema: { type: 'string' }, description: 'Role or trade direction, e.g. "backend", "frontend", "qa", "devops", "design"' },
             { name: 'it', in: 'query', schema: { type: 'string', enum: ['1'] }, description: 'IT and adjacent trades only' },
             { name: 'sort', in: 'query', schema: { type: 'string', enum: ['new', 'score', 'budget'] } },
             { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 500, default: 50 } },
@@ -136,6 +138,14 @@ export function renderOpenApi(baseUrl: string): Record<string, unknown> {
       },
     },
     components: {
+      securitySchemes: {
+        BearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'mcp_* or session',
+          description: 'Personal AI agent token from https://openradar.fun/me or session bearer token',
+        },
+      },
       responses: {
         Unauthorized: { description: 'The hub is not in public-read mode' },
       },
@@ -175,6 +185,8 @@ function leadSchema(): Record<string, unknown> {
       category: { type: 'string' },
       skills: { type: 'array', items: { type: 'string' } },
       isRemote: { type: 'boolean' },
+      workplaceType: { type: 'string', enum: ['remote', 'hybrid', 'onsite'], description: 'Workplace arrangement: remote, hybrid, or onsite' },
+      direction: { type: 'string', description: 'Standardized trade direction, e.g. "backend", "frontend", "qa", "design"' },
       publishedAt: { type: 'string', format: 'date-time' },
       createdAt: { type: 'string', format: 'date-time' },
       votes_up: { type: 'integer' },

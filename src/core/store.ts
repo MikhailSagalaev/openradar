@@ -2,6 +2,7 @@ import type { LeadReview, ReviewBucket } from './reviews.ts';
 import type { LabelledDecision, ModelDecision } from './decisions.ts';
 import type { SourceQualityInput } from './source-quality.ts';
 import type { PageFacts } from '../research/facts.ts';
+import type { WorkplaceType } from './text.ts';
 import type { SubscriptionRecord } from './subscriptions.ts';
 import type {
   Contact,
@@ -54,6 +55,8 @@ export interface ListLeadsOptions {
   minBudgetUsd?: number;
   /** Only leads that can be done remotely. */
   remote?: boolean;
+  /** Only leads with this workplace arrangement (remote, hybrid, onsite). */
+  workplaceType?: WorkplaceType;
   /** Only leads tagged with this skill (case-insensitive). */
   skill?: string;
   /** Only leads tagged with at least one of these skills (case-insensitive): the «IT» chip. */
