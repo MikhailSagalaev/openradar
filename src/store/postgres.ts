@@ -1079,10 +1079,13 @@ export class PostgresStore implements Store {
       // Leads rejected by the pipeline rules stay with the operator, not in the public feed.
       conditions.push(`state = 'active'`, `status <> 'rejected'`);
       if (options.maxAgeDays) {
+        const now = Date.now();
+        const jobCutoff = new Date(now - options.maxAgeDays.job * 86_400_000).toISOString();
+        const gigCutoff = new Date(now - options.maxAgeDays.gig * 86_400_000).toISOString();
         conditions.push(
-          `created_at >= NOW() - make_interval(days => CASE WHEN type = 'job' THEN $${idx}::int ELSE $${idx + 1}::int END)`,
+          `((type = 'job' AND created_at >= $${idx}::timestamptz) OR (type <> 'job' AND created_at >= $${idx + 1}::timestamptz))`
         );
-        params.push(options.maxAgeDays.job, options.maxAgeDays.gig);
+        params.push(jobCutoff, gigCutoff);
         idx += 2;
       }
       if (options.after) {
@@ -1191,7 +1194,7 @@ export class PostgresStore implements Store {
             ? 'COALESCE(normalized_usd_max, normalized_usd_min) DESC NULLS LAST, created_at DESC, id DESC'
             : options.sort === 'relevance' && queryTsIdx !== undefined
               ? (this.hasPgSearch
-                  ? `paradedb.score(id) DESC, created_at DESC, id DESC`
+                  ? `paradedb.score(id) DESC`
                   : `ts_rank_cd('{0.1, 0.2, 0.4, 1.0}', search_vector, websearch_to_tsquery('russian', $${queryTsIdx}) || websearch_to_tsquery('english', $${queryTsIdx})) DESC, created_at DESC, id DESC`)
               : 'created_at DESC, id DESC';
     const offset = Math.max(0, Math.min(Math.floor(options.offset ?? 0), 10_000));

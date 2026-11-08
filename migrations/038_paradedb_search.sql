@@ -6,7 +6,7 @@ BEGIN
   IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'pg_search') THEN
     EXECUTE 'CREATE EXTENSION IF NOT EXISTS pg_search CASCADE';
     IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_leads_paradedb') THEN
-      EXECUTE 'CREATE INDEX idx_leads_paradedb ON leads USING paradedb (id, title, skills_json, category, direction, text)';
+      EXECUTE 'CREATE INDEX idx_leads_paradedb ON leads USING bm25 (id, title, skills_json, direction, text)';
     END IF;
   END IF;
 END $do$;
