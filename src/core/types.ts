@@ -160,6 +160,7 @@ export interface RawLead {
   category?: string;
   skills?: string[];
   isRemote?: boolean;
+  workplaceType?: 'remote' | 'hybrid' | 'onsite';
   publishedAt?: string;
   metadata?: Record<string, unknown>;
   raw?: Record<string, unknown>;

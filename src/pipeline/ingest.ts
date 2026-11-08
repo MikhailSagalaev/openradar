@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { prepareRawLead } from '../core/prepare.ts';
 import { applyRules } from '../core/rules.ts';
 import { assessQuality, offersNoPay } from '../core/quality.ts';
-import { extractSkills } from '../core/text.ts';
+import { classifyWorkplace, extractSkills } from '../core/text.ts';
 import { emitLeadCreated } from '../core/events.ts';
 import { estimateJaccardFromSketches } from '../core/fingerprint.ts';
 import { companyKeyOf } from '../core/company.ts';
@@ -216,6 +216,14 @@ export async function ingestRawLead(
 
   const owner = typeof source.config.company === 'string' ? source.config.company : undefined;
   const employer = employerOf({ type: prepared.type ?? 'gig', author: prepared.author, text: prepared.text }, source.kind, owner);
+  const wp = classifyWorkplace({
+    title: prepared.title,
+    text: prepared.text,
+    city,
+    type: prepared.type ?? 'gig',
+    explicitRemote: typeof prepared.isRemote === 'boolean' ? prepared.isRemote : undefined,
+  });
+
   const lead: Lead = {
     id: randomUUID(),
     sourceId: source.id,
@@ -238,7 +246,8 @@ export async function ingestRawLead(
     normalizedUsdMax: prepared.normalizedUsdMax,
     category,
     skills,
-    isRemote: prepared.isRemote !== false,
+    isRemote: wp.isRemote,
+    workplaceType: wp.workplaceType,
     metadata,
     publishedAt: prepared.publishedAt,
     contacts: prepared.contacts,

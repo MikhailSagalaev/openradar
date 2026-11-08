@@ -1,7 +1,7 @@
 import pg from 'pg';
 import { randomUUID } from 'node:crypto';
 import { recalculateVoteScoreAndStatus } from '../core/rules.ts';
-import { normalizeTechTokens } from '../core/text.ts';
+import { normalizeTechTokens, type WorkplaceType } from '../core/text.ts';
 import { mergeContacts } from '../core/contacts.ts';
 import type {
   Contact,
@@ -401,7 +401,7 @@ export class PostgresStore implements Store {
           raw_salary, payment_period, normalized_usd_min, normalized_usd_max,
           minhash_sketch, state, contacts_json,
           source_platform, source_channel, source_channel_title, source_visibility, source_message_id,
-          company, company_key, direction
+          company, company_key, direction, workplace_type
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7,
           $8, $9, $10, $11, $12, $13::jsonb, $14,
@@ -411,7 +411,7 @@ export class PostgresStore implements Store {
           $30, $31, $32, $33,
           $34, $35, $36::jsonb,
           $37, $38, $39, $40, $41,
-          $42, $43, $44
+          $42, $43, $44, $45
         ) ON CONFLICT DO NOTHING`,
         [
           lead.id,
@@ -427,7 +427,7 @@ export class PostgresStore implements Store {
           lead.currency ?? 'RUB',
           lead.category ?? null,
           JSON.stringify(lead.skills ?? []),
-          lead.isRemote ?? true,
+          lead.isRemote ?? (lead.workplaceType === 'remote'),
           JSON.stringify(lead.metadata ?? {}),
           lead.publishedAt ? new Date(lead.publishedAt) : null,
           lead.fingerprint,
@@ -458,6 +458,7 @@ export class PostgresStore implements Store {
           lead.company ?? null,
           lead.companyKey ?? null,
           lead.direction ?? null,
+          lead.workplaceType ?? (lead.isRemote ? 'remote' : 'onsite'),
         ]
       );
 
@@ -668,6 +669,13 @@ export class PostgresStore implements Store {
     await this.pool.query(
       `UPDATE leads SET direction = $2 WHERE id = $1 AND (direction IS NULL OR direction = '')`,
       [leadId, direction],
+    );
+  }
+
+  async applyLeadWorkplace(leadId: string, workplaceType: 'remote' | 'hybrid' | 'onsite', isRemote: boolean): Promise<void> {
+    await this.pool.query(
+      `UPDATE leads SET workplace_type = $2, is_remote = $3 WHERE id = $1`,
+      [leadId, workplaceType, isRemote],
     );
   }
 
@@ -1091,9 +1099,10 @@ export class PostgresStore implements Store {
       params.push(options.minBudgetUsd);
     }
     if (options.remote) {
-      // Same rule as isRemoteLead() in src/core/text.ts.
+      // Remote classification: requires is_remote = true or workplace_type = 'remote',
+      // or explicit online city / text markers, avoiding blind city IS NULL assumptions.
       conditions.push(
-        `(city IS NULL OR city ~* '^(онлайн|удал)' OR (title || ' ' || text) ~* 'удал[её]нн|удал[её]нк|можно\\s+удал|remote')`,
+        `(is_remote = true OR workplace_type = 'remote' OR city ~* '^(онлайн|удал)' OR (title || ' ' || text) ~* 'удал[её]нн(?:ая|ое|ый|ую)\\s+(?:работ|формат|график)|100%\\s+remote|\\btelecommute\\b|работа\\s+из\\s+дома')`,
       );
     }
     if (options.skill && options.skill.trim()) {
@@ -1412,7 +1421,8 @@ export class PostgresStore implements Store {
       currency: r.currency || 'RUB',
       category: r.category || undefined,
       skills: Array.isArray(r.skills_json) ? r.skills_json : (typeof r.skills_json === 'string' ? JSON.parse(r.skills_json) : []),
-      isRemote: r.is_remote !== null ? Boolean(r.is_remote) : true,
+      isRemote: r.is_remote !== null ? Boolean(r.is_remote) : (r.workplace_type === 'remote'),
+      workplaceType: (r.workplace_type as WorkplaceType) || (r.is_remote ? 'remote' : 'onsite'),
       metadata: typeof r.metadata_json === 'object' && r.metadata_json !== null ? r.metadata_json : JSON.parse(r.metadata_json || '{}'),
       publishedAt: r.published_at ? new Date(r.published_at).toISOString() : undefined,
       fingerprint: r.fingerprint,
@@ -2472,7 +2482,7 @@ export class PostgresStore implements Store {
       // Company career pages are many and long, and only their head matters to the report.
       `SELECT id, source_id, external_id, url, canonical_url, title,
               left(text, CASE WHEN source_id IN (SELECT id FROM sources WHERE kind = 'ats') THEN 600 ELSE 3000 END) AS text, author, city,
-              budget, currency, category, skills_json, is_remote, metadata_json, published_at, fingerprint,
+              budget, currency, category, skills_json, is_remote, workplace_type, metadata_json, published_at, fingerprint,
               title_key, status, score, reasons_json, created_at, delivered_at, type, raw_salary, payment_period,
               normalized_usd_min, normalized_usd_max, state, contacts_json, source_platform, source_channel,
               source_channel_title, source_visibility, source_message_id, confirmed_at,

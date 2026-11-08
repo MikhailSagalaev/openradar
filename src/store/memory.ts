@@ -370,6 +370,14 @@ export class MemoryStore implements Store {
     if (lead && (!lead.direction || lead.direction === '')) lead.direction = direction;
   }
 
+  async applyLeadWorkplace(leadId: string, workplaceType: 'remote' | 'hybrid' | 'onsite', isRemote: boolean): Promise<void> {
+    const lead = this.leads.get(leadId);
+    if (lead) {
+      lead.workplaceType = workplaceType;
+      lead.isRemote = isRemote;
+    }
+  }
+
   async listAppliedDecisions(limit: number): Promise<Array<{ lead: Lead; decision: ModelDecision }>> {
     return [...this.modelDecisions.values()].flatMap((decision) => {
       const lead = this.leads.get(decision.leadId);
