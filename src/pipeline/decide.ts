@@ -68,8 +68,8 @@ async function withRetry<T>(ask: () => Promise<T>): Promise<T> {
 }
 
 /** Acts on stored answers. Each post once: an answer a person overruled stays overruled. */
-export async function applyDecisions(deps: DecideDeps, limit: number): Promise<{ hidden: number; closed: number; moved: number }> {
-  const summary = { hidden: 0, closed: 0, moved: 0 };
+export async function applyDecisions(deps: DecideDeps, limit: number): Promise<{ hidden: number; closed: number; moved: number; directed: number }> {
+  const summary = { hidden: 0, closed: 0, moved: 0, directed: 0 };
   const { store, env } = deps;
   if (!env.RADAR_DECIDE_APPLY || !store.listDecisionsToApply || !store.markDecisionApplied) return summary;
   for (const { decision, score } of await store.listDecisionsToApply(limit)) {
@@ -84,6 +84,11 @@ export async function applyDecisions(deps: DecideDeps, limit: number): Promise<{
     if (shift) {
       await store.updateLeadScore?.(decision.leadId, Math.max(0, Math.min(100, score + shift)));
       summary.moved++;
+    }
+    // A sure direction fills an empty one: data for the catalogs, never a hide.
+    if (decision.direction && (decision.directionConfidence ?? 0) >= 0.8 && store.applyLeadDirection) {
+      await store.applyLeadDirection(decision.leadId, decision.direction);
+      summary.directed++;
     }
     await store.markDecisionApplied(decision.leadId, action ?? 'scored');
   }

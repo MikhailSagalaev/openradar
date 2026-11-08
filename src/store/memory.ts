@@ -365,6 +365,11 @@ export class MemoryStore implements Store {
     if (decision) decision.applied = applied;
   }
 
+  async applyLeadDirection(leadId: string, direction: string): Promise<void> {
+    const lead = this.leads.get(leadId);
+    if (lead && (!lead.direction || lead.direction === '')) lead.direction = direction;
+  }
+
   async listAppliedDecisions(limit: number): Promise<Array<{ lead: Lead; decision: ModelDecision }>> {
     return [...this.modelDecisions.values()].flatMap((decision) => {
       const lead = this.leads.get(decision.leadId);
