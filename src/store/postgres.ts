@@ -1226,8 +1226,8 @@ export class PostgresStore implements Store {
          FROM sources s LEFT JOIN leads l ON l.source_id = s.id AND l.created_at > NOW() - INTERVAL '7 days'
          GROUP BY s.id, s.title, s.enabled ORDER BY inserted DESC, s.title`,
       ),
-      one(`SELECT COUNT(*), COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') FROM app_users`),
-      one(`SELECT COUNT(*), COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') FROM lead_votes`),
+      one(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS new_7d FROM app_users`),
+      one(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS new_7d FROM lead_votes`),
       one(`SELECT COUNT(*) FROM participants`),
       one(`SELECT COUNT(*) FROM observations WHERE received_at > NOW() - INTERVAL '7 days'`),
     ]);
