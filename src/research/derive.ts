@@ -172,6 +172,44 @@ export const ROLES: RoleDef[] = [
 
 export const OTHER_ROLE = { slug: 'other', label: 'Другое', plural: 'другие специалисты' };
 
+export const ROLE_LABELS_EN: Record<string, string> = {
+  ai: 'AI Engineer & Vibe Coding',
+  '1c': '1C Developer',
+  security: 'Information Security',
+  qa: 'QA Engineer',
+  devops: 'DevOps & SRE',
+  architect: 'Software Architect',
+  sysadmin: 'System Administrator',
+  'data-engineer': 'Data Engineer',
+  'analyst-system': 'Systems Analyst',
+  'analyst-business': 'Business Analyst',
+  'analyst-data': 'Data & Product Analyst',
+  ml: 'Data Science & ML',
+  product: 'Product Manager',
+  project: 'Project Manager',
+  design: 'Designer',
+  gamedev: 'Game Developer',
+  mobile: 'Mobile Developer',
+  fullstack: 'Fullstack Developer',
+  frontend: 'Frontend Developer',
+  embedded: 'Embedded Developer',
+  backend: 'Backend Developer',
+  education: 'Teaching & Mentoring',
+  support: 'Tech Support',
+  marketing: 'Marketing & Advertising',
+  content: 'Content & Copywriting',
+  sales: 'Sales & BizDev',
+  hr: 'HR & Recruiting',
+  web: 'Websites & CMS',
+  bots: 'Bots & Chatbots',
+  parsing: 'Scraping & Automation',
+  marketplaces: 'E-commerce & Marketplaces',
+  video: 'Video & Animation',
+  translation: 'Translation & Localization',
+  'dev-other': 'Other Development',
+  other: 'Other',
+};
+
 /**
  * Roles whose order of checks needs care in orders: a «бот на нейросетях» is a bot and a
  * «сайт на Битриксе» a site, so for orders the AI role only wins when the title says so.
@@ -182,7 +220,10 @@ export function roleDef(slug: string): RoleDef | undefined {
   return ROLES.find((role) => role.slug === slug);
 }
 
-export function roleLabel(slug: string): string {
+export function roleLabel(slug: string, lang: 'ru' | 'en' = 'ru'): string {
+  if (lang === 'en') {
+    return ROLE_LABELS_EN[slug] ?? roleDef(slug)?.label ?? 'Other';
+  }
   return roleDef(slug)?.label ?? OTHER_ROLE.label;
 }
 
