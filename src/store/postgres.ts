@@ -1137,19 +1137,17 @@ export class PostgresStore implements Store {
       conditions.push(`direction = ANY($${idx++}::text[])`);
       params.push(options.directionsAny);
     }
+    let queryTsIdx: number | undefined;
     if (options.query && options.query.trim().length > 0) {
       const trimmed = options.query.trim();
       const normQuery = normalizeTechTokens(trimmed);
       // ILIKE wildcards in user input are literal characters, not patterns.
       const like = `%${trimmed.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
       if (trimmed.length >= 2) {
+        queryTsIdx = idx;
         conditions.push(`(
-          (to_tsvector('russian', title || ' ' || text) || to_tsvector('english', title || ' ' || text))
-          @@ (websearch_to_tsquery('russian', $${idx}) || websearch_to_tsquery('english', $${idx}))
+          search_vector @@ (websearch_to_tsquery('russian', $${idx}) || websearch_to_tsquery('english', $${idx}))
           OR title ILIKE $${idx + 1}
-          OR text ILIKE $${idx + 1}
-          OR city ILIKE $${idx + 1}
-          OR category ILIKE $${idx + 1}
           OR skills_json::text ILIKE $${idx + 1}
         )`);
         params.push(normQuery);
@@ -1178,7 +1176,9 @@ export class PostgresStore implements Store {
           ? `score - EXTRACT(EPOCH FROM (now() - created_at)) / 3600 * ${SCORE_DECAY_PER_HOUR} DESC, created_at DESC, id DESC`
           : options.sort === 'budget'
             ? 'COALESCE(normalized_usd_max, normalized_usd_min) DESC NULLS LAST, created_at DESC, id DESC'
-            : 'created_at DESC, id DESC';
+            : queryTsIdx !== undefined && (!options.sort || options.sort === 'new')
+              ? `ts_rank_cd('{0.1, 0.2, 0.4, 1.0}', search_vector, websearch_to_tsquery('russian', $${queryTsIdx}) || websearch_to_tsquery('english', $${queryTsIdx})) DESC, created_at DESC, id DESC`
+              : 'created_at DESC, id DESC';
     const offset = Math.max(0, Math.min(Math.floor(options.offset ?? 0), 10_000));
     const query = `SELECT * FROM leads ${whereClause} ORDER BY ${order} LIMIT $${idx}${offset ? ` OFFSET ${offset}` : ''}`;
 
