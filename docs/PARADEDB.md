@@ -56,17 +56,16 @@ ParadeDB объединяет в едином образе PostgreSQL три к�
 ```sql
 CREATE EXTENSION IF NOT EXISTS pg_search CASCADE;
 
-CREATE INDEX IF NOT EXISTS idx_leads_paradedb ON leads USING paradedb (
+CREATE INDEX IF NOT EXISTS idx_leads_paradedb ON leads USING bm25 (
   id,
   title,
   skills_json,
-  category,
   direction,
   text
 );
 ```
 
-### Преимущества индекса `USING paradedb`:
+### Преимущества индекса `USING bm25`:
 - **Мультиколоночный индекс**: индексирует сразу заголовок, навыки, категорию, направление и текст без необходимости собирать промежуточный объединенный `tsvector`.
 - **Автоматическая синхронизация**: при операциях `INSERT`, `UPDATE` и `DELETE` индекс обновляется движком PostgreSQL синхронно в рамках одной транзакции (ACID).
 - **LSM-дерево**: внутреннее представление индекса оптимизировано для высокой скорости записи и моментального извлечения top-k релевантных совпадений.
@@ -125,6 +124,7 @@ services:
     container_name: radar_postgres
     restart: unless-stopped
     mem_limit: ${RADAR_PG_MEM_LIMIT:-1g}
+    command: postgres -c shared_preload_libraries=pg_search
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-radar}
       POSTGRES_USER: ${POSTGRES_USER:-radar}
