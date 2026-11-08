@@ -2392,20 +2392,23 @@ ${input.body}
   </details>
 </dialog>
 <script>
-function openLoginModal() {
+function openLoginModal(customReturnTo) {
   const dlg = document.getElementById('auth-vote-dialog');
   const btn = document.getElementById('auth-vote-github-btn');
+  const target = typeof customReturnTo === 'string' && customReturnTo
+    ? customReturnTo
+    : (window.location.pathname + window.location.search);
   if (btn) {
-    btn.href = '/auth/github?returnTo=' + encodeURIComponent(window.location.pathname + window.location.search);
+    btn.href = '/auth/github?returnTo=' + encodeURIComponent(target);
   }
   if (dlg && typeof dlg.showModal === 'function') {
     dlg.showModal();
   } else {
-    window.location.href = '/login?returnTo=' + encodeURIComponent(window.location.pathname + window.location.search);
+    window.location.href = '/login?returnTo=' + encodeURIComponent(target);
   }
 }
-function openAuthVoteModal() {
-  openLoginModal();
+function openAuthVoteModal(customReturnTo) {
+  openLoginModal(customReturnTo);
 }
 function setupBackdropClose(id) {
   const dlg = document.getElementById(id);
