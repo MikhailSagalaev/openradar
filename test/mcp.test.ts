@@ -120,6 +120,24 @@ describe('MCP server', () => {
     expect(sinceInstant('nonsense')).toBeUndefined();
   });
 
+  it('passes workplace and direction filters and returns them in compact lead', async () => {
+    const seen: ListLeadsOptions[] = [];
+    const leads = [lead({ id: 'l1', title: 'Backend Dev', workplaceType: 'hybrid', direction: 'backend' })];
+    const mockBackend: McpBackend = {
+      async listLeads(options) {
+        seen.push(options);
+        return leads;
+      },
+      async getLead() { return null; },
+    };
+    const res = JSON.parse((await handleMcpRequest(
+      { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'search_leads', arguments: { workplace: 'hybrid', direction: 'backend' } } },
+      mockBackend,
+    ) as Content).result!.content![0]!.text);
+    expect(seen[0]).toMatchObject({ workplaceType: 'hybrid', directionsAny: ['backend'] });
+    expect(res.results[0]).toMatchObject({ id: 'l1', workplace_type: 'hybrid', direction: 'backend' });
+  });
+
   it('returns details with contacts as the backend provides them, and -32602 for unknown ids', async () => {
     const details = parsed(await call('get_lead_details', { id: 'lead-go' }));
     expect(details.contacts).toEqual([{ type: 'telegram', value: '@hr_go' }]);

@@ -439,7 +439,7 @@ async function leadsFor(runtime: Runtime, viewer: Viewer, options: ListLeadsOpti
 const PUBLIC_LEAD_KEYS = [
   'id', 'type', 'title', 'text', 'url', 'canonicalUrl', 'author', 'city', 'score',
   'budget', 'currency', 'paymentPeriod', 'rawSalary', 'normalizedUsdMin', 'normalizedUsdMax',
-  'category', 'skills', 'isRemote', 'publishedAt', 'createdAt',
+  'category', 'skills', 'isRemote', 'workplaceType', 'direction', 'publishedAt', 'createdAt',
   'votes_up', 'votes_down', 'votes_scam', 'votes_closed', 'contacts', 'sourceRef',
 ] as const;
 
@@ -2327,9 +2327,16 @@ export function createApp(runtime: Runtime): Hono {
     const type: LeadType | undefined = rawType === 'job' || rawType === 'gig' ? rawType : undefined;
     const sourceId = c.req.query('source') || undefined;
     const query = c.req.query('q')?.trim() || undefined;
+    const rawWorkplace = c.req.query('workplace')?.trim();
+    const workplaceType = rawWorkplace === 'remote' || rawWorkplace === 'hybrid' || rawWorkplace === 'onsite' ? rawWorkplace : undefined;
+    const rawDirection = c.req.query('direction')?.trim();
+    const directionsAny = rawDirection ? [rawDirection] : undefined;
     // The viewer's tier (delay, contacts) applies to the API just like the UI.
     const viewer = await viewerFromRequest(c, runtime);
-    const leads = await leadsFor(runtime, viewer, { limit, status, sourceId, query, type, ...filterOptions(parseFeedFilters(c)) });
+    const leads = await leadsFor(runtime, viewer, {
+      limit, status, sourceId, query, type, workplaceType, directionsAny,
+      ...filterOptions(parseFeedFilters(c)),
+    });
     if (viewer.tier === 'admin') return c.json(leads);
     return c.json(leads.map((lead) => toPublicLead(projectContacts(lead, viewer))));
   });

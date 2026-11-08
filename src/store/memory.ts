@@ -829,6 +829,9 @@ export class MemoryStore implements Store {
     if (options.remote) {
       result = result.filter((l) => isRemoteLead(l));
     }
+    if (options.workplaceType) {
+      result = result.filter((l) => (l.workplaceType ?? (isRemoteLead(l) ? 'remote' : 'onsite')) === options.workplaceType);
+    }
     if (options.skill?.trim()) {
       const skill = options.skill.trim().toLowerCase();
       result = result.filter((l) => (l.skills ?? []).some((s) => s.toLowerCase() === skill));

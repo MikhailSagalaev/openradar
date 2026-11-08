@@ -49,6 +49,8 @@ export const MCP_TOOLS: McpTool[] = [
         type: { type: 'string', enum: ['job', 'gig'], description: 'job = employment, gig = freelance order' },
         market: { type: 'string', enum: ['ru', 'intl'], description: 'ru = Russian-language boards and channels, intl = the rest' },
         remote: { type: 'boolean', description: 'Only work that can be done remotely' },
+        workplace: { type: 'string', enum: ['remote', 'hybrid', 'onsite'], description: 'Workplace arrangement: remote, hybrid, or onsite' },
+        direction: { type: 'string', description: 'Role or trade direction, e.g. "backend", "frontend", "qa", "devops", "design", "ai"' },
         skills: { type: 'array', items: { type: 'string' }, description: 'At least one of these skills, e.g. ["Python", "Django"]' },
         min_budget_rub: { type: 'number', description: 'Minimum budget or monthly pay, in roubles (other currencies are converted)' },
         min_budget: { type: 'number', description: 'Minimum budget in the lead\'s own currency (prefer min_budget_rub)' },
@@ -167,6 +169,8 @@ function leadCompact(lead: Lead): Record<string, unknown> {
     currency: lead.budget !== undefined ? lead.currency : undefined,
     market: marketOf(lead),
     where: lead.isRemote ? 'remote' : lead.city,
+    workplace_type: lead.workplaceType ?? (lead.isRemote ? 'remote' : 'onsite'),
+    direction: lead.direction,
     skills: lead.skills?.slice(0, 6),
     score: lead.score,
     flags: qualityFlagsOf(lead).length ? qualityFlagsOf(lead) : undefined,
@@ -197,6 +201,8 @@ function leadSummary(lead: Lead): Record<string, unknown> {
     currency: lead.currency,
     city: lead.city,
     remote: lead.isRemote,
+    workplace_type: lead.workplaceType ?? (lead.isRemote ? 'remote' : 'onsite'),
+    direction: lead.direction,
     skills: lead.skills,
     flags: qualityFlagsOf(lead).length ? qualityFlagsOf(lead) : undefined,
     url: lead.canonicalUrl || lead.url,
@@ -264,6 +270,10 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend): Pr
         : [];
       const minBudget = Number(args.min_budget);
       const minRub = Number(args.min_budget_rub);
+      const workplace = typeof args.workplace === 'string' && (args.workplace === 'remote' || args.workplace === 'hybrid' || args.workplace === 'onsite')
+        ? (args.workplace as 'remote' | 'hybrid' | 'onsite')
+        : undefined;
+      const direction = typeof args.direction === 'string' && args.direction.trim() ? args.direction.trim() : undefined;
       const sort: LeadSort = args.sort === 'score' || args.sort === 'budget' ? args.sort : 'new';
       const since = sinceInstant(args.since);
       // One skill and the rouble floor go to the database; several skills and a floor in the
@@ -273,7 +283,9 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend): Pr
         query: typeof args.query === 'string' && args.query.trim() ? args.query.trim() : undefined,
         type: asType(args.type),
         language: args.market === 'ru' ? 'ru' : args.market === 'intl' ? 'en' : undefined,
-        remote: args.remote === true || undefined,
+        remote: args.remote === true ? true : (workplace === 'remote' ? true : undefined),
+        workplaceType: workplace,
+        directionsAny: direction ? [direction] : undefined,
         skill: skills.length === 1 ? skills[0] : undefined,
         minBudgetUsd: Number.isFinite(minRub) && minRub > 0 ? rubToUsd(minRub) : undefined,
         sort,
