@@ -66,6 +66,8 @@ export interface ListLeadsOptions {
    * its old publish date and does not pass a «last 7 days» filter.
    */
   publishedAfter?: string;
+  /** Only leads whose research direction (role) is one of these: catalog pages and role filters. */
+  directionsAny?: string[];
   sort?: LeadSort;
   /** Only leads whose title is in Russian (Cyrillic) or in English (no Cyrillic). */
   language?: 'ru' | 'en';
