@@ -40,6 +40,13 @@ describe('classifyWorkplace', () => {
     });
     expect(cook.workplaceType).toBe('onsite');
     expect(cook.isRemote).toBe(false);
+
+    const cleaner = classifyWorkplace({
+      title: 'Уборщик производственных и служебных помещений',
+      type: 'job',
+    });
+    expect(cleaner.workplaceType).toBe('onsite');
+    expect(cleaner.isRemote).toBe(false);
   });
 
   it('detects false positive remote keywords on physical roles', () => {
@@ -124,6 +131,14 @@ describe('classifyWorkplace', () => {
     });
     expect(onlineCity.workplaceType).toBe('remote');
     expect(onlineCity.isRemote).toBe(true);
+
+    const teamLead = classifyWorkplace({
+      title: 'Руководитель группы разработки',
+      text: 'Полная удаленка из любой точки мира.',
+      type: 'job',
+    });
+    expect(teamLead.workplaceType).toBe('remote');
+    expect(teamLead.isRemote).toBe(true);
   });
 
   it('applies type-based defaults when no markers are present', () => {
