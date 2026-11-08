@@ -609,4 +609,48 @@ describe('research data consistency & honest visual metrics', () => {
     expect(bumpEmbed).toContain('bump-chart-svg');
     expect(bumpEmbed).toContain('btn-bump-w');
   });
+
+  it('enriches lead fields when saveLeadModelFacts is called with applyToLead: true', async () => {
+    const runtime = makeTestRuntime({ RADAR_EXTRACT_APPLY: true });
+    const source = await runtime.store.createSource({ kind: 'telegram', title: 'tg', config: { channel: 'jobs' } });
+    await runtime.store.insertLead(lead('enrich-1', {
+      sourceId: source.id,
+      type: 'job',
+      title: 'Python разработчик',
+      text: 'Требуется разработчик',
+      direction: 'other',
+    }));
+
+    const storedFacts = {
+      v: 2,
+      model: 'qwen/qwen3.8-27b',
+      at: new Date().toISOString(),
+      facts: {
+        isPost: true,
+        confidence: 0.95,
+        role: 'backend',
+        skills: ['Python', 'FastAPI', 'PostgreSQL'],
+        payMin: 200000,
+        payMax: 300000,
+        currency: 'RUB',
+        period: 'month' as const,
+        company: 'Acme Corp',
+        city: 'Москва',
+        remote: true,
+      },
+    };
+
+    await runtime.store.saveLeadModelFacts!('enrich-1', storedFacts, { applyToLead: true });
+
+    const updated = await runtime.store.getLead('enrich-1');
+    expect(updated).toBeDefined();
+    expect(updated!.skills).toEqual(expect.arrayContaining(['Python', 'FastAPI', 'PostgreSQL']));
+    expect(updated!.company).toBe('Acme Corp');
+    expect(updated!.city).toBe('Москва');
+    expect(updated!.isRemote).toBe(true);
+    expect(updated!.workplaceType).toBe('remote');
+    expect(updated!.direction).toBe('backend');
+    expect(updated!.normalizedUsdMin).toBeGreaterThan(0);
+    expect(updated!.normalizedUsdMax).toBeGreaterThan(0);
+  });
 });

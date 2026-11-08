@@ -49,6 +49,8 @@ import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
 import { BROKEN_AFTER, countFailedInRow } from '../core/source-health.ts';
 import type { SubscriptionRecord } from '../core/subscriptions.ts';
 
+import { normalizeSalary } from '../core/salary.ts';
+import { MIN_CONFIDENCE, type ModelFacts } from '../research/model.ts';
 import { checkMigrations } from './migrator.ts';
 
 const { Pool } = pg;
@@ -2514,11 +2516,121 @@ export class PostgresStore implements Store {
     return result.rows.map((r) => ({ id: r.id, title: r.title, text: r.text, type: r.type === 'job' ? 'job' : 'gig' }));
   }
 
-  async saveLeadModelFacts(id: string, stored: unknown): Promise<void> {
+  async saveLeadModelFacts(id: string, stored: unknown, options?: { applyToLead?: boolean }): Promise<void> {
     await this.pool.query(
       `UPDATE leads SET metadata_json = COALESCE(metadata_json, '{}'::jsonb) || jsonb_build_object('model', $2::jsonb) WHERE id = $1`,
       [id, JSON.stringify(stored)],
     );
+
+    const rawStored = stored as { facts?: ModelFacts } | undefined;
+    const facts = rawStored?.facts;
+    if (options?.applyToLead && facts && facts.confidence >= MIN_CONFIDENCE && facts.isPost !== false) {
+      await this.applyLeadModelEnrichment(id, facts);
+    }
+  }
+
+  private async applyLeadModelEnrichment(id: string, facts: ModelFacts): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // 1. Merge skills if provided
+      if (facts.skills && Array.isArray(facts.skills) && facts.skills.length > 0) {
+        const cleanedSkills = facts.skills
+          .map((s) => (typeof s === 'string' ? s.trim() : ''))
+          .filter((s) => s.length > 0 && s.length <= 40)
+          .slice(0, 15);
+        if (cleanedSkills.length > 0) {
+          await client.query(
+            `UPDATE leads
+             SET skills_json = (
+               SELECT COALESCE(jsonb_agg(DISTINCT elem), '[]'::jsonb)
+               FROM (
+                 SELECT jsonb_array_elements_text(COALESCE(skills_json, '[]'::jsonb)) AS elem
+                 UNION
+                 SELECT unnest($2::text[]) AS elem
+               ) t
+               WHERE elem IS NOT NULL AND length(elem) > 0
+             )
+             WHERE id = $1`,
+            [id, cleanedSkills],
+          );
+        }
+      }
+
+      // 2. Normalise and apply salary if lead has no normalized USD pay
+      if (facts.currency && (facts.payMin || facts.payMax)) {
+        const rawSalaryStr = `${facts.payMin ?? ''}${facts.payMax && facts.payMax !== facts.payMin ? `–${facts.payMax}` : ''} ${facts.currency}`.trim();
+        const salaryInfo = normalizeSalary({
+          text: '',
+          rawSalary: rawSalaryStr,
+          budget: facts.payMax ?? facts.payMin,
+          currency: facts.currency,
+          type: facts.postType ?? 'job',
+        });
+        if (!salaryInfo.implausible && (salaryInfo.normalizedUsdMin !== undefined || salaryInfo.normalizedUsdMax !== undefined)) {
+          await client.query(
+            `UPDATE leads SET
+               budget = CASE WHEN budget IS NULL THEN $2 ELSE budget END,
+               currency = CASE WHEN currency IS NULL THEN $3 ELSE currency END,
+               payment_period = CASE WHEN payment_period IS NULL THEN $4 ELSE payment_period END,
+               raw_salary = CASE WHEN raw_salary IS NULL THEN $5 ELSE raw_salary END,
+               normalized_usd_min = CASE WHEN normalized_usd_min IS NULL THEN $6 ELSE normalized_usd_min END,
+               normalized_usd_max = CASE WHEN normalized_usd_max IS NULL THEN $7 ELSE normalized_usd_max END
+             WHERE id = $1 AND normalized_usd_min IS NULL AND normalized_usd_max IS NULL`,
+            [
+              id,
+              facts.payMax ?? facts.payMin ?? null,
+              salaryInfo.currency ?? facts.currency,
+              salaryInfo.paymentPeriod ?? 'monthly',
+              salaryInfo.rawSalary ?? rawSalaryStr,
+              salaryInfo.normalizedUsdMin ?? null,
+              salaryInfo.normalizedUsdMax ?? null,
+            ],
+          );
+        }
+      }
+
+      // 3. Company
+      if (facts.company && facts.company.trim()) {
+        await client.query(
+          `UPDATE leads SET company = $2 WHERE id = $1 AND (company IS NULL OR company = '')`,
+          [id, facts.company.trim().slice(0, 120)],
+        );
+      }
+
+      // 4. City
+      if (facts.city && facts.city.trim()) {
+        await client.query(
+          `UPDATE leads SET city = $2 WHERE id = $1 AND (city IS NULL OR city = '')`,
+          [id, facts.city.trim().slice(0, 60)],
+        );
+      }
+
+      // 5. Remote format
+      if (facts.remote === true) {
+        await client.query(
+          `UPDATE leads SET is_remote = true, workplace_type = COALESCE(workplace_type, 'remote') WHERE id = $1`,
+          [id],
+        );
+      }
+
+      // 6. Direction / role if empty or other
+      if (facts.role && facts.role !== 'other') {
+        await client.query(
+          `UPDATE leads SET direction = $2, role = COALESCE(role, $2)
+           WHERE id = $1 AND (direction IS NULL OR direction = '' OR direction = 'other')`,
+          [id, facts.role],
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   async getResearchSnapshot(period: string): Promise<{ report: unknown; createdAt: string } | null> {

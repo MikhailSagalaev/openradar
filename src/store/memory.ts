@@ -31,6 +31,8 @@ import type { EmployerRow, EmployerSummary, SourceQualityInput, LeadFactsFill, L
 import type { PageFacts } from '../research/facts.ts';
 import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
 import { computeSalaryMedians } from '../core/salary-sanity.ts';
+import { normalizeSalary } from '../core/salary.ts';
+import { MIN_CONFIDENCE, type ModelFacts } from '../research/model.ts';
 import { countFailedInRow } from '../core/source-health.ts';
 import type { SubscriptionRecord } from '../core/subscriptions.ts';
 import type {
@@ -698,9 +700,49 @@ export class MemoryStore implements Store {
       .map((l) => ({ id: l.id, title: l.title, text: l.text.slice(0, 2500), type: l.type }));
   }
 
-  async saveLeadModelFacts(id: string, stored: unknown): Promise<void> {
+  async saveLeadModelFacts(id: string, stored: unknown, options?: { applyToLead?: boolean }): Promise<void> {
     const lead = this.leads.get(id);
-    if (lead) lead.metadata = { ...(lead.metadata ?? {}), model: stored };
+    if (!lead) return;
+    lead.metadata = { ...(lead.metadata ?? {}), model: stored };
+    const rawStored = stored as { facts?: ModelFacts } | undefined;
+    const facts = rawStored?.facts;
+    if (options?.applyToLead && facts && facts.confidence >= MIN_CONFIDENCE && facts.isPost !== false) {
+      if (facts.skills && Array.isArray(facts.skills) && facts.skills.length > 0) {
+        const merged = Array.from(
+          new Set([
+            ...(lead.skills ?? []),
+            ...facts.skills.map((s) => (typeof s === 'string' ? s.trim() : '')).filter((s) => s.length > 0 && s.length <= 40),
+          ]),
+        );
+        lead.skills = merged.slice(0, 15);
+      }
+      if (facts.currency && (facts.payMin || facts.payMax) && lead.normalizedUsdMin === undefined && lead.normalizedUsdMax === undefined) {
+        const salaryInfo = normalizeSalary({
+          text: '',
+          rawSalary: `${facts.payMin ?? ''}${facts.payMax && facts.payMax !== facts.payMin ? `–${facts.payMax}` : ''} ${facts.currency}`.trim(),
+          budget: facts.payMax ?? facts.payMin,
+          currency: facts.currency,
+          type: facts.postType ?? lead.type,
+        });
+        if (!salaryInfo.implausible && (salaryInfo.normalizedUsdMin !== undefined || salaryInfo.normalizedUsdMax !== undefined)) {
+          if (lead.budget === undefined) lead.budget = facts.payMax ?? facts.payMin;
+          if (!lead.currency) lead.currency = salaryInfo.currency ?? facts.currency;
+          if (!lead.paymentPeriod) lead.paymentPeriod = salaryInfo.paymentPeriod ?? 'monthly';
+          if (!lead.rawSalary) lead.rawSalary = salaryInfo.rawSalary;
+          lead.normalizedUsdMin = salaryInfo.normalizedUsdMin;
+          lead.normalizedUsdMax = salaryInfo.normalizedUsdMax;
+        }
+      }
+      if (facts.company && !lead.company) lead.company = facts.company.trim().slice(0, 120);
+      if (facts.city && !lead.city) lead.city = facts.city.trim().slice(0, 60);
+      if (facts.remote === true) {
+        lead.isRemote = true;
+        if (!lead.workplaceType) lead.workplaceType = 'remote';
+      }
+      if (facts.role && (!lead.direction || lead.direction === 'other')) {
+        lead.direction = facts.role;
+      }
+    }
   }
 
   private researchSnapshots = new Map<string, { report: unknown; createdAt: string }>();
