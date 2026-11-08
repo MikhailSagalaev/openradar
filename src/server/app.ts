@@ -1327,7 +1327,6 @@ export function createApp(runtime: Runtime): Hono {
     ((await runtime.store.listDirections?.()) ?? []).map((item) => ({ ...item, label: roleLabel(item.slug) }));
   app.get('/review', rateLimit({ windowMs: 60_000, max: 120 }), async (c) => {
     const user = await currentUser(c, runtime);
-    if (!user) return c.redirect('/login?returnTo=/review');
     const directions = await directionItems();
     const asked = c.req.query('c') ?? '';
     const direction = directions.some((item) => item.slug === asked) ? asked : '';
@@ -1337,12 +1336,12 @@ export function createApp(runtime: Runtime): Hono {
     const shown = again ? await runtime.store.getLead(again) : null;
     const lead = shown && viewerCanSeeLead({ tier: 'guest' }, shown, runtime.access)
       ? shown
-      : await runtime.store.nextLeadToReview?.(user.id, { direction: direction || undefined, bucket });
-    const stats = await runtime.store.reviewStats?.(user.id);
+      : await runtime.store.nextLeadToReview?.(user?.id ?? 0, { direction: direction || undefined, bucket });
+    const stats = user ? await runtime.store.reviewStats?.(user.id) : undefined;
     return c.html(renderReviewPage({
       version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c),
       lead: lead ? projectContacts(lead, { tier: 'guest' }) : undefined,
-      bucket, directions, direction, mine: stats?.mine ?? 0, last: c.req.query('last'),
+      bucket, directions, direction, mine: stats?.mine ?? 0, last: user ? c.req.query('last') : undefined,
     }));
   });
   app.post('/review', rateLimit({ windowMs: 60_000, max: 60 }), async (c) => {

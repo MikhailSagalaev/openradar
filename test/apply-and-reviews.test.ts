@@ -141,7 +141,14 @@ describe('reader reviews', () => {
     await insert('a', { title: 'Backend-разработчик', direction: 'backend', contacts: [{ type: 'email', value: 'hr@a.test' }] });
     await insert('b', { title: 'Дизайнер логотипов', direction: 'design' });
     const app = createApp(runtime);
-    expect((await app.request('/review')).status).toBe(302);
+    const guest = await app.request('/review');
+    expect(guest.status).toBe(200);
+    const guestHtml = await guest.text();
+    expect(guestHtml).toContain('data-guest="true"');
+    expect(guestHtml).toContain('Разбор постов');
+    const guestPost = await app.request('/review', { method: 'POST', headers: { origin: 'http://localhost', 'content-type': 'application/x-www-form-urlencoded' }, body: 'id=b&verdict=ok' });
+    expect(guestPost.status).toBe(302);
+    expect(guestPost.headers.get('location')).toBe('/login?returnTo=/review');
     const session = await makeUserSession(runtime as never);
     const cookie = { cookie: `radar_session=${session}` };
     const first = await (await app.request('/review?c=design', { headers: cookie })).text();

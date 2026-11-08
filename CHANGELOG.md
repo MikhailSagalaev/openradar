@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.60.1
+
+- **Public access to review page.** `/review` is now open to all visitors without mandatory login redirect.
+- **Action-triggered authentication modal.** Guests can browse and read posts; attempting to submit a verdict (via 1–5 buttons or hotkeys 1–5 / Enter) triggers the GitHub authentication dialog while saving the viewed post ID in `returnTo`.
+- **Preserved review state.** After signing in through GitHub, users return to the exact same lead they were reviewing.
+
 ## 0.60.0
 
 - Catalog pages collect their research direction instead of one word: «Удалённые вакансии в IT» filters IT roles and remote (no more Следователь on it), «видеомонтаж» collects video direction only (no shoots, no assistants). 15 of 32 pages mapped; word queries stay as tie-breakers.

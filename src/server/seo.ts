@@ -1030,6 +1030,38 @@ const REVIEW_SCRIPT = `<script>
       row.style.display = row.dataset.label.includes(query) ? '' : 'none';
     });
   });
+  const form = document.querySelector('.review-form');
+  const isGuest = Boolean(form && form.dataset.guest === 'true');
+
+  const triggerGuestAuth = () => {
+    const leadId = form ? form.querySelector('input[name="id"]')?.value : null;
+    const direction = form ? form.querySelector('input[name="c"]')?.value : '';
+    const query = new URLSearchParams();
+    if (leadId) query.set('show', leadId);
+    if (direction) query.set('c', direction);
+    const qs = query.toString();
+    const returnTo = '/review' + (qs ? ('?' + qs) : '');
+    if (typeof openLoginModal === 'function') {
+      openLoginModal(returnTo);
+    } else {
+      window.location.href = '/login?returnTo=' + encodeURIComponent(returnTo);
+    }
+  };
+
+  if (isGuest && form) {
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      triggerGuestAuth();
+    });
+    document.querySelectorAll('.review-answers button[name="verdict"]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        triggerGuestAuth();
+      });
+    });
+  }
+
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
       closeAll();
@@ -1043,6 +1075,10 @@ const REVIEW_SCRIPT = `<script>
     if (event.key === 'Enter') {
       if (event.target.classList.contains('review-picker-search')) return;
       event.preventDefault();
+      if (isGuest) {
+        triggerGuestAuth();
+        return;
+      }
       const focused = document.activeElement && document.activeElement.matches('.review-ans-btn') ? document.activeElement : buttons[0];
       focused?.click();
       return;
@@ -1053,6 +1089,10 @@ const REVIEW_SCRIPT = `<script>
     const numMatch = event.key.match(/^[1-5]$/) || (event.code && event.code.match(/^(?:Digit|Numpad)([1-5])$/));
     if (numMatch) {
       event.preventDefault();
+      if (isGuest) {
+        triggerGuestAuth();
+        return;
+      }
       const idx = Number(numMatch[1] || event.key) - 1;
       buttons[idx]?.click();
       return;
@@ -1101,6 +1141,7 @@ export function renderReviewPage(options: {
   last?: string;
 }): string {
   const { lead, directions } = options;
+  const signedIn = Boolean(options.auth?.handle || options.auth?.isAdmin);
   const shown = directions.find((item) => item.slug === lead?.direction)?.label ?? 'Другое';
   const typeName = lead?.type === 'job' ? 'Вакансия' : 'Заказ';
   const company = lead ? (lead.company ?? lead.author) : '';
@@ -1131,7 +1172,7 @@ export function renderReviewPage(options: {
   </section>
 
   <aside class="review-actions-col">
-    <form method="post" action="/review" class="review-form">
+    <form method="post" action="/review" class="review-form"${signedIn ? '' : ' data-guest="true"'}>
       <input type="hidden" name="id" value="${escapeHtml(lead.id)}">
       <input type="hidden" name="bucket" value="${escapeHtml(options.bucket ?? '')}">
       <input type="hidden" name="c" value="${escapeHtml(options.direction)}">
@@ -1203,7 +1244,7 @@ export function renderReviewPage(options: {
     ${directionPicker('c', 'Все направления', [{ slug: '', label: 'Все направления' }, ...directions], options.direction, true)}
   </div>
   <div class="review-nav-right">
-    <span class="review-counter">Вы разобрали: <strong>${options.mine}</strong></span>
+    ${signedIn ? `<span class="review-counter">Вы разобрали: <strong>${options.mine}</strong></span>` : `<span class="review-counter">Разбор постов</span>`}
     <button type="button" class="link-btn review-help-trigger" title="Справка по оценке (?)">Как оценивать (?)</button>
     ${options.last ? `<form method="post" action="/review/undo" class="review-undo-inline"><input type="hidden" name="id" value="${escapeHtml(options.last)}"><button class="link-btn review-undo-btn" type="submit" title="Отменить последний ответ (Z)">Отменить ответ (Z)</button></form>` : ''}
   </div>
