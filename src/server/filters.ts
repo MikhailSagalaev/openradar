@@ -43,7 +43,7 @@ export interface FeedFilters {
 
 export function parseFeedFilters(c: Context, defaultSort: LeadSort = 'new', defaultLanguage?: 'ru' | 'en'): FeedFilters {
   const rawSort = c.req.query('sort');
-  const sort: LeadSort = rawSort === 'new' || rawSort === 'score' || rawSort === 'budget' ? rawSort : defaultSort;
+  const sort: LeadSort = rawSort === 'new' || rawSort === 'score' || rawSort === 'budget' || rawSort === 'relevance' ? rawSort : defaultSort;
   const rawRemote = c.req.query('remote');
   const budget = Number(c.req.query('budget'));
   const skill = (c.req.query('skill') ?? '').trim().slice(0, 40);

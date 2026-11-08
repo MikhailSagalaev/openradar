@@ -35,7 +35,7 @@ export interface UpdateSourceInput {
 }
 
 /** Feed order: newest first, by score, or by budget (USD-normalised). */
-export type LeadSort = 'new' | 'score' | 'budget';
+export type LeadSort = 'new' | 'score' | 'budget' | 'relevance';
 
 /**
  * «Сначала лучшие»: a lead's score loses this many points per hour of age, so a strong lead

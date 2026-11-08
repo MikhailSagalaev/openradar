@@ -1145,14 +1145,9 @@ export class PostgresStore implements Store {
       const like = `%${trimmed.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
       if (trimmed.length >= 2) {
         queryTsIdx = idx;
-        conditions.push(`(
-          search_vector @@ (websearch_to_tsquery('russian', $${idx}) || websearch_to_tsquery('english', $${idx}))
-          OR title ILIKE $${idx + 1}
-          OR skills_json::text ILIKE $${idx + 1}
-        )`);
+        conditions.push(`search_vector @@ (websearch_to_tsquery('russian', $${idx}) || websearch_to_tsquery('english', $${idx}))`);
         params.push(normQuery);
-        params.push(like);
-        idx += 2;
+        idx++;
       } else {
         conditions.push(`(
           title ILIKE $${idx} OR
@@ -1176,7 +1171,7 @@ export class PostgresStore implements Store {
           ? `score - EXTRACT(EPOCH FROM (now() - created_at)) / 3600 * ${SCORE_DECAY_PER_HOUR} DESC, created_at DESC, id DESC`
           : options.sort === 'budget'
             ? 'COALESCE(normalized_usd_max, normalized_usd_min) DESC NULLS LAST, created_at DESC, id DESC'
-            : queryTsIdx !== undefined && (!options.sort || options.sort === 'new')
+            : options.sort === 'relevance' && queryTsIdx !== undefined
               ? `ts_rank_cd('{0.1, 0.2, 0.4, 1.0}', search_vector, websearch_to_tsquery('russian', $${queryTsIdx}) || websearch_to_tsquery('english', $${queryTsIdx})) DESC, created_at DESC, id DESC`
               : 'created_at DESC, id DESC';
     const offset = Math.max(0, Math.min(Math.floor(options.offset ?? 0), 10_000));
