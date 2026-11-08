@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.60.0
+
+- Catalog pages collect their research direction instead of one word: «Удалённые вакансии в IT» filters IT roles and remote (no more Следователь on it), «видеомонтаж» collects video direction only (no shoots, no assistants). 15 of 32 pages mapped; word queries stay as tie-breakers.
+- The feed and RSS of a catalog page follow the same structural filter.
+
 ## 0.59.4
 
 - **Review keyboard controls.** Enter accepts the first choice («Всё верно») or the focused verdict; arrow keys ↑↓ navigate through options; numbers 1–5 trigger answers across numpad and top row.
