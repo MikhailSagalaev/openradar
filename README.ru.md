@@ -111,6 +111,7 @@ hub.observe([{"source": {"platform": "telegram", "channel": "-1001234567890", "v
 | [GETTING_STARTED.md](docs/GETTING_STARTED.md) | Сценарии: читать хаб, свой узел, сервер, парсер, обмен с хабом |
 | [PROTOCOL.md](docs/PROTOCOL.md) | radar/2: посты, подписи, склейка, уровни, рейтинг, модерация |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Конвейер узла, рейтинг заказа, модель данных, HTTP-маршруты |
+| [PARADEDB.md](docs/PARADEDB.md) | Быстрый поиск через ParadeDB (pg_search / Tantivy BM25) |
 | [PLUGINS.md](docs/PLUGINS.md) | Как написать адаптер источника или получателя |
 | [EXTENSION.md](docs/EXTENSION.md) | Расширение для браузера и оценка рынка |
 | [BACKUP_AND_RESTORE.md](docs/BACKUP_AND_RESTORE.md) | Резервные копии |

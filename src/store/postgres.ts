@@ -57,6 +57,7 @@ const { Pool } = pg;
 
 export class PostgresStore implements Store {
   private pool: pg.Pool;
+  private hasPgSearch: boolean = false;
 
   constructor(connectionString: string) {
     this.pool = new Pool({
@@ -74,6 +75,16 @@ export class PostgresStore implements Store {
         `Database schema is not up to date! Pending migrations: ${pending.join(', ')}. ` +
         `Please run 'radar migrate' before starting the application.`
       );
+    }
+    await this.detectExtensions();
+  }
+
+  private async detectExtensions(): Promise<void> {
+    try {
+      const res = await this.pool.query(`SELECT 1 FROM pg_extension WHERE extname = 'pg_search'`);
+      this.hasPgSearch = (res.rowCount ?? 0) > 0;
+    } catch {
+      this.hasPgSearch = false;
     }
   }
 
@@ -1147,8 +1158,13 @@ export class PostgresStore implements Store {
       const like = `%${trimmed.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
       if (trimmed.length >= 2) {
         queryTsIdx = idx;
-        conditions.push(`search_vector @@ (websearch_to_tsquery('russian', $${idx}) || websearch_to_tsquery('english', $${idx}))`);
-        params.push(normQuery);
+        if (this.hasPgSearch) {
+          conditions.push(`leads @@@ $${idx}`);
+          params.push(trimmed);
+        } else {
+          conditions.push(`search_vector @@ (websearch_to_tsquery('russian', $${idx}) || websearch_to_tsquery('english', $${idx}))`);
+          params.push(normQuery);
+        }
         idx++;
       } else {
         conditions.push(`(
@@ -1174,7 +1190,9 @@ export class PostgresStore implements Store {
           : options.sort === 'budget'
             ? 'COALESCE(normalized_usd_max, normalized_usd_min) DESC NULLS LAST, created_at DESC, id DESC'
             : options.sort === 'relevance' && queryTsIdx !== undefined
-              ? `ts_rank_cd('{0.1, 0.2, 0.4, 1.0}', search_vector, websearch_to_tsquery('russian', $${queryTsIdx}) || websearch_to_tsquery('english', $${queryTsIdx})) DESC, created_at DESC, id DESC`
+              ? (this.hasPgSearch
+                  ? `paradedb.score(id) DESC, created_at DESC, id DESC`
+                  : `ts_rank_cd('{0.1, 0.2, 0.4, 1.0}', search_vector, websearch_to_tsquery('russian', $${queryTsIdx}) || websearch_to_tsquery('english', $${queryTsIdx})) DESC, created_at DESC, id DESC`)
               : 'created_at DESC, id DESC';
     const offset = Math.max(0, Math.min(Math.floor(options.offset ?? 0), 10_000));
     const query = `SELECT * FROM leads ${whereClause} ORDER BY ${order} LIMIT $${idx}${offset ? ` OFFSET ${offset}` : ''}`;
