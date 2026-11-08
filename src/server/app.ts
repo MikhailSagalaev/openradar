@@ -3273,6 +3273,10 @@ export function createApp(runtime: Runtime): Hono {
       query: entry.q,
       skill: entry.skill,
       type: entry.type,
+      // Structural filters beat the word search: a page collects its research directions,
+      // so «Следователь» cannot land on the IT page because a word matched somewhere.
+      directionsAny: entry.directions,
+      remote: entry.remote || undefined,
       // These pages are Russian: an English post is on them only by a shared word.
       language: 'ru',
     })).filter((lead) => lead.status !== 'rejected' && lead.status !== 'failed').slice(0, 20);

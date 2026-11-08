@@ -18,6 +18,10 @@ export interface CatalogEntry {
   /** Exact skill instead of a word search: «бот» is also inside «работа». */
   skill?: string;
   type?: LeadType;
+  /** The research directions this page collects: a structural filter, not a word search. */
+  directions?: string[];
+  /** Vacancy pages pinned to remote: the IT feed must not leak office posts. */
+  remote?: boolean;
 }
 
 /**
@@ -37,6 +41,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Здесь собраны заказы на программирование из FL.ru, Kwork, Freelancehunt и Telegram-каналов: сайты, боты, парсеры, интеграции, доработки. Один и тот же заказ, опубликованный на двух биржах, показывается одной карточкой, а у каждой карточки есть оценка от 0 до 100: за бюджет, понятное ТЗ и прямой контакт заказчика.',
     q: 'разработка',
+    directions: ['backend', 'frontend', 'fullstack', 'web', 'mobile', 'dev-other', 'embedded'],
     type: 'gig',
   },
   {
@@ -50,6 +55,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Лендинги, корпоративные сайты, интернет-магазины, доработка готовых сайтов на WordPress, Tilda и Битриксе. Подходит веб-разработчикам и студиям, которым нужен поток небольших проектов без абонентской платы за доступ к бирже.',
     q: 'сайт',
+    directions: ['web'],
     type: 'gig',
   },
   {
@@ -74,6 +80,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Боты для записи клиентов, приёма оплат, рассылок, воронок продаж и поддержки, мини-приложения в Telegram, боты для VK и WhatsApp. Многие такие заказы публикуются только в Telegram-каналах, поэтому openradar читает и биржи, и каналы.',
     skill: 'Telegram Bot',
+    directions: ['bots'],
     type: 'gig',
   },
   {
@@ -86,6 +93,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Доработка конфигураций, обмены с сайтом и маркетплейсами, отчёты, перенос данных, консультации по 1С:Бухгалтерии и УТ. Работы для программистов 1С много и на биржах, и в профильных каналах, здесь она собрана в одну ленту.',
     q: '1с',
+    directions: ['1c'],
     type: 'gig',
   },
   {
@@ -98,6 +106,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Логотипы и фирменный стиль, макеты сайтов в Figma, интерфейсы приложений, баннеры, презентации, оформление соцсетей. Чтобы найти задачи под свой инструмент, используйте поиск по ленте: «Figma», «презентация», «логотип».',
     q: 'дизайн',
+    directions: ['design'],
     type: 'gig',
   },
   {
@@ -110,6 +119,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Приложения под iOS и Android с нуля, доработка готовых, кроссплатформенные проекты на Flutter и React Native, публикация в сторах. Заказы на мобильную разработку редкие и крупные, поэтому их удобнее ловить через RSS этой страницы, а не заходить вручную.',
     q: 'приложени',
+    directions: ['mobile'],
     type: 'gig',
   },
   {
@@ -122,6 +132,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Статьи для блогов, тексты для сайтов и лендингов, описания товаров, посты для соцсетей, сценарии роликов, редактура. Заказы приходят с бирж и из каналов для авторов.',
     q: 'текст',
+    directions: ['content'],
     type: 'gig',
   },
   {
@@ -134,6 +145,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Вакансии приходят из hh.ru, Хабр Карьеры, портала «Работа России» и зарубежных досок для удалёнки. В карточке есть вилка, город, формат работы и навыки, а для вакансий без вилки расширение openradar показывает, сколько обычно платят за похожую работу.',
     q: 'разработчик',
+    directions: ['backend', 'frontend', 'fullstack', 'web', 'mobile', 'dev-other'],
     type: 'job',
   },
   {
@@ -145,6 +157,8 @@ export const SEO_CATALOG: CatalogEntry[] = [
     intro: 'Только удалёнка: вакансии из России и мира с указанием вилки.',
     about:
       'Российские работодатели с удалённым форматом и международные доски We Work Remotely, Jobicy и RemoteOK. Зарплаты в долларах показаны с примерным пересчётом в рубли.',
+    directions: ['backend', 'frontend', 'fullstack', 'mobile', 'web', 'dev-other', 'data-engineer', 'ml', 'qa', 'devops', 'architect', 'sysadmin', 'analyst-system', 'analyst-business', 'analyst-data', 'product', 'gamedev', 'embedded', 'security', 'ai', '1c'],
+    remote: true,
     type: 'job',
   },
   {
@@ -156,6 +170,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Монтаж роликов для YouTube, вертикальные видео для Reels, Shorts и TikTok, рекламные креативы, моушн-дизайн и анимация. Значительная часть таких заказов публикуется в Telegram-каналах для монтажёров.',
     q: 'видео',
+    directions: ['video'],
     type: 'gig',
   },
   {
@@ -167,6 +182,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Настройка Яндекс Директа и таргета VK, продвижение на Авито, ведение соцсетей, посевы в Telegram, маркетинговая аналитика. Подходит специалистам по трафику и SMM, которые ищут клиентов без агентств.',
     q: 'реклама',
+    directions: ['marketing'],
     type: 'gig',
   },
   {
@@ -178,6 +194,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Переводы статей, сайтов, документации, субтитров и деловой переписки, чаще всего с английского и на английский. Срочные заказы на переводы быстро разбирают, поэтому удобнее подписаться на RSS.',
     q: 'перевод',
+    directions: ['translation'],
     type: 'gig',
   },
   {
@@ -222,6 +239,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Сбор цен и остатков с маркетплейсов, выгрузка каталогов, мониторинг конкурентов, парсинг объявлений и соцсетей, сохранение в Excel, Google Таблицы или базу. Обычно такие заказы делают на Python, иногда на Node.js или в готовых сервисах.',
     q: 'парс',
+    directions: ['parsing'],
     type: 'gig',
   },
   {
@@ -233,6 +251,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Чат-боты и ассистенты на языковых моделях, автоматизация процессов через n8n и Make, генерация изображений и видео, обработка документов. Категория быстро растёт: заказчики ищут исполнителей и среди разработчиков, и среди дизайнеров.',
     q: 'нейросет',
+    directions: ['ai'],
     type: 'gig',
   },
   {
@@ -244,6 +263,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Продвижение сайтов в Яндексе и Google, технический аудит, сбор семантического ядра, внутренняя оптимизация, SEO-тексты для сайтов и маркетплейсов. Подходит SEO-специалистам и копирайтерам.',
     q: 'seo',
+    directions: ['marketing'],
     type: 'gig',
   },
   {

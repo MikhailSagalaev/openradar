@@ -1093,6 +1093,10 @@ export class PostgresStore implements Store {
       conditions.push(`COALESCE(published_at, created_at) >= $${idx++}::timestamptz`);
       params.push(options.publishedAfter);
     }
+    if (options.directionsAny?.length) {
+      conditions.push(`direction = ANY($${idx++}::text[])`);
+      params.push(options.directionsAny);
+    }
     if (options.query && options.query.trim().length > 0) {
       const trimmed = options.query.trim();
       const normQuery = normalizeTechTokens(trimmed);
