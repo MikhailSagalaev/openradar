@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.61.0
+
+- **Decide v2 with research direction, remote and grade.** Expanded fast classification questions with 35 research roles, remote probability, and experience grades (intern, junior, middle, senior, lead).
+- **Automated direction assignment.** High-confidence direction predictions (>= 0.8) automatically populate empty lead directions during decide pipeline runs.
+- **Migration 035.** Added `direction`, `direction_confidence`, `remote`, and `grade` columns and index to `model_decisions`.
+
 ## 0.60.1
 
 - **Public access to review page.** `/review` is now open to all visitors without mandatory login redirect.
