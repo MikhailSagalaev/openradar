@@ -89,6 +89,8 @@ docker compose up -d
 curl http://127.0.0.1:8787/health
 ```
 
+По умолчанию в `docker-compose.yml` используется образ ParadeDB (`paradedb/paradedb:latest-pg18`), объединяющий PostgreSQL 18, расширение векторов `pgvector` и поисковый движок `pg_search` (Tantivy BM25). Если вы используете внешний стандартный PostgreSQL, поиск автоматически переключится на полнотекстовый `tsvector`. Подробнее об архитектуре поиска см. [PARADEDB.md](PARADEDB.md).
+
 Если копировать `.env.example` вручную, замените в нём секреты: с примерами Docker Compose не запустится, это сделано намеренно.
 
 **Домен и HTTPS.** Приложение слушает только `127.0.0.1:${RADAR_HOST_PORT}`. Наружу его открывает nginx: пример в [nginx.example.conf](nginx.example.conf), сертификат — `certbot --nginx -d ваш-домен`.

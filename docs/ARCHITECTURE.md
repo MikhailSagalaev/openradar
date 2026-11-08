@@ -24,7 +24,7 @@ Radar — самостоятельный сервис, который превр
 
 1. **Ядро не знает про источники.** Источник — адаптер с маленьким контрактом.
 2. **Сначала правила, потом LLM.** Без ключа и без сети классификатор просто выключен.
-3. **PostgreSQL 18 и Outbox Pattern.** Выделенная СУБД с pgvector и гарантированной доставкой.
+3. **PostgreSQL 18, ParadeDB и Outbox Pattern.** Выделенная СУБД с pgvector, поисковым движком ParadeDB (pg_search на Rust Tantivy) и гарантированной доставкой.
 4. **Дедуп объяснимый.** Канонический URL, хэш текста и ключ заголовка, а не «магия».
 5. **Данные у оператора.** Self-hosted, без телеметрии и облачной БД.
 6. **Легальность по дизайну.** Адаптер обязан объявить уровень доступа и риски.
@@ -112,6 +112,10 @@ interface SinkAdapter {
 
 `Store` — интерфейс из `src/core/store.ts`. Production реализация построена на PostgreSQL 18 с pgvector, миграциями через advisory lock и Transactional Outbox Pattern для надёжной доставки. Для изолированных тестов используется In-Memory реализация `MemoryStore`.
 
+Полнотекстовый и релевантный поиск:
+- **ParadeDB (`pg_search`)**: встроенный в PostgreSQL поисковый движок на базе Rust Tantivy. Предоставляет честный алгоритм ранжирования Okapi BM25 (`paradedb.score(id)`), поддержку поисковых операторов (`leads @@@ $query`), опечаткоустойчивость и фасеты без сторонних поисковых сервисов (Elasticsearch). Подробнее см. [PARADEDB.md](PARADEDB.md).
+- **Graceful Fallback**: `PostgresStore` определяет наличие расширения `pg_search`. Если оно не установлено (например, на чистом базовом образе PostgreSQL), поиск автоматически и прозрачно выполняется через взвешенный `search_vector` (`tsvector` с весами: заголовок A, навыки и направление B, текст C) с ранжированием `ts_rank_cd`.
+
 ## 6. Модель данных
 
 ```
@@ -135,7 +139,9 @@ sessions(id, user_id, created_at, expires_at)
 
 - `UNIQUE(fingerprint)` и `UNIQUE(source_id, external_id)` — двухуровневый дедуп;
 - `PRIMARY KEY (user_id, lead_id, signal)` в `lead_votes` — один голос на участника;
-- `(status, created_at)`, `(source_id, created_at)`, `(title_key, created_at)`, GIN по `tsvector` — выборки и поиск.
+- `(status, created_at)`, `(source_id, created_at)`, `(title_key, created_at)` — основные выборки;
+- `idx_leads_search_vector` (GIN по взвешенному `tsvector`: заголовок A, навыки/направление B, текст C) — быстрый полнотекстовый поиск PostgreSQL;
+- `idx_leads_paradedb` (`USING paradedb`) — Tantivy BM25 инвертированный индекс по всем полям лида при наличии ParadeDB.
 
 `config_json` и `reasons_json` — JSON. Секреты в БД не хранятся: только имена переменных окружения и токены вебхуков. Таблицы `app_users`, `lead_votes` и колонка `leads.embedding` (halfvec) — задел под Этапы 3–4 роадмапа; эмбеддинги пока не заполняются.
 

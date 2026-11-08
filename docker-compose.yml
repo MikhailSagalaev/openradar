@@ -1,7 +1,8 @@
 services:
   postgres:
     # A new major version takes a new volume: scripts/pg-upgrade.sh moves the data over.
-    image: pgvector/pgvector:pg18-trixie
+    # ParadeDB bundles Tantivy BM25 (pg_search), pg_analytics and pgvector in PostgreSQL.
+    image: ${RADAR_PG_IMAGE:-paradedb/paradedb:latest-pg18}
     container_name: radar_postgres
     restart: unless-stopped
     mem_limit: ${RADAR_PG_MEM_LIMIT:-1g}
