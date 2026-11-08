@@ -7,10 +7,51 @@
  */
 
 /** Raised when the questions change: older answers then no longer compare. */
-export const DECISION_VERSION = 1;
+export const DECISION_VERSION = 2;
 
 export const DECISION_KINDS = ['vacancy', 'order', 'resume', 'other'] as const;
 export type DecisionKind = (typeof DECISION_KINDS)[number];
+
+/** The research directions a post can name, mirroring ROLES in research/derive.ts. */
+export const DECISION_ROLES: Record<string, string> = {
+  ai: 'AI-инженер и вайб-кодинг',
+  '1c': 'Программист 1С',
+  security: 'Информационная безопасность',
+  qa: 'Тестировщик (QA)',
+  devops: 'DevOps и SRE',
+  architect: 'Архитектор ПО',
+  sysadmin: 'Системный администратор',
+  'data-engineer': 'Data-инженер',
+  'analyst-system': 'Системный аналитик',
+  'analyst-business': 'Бизнес-аналитик',
+  'analyst-data': 'Аналитик данных и продуктовый аналитик',
+  ml: 'Data Science и ML',
+  product: 'Продакт-менеджер',
+  project: 'Проджект-менеджер',
+  design: 'Дизайнер',
+  gamedev: 'Разработчик игр',
+  mobile: 'Мобильный разработчик',
+  fullstack: 'Fullstack-разработчик',
+  frontend: 'Frontend-разработчик',
+  embedded: 'Embedded-разработчик',
+  backend: 'Backend-разработчик',
+  education: 'Преподавание и менторство',
+  support: 'Техподдержка',
+  marketing: 'Маркетинг и реклама',
+  content: 'Тексты и контент',
+  sales: 'Продажи',
+  hr: 'HR и рекрутинг',
+  web: 'Сайты',
+  bots: 'Боты',
+  parsing: 'Парсинг и автоматизация',
+  marketplaces: 'Маркетплейсы',
+  video: 'Видео и анимация',
+  translation: 'Переводы',
+  'dev-other': 'Другая разработка',
+  other: 'Другое',
+};
+
+export const DECISION_GRADES = ['intern', 'junior', 'middle', 'senior', 'lead'] as const;
 
 export const DECISION_QUESTIONS = {
   kind: {
@@ -22,6 +63,21 @@ export const DECISION_QUESTIONS = {
       resume: 'Человек сам ищет работу или предлагает свои услуги',
       other: 'Реклама, курс, новость, опрос или текст без предложения работы',
     },
+  },
+  direction: {
+    type: 'choice',
+    instructions: 'Какое направление работы описывает пост? null — определить не удалось.',
+    criteria: DECISION_ROLES,
+  },
+  remote: {
+    type: 'noul',
+    instructions: 'Пост обещает удалённую работу из любой точки?',
+    criteria: { true: 'Удалённо, из дома, дистанционно, из любой точки мира', false: 'Офис, город, выезд или формат не назван' },
+  },
+  grade: {
+    type: 'choice',
+    instructions: 'Какой опыт требует пост? null — не указан.',
+    criteria: { intern: 'Стажировка', junior: 'Джун: без опыта или до года', middle: 'Миддл: от года до трёх', senior: 'Сеньор: от трёх лет', lead: 'Лид или руководитель команды' },
   },
   closed: {
     type: 'noul',
@@ -46,6 +102,11 @@ export interface ModelDecision {
   model: string;
   kind: DecisionKind;
   kindConfidence: number;
+  /** v2: the research direction the post describes, with how sure the answer is. */
+  direction?: string;
+  directionConfidence?: number;
+  remote?: number;
+  grade?: string;
   closed: number;
   scam: number;
   fullness: number;
@@ -90,9 +151,18 @@ export function parseDecision(body: unknown, leadId: string, model: string, deci
   if (typeof kind !== 'string' || !(DECISION_KINDS as readonly string[]).includes(kind)) return undefined;
   if (typeof closed !== 'number' || typeof scam !== 'number' || typeof fullness !== 'number') return undefined;
   const tokens = (body as { usage?: { input_tokens?: unknown } }).usage?.input_tokens;
+  // v2 answers are optional: a service that only knows the v1 questions still parses.
+  const direction = answers?.direction?.choice;
+  const directionConfidence = answers?.direction?.confidence;
+  const remote = answers?.remote?.noul;
+  const grade = answers?.grade?.choice;
   return {
     leadId, version: DECISION_VERSION, model, kind: kind as DecisionKind,
     kindConfidence: typeof confidence === 'number' ? confidence : 0,
+    direction: typeof direction === 'string' && direction in DECISION_ROLES ? direction : undefined,
+    directionConfidence: typeof directionConfidence === 'number' ? directionConfidence : undefined,
+    remote: typeof remote === 'number' ? remote : undefined,
+    grade: typeof grade === 'string' && (DECISION_GRADES as readonly string[]).includes(grade) ? grade : undefined,
     closed, scam, fullness, tokens: typeof tokens === 'number' ? tokens : 0, decidedAt,
   };
 }

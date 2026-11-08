@@ -578,12 +578,16 @@ export class PostgresStore implements Store {
 
   async saveModelDecision(d: ModelDecision): Promise<void> {
     await this.pool.query(
-      `INSERT INTO model_decisions (lead_id, version, model, kind, kind_confidence, closed, scam, fullness, tokens, decided_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `INSERT INTO model_decisions (lead_id, version, model, kind, kind_confidence, closed, scam, fullness, tokens, decided_at, direction, direction_confidence, remote, grade)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        ON CONFLICT (lead_id) DO UPDATE SET version = EXCLUDED.version, model = EXCLUDED.model, kind = EXCLUDED.kind,
          kind_confidence = EXCLUDED.kind_confidence, closed = EXCLUDED.closed, scam = EXCLUDED.scam,
-         fullness = EXCLUDED.fullness, tokens = EXCLUDED.tokens, decided_at = EXCLUDED.decided_at`,
-      [d.leadId, d.version, d.model, d.kind, d.kindConfidence, d.closed, d.scam, d.fullness, d.tokens, d.decidedAt],
+         fullness = EXCLUDED.fullness, tokens = EXCLUDED.tokens, decided_at = EXCLUDED.decided_at,
+         direction = COALESCE(EXCLUDED.direction, model_decisions.direction),
+         direction_confidence = COALESCE(EXCLUDED.direction_confidence, model_decisions.direction_confidence),
+         remote = COALESCE(EXCLUDED.remote, model_decisions.remote), grade = COALESCE(EXCLUDED.grade, model_decisions.grade)`,
+      [d.leadId, d.version, d.model, d.kind, d.kindConfidence, d.closed, d.scam, d.fullness, d.tokens, d.decidedAt,
+       d.direction ?? null, d.directionConfidence ?? null, d.remote ?? null, d.grade ?? null],
     );
   }
 
@@ -604,15 +608,29 @@ export class PostgresStore implements Store {
 
   private rowToDecision(r: any): ModelDecision {
     return {
-      applied: r.applied ?? undefined, leadId: String(r.lead_id), version: Number(r.d_version), model: String(r.d_model), kind: r.d_kind, kindConfidence: Number(r.kind_confidence),
-      closed: Number(r.d_closed), scam: Number(r.d_scam), fullness: Number(r.fullness), tokens: Number(r.tokens), decidedAt: new Date(r.decided_at).toISOString(),
+      applied: r.applied ?? undefined,
+      leadId: String(r.lead_id),
+      version: Number(r.d_version),
+      model: String(r.d_model),
+      kind: r.d_kind,
+      kindConfidence: Number(r.kind_confidence),
+      direction: r.direction ?? undefined,
+      directionConfidence: r.direction_confidence != null ? Number(r.direction_confidence) : undefined,
+      remote: r.remote != null ? Number(r.remote) : undefined,
+      grade: r.grade ?? undefined,
+      closed: Number(r.d_closed),
+      scam: Number(r.d_scam),
+      fullness: Number(r.fullness),
+      tokens: Number(r.tokens),
+      decidedAt: new Date(r.decided_at).toISOString(),
     };
   }
 
   async listDecisionDisagreements(limit: number): Promise<Array<{ lead: Lead; decision: ModelDecision; reason: string }>> {
     const res = await this.pool.query(
       `SELECT l.*, d.lead_id, d.version AS d_version, d.model AS d_model, d.kind AS d_kind, d.kind_confidence,
-              d.closed AS d_closed, d.scam AS d_scam, d.fullness, d.tokens, d.decided_at
+              d.closed AS d_closed, d.scam AS d_scam, d.fullness, d.tokens, d.decided_at,
+              d.direction, d.direction_confidence, d.remote, d.grade
          FROM model_decisions d JOIN leads l ON l.id = d.lead_id
         WHERE l.state = 'active' AND l.status <> 'rejected'
           AND NOT EXISTS (SELECT 1 FROM lead_labels b WHERE b.lead_id = l.id)
@@ -632,7 +650,8 @@ export class PostgresStore implements Store {
   async listDecisionsToApply(limit: number): Promise<Array<{ decision: ModelDecision; score: number }>> {
     const res = await this.pool.query(
       `SELECT d.lead_id, d.version AS d_version, d.model AS d_model, d.kind AS d_kind, d.kind_confidence,
-              d.closed AS d_closed, d.scam AS d_scam, d.fullness, d.tokens, d.decided_at, l.score
+              d.closed AS d_closed, d.scam AS d_scam, d.fullness, d.tokens, d.decided_at,
+              d.direction, d.direction_confidence, d.remote, d.grade, l.score
          FROM model_decisions d JOIN leads l ON l.id = d.lead_id
         WHERE d.applied IS NULL AND NOT d.overruled AND l.state = 'active' AND l.status <> 'rejected'
         ORDER BY d.decided_at DESC LIMIT $1`,
@@ -645,10 +664,18 @@ export class PostgresStore implements Store {
     await this.pool.query(`UPDATE model_decisions SET applied = $2 WHERE lead_id = $1`, [leadId, applied]);
   }
 
+  async applyLeadDirection(leadId: string, direction: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE leads SET direction = $2 WHERE id = $1 AND (direction IS NULL OR direction = '')`,
+      [leadId, direction],
+    );
+  }
+
   async listAppliedDecisions(limit: number): Promise<Array<{ lead: Lead; decision: ModelDecision }>> {
     const res = await this.pool.query(
       `SELECT l.*, d.lead_id, d.version AS d_version, d.model AS d_model, d.kind AS d_kind, d.kind_confidence,
-              d.closed AS d_closed, d.scam AS d_scam, d.fullness, d.tokens, d.decided_at
+              d.closed AS d_closed, d.scam AS d_scam, d.fullness, d.tokens, d.decided_at,
+              d.direction, d.direction_confidence, d.remote, d.grade
          FROM model_decisions d JOIN leads l ON l.id = d.lead_id
         WHERE d.applied IN ('hidden_scam', 'hidden_junk', 'closed') AND NOT d.overruled
         ORDER BY d.decided_at DESC LIMIT $1`,

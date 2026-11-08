@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DECISION_VERSION, disagreement, parseDecision, scoreDecisions } from '../src/core/decisions.ts';
-import { decisionsEnabled, runDecisions } from '../src/pipeline/decide.ts';
+import { applyDecisions, decisionsEnabled, runDecisions } from '../src/pipeline/decide.ts';
 import { createApp } from '../src/server/app.ts';
 import { makeTestRuntime } from './helpers.ts';
 
@@ -32,6 +32,25 @@ async function withLeads(ids: string[], over: Record<string, unknown> = {}) {
 describe('answers', () => {
   it('read the shape asked for', () => {
     expect(parseDecision(answer, 'a', 'm', 'now')).toMatchObject({ kind: 'vacancy', kindConfidence: 0.97, closed: 0.02, tokens: 600, version: DECISION_VERSION });
+  });
+
+  it('reads v2 direction, remote and grade', () => {
+    const answerV2 = {
+      answers: {
+        kind: { type: 'choice', choice: 'vacancy', confidence: 0.97 },
+        direction: { type: 'choice', choice: 'backend', confidence: 0.95 },
+        remote: { type: 'noul', noul: 0.9 },
+        grade: { type: 'choice', choice: 'senior' },
+        closed: { type: 'noul', noul: 0.02 },
+        scam: { type: 'noul', noul: 0 },
+        fullness: { type: 'score', score: 2.4 },
+      },
+      usage: { input_tokens: 650 },
+    };
+    expect(parseDecision(answerV2, 'a', 'm', 'now')).toMatchObject({
+      kind: 'vacancy', kindConfidence: 0.97, direction: 'backend', directionConfidence: 0.95,
+      remote: 0.9, grade: 'senior', closed: 0.02, tokens: 650, version: DECISION_VERSION,
+    });
   });
 
   it('turn anything else down', () => {
@@ -101,6 +120,42 @@ describe('asking the model', () => {
     const summary = await runDecisions({ store: runtime.store, env: runtime.env, logger, fetchImpl }, 10);
     expect(summary.stopped).toBe(402);
     expect(calls).toBeLessThanOrEqual(4);
+  });
+});
+
+describe('applying decisions', () => {
+  it('fills an empty direction on high confidence', async () => {
+    const runtime = await withLeads(['a']);
+    const d = parseDecision({
+      answers: {
+        kind: { type: 'choice', choice: 'vacancy', confidence: 0.97 },
+        direction: { type: 'choice', choice: 'backend', confidence: 0.95 },
+        closed: { type: 'noul', noul: 0.01 },
+        scam: { type: 'noul', noul: 0 },
+        fullness: { type: 'score', score: 2.0 },
+      },
+    }, 'a', 'm', 'now')!;
+    await runtime.store.saveModelDecision!(d);
+    expect((await runtime.store.getLead('a'))?.direction).toBeUndefined();
+    const res = await applyDecisions({ store: runtime.store, env: { ...env, RADAR_DECIDE_APPLY: true } as never, logger, fetchImpl: fetch }, 10);
+    expect(res.directed).toBe(1);
+    expect((await runtime.store.getLead('a'))?.direction).toBe('backend');
+  });
+
+  it('does not overwrite an existing direction', async () => {
+    const runtime = await withLeads(['b'], { direction: 'frontend' });
+    const d = parseDecision({
+      answers: {
+        kind: { type: 'choice', choice: 'vacancy', confidence: 0.97 },
+        direction: { type: 'choice', choice: 'backend', confidence: 0.95 },
+        closed: { type: 'noul', noul: 0.01 },
+        scam: { type: 'noul', noul: 0 },
+        fullness: { type: 'score', score: 2.0 },
+      },
+    }, 'b', 'm', 'now')!;
+    await runtime.store.saveModelDecision!(d);
+    await applyDecisions({ store: runtime.store, env: { ...env, RADAR_DECIDE_APPLY: true } as never, logger, fetchImpl: fetch }, 10);
+    expect((await runtime.store.getLead('b'))?.direction).toBe('frontend');
   });
 });
 
