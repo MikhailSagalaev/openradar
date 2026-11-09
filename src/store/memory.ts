@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { recalculateVoteScoreAndStatus } from '../core/rules.ts';
-import { isRemoteLead, normalizeTechTokens } from '../core/text.ts';
+import { isRemoteLead, normalizeTechTokens, titleForLanguage } from '../core/text.ts';
 import { contactKey, mergeContacts } from '../core/contacts.ts';
 import type {
   ContactFlag,
@@ -664,6 +664,7 @@ export class MemoryStore implements Store {
         return at >= options.from && at < options.to
           && l.state !== 'hidden_junk' && l.state !== 'hidden_scam'
           && l.status !== 'rejected' && l.status !== 'failed'
+          && !['channel_ad', 'digest', 'mlm'].some((flag) => (l.metadata?.qualityFlags as string[] | undefined)?.includes(flag))
           && (!afterId || l.id > afterId);
       })
       .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
@@ -884,7 +885,7 @@ export class MemoryStore implements Store {
     }
     if (options.language) {
       const russian = options.language === 'ru';
-      result = result.filter((l) => /[А-Яа-яЁё]/.test(l.title) === russian);
+      result = result.filter((l) => /[А-Яа-яЁё]/.test(titleForLanguage(l.title)) === russian);
     }
     if (options.createdAfter) {
       const since = options.createdAfter;

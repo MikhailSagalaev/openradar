@@ -277,7 +277,7 @@ const TECH_SKILL_PATTERNS: Array<[RegExp, string]> = [
   [/\bgolang\b|\bGo(?:[- ](?:developer|engineer|разработчик|backend|бэкенд))|(?:^|[\s(])на\s+Go\b|\bGo\s*[,/]\s*(?:Python|Java|Rust|C\+\+|PHP|Kotlin|Kubernetes|Docker|PostgreSQL|gRPC)|(?:Python|Java|Rust|C\+\+|PHP|Kotlin)\s*[,/]\s*Go\b/, 'Golang'],
   [/\bjava\b(?!script)/i, 'Java'],
   [/\bkotlin\b/i, 'Kotlin'],
-  [/\bswift\b/i, 'Swift'],
+  [/(?<![\p{L}])Swift\b|swiftui|\b(?:ios|xcode)\b.{0,40}\bswift\b|\bswift\b.{0,40}\b(?:ios|xcode)\b/iu, 'Swift'],
   [/\bc\+\+/i, 'C++'],
   [/\bc#/i, 'C#'],
   [/\.net|dotnet/i, '.NET'],
@@ -289,7 +289,7 @@ const TECH_SKILL_PATTERNS: Array<[RegExp, string]> = [
   [/\bopencart\b/i, 'OpenCart'],
   [/\btilda\b|тильда/i, 'Tilda'],
   [/\bfigma\b|фигм/i, 'Figma'],
-  [/\bphotoshop\b|\bps\b(?![a-z])/i, 'Photoshop'],
+  [/\bphotoshop\b/i, 'Photoshop'],
   [/\billustrator\b/i, 'Illustrator'],
   [/after effects/i, 'After Effects'],
   [/\bautocad\b|автокад/i, 'AutoCAD'],
@@ -321,7 +321,7 @@ const TECH_SKILL_PATTERNS: Array<[RegExp, string]> = [
   [/видеомонтаж|монтаж\S*\s+(?:видео|ролик|reels|клип)|premiere|davinci|reels-?мейкер/i, 'Видеомонтаж'],
   [/моушн|motion\s*design/i, 'Моушн-дизайн'],
   [/логотип|брендбук|фирменн\S*\s+стил|брендинг/i, 'Брендинг'],
-  [/иллюстрац|illustration/i, 'Иллюстрация'],
+  [/иллюстрац|(?:ui|vector|digital|book)\s+illustration/i, 'Иллюстрация'],
   [/(?:^|[^a-zа-яё0-9])3[dд](?:[^a-zа-яё0-9]|$)|3d-|моделировани/i, '3D'],
   [/копирайт|рерайт|написать\s+(?:текст|стат)|статьи\s+для|сценари/i, 'Тексты'],
   [/перевод(?:чик|\s+(?:текст|с\s|на\s))|\btranslator\b|\btranslation\s+(?:of|from|into)\b/i, 'Переводы'],
@@ -387,6 +387,13 @@ const ROLE_SKILL_PATTERNS: Array<[RegExp, string]> = [
 
 const ALL_SKILL_PATTERNS = [...TECH_SKILL_PATTERNS, ...ROLE_SKILL_PATTERNS];
 
+const FEED_LABEL = /(?:Компания|Город|Company|City)\s*:[^.|\n]*/gi;
+
+/** Title without the adapter's «Компания:» and «Город:» lines, so those labels do not decide the language. */
+export function titleForLanguage(title: string): string {
+  return title.replace(FEED_LABEL, ' ');
+}
+
 /** Names of the trade tags, which only the title and the requirements may set. */
 export const ROLE_SKILLS: ReadonlySet<string> = new Set(ROLE_SKILL_PATTERNS.map(([, name]) => name));
 
@@ -395,10 +402,9 @@ export function extractTechSkills(input: string, max = 8): string[] {
   if (!input) return [];
   const found: string[] = [];
   for (const [pattern, name] of ALL_SKILL_PATTERNS) {
-    if (pattern.test(input)) {
-      found.push(name);
-      if (found.length >= max) break;
-    }
+    if (name === 'Битрикс' ? !bitrixIsSkill(input) : !pattern.test(input)) continue;
+    found.push(name);
+    if (found.length >= max) break;
   }
   return found;
 }
@@ -439,12 +445,20 @@ function roleWindow(title: string, text: string): string {
  * Skills of a post: tools and technologies from the whole text, trades (Тестирование,
  * Рекрутинг, Разработка…) only from the title and the requirements.
  */
+/** A partner mention is not a Bitrix skill. A developer post still is. */
+function bitrixIsSkill(input: string): boolean {
+  if (!/\bbitrix\b|битрикс/i.test(input)) return false;
+  const partner = /партн[её]р\S{0,4}\s+битрикс|битрикс\s*24/i.test(input);
+  const craft = /(?:разработ|программист|версталь|на\s+битрикс|битрикс\s*(?:и|\/)\s*1c)/i.test(input);
+  return !partner || craft;
+}
+
 export function extractSkills(title: string, text: string, max = 8): string[] {
   const all = `${title}\n${text}`;
   const found: string[] = [];
   // Technologies read anywhere in the post; trades wait for the role window below.
   for (const [pattern, name] of TECH_SKILL_PATTERNS) {
-    if (!pattern.test(all)) continue;
+    if (name === 'Битрикс' ? !bitrixIsSkill(all) : !pattern.test(all)) continue;
     found.push(name);
     if (found.length >= max) break;
   }

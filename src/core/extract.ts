@@ -216,7 +216,7 @@ export function cleanTitle(rawTitle: string, fallbackText = ''): string {
   }
 
   // Strip glued metadata labels like "Компания: ...", "Формат: ...", "Локация: ..." if they follow the job title
-  candidate = candidate.replace(/(?:\s+|[a-zа-яё0-9\)])(?:Компания|Работодатель|Company|Формат\s+работы|Формат|Локация|Уровень|Занятость|Вилка|ЗП|Зарплата)\s*:[^·\n]*/iu, '');
+  candidate = candidate.replace(/(?:\s+|[a-zа-яё0-9\)])(?:Компания|Город|Работодатель|Company|City|Формат\s+работы|Формат|Локация|Уровень|Занятость|Вилка|ЗП|Зарплата)\s*:[^·\n]*/iu, '');
 
   let title = stripEmoji(toPlainText(candidate))
     .replace(/^[\s«"„“—–·•|*:-]+|[\s»"”\.…—–·•|*:-]+$/g, '')

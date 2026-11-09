@@ -5,7 +5,7 @@ import { type SupportedLang, getTranslations } from './i18n.ts';
 import { renderLogo } from './logo.ts';
 import { type AnalyticsConfig, analyticsBody, analyticsHead } from './analytics.ts';
 import { formatLeadText } from './format.ts';
-import { activeFilterCount, BUDGET_STEPS_RUB, type FeedFilters, hasActiveFilters, rankedWindowApplies } from './filters.ts';
+import { activeFilterCount, budgetStepsFor, type FeedFilters, hasActiveFilters, rankedWindowApplies } from './filters.ts';
 import { SEO_CATALOG } from './seo.ts';
 import { qualityFlagsOf } from '../core/quality.ts';
 import { BROKEN_AFTER, sourceState, type SourceState } from '../core/source-health.ts';
@@ -2647,7 +2647,7 @@ export function leadTitle(lead: Lead): string {
   let title = lead.title.trim() || firstLine(lead.text, 100) || 'Без заголовка';
   title = decodeHtmlEntities(title);
   // Strip glued metadata labels like "Компания: ...", "Формат: ..."
-  title = title.replace(/(?:\s+|[a-zа-яё0-9\)])(?:Компания|Работодатель|Company|Формат\s+работы|Формат|Локация|Уровень|Занятость|Вилка|ЗП|Зарплата)\s*:[^·\n]*/iu, '');
+  title = title.replace(/(?:\s+|[a-zа-яё0-9\)])(?:Компания|Город|Работодатель|Company|City|Формат\s+работы|Формат|Локация|Уровень|Занятость|Вилка|ЗП|Зарплата)\s*:[^·\n]*/iu, '');
   // Strip leading/trailing noise characters like bullets, pipes, colons, braille blanks
   title = title.replace(/^[\s\u2800«"„“—–·•|*:-]+|[\s\u2800»"”\.…—–·•|*:-]+$/g, '').trim();
   return title || 'Без заголовка';
@@ -2877,14 +2877,15 @@ export function renderLeadsPage(data: LeadsPageData): string {
   ];
   const directionSelect = renderDropdown('direction', t.directionSelectLabel, directionItems, Boolean(filters.direction), true);
 
+  const budgetSteps = budgetStepsFor(type === 'gig' || type === 'job' ? type : undefined);
   const budgetItems: DropdownItem[] = [
     { value: '', label: t.budgetAny, selected: !filters.budgetRub },
-    ...BUDGET_STEPS_RUB.map((rub) => ({
+    ...budgetSteps.map((rub) => ({
       value: String(rub),
       label: t.budgetFrom.replace('{n}', formatBudget(rub).replace(/\s*₽$/, '')),
       selected: filters.budgetRub === rub,
     })),
-    ...(filters.budgetRub && !(BUDGET_STEPS_RUB as readonly number[]).includes(filters.budgetRub)
+    ...(filters.budgetRub && !budgetSteps.includes(filters.budgetRub)
       ? [{
           value: String(filters.budgetRub),
           label: t.budgetFrom.replace('{n}', formatBudget(filters.budgetRub).replace(/\s*₽$/, '')),

@@ -100,7 +100,7 @@ function histogram(bins: Report['jobs']['histogram']): string {
 <p class="rs-legend">Зарплата в месяц, тыс. ₽; число вакансий в каждом интервале</p>`;
 }
 
-function weekly(rows: Report['jobs']['weekly']): string {
+function weekly(rows: Report['jobs']['weekly'], indexed?: Report['jobs']['weeklyIndexed']): string {
   if (rows.length < 2) return '<p class="muted small">Динамика появится, когда в базе будет хотя бы две недели данных.</p>';
   const max = Math.max(...rows.map((r) => r.n));
   return `<div class="rs-hist">${rows
@@ -113,7 +113,8 @@ function weekly(rows: Report['jobs']['weekly']): string {
 <p class="rs-legend">Столбик — число вакансий за неделю (по понедельникам), подпись — медианная зарплата, тыс. ₽</p>
 <p class="muted small" style="margin-top: 10px; line-height: 1.5; border-left: 2px solid var(--line-strong); padding-left: 10px;">
   <b>Состав выборки менялся:</b> новые источники подключались в октябре и ноябре, а в первые дни лента площадки отдаёт и старые вакансии, поднятые в поиске. Поэтому недели здесь не сравниваются между собой. Для динамики смотрите <a href="/research/index">индекс</a>: он считается на постоянной панели источников.
-</p>`;
+</p>
+${indexed && indexed.length >= 2 ? `<p class="muted small">Индекс состава, 100 = первая неделя корзины: ${indexed.map((row) => `${row.week.slice(8, 10)}.${row.week.slice(5, 7)} — ${row.index}`).join('; ')}. В корзине роли с 30 и более оплачиваемыми вакансиями за период; неделя роли берётся, если в ней 10 и более.</p>` : ''}`;
 }
 
 function kpi(value: string, label: string): string {
@@ -503,7 +504,7 @@ ${report.findings.length ? `<section class="rs-section">
 
 <section class="rs-section">
   <h2>Динамика</h2>
-  ${weekly(jobs.weekly)}
+  ${weekly(jobs.weekly, jobs.weeklyIndexed)}
 </section>
 
 ${jobs.companies.length ? `<section class="rs-section">

@@ -49,7 +49,7 @@ const BIG_FOREIGN_MONEY = /[$€£]\s?\d+(?:[.,]\d+)?\s?(?:m|mn|mln|b|bn|million
  * profit of a launch, a market statistic. Every figure in it is out: «бюджетах от $20 тыс.,
  * желательно от $50 тыс.» names two.
  */
-const NOT_PAY_SENTENCE = /реклам[а-я]*\s+бюджет|бюджет[а-я]*\s+(?:на\s+)?(?:реклам|трафик|маркетинг|продвижен)|ad\s*spend|(?:ad|ads|media|marketing|paid)\s+budgets?|открут|(?:управлени[а-я]*|управлял[а-я]*|вед[её]т[а-я]*|вел[а-я]*)\s+бюджет|manag[a-z]*\s+(?:[a-z$]+\s+){0,2}budgets?|чист[а-я]*\s+прибыл|net\s+profit|запуск[а-я]*\s+(?:на|от)\s+\d|опыт[а-я]*\s+(?:[а-я]+\s+)?запуск|\d\s*(?:млн|тыс)?[\s.]*(?:₽|руб[а-я.]*)?\s*[-–—]\s*запуск|средн[а-я]*\s+зарплат[а-я]*\s+(?:в|по|на\s+рынке)|average\s+salary\s+(?:in|for)/iu;
+const NOT_PAY_SENTENCE = /реклам[а-я]*\s+бюджет|бюджет[а-я]*\s+(?:на\s+)?(?:реклам|трафик|маркетинг|продвижен)|ad\s*spend|(?:ad|ads|media|marketing|paid)\s+budgets?|facebook\s+ads|спенд|открут|(?:управлени[а-я]*|управлял[а-я]*|вед[её]т[а-я]*|вел[а-я]*)\s+бюджет|manag[a-z]*\s+(?:[a-z$]+\s+){0,2}budgets?|чист[а-я]*\s+прибыл|net\s+profit|запуск[а-я]*\s+(?:на|от)\s+\d|запускаем\s+ежемесячно|опыт[а-я]*\s+(?:[а-я]+\s+)?запуск|проект\S{0,6}\s+с\s+бюджетом|клиентск\S{0,6}\s+бюджет|\d\s*(?:млн|тыс)?[\s.]*(?:₽|руб[а-я.]*)?\s*[-–—]\s*запуск|средн[а-я]*\s+зарплат[а-я]*\s+(?:в|по|на\s+рынке)|average\s+salary\s+(?:in|for)/iu;
 
 function maskNotPaySentences(text: string): string {
   if (!NOT_PAY_SENTENCE.test(text)) return text;
@@ -113,7 +113,8 @@ export function detectPaymentPeriod(text: string, defaultType: 'job' | 'gig' = '
     lower.includes('per hour') ||
     lower.includes('/hr') ||
     lower.includes('$/h') ||
-    lower.includes('hourly')
+    lower.includes('hourly') ||
+    /(?:pln|zł|zl|eur|usd|gbp|руб|₽|€|\$)\s*\/\s*h(?:r|our)?\b/.test(lower)
   ) {
     return 'hourly';
   }

@@ -26,7 +26,7 @@ import { VERSION } from '../version.ts';
 import { githubOAuthConfigured, startGitHubOAuth, handleGitHubCallback } from './auth.ts';
 import { renderAdminPage } from './admin.ts';
 import { analyticsFromEnv, contentSecurityPolicy } from './analytics.ts';
-import { filterOptions, parseFeedFilters, type FeedFilters } from './filters.ts';
+import { filterOptions, matchesSavedFilters, parseFeedFilters, type FeedFilters } from './filters.ts';
 import { estimateMarket } from '../core/market.ts';
 import { COLLECTOR_MAX_ORDERS, COLLECTOR_PLATFORMS, collectedOrderToRaw, type CollectorPlatform, COLLECTOR_SITES, collectedVacancyToRaw, type CollectorSite } from './collector.ts';
 import { rateLimit } from './ratelimit.ts';
@@ -1152,15 +1152,18 @@ export function createApp(runtime: Runtime): Hono {
 
   // Search suggestions and dynamic filter skills: dictionary skills of recent leads (up to 30),
   // filtered for significance (count >= 2), refreshed every 10 minutes.
-  let popularCache: { at: number; items: Array<{ name: string; count: number }> } | undefined;
-  const popularSkills = async (): Promise<Array<{ name: string; count: number }>> => {
-    if (popularCache && Date.now() - popularCache.at < 10 * 60_000) return popularCache.items;
+  const popularCaches = new Map<string, { at: number; items: Array<{ name: string; count: number }> }>();
+  const popularSkills = async (filters: SavedFilters): Promise<Array<{ name: string; count: number }>> => {
+    const key = [filters.type ?? '', filters.it ? '1' : '0', filters.remote ? '1' : '0', filters.language ?? '', filters.budgetRub ?? ''].join('|');
+    const cached = popularCaches.get(key);
+    if (cached && Date.now() - cached.at < 10 * 60_000) return cached.items;
     const recent = await runtime.store.getLeadsForFeed({
       limit: 2000,
       createdAfter: new Date(Date.now() - 14 * 24 * 3600_000).toISOString(),
     });
+    const scope: SavedFilters = { type: filters.type, it: filters.it, remote: filters.remote, language: filters.language, budgetRub: filters.budgetRub };
     const counts = new Map<string, number>();
-    for (const lead of recent) {
+    for (const lead of recent.filter((lead) => matchesSavedFilters(lead, scope))) {
       const skills = lead.skills?.length ? lead.skills : extractSkills(lead.title, lead.text);
       for (const skill of skills) {
         counts.set(skill, (counts.get(skill) ?? 0) + 1);
@@ -1171,7 +1174,7 @@ export function createApp(runtime: Runtime): Hono {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 30)
       .map(([name, count]) => ({ name, count }));
-    popularCache = { at: Date.now(), items };
+    popularCaches.set(key, { at: Date.now(), items });
     return items;
   };
 
@@ -1300,7 +1303,13 @@ export function createApp(runtime: Runtime): Hono {
         page,
         hasMore,
         partialMatch,
-        popularSkills: await popularSkills(),
+        popularSkills: await popularSkills({
+          type: type === 'job' || type === 'gig' ? type : undefined,
+          it: filters.it,
+          remote: filters.remote,
+          language: filters.language,
+          budgetRub: filters.budgetRub,
+        }),
         directions: await popularDirections(lang),
         query,
         status,

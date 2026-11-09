@@ -135,6 +135,8 @@ export interface Report {
     companies: Array<{ name: string; n: number }>;
     histogram: Array<{ from: number; to?: number; n: number }>;
     weekly: Array<{ week: string; n: number; median?: number }>;
+    /** Same pay, held to a fixed role mix. 100 is the first week that has a basket. */
+    weeklyIndexed?: Array<{ week: string; index: number; n: number }>;
     roles: RoleDetail[];
   };
   gigs: { budget: Dist; budgetShare: number; byCategory: Slice[]; hourly: Dist };
@@ -321,11 +323,11 @@ function computeTaskTransformation(records: ResearchRecord[]) {
   let totalMatched = 0;
 
   for (const r of records) {
-    const text = `${r.role} ${r.skills.join(' ')}`;
+    const text = r.skills.join(' ');
     let matchedEmerging = false;
 
     for (const d of emergingDefs) {
-      if (d.rx.test(text) || d.roles.includes(r.role)) {
+      if (d.rx.test(text)) {
         const cur = emergingStats.get(d.key)!;
         cur.n++;
         if (projectPay(r)) {
@@ -340,7 +342,7 @@ function computeTaskTransformation(records: ResearchRecord[]) {
 
     if (!matchedEmerging) {
       for (const d of routineDefs) {
-        if (d.rx.test(text) || d.roles.includes(r.role)) {
+        if (d.rx.test(text)) {
           const cur = routineStats.get(d.key)!;
           cur.n++;
           if (projectPay(r)) {
@@ -568,6 +570,44 @@ function skillStats(records: ResearchRecord[], limit: number): Array<{ skill: st
     .sort((a, b) => b.pay.median! - a.pay.median!);
 }
 
+const BASKET_MIN = 30;
+const WEEK_CELL_MIN = 10;
+
+/** Laspeyres-style weekly pay: roles with enough posts keep a fixed weight, so a flood of one role cannot move the index alone. */
+function compositionIndex(records: ResearchRecord[]): Array<{ week: string; index: number; n: number }> {
+  const totals = new Map<string, number>();
+  for (const record of records) totals.set(record.role, (totals.get(record.role) ?? 0) + 1);
+  const basket = [...totals.entries()].filter(([, n]) => n >= BASKET_MIN);
+  const weightTotal = basket.reduce((sum, [, n]) => sum + n, 0);
+  if (!basket.length || weightTotal === 0) return [];
+  const weights = new Map(basket.map(([role, n]) => [role, n / weightTotal]));
+  const cells = new Map<string, Map<string, number[]>>();
+  for (const record of records) {
+    if (!weights.has(record.role) || record.pay === undefined) continue;
+    const week = mondayOf(record.date);
+    const byRole = cells.get(week) ?? new Map<string, number[]>();
+    const pays = byRole.get(record.role) ?? [];
+    pays.push(record.pay);
+    byRole.set(record.role, pays);
+    cells.set(week, byRole);
+  }
+  const rows = [...cells.keys()].sort().flatMap((week) => {
+    const byRole = cells.get(week)!;
+    const present = [...weights.keys()].filter((role) => (byRole.get(role)?.length ?? 0) >= WEEK_CELL_MIN);
+    const weightSum = present.reduce((sum, role) => sum + weights.get(role)!, 0);
+    if (!present.length || weightSum === 0) return [];
+    const value = present.reduce((sum, role) => {
+      const pays = [...(byRole.get(role) ?? [])].sort((a, b) => a - b);
+      return sum + (weights.get(role)! / weightSum) * pays[Math.floor((pays.length - 1) / 2)]!;
+    }, 0);
+    const n = present.reduce((sum, role) => sum + (byRole.get(role)?.length ?? 0), 0);
+    return [{ week, value, n }];
+  });
+  const base = rows[0]?.value;
+  if (!base) return [];
+  return rows.map((row) => ({ week: row.week, index: Math.round((row.value / base) * 1000) / 10, n: row.n }));
+}
+
 function mondayOf(date: string): string {
   const d = new Date(`${date}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
@@ -713,6 +753,7 @@ export function buildReport(
         const d = dist(weeks.get(week) ?? []);
         return { week, n: weekCounts.get(week)!, median: d.median };
       }),
+      weeklyIndexed: compositionIndex(ruJobs),
       roles,
     },
     gigs: {

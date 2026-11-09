@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.63.0
+
+- **Pay is compensation.** Ad spend, Facebook Ads budgets and a client's project budget no longer become the salary. An hourly rate written as PLN/h stays hourly.
+- **Skills.** «take swift» is not Swift, «ps» is not Photoshop, a bare «illustration» is not the illustration skill, and «партнёры Битрикс 24» is not a Bitrix skill.
+- **Feed language.** «Компания:» and «Город:» labels no longer make an English vacancy look Russian. The budget steps for vacancies are 80, 150, 250 and 400 thousand ₽; orders keep the freelance steps. Skill counts follow the current feed, not the whole recent pile.
+- **Research.** Channel ads, digests and MLM posts stay out of the report. The task comparison matches the words of the work, not the whole role. Weekly pay also has a fixed-role index, so a change of mix is not read as a pay crash.
+
 ## 0.62.0
 
 - **Workplace arrangement classification (remote, hybrid, onsite).** Replaced naive boolean `isRemote` assumptions with a 3-step cascade classifier adhering to Google Jobs and schema.org guidelines.

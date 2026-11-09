@@ -1,5 +1,6 @@
 import type { Context } from 'hono';
 import { rubToUsd } from '../core/salary.ts';
+import { titleForLanguage } from '../core/text.ts';
 import type { SavedFilters } from '../core/subscriptions.ts';
 import type { Lead } from '../core/types.ts';
 import type { LeadSort, ListLeadsOptions } from '../core/store.ts';
@@ -10,8 +11,15 @@ import type { LeadSort, ListLeadsOptions } from '../core/store.ts';
  */
 export const RANKED_WINDOW_MS = 7 * 24 * 3600 * 1000;
 
-/** Budget thresholds offered in the feed filter, in roubles. */
-export const BUDGET_STEPS_RUB = [5_000, 20_000, 50_000, 100_000] as const;
+/** Budget thresholds offered in the feed filter, in roubles. Orders and vacancies use different scales. */
+export const BUDGET_STEPS_GIG = [5_000, 20_000, 50_000, 100_000] as const;
+export const BUDGET_STEPS_JOB = [80_000, 150_000, 250_000, 400_000] as const;
+/** Mixed feed uses the vacancy scale: a 5 000 ₽ floor hides almost no job. */
+export const BUDGET_STEPS_RUB = BUDGET_STEPS_JOB;
+
+export function budgetStepsFor(type: 'job' | 'gig' | undefined): readonly number[] {
+  return type === 'gig' ? BUDGET_STEPS_GIG : BUDGET_STEPS_JOB;
+}
 
 /**
  * Skills that make a lead IT work for the «IT» chip: development, data, DevOps, 1C, site
@@ -119,7 +127,7 @@ export function matchesSavedFilters(lead: Lead, filters: SavedFilters): boolean 
   }
   if (filters.budgetRub && (lead.normalizedUsdMax ?? lead.normalizedUsdMin ?? (lead.budget ? rubToUsd(lead.budget) : 0)) < rubToUsd(filters.budgetRub)) return false;
   if (filters.language) {
-    const cyrillic = /[А-Яа-яЁё]/.test(lead.title);
+    const cyrillic = /[А-Яа-яЁё]/.test(titleForLanguage(lead.title));
     if (cyrillic !== (filters.language === 'ru')) return false;
   }
   if (filters.q) {

@@ -224,8 +224,8 @@ describe('MCP server', () => {
 
   it('filters search_leads by company, grade, and has_budget', async () => {
     const customLeads = [
-      lead({ id: 'l-senior', title: 'Senior Python Dev', grade: 'senior', company: 'Acme Corp', budget: 250000 }),
-      lead({ id: 'l-junior', title: 'Junior Go Dev', grade: 'junior', company: 'Beta LLC' }),
+      lead({ id: 'l-senior', title: 'Senior Python Dev', company: 'Acme Corp', budget: 250000 }),
+      lead({ id: 'l-junior', title: 'Junior Go Dev', company: 'Beta LLC' }),
     ];
     const customBackend: McpBackend = {
       ...backend,

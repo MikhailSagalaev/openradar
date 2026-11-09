@@ -60,14 +60,16 @@ describe('layout accessibility', () => {
 describe('renderLeadsPage dropdowns and direction filters', () => {
   it('renders direction filter and search input in dropdowns', () => {
     const html = renderLeadsPage({
-      stats: { totalLeads: 10, sources: 2, totalSources: 2, last24h: 5 },
+      stats: { sources: 2, enabledSources: 2, leads: 10, newLeads: 5, deliveredLeads: 0, rejectedLeads: 0, last24h: 5 },
       health: [],
       leads: [],
+      query: '',
+      status: '',
       page: 1,
       hasMore: false,
       version: 'test',
       lang: 'en',
-      filters: { direction: 'backend' },
+      filters: { direction: 'backend', sort: 'new', remote: false },
       directions: [
         { slug: 'backend', label: 'Backend', count: 12 },
         { slug: 'frontend', label: 'Frontend', count: 8 },
