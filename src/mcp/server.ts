@@ -76,7 +76,7 @@ export const MCP_TOOLS: McpTool[] = [
         min_budget_rub: { type: 'number', description: 'Minimum budget or monthly pay, in roubles (other currencies are converted)' },
         min_budget: { type: 'number', description: 'Minimum budget in the lead\'s own currency (prefer min_budget_rub)' },
         since: { type: 'string', description: 'Only posts newer than this: "24h", "7d" or an ISO date' },
-        sort: { type: 'string', enum: ['new', 'score', 'budget'], description: 'new (default), score = best described first, budget = highest pay first; score and budget look at the last 7 days' },
+        sort: { type: 'string', enum: ['new', 'score', 'budget', 'relevance'], description: 'new (default), relevance = best full-text match when query is set, score = best described first, budget = highest pay first; score and budget look at the last 7 days' },
         limit: { type: 'number', description: 'Results per call, 1-50 (default 10)' },
         offset: { type: 'number', description: 'next_offset from the previous call, to read the next page' },
       },
@@ -245,6 +245,8 @@ function leadCompact(lead: Lead): Record<string, unknown> {
     where: lead.isRemote ? 'remote' : lead.city,
     workplace_type: lead.workplaceType ?? (lead.isRemote ? 'remote' : 'onsite'),
     direction: lead.direction,
+    grade: lead.grade,
+    company: lead.company ?? lead.author,
     skills: lead.skills?.slice(0, 6),
     score: lead.score,
     flags: qualityFlagsOf(lead).length ? qualityFlagsOf(lead) : undefined,
@@ -351,7 +353,7 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend): Pr
       const grade = typeof args.grade === 'string' && ['intern', 'junior', 'middle', 'senior', 'lead'].includes(args.grade) ? args.grade.toLowerCase() : undefined;
       const company = typeof args.company === 'string' && args.company.trim() ? args.company.trim().toLowerCase() : undefined;
       const hasBudget = args.has_budget === true;
-      const sort: LeadSort = args.sort === 'score' || args.sort === 'budget' ? args.sort : 'new';
+      const sort: LeadSort = args.sort === 'score' || args.sort === 'budget' || args.sort === 'relevance' ? args.sort : 'new';
       const since = sinceInstant(args.since);
       // One skill and the rouble floor go to the database; several skills, grade, company or a floor in the
       // lead's own currency are checked here, so a wider page is read for them.
@@ -386,7 +388,7 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend): Pr
         leads = leads.filter((lead) => (lead.skills ?? []).some((skill) => wanted.has(skill.toLowerCase())));
       }
       if (grade) {
-        leads = leads.filter((lead) => ((lead as { grade?: string }).grade?.toLowerCase() === grade) || lead.title.toLowerCase().includes(grade));
+        leads = leads.filter((lead) => (lead.grade?.toLowerCase() === grade) || lead.title.toLowerCase().includes(grade));
       }
       if (company) {
         leads = leads.filter((lead) => (lead.company?.toLowerCase().includes(company)) || (lead.author?.toLowerCase().includes(company)));

@@ -7,7 +7,9 @@
 
 ```bash
 pnpm dev export --jobspy --limit 5000 --out openradar-jobspy.csv
-# на проде: node bin/radar.js export --jobspy
+# с фильтрами по источнику, типу и дате публикации:
+pnpm dev export --jobspy --source telegram --type gig --since 30d --out tg-gigs-30d.csv
+# на проде: node bin/radar.js export --jobspy --since 7d
 ```
 
 ```python

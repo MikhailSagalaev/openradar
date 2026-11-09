@@ -38,7 +38,7 @@ export function renderOpenApi(baseUrl: string): Record<string, unknown> {
             { name: 'workplace', in: 'query', schema: { type: 'string', enum: ['remote', 'hybrid', 'onsite'] }, description: 'Workplace arrangement: remote, hybrid, or onsite' },
             { name: 'direction', in: 'query', schema: { type: 'string' }, description: 'Role or trade direction, e.g. "backend", "frontend", "qa", "devops", "design"' },
             { name: 'it', in: 'query', schema: { type: 'string', enum: ['1'] }, description: 'IT and adjacent trades only' },
-            { name: 'sort', in: 'query', schema: { type: 'string', enum: ['new', 'score', 'budget'] } },
+            { name: 'sort', in: 'query', schema: { type: 'string', enum: ['new', 'score', 'budget', 'relevance'] } },
             { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 500, default: 50 } },
             { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1 } },
           ],
@@ -115,6 +115,8 @@ export function renderOpenApi(baseUrl: string): Record<string, unknown> {
             { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'From x-radar-cursor of the previous page' },
             { name: 'limit', in: 'query', schema: { type: 'integer', maximum: 200, default: 50 } },
             q(), type(),
+            { name: 'workplace', in: 'query', schema: { type: 'string', enum: ['remote', 'hybrid', 'onsite'] }, description: 'Workplace arrangement: remote, hybrid, or onsite' },
+            { name: 'direction', in: 'query', schema: { type: 'string' }, description: 'Role or trade direction' },
           ],
           responses: {
             '200': { description: 'Feed page and cursor', content: { 'application/json': { schema: { type: 'object' } }, 'application/x-ndjson': { schema: { type: 'string' } } } },
@@ -132,7 +134,7 @@ export function renderOpenApi(baseUrl: string): Record<string, unknown> {
       '/mcp': {
         get: {
           summary: 'Model Context Protocol server',
-          description: 'Streamable HTTP MCP with tools search_leads, get_lead_details, get_market_stats. Keyless guest access; a signed participant key raises the tier.',
+          description: 'Streamable HTTP MCP with tools search_leads, get_lead_details, estimate_compensation, submit_lead, vote_lead, get_market_analytics, save_search, list_saved_searches, xray_generate_dorks. Keyless guest access; a signed participant key raises the tier.',
           responses: { '200': { description: 'JSON-RPC over MCP; see https://modelcontextprotocol.io' } },
         },
       },
