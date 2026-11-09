@@ -40,7 +40,7 @@ describe('OpenAPI description of the public API', () => {
     expect(res.status).toBe(200);
     const spec = (await res.json()) as Record<string, any>;
     expect(spec.openapi).toBe('3.1.0');
-    for (const path of ['/api/leads', '/api/market', '/api/delta', '/v2/feed', '/v2/stream', '/mcp', '/health']) {
+    for (const path of ['/api/leads', '/api/market', '/api/insights', '/api/companies/suggest', '/api/delta', '/v2/feed', '/v2/stream', '/mcp', '/health']) {
       expect(spec.paths, `path ${path} missing`).toHaveProperty(path);
     }
     expect(spec.components.schemas.Lead.properties).toHaveProperty('title');
@@ -79,5 +79,20 @@ describe('OpenAPI description of the public API', () => {
     const schemaKeys = Object.keys(spec.components.schemas.Lead.properties);
     const undeclared = [...new Set(leads.flatMap((lead) => Object.keys(lead)))].filter((key) => !schemaKeys.includes(key));
     expect(undeclared, `fields not in the schema: ${undeclared.join(', ')}`).toEqual([]);
+  });
+  it('serves /api/insights and /api/companies/suggest over the guest projection', async () => {
+    const { app, runtime } = makeRuntime();
+    await seedOneLead(runtime);
+    const insightsRes = await app.request('/api/insights?days=30');
+    expect(insightsRes.status).toBe(200);
+    const insights = (await insightsRes.json()) as Record<string, unknown>;
+    expect(insights).toHaveProperty('trending_skills');
+    expect(insights).toHaveProperty('workplace');
+    expect(insights).toHaveProperty('salary_percentiles');
+    expect(insights).toHaveProperty('ai_exposure');
+
+    const suggestRes = await app.request('/api/companies/suggest?q=acme&limit=5');
+    expect(suggestRes.status).toBe(200);
+    expect(Array.isArray(await suggestRes.json())).toBe(true);
   });
 });
