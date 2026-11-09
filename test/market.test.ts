@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { estimateMarket } from '../src/core/market.ts';
+import { computeInsights, estimateMarket } from '../src/core/market.ts';
 import type { Lead } from '../src/core/types.ts';
 
 function lead(id: string, title: string, usd: number, type: 'job' | 'gig' = 'gig', skills: string[] = []): Lead {
@@ -48,5 +48,19 @@ describe('market estimate', () => {
     expect(est.count).toBe(3);
     expect(est.usd?.median).toBe(20000);
     expect(est.usd?.p25).toBeGreaterThanOrEqual(14000);
+  });
+  it('computes aggregate insights: trending skills, workplace share, pay percentiles, and AI exposure', () => {
+    const sample = [
+      { ...lead('j1', 'Senior Python LLM Engineer', 4000, 'job', ['Python', 'LLM']), workplaceType: 'remote' as const, direction: 'ai' },
+      { ...lead('j2', 'Backend Go Developer', 3500, 'job', ['Golang', 'Python']), workplaceType: 'hybrid' as const, direction: 'backend' },
+      { ...lead('j3', 'Frontend React Developer', 3000, 'job', ['React']), workplaceType: 'onsite' as const, isRemote: false, direction: 'frontend' },
+    ];
+    const insights = computeInsights(sample, 30);
+    expect(insights.total_leads).toBe(3);
+    expect(insights.trending_skills[0]).toEqual({ name: 'Python', count: 2, share_pct: 66.7 });
+    expect(insights.workplace).toEqual({ remote: 1, hybrid: 1, onsite: 1, remote_share_pct: 33.3 });
+    expect(insights.salary_percentiles.job.count).toBe(3);
+    expect(insights.salary_percentiles.job.usd?.median).toBe(3500);
+    expect(insights.ai_exposure).toEqual({ count: 1, share_pct: 33.3 });
   });
 });

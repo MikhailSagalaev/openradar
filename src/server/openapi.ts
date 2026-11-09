@@ -96,6 +96,31 @@ export function renderOpenApi(baseUrl: string): Record<string, unknown> {
           },
         },
       },
+      '/api/insights': {
+        get: {
+          summary: 'Aggregate market insights (trending skills, directions, workplace share, pay percentiles, AI exposure)',
+          description: 'Computed over the guest-visible feed for the requested window (default 30 days).',
+          parameters: [
+            type(),
+            { name: 'days', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 90, default: 30 }, description: 'Lookback window in days' },
+          ],
+          responses: {
+            '200': { description: 'Aggregate market statistics', content: { 'application/json': { schema: { type: 'object' } } } },
+          },
+        },
+      },
+      '/api/companies/suggest': {
+        get: {
+          summary: 'Suggest hiring employers by name prefix',
+          parameters: [
+            { name: 'q', in: 'query', schema: { type: 'string' }, description: 'Company name substring or prefix' },
+            { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 50, default: 10 } },
+          ],
+          responses: {
+            '200': { description: 'Matching employers with active vacancy counts and page URLs', content: { 'application/json': { schema: { type: 'array', items: { type: 'object' } } } } },
+          },
+        },
+      },
       '/api/delta': {
         get: {
           summary: 'Changes since a moment, for synchronising tools',

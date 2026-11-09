@@ -47,6 +47,7 @@
 | [GIG_SOURCES.md](GIG_SOURCES.md) | Карта площадок фриланс-заказов и проектной работы (РФ и мир) |
 | [SOURCES_COVERAGE.md](SOURCES_COVERAGE.md) | Покрытие источников вакансий и заказов, ATS-провайдеры и открытые JSON-доски |
 | [SOURCES_ROBOTS.md](SOURCES_ROBOTS.md) | Журнал аудита `robots.txt` и правил доступа к площадкам |
+| [SOURCE_INDEXING_LOG.md](SOURCE_INDEXING_LOG.md) | Журнал решений по источникам (`indexed`, `blocked`, `retired`) с результатами HTTP-проверок |
 
 ## 6. Эксплуатация, дорожная карта и развитие · Operations & Roadmap
 

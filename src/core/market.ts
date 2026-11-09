@@ -139,3 +139,125 @@ export function estimateMarket(query: MarketQuery, leads: Lead[]): MarketEstimat
     rub: { p25: roundRub(usd.p25 * RUB_PER_USD), median: roundRub(usd.median * RUB_PER_USD), p75: roundRub(usd.p75 * RUB_PER_USD) },
   };
 }
+
+const AI_SKILLS = new Set([
+  'ai / ml', 'ai', 'ml', 'llm', 'openai', 'langchain', 'pytorch', 'tensorflow', 'rag', 'nlp', 'computer vision',
+]);
+
+export interface PaySummary {
+  count: number;
+  usd?: MarketRange;
+  rub?: MarketRange;
+}
+
+export interface MarketInsights {
+  window_days: number;
+  total_leads: number;
+  trending_skills: Array<{ name: string; count: number; share_pct: number }>;
+  directions: Array<{ direction: string; count: number; share_pct: number }>;
+  workplace: {
+    remote: number;
+    hybrid: number;
+    onsite: number;
+    remote_share_pct: number;
+  };
+  salary_percentiles: {
+    job: PaySummary;
+    gig: PaySummary;
+  };
+  ai_exposure: {
+    count: number;
+    share_pct: number;
+  };
+}
+
+function paySummaryFor(leads: Lead[], type: LeadType): PaySummary {
+  const values = leads
+    .filter((l) => (l.type ?? 'gig') === type && !salaryLooksWrong(l))
+    .map((l) => {
+      let usd = budgetUsd(l);
+      if (usd !== undefined && type === 'job' && l.paymentPeriod === 'hourly' && usd <= 300) {
+        usd = Math.round(usd * 168);
+      }
+      return usd;
+    })
+    .filter((v): v is number => typeof v === 'number' && Number.isFinite(v) && v > (type === 'job' ? 299 : 0))
+    .sort((a, b) => a - b);
+
+  if (values.length < MIN_SAMPLES) return { count: values.length };
+  const p25 = quantile(values, 0.25);
+  const median = quantile(values, 0.5);
+  const p75 = quantile(values, 0.75);
+  return {
+    count: values.length,
+    usd: { p25: Math.round(p25), median: Math.round(median), p75: Math.round(p75) },
+    rub: { p25: roundRub(p25 * RUB_PER_USD), median: roundRub(median * RUB_PER_USD), p75: roundRub(p75 * RUB_PER_USD) },
+  };
+}
+
+/**
+ * Aggregate market insights over guest-visible leads: trending skills, role
+ * directions, workplace breakdown (remote/hybrid/onsite), pay percentiles, and AI exposure.
+ */
+export function computeInsights(leads: Lead[], windowDays: number = 30): MarketInsights {
+  const total = leads.length;
+  const pct = (n: number): number => (total > 0 ? Math.round((n / total) * 1000) / 10 : 0);
+
+  const skillCounts = new Map<string, number>();
+  const dirCounts = new Map<string, number>();
+  let remote = 0;
+  let hybrid = 0;
+  let onsite = 0;
+  let aiCount = 0;
+
+  for (const lead of leads) {
+    const wp = lead.workplaceType ?? (lead.isRemote !== false ? 'remote' : 'onsite');
+    if (wp === 'remote') remote++;
+    else if (wp === 'hybrid') hybrid++;
+    else onsite++;
+
+    if (lead.direction) {
+      dirCounts.set(lead.direction, (dirCounts.get(lead.direction) ?? 0) + 1);
+    }
+
+    const skills = lead.skills ?? [];
+    for (const s of skills) {
+      skillCounts.set(s, (skillCounts.get(s) ?? 0) + 1);
+    }
+
+    const hasAiSkill = skills.some((s) => AI_SKILLS.has(s.toLowerCase()));
+    if (lead.direction === 'ai' || hasAiSkill || /\b(llm|gpt|openai|claude|rag|machine learning|нейросет)\b/i.test(lead.title)) {
+      aiCount++;
+    }
+  }
+
+  const trending_skills = [...skillCounts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 15)
+    .map(([name, count]) => ({ name, count, share_pct: pct(count) }));
+
+  const directions = [...dirCounts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([direction, count]) => ({ direction, count, share_pct: pct(count) }));
+
+  return {
+    window_days: windowDays,
+    total_leads: total,
+    trending_skills,
+    directions,
+    workplace: {
+      remote,
+      hybrid,
+      onsite,
+      remote_share_pct: pct(remote),
+    },
+    salary_percentiles: {
+      job: paySummaryFor(leads, 'job'),
+      gig: paySummaryFor(leads, 'gig'),
+    },
+    ai_exposure: {
+      count: aiCount,
+      share_pct: pct(aiCount),
+    },
+  };
+}

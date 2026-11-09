@@ -27,7 +27,7 @@ import { githubOAuthConfigured, startGitHubOAuth, handleGitHubCallback } from '.
 import { renderAdminPage } from './admin.ts';
 import { analyticsFromEnv, contentSecurityPolicy } from './analytics.ts';
 import { filterOptions, matchesSavedFilters, parseFeedFilters, type FeedFilters } from './filters.ts';
-import { estimateMarket } from '../core/market.ts';
+import { computeInsights, estimateMarket } from '../core/market.ts';
 import { COLLECTOR_MAX_ORDERS, COLLECTOR_PLATFORMS, collectedOrderToRaw, type CollectorPlatform, COLLECTOR_SITES, collectedVacancyToRaw, type CollectorSite } from './collector.ts';
 import { rateLimit } from './ratelimit.ts';
 import { indexCsv, openradarIndex } from '../research/index.ts';
@@ -2392,6 +2392,46 @@ export function createApp(runtime: Runtime): Hono {
     c.header('Cache-Control', 'public, max-age=600');
     return c.json(estimateMarket({ title, type, skills }, leads));
   });
+
+  // Aggregate market insights over guest-visible leads (Epic #61 [F-05]):
+  // trending skills, directions, workplace share, pay percentiles, and AI exposure.
+  app.get('/api/insights', rateLimit({ windowMs: 60_000, max: 60 }), async (c) => {
+    c.header('Access-Control-Allow-Origin', '*');
+    if (!await canRead(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
+    const rawType = c.req.query('type')?.trim();
+    const type: LeadType | undefined = rawType === 'job' || rawType === 'gig' ? rawType : undefined;
+    const days = Math.max(1, Math.min(Number(c.req.query('days') ?? 30) || 30, 90));
+    const now = new Date();
+    const leads = await runtime.store.getLeadsForFeed({
+      type,
+      limit: 3000,
+      createdAfter: new Date(now.getTime() - days * 86_400_000).toISOString(),
+      createdBefore: visibleBefore({ tier: 'guest' }, runtime.access, now),
+    });
+    c.header('Cache-Control', 'public, max-age=600');
+    return c.json(computeInsights(leads, days));
+  });
+
+  // Employer / company autocomplete over guest-visible employer pages (Epic #61 [F-06]).
+  const handleCompaniesSuggest = async (c: Context) => {
+    c.header('Access-Control-Allow-Origin', '*');
+    if (!await canRead(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
+    const query = (c.req.query('q') ?? '').trim().slice(0, 80) || undefined;
+    const limit = Math.max(1, Math.min(Number(c.req.query('limit') ?? 10) || 10, 50));
+    const rows = (await runtime.store.listEmployers?.({ limit, minPosts: query ? 1 : 2, query })) ?? [];
+    c.header('Cache-Control', 'public, max-age=300');
+    return c.json(
+      rows.map((e) => ({
+        key: e.key,
+        name: e.name,
+        active: e.active,
+        lastAt: e.lastAt,
+        url: employerPath(e.key),
+      })),
+    );
+  };
+  app.get('/api/companies/suggest', rateLimit({ windowMs: 60_000, max: 60 }), handleCompaniesSuggest);
+  app.get('/api/employers/suggest', rateLimit({ windowMs: 60_000, max: 60 }), handleCompaniesSuggest);
 
   app.get('/api/leads', feedLimit, async (c) => {
     if (!await canRead(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
