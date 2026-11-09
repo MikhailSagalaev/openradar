@@ -107,7 +107,7 @@ hub.observe([{"source": {"platform": "telegram", "channel": "-1001234567890", "v
 
 | Document | Contents |
 | --- | --- |
-| [GETTING_STARTED.md](docs/GETTING_STARTED.md) | Scenarios: reading the hub, running a node, a server, a parser, sharing with the hub |
+| [GETTING_STARTED.md](docs/GETTING_STARTED_EN.md) | Scenarios: reading the hub, running a node, a server, a parser, sharing with the hub |
 | [PROTOCOL.md](docs/PROTOCOL.md) | radar/2: posts, signatures, merging, tiers, rating, moderation |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | The node pipeline, the score, the data model, HTTP routes |
 | [PARADEDB.md](docs/PARADEDB.md) | High-performance search with ParadeDB (pg_search / Tantivy BM25) |

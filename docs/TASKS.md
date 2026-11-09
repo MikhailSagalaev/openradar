@@ -31,7 +31,7 @@
 - [ ] Вход через Telegram: дизайнеры и копирайтеры не заходят через GitHub
 - [ ] После регистрации вести к подписке или токену агента
 - [ ] Быстрые кнопки «Мусор» и «Закрыто» в ленте, меньший порог голосов
-- [ ] Перевести GETTING_STARTED на английский ([#56](https://github.com/MikhailSagalaev/openradar/issues/56))
+- [x] Перевести GETTING_STARTED на английский ([#56](https://github.com/MikhailSagalaev/openradar/issues/56))
 
 ## Агенты и распространение
 

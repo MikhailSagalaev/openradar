@@ -147,7 +147,7 @@ export async function evaluateLeadState(
   store: Store,
   lead: Lead,
   weights: WeightResolver,
-  opts: { live?: boolean } = {},
+  opts: { live?: boolean; observations?: ObservationRecord[]; signals?: SignalRecord[] } = {},
 ): Promise<LeadState> {
   const decision = await store.getLeadDecision(lead.id);
   let state: LeadState;
@@ -156,7 +156,10 @@ export async function evaluateLeadState(
   } else if ((await store.getContactFlags(lead.contacts ?? [])).some((f) => f.flag === 'scam')) {
     state = 'hidden_scam';
   } else {
-    const [signals, observations] = await Promise.all([store.listSignals(lead.id), store.listObservations(lead.id)]);
+    const [signals, observations] = await Promise.all([
+      opts.signals ? Promise.resolve(opts.signals) : store.listSignals(lead.id),
+      opts.observations ? Promise.resolve(opts.observations) : store.listObservations(lead.id),
+    ]);
     const author = observations.find((o) => o.isFirst)?.pubkey;
     const fromSignals = stateFromSignals(await sumSignals(signals, weights, author));
     // The author or the board closing the post holds unless signals hide it.
@@ -309,12 +312,14 @@ export async function recomputeRatings(
   const leadIds: string[] = [];
   const entries: LedgerEntry[] = [];
   for (const [leadId] of byLead) {
-    const lead = await store.getLead(leadId);
+    // Fetch lead, all observations, and signals concurrently once per lead (avoids duplicate N+1 queries)
+    const [lead, observations, signals] = await Promise.all([
+      store.getLead(leadId),
+      store.listObservations(leadId),
+      store.listSignals(leadId),
+    ]);
     if (!lead) continue;
-    lead.state = await evaluateLeadState(store, lead, weights);
-    // all observations of the lead, not only the recent ones
-    const observations = await store.listObservations(leadId);
-    const signals = await store.listSignals(leadId);
+    lead.state = await evaluateLeadState(store, lead, weights, { observations, signals });
     leadIds.push(leadId);
     const wasConfirmed = Boolean(lead.confirmedAt);
     await loadAccounts(signals);

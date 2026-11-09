@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { JOBSPY_COLUMNS, jobspyCsv, jobspyRow, siteSlugFor } from '../src/core/jobspy.ts';
+import { filterJobspyLeads, JOBSPY_COLUMNS, jobspyCsv, jobspyRow, parseExportSince, siteSlugFor } from '../src/core/jobspy.ts';
 import type { Lead } from '../src/core/types.ts';
 import { TEST_NOW } from './helpers.ts';
 
@@ -85,5 +85,28 @@ describe('JobSpy-compatible export', () => {
     expect(siteSlugFor(makeLead({ sourceRef: { platform: 'telegram', channel: '-100123', visibility: 'public' } }), kinds)).toBe('telegram');
     expect(siteSlugFor(makeLead(), kinds)).toBe('kwork');
     expect(siteSlugFor(makeLead(), new Map())).toBe('openradar');
+  });
+  it('filters exported leads by --source, --type, and --since', () => {
+    const kinds = new Map([['src-kwork', 'kwork'], ['src-hh', 'hh']]);
+    const now = new Date('2026-11-09T12:00:00Z');
+    const leads: Lead[] = [
+      makeLead({ id: 'g1', sourceId: 'src-kwork', type: 'gig', publishedAt: '2026-11-08T12:00:00Z' }),
+      makeLead({ id: 'j1', sourceId: 'src-hh', type: 'job', publishedAt: '2026-11-05T12:00:00Z' }),
+      makeLead({
+        id: 't1',
+        sourceId: 'src-tg',
+        type: 'gig',
+        sourceRef: { platform: 'telegram', channel: '-1001', visibility: 'public' },
+        publishedAt: '2026-09-01T12:00:00Z',
+      }),
+    ];
+    const siteOf = (l: Lead) => siteSlugFor(l, kinds);
+
+    expect(filterJobspyLeads(leads, siteOf, { source: 'kwork' }).map((l) => l.id)).toEqual(['g1']);
+    expect(filterJobspyLeads(leads, siteOf, { source: 'telegram' }).map((l) => l.id)).toEqual(['t1']);
+    expect(filterJobspyLeads(leads, siteOf, { type: 'job' }).map((l) => l.id)).toEqual(['j1']);
+    expect(filterJobspyLeads(leads, siteOf, { since: '7d', now }).map((l) => l.id)).toEqual(['g1', 'j1']);
+    expect(filterJobspyLeads(leads, siteOf, { since: '2026-11-07T00:00:00Z', now }).map((l) => l.id)).toEqual(['g1']);
+    expect(parseExportSince('24h', now)).toBe(Date.parse('2026-11-08T12:00:00Z'));
   });
 });

@@ -14,7 +14,7 @@ import { fillEmployers } from '../pipeline/reemployers.ts';
 import { rescoreLeads } from '../pipeline/rescore.ts';
 import { auditSourceRobots, robotsMarkdown } from '../pipeline/robots-audit.ts';
 import { PollRunner } from '../pipeline/runner.ts';
-import { jobspyCsv, siteSlugFor } from '../core/jobspy.ts';
+import { filterJobspyLeads, jobspyCsv, parseExportSince, siteSlugFor } from '../core/jobspy.ts';
 import { createRuntime, type Runtime } from '../runtime.ts';
 import { createApp, startSubscriptionBot, subscriptionDeps, userTelegramDeps } from '../server/app.ts';
 import { pollUserTelegramSources } from '../pipeline/user-telegram.ts';
@@ -764,18 +764,33 @@ function buildProgram(): Command {
     .description('Export leads to JSON or CSV (--jobspy for the JobSpy-compatible columns)')
     .option('--format <format>', 'json or csv', 'json')
     .option('--jobspy', 'JobSpy-compatible CSV: the columns pandas pipelines of JobSpy expect')
+    .option('--source <slug>', 'Filter by SITE slug (e.g. telegram, kwork, hh) or source id')
+    .option('--type <type>', 'Filter by lead type: job or gig')
+    .option('--since <when>', 'Only posts newer than 24h, 7d, 30d or an ISO date')
     .option('--out <path>', 'Output file')
     .option('--limit <n>', 'Max leads', '5000')
-    .action(async (options: { format: string; jobspy?: boolean; out?: string; limit: string }) => {
-      const format = options.format.toLowerCase();
+    .action(async (options: { format: string; jobspy?: boolean; source?: string; type?: string; since?: string; out?: string; limit: string }) => {
+      const format = options.jobspy && options.format === 'json' ? 'csv' : options.format.toLowerCase();
       if (format !== 'json' && format !== 'csv') fail('format must be json or csv');
+      if (options.type && options.type !== 'job' && options.type !== 'gig') fail('--type must be job or gig');
+      if (options.since && !Number.isFinite(parseExportSince(options.since))) fail('--since must be <N>h, <N>d, <N>w or an ISO date');
       const out = options.out ?? (format === 'csv' ? (options.jobspy ? 'openradar-jobspy.csv' : 'radar-export.csv') : 'radar-export.json');
 
       await withRuntime(async (runtime) => {
-        const leads = await runtime.store.listLeads({ limit: Number(options.limit) || 5000 });
+        const sinceMs = parseExportSince(options.since);
+        const rawLeads = await runtime.store.listLeads({
+          limit: Number(options.limit) || 5000,
+          type: options.type as 'job' | 'gig' | undefined,
+          publishedAfter: sinceMs !== undefined ? new Date(sinceMs).toISOString() : undefined,
+        });
+        const kinds = new Map((await runtime.store.listSources()).map((s) => [s.id, s.kind]));
+        const leads = filterJobspyLeads(rawLeads, (lead) => siteSlugFor(lead, kinds), {
+          source: options.source,
+          type: options.type,
+          since: options.since,
+        });
         if (options.jobspy) {
           if (format !== 'csv') fail('--jobspy exports CSV only');
-          const kinds = new Map((await runtime.store.listSources()).map((s) => [s.id, s.kind]));
           writeFileSync(resolve(out), jobspyCsv(leads, (lead) => siteSlugFor(lead, kinds)), 'utf8');
           console.log(`Экспортировано ${leads.length} лидов в ${resolve(out)} (колонки JobSpy)`);
           return;
