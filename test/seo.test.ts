@@ -8,6 +8,7 @@ import {
   renderFaqPage,
   renderLlmsTxt,
   renderNetworkPage,
+  renderReviewPage,
   renderRobotsTxt,
   renderSitemapXml,
 } from '../src/server/seo.ts';
@@ -80,10 +81,24 @@ describe('SEO catalog pages', () => {
     const about = renderAboutPage({ baseUrl: 'https://openradar.fun', version: 'test' });
     expect(about).toContain('<h1>О проекте openradar</h1>');
     expect(about).toContain('"@type": "SearchAction"');
+    expect(about).toContain('<a href="/sources">странице источников</a>');
+    expect(about).not.toContain('/sources/new');
+    expect(about).not.toContain('/sources/catalog');
+
+    const aboutEn = renderAboutPage({ baseUrl: 'https://openradar.fun', version: 'test', lang: 'en' });
+    expect(aboutEn).toContain('<a href="/sources">sources page</a>');
+    expect(aboutEn).not.toContain('/sources/new');
+    expect(aboutEn).not.toContain('/sources/catalog');
 
     const faq = renderFaqPage({ baseUrl: 'https://openradar.fun', version: 'test' });
     expect(faq).toContain('"@type": "FAQPage"');
     expect(faq).toContain('Это бесплатно?');
+    expect(faq).toContain('<a href="/sources">странице источников</a>');
+    expect(faq).not.toContain('/sources/new');
+
+    const faqEn = renderFaqPage({ baseUrl: 'https://openradar.fun', version: 'test', lang: 'en' });
+    expect(faqEn).toContain('<a href="/sources">sources page</a>');
+    expect(faqEn).not.toContain('/sources/catalog');
 
     const indexEn = renderCatalogIndex({ baseUrl: 'https://openradar.fun', version: 'test', lang: 'en' });
     expect(indexEn).toContain('Categories of orders and vacancies');
@@ -105,6 +120,9 @@ describe('SEO catalog pages', () => {
     const llms = renderLlmsTxt('https://openradar.fun');
     expect(llms).toMatch(/^# openradar/);
     expect(llms).toContain('https://openradar.fun/catalog/vakansii-python');
+    expect(llms).toContain('https://openradar.fun/sources');
+    expect(llms).not.toContain('/sources/new');
+    expect(llms).not.toContain('/sources/catalog');
   });
 
   it('renders robots.txt and sitemap.xml for the catalog', () => {
@@ -120,9 +138,26 @@ describe('SEO catalog pages', () => {
     expect(sitemap).toContain('<loc>https://openradar.fun/about</loc>');
     expect(sitemap).toContain('<loc>https://openradar.fun/faq</loc>');
     expect(sitemap).toContain('<loc>https://openradar.fun/catalog</loc>');
+    expect(sitemap).toContain('<loc>https://openradar.fun/sources</loc>');
+    expect(sitemap).toMatch(/<loc>https:\/\/openradar\.fun\/sources<\/loc><lastmod>\d{4}-\d{2}-\d{2}<\/lastmod><changefreq>daily<\/changefreq>/);
+    expect(sitemap).not.toContain('/sources/new');
+    expect(sitemap).not.toContain('/sources/catalog');
+    expect(sitemap).not.toContain('/sources/');
+    expect(sitemap).not.toContain('<loc>https://openradar.fun/review</loc>');
+    expect(robots).toContain('Disallow: /sources/new');
+    expect(robots).toContain('Disallow: /sources/catalog');
+    expect(robots).toContain('Disallow: /sources/*/edit');
+    expect(robots).not.toMatch(/^Disallow: \/sources$/m);
 
     const withLeads = renderSitemapXml('https://openradar.fun', [{ id: 'abc', createdAt: '2026-10-26T06:48:19.000Z' }]);
     expect(withLeads).toContain('<loc>https://openradar.fun/leads/abc</loc><lastmod>2026-10-26</lastmod>');
+    expect(withLeads).toContain('<loc>https://openradar.fun/sources</loc>');
+    expect(withLeads).not.toContain('/sources/new');
+  });
+
+  it('keeps the review page out of the index', () => {
+    const html = renderReviewPage({ version: 'test', directions: [], direction: '', mine: 0 });
+    expect(html).toContain('<meta name="robots" content="noindex">');
   });
 
   it('renders og metadata and WebSite SearchAction schema on the main page', () => {

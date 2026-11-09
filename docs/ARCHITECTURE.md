@@ -261,7 +261,7 @@ const ok = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(req.headers
 - `POST /leads/:id/status`, `POST /leads/:id/feedback`, `PATCH /api/leads/:id/status` — воронка; только админ.
 - `GET /submit`, `POST /submit`, `POST /api/submit`, `POST /api/preview` — добавление по ссылке; запись — только после GitHub-входа, превью ходит через SSRF-guarded fetch.
 - `GET /feed.rss`, `/feed.xml`, `/api/feed.rss` — RSS-лента под запрос.
-- `GET /catalog/:slug` — индексируемые страницы категорий; `GET /robots.txt`, `GET /sitemap.xml` — в sitemap попадают категории и лиды, которые видит гость.
+- `GET /catalog/:slug` — индексируемые страницы категорий; `GET /robots.txt`, `GET /sitemap.xml` — в sitemap попадают категории, публичный список источников (`/sources`) и лиды, которые видит гость. `/sources/new`, `/sources/catalog` и `/sources/*/edit` в sitemap не входят и закрыты в `robots.txt`.
 - `GET /extension`, `GET /extension/download` — страница и архив браузерного расширения.
 - `GET /api/market?title=&type=job|gig&skills=` — оценка оплаты для расширения: 25/50/75-й перцентили по похожим лидам с бюджетом за 90 дней (похожие — где есть половина слов запроса по основам или половина навыков; меньше трёх — по всем лидам типа). Только агрегаты по лидам, которые уже видит гость; `Access-Control-Allow-Origin: *`.
 - `GET /admin` — сводка для оператора: заказы по дням, источники за неделю, пользователи, голоса, участники сети. Админ — токен `RADAR_ADMIN_TOKEN` или GitHub-аккаунт из `RADAR_ADMIN_GITHUB`.
