@@ -4,7 +4,8 @@
  */
 import { escapeHtml, jsonForScript } from '../core/text.ts';
 import { layout, type AuthDisplay } from '../server/ui.ts';
-import { GRADE_LABELS, MIN_CONFIDENCE, ROLES } from './derive.ts';
+import type { SupportedLang } from '../server/i18n.ts';
+import { GRADE_LABELS, MIN_CONFIDENCE, ROLES, roleLabel } from './derive.ts';
 
 const MIN_CONFIDENCE_PCT = Math.round(MIN_CONFIDENCE * 100);
 import {
@@ -714,44 +715,57 @@ export function renderEmbedPage(options: { chartId: string; report: Report; base
 </html>`;
 }
 
-export function renderRolePage(options: { detail: RoleDetail; report: Report; baseUrl: string; version: string; auth?: AuthDisplay }): string {
+export function renderRolePage(options: { detail: RoleDetail; report: Report; baseUrl: string; version: string; auth?: AuthDisplay; lang?: SupportedLang }): string {
   const { detail, report, baseUrl, version } = options;
-  const title = `Зарплаты: ${detail.label}`;
-  const path = `/research/roles/${detail.slug}`;
+  const ru = (options.lang ?? 'ru') !== 'en';
+  const roleName = roleLabel(detail.slug, options.lang);
+  const title = ru ? `Зарплаты: ${roleName}` : `Salaries: ${roleName}`;
+  const path = ru ? `/research/roles/${detail.slug}` : `/en/research/roles/${detail.slug}`;
   const quote = detail.pay.median
-    ? `По данным openradar, медианная зарплата в вакансиях направления «${detail.label}» ${report.period.phrase} составила ${formatRub(detail.pay.median)} в месяц (выборка: ${detail.pay.n} вакансий).`
+    ? (ru
+        ? `По данным openradar, медианная зарплата в вакансиях направления «${roleName}» ${report.period.phrase} составила ${formatRub(detail.pay.median)} в месяц (выборка: ${detail.pay.n} вакансий).`
+        : `According to openradar, the median salary in "${roleName}" vacancies for ${report.period.label} was ${formatRub(detail.pay.median)} per month (sample: ${detail.pay.n} vacancies).`)
     : '';
   const body = `
-<nav class="crumbs" aria-label="Навигация"><a href="/">openradar</a> / <a href="/research">Исследования</a> / ${escapeHtml(detail.label)}</nav>
+<nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/">openradar</a> / <a href="${ru ? '/research' : '/en/research'}">${ru ? 'Исследования' : 'Research'}</a> / ${escapeHtml(roleName)}</nav>
 <div class="page-head"><div>
   <h1>${escapeHtml(title)}</h1>
-  <p class="muted small">${num(detail.n)} вакансий за ${escapeHtml(report.period.label)}, зарплата указана в ${num(detail.withPay)}. Удалённую работу допускают ${formatShare(detail.remoteShare)}.</p>
+  <p class="muted small">${ru
+    ? `${num(detail.n)} вакансий за ${escapeHtml(report.period.label)}, зарплата указана в ${num(detail.withPay)}. Удалённую работу допускают ${formatShare(detail.remoteShare)}.`
+    : `${num(detail.n)} vacancies in ${escapeHtml(report.period.label)}, pay specified in ${num(detail.withPay)}. Remote allowed in ${formatShare(detail.remoteShare)}.`}</p>
 </div></div>
 <div class="rs-kpis">
-  ${kpi(detail.pay.median ? formatRub(detail.pay.median) : '—', 'медиана в месяц')}
-  ${kpi(detail.pay.p25 ? formatRub(detail.pay.p25) : '—', '25-й процентиль')}
-  ${kpi(detail.pay.p75 ? formatRub(detail.pay.p75) : '—', '75-й процентиль')}
-  ${kpi(num(detail.n), 'вакансий')}
+  ${kpi(detail.pay.median ? formatRub(detail.pay.median) : '—', ru ? 'медиана в месяц' : 'monthly median')}
+  ${kpi(detail.pay.p25 ? formatRub(detail.pay.p25) : '—', ru ? '25-й процентиль' : '25th percentile')}
+  ${kpi(detail.pay.p75 ? formatRub(detail.pay.p75) : '—', ru ? '75-й процентиль' : '75th percentile')}
+  ${kpi(num(detail.n), ru ? 'вакансий' : 'vacancies')}
 </div>
 ${quote ? `<p class="small">${escapeHtml(quote)} ${quoteButton(quote)}</p>` : ''}
-<section class="rs-section"><h2>По уровню</h2>${rangeChart(sliceRows(detail.byGrade))}</section>
-${detail.byLanguage.some((s) => s.pay.median) ? `<section class="rs-section"><h2>По языку</h2>${rangeChart(sliceRows(detail.byLanguage))}</section>` : ''}
-<section class="rs-section"><h2>По городам</h2>${rangeChart(sliceRows(detail.byRegion))}</section>
-${detail.skills.length ? `<section class="rs-section"><h2>Навыки</h2>${rangeChart(detail.skills.map((s) => ({ label: s.skill, n: s.n, pay: s.pay })))}</section>` : ''}
+<section class="rs-section"><h2>${ru ? 'По уровню' : 'By level'}</h2>${rangeChart(sliceRows(detail.byGrade))}</section>
+${detail.byLanguage.some((s) => s.pay.median) ? `<section class="rs-section"><h2>${ru ? 'По языку' : 'By language'}</h2>${rangeChart(sliceRows(detail.byLanguage))}</section>` : ''}
+<section class="rs-section"><h2>${ru ? 'По городам' : 'By city'}</h2>${rangeChart(sliceRows(detail.byRegion))}</section>
+${detail.skills.length ? `<section class="rs-section"><h2>${ru ? 'Навыки' : 'Skills'}</h2>${rangeChart(detail.skills.map((s) => ({ label: s.skill, n: s.n, pay: s.pay })))}</section>` : ''}
 ${detail.companies.length ? `<section class="rs-section"><h2>Кто нанимает</h2>${countBars(detail.companies.map((c) => ({ label: c.name, n: c.n })))}</section>` : ''}
 <section class="rs-section prose" style="margin-top:36px">
-  <p>Свежие вакансии этого направления — в <a href="/?type=job">ленте вакансий</a>. Как считаются цифры — в <a href="/research/methodology">методике</a>. Все направления — в <a href="/research">общем отчёте</a>.</p>
-  <div class="chip-links">${report.jobs.roles.filter((r) => r.slug !== detail.slug).slice(0, 12).map((r) => `<a href="/research/roles/${escapeHtml(r.slug)}">${escapeHtml(r.label)}</a>`).join('')}</div>
+  <p>${ru
+    ? 'Свежие вакансии этого направления — в <a href="/?type=job">ленте вакансий</a>. Как считаются цифры — в <a href="/research/methodology">методике</a>. Все направления — в <a href="/research">общем отчёте</a>.'
+    : 'Fresh vacancies for this role — in the <a href="/?type=job">job feed</a>. How figures are calculated — in the <a href="/en/research/methodology">methodology</a>. All roles — in the <a href="/en/research">main report</a>.'}</p>
+  <div class="chip-links">${report.jobs.roles.filter((r) => r.slug !== detail.slug).slice(0, 12).map((r) => `<a href="${ru ? '/research/roles/' : '/en/research/roles/'}${escapeHtml(r.slug)}">${escapeHtml(roleLabel(r.slug, options.lang))}</a>`).join('')}</div>
 </section>`;
   const description = detail.pay.median
-    ? `${detail.label}: медианная зарплата в вакансиях ${formatRub(detail.pay.median)} в месяц. Зарплаты по уровням, городам и навыкам, ${report.period.label}.`
-    : `${detail.label}: зарплаты в вакансиях по данным openradar.`;
+    ? (ru
+        ? `${roleName}: медианная зарплата в вакансиях ${formatRub(detail.pay.median)} в месяц. Зарплаты по уровням, городам и навыкам, ${report.period.label}.`
+        : `${roleName}: median salary in vacancies ${formatRub(detail.pay.median)} per month. Pay by level, city and skills, ${report.period.label}.`)
+    : (ru
+        ? `${roleName}: зарплаты в вакансиях по данным openradar.`
+        : `${roleName}: salaries in vacancies according to openradar.`);
   return layout({
     auth: options.auth,
     title,
     version,
     active: 'research',
     body,
+    lang: options.lang,
     script: QUOTE_SCRIPT,
     head: `<meta name="description" content="${escapeHtml(description)}">
 <link rel="canonical" href="${escapeHtml(baseUrl + path)}">`,

@@ -371,15 +371,16 @@ export function findCatalogEntry(slug: string): CatalogEntry | undefined {
   return SEO_CATALOG.find((entry) => entry.slug === slug);
 }
 
-function leadRow(lead: Lead, baseUrl: string): string {
+function leadRow(lead: Lead, baseUrl: string, lang?: SupportedLang): string {
+  const ru = (lang ?? 'ru') !== 'en';
   // Rows open the lead page on the hub: it carries the details, the score and the link to the source.
   const href = `${baseUrl}/leads/${encodeURIComponent(lead.id)}`;
   const meta = [
     lead.city,
     typeof lead.budget === 'number'
-      ? `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(lead.budget)} ${!lead.currency || lead.currency === 'RUB' ? '₽' : lead.currency}`
+      ? `${new Intl.NumberFormat(ru ? 'ru-RU' : 'en-US', { maximumFractionDigits: 0 }).format(lead.budget)} ${!lead.currency || lead.currency === 'RUB' ? (ru ? '₽' : 'RUB') : lead.currency}`
       : undefined,
-    lead.type === 'job' ? 'вакансия' : 'заказ',
+    lead.type === 'job' ? (ru ? 'вакансия' : 'vacancy') : (ru ? 'заказ' : 'gig'),
   ]
     .filter(Boolean)
     .join(' · ');
@@ -401,8 +402,29 @@ function feedHrefOf(entry: CatalogEntry): string {
 }
 
 /** Questions every catalog page answers; the FAQ page adds the project-wide ones. */
-function catalogFaq(entry: CatalogEntry): Array<[string, string]> {
-  const what = entry.type === 'job' ? 'вакансии' : 'заказы';
+function catalogFaq(entry: CatalogEntry, lang?: SupportedLang): Array<[string, string]> {
+  const ru = (lang ?? 'ru') !== 'en';
+  const what = entry.type === 'job' ? (ru ? 'вакансии' : 'vacancies') : (ru ? 'заказы' : 'gigs');
+  if (!ru) {
+    return [
+      [
+        `Where do ${what} on this page come from?`,
+        `From open sources: freelance boards, job portals, RSS feeds and Telegram channels, as well as participants who submit listings by link or via the browser extension. Sources are polled automatically, usually every few minutes.`,
+      ],
+      [
+        `Do I need to pay to apply?`,
+        `No. openradar charges no fees for access or replies: each card includes a link to the original source and direct contact info.`,
+      ],
+      [
+        'How do I get notified about new posts in this category?',
+        'Subscribe to the RSS feed of this page in any RSS reader or Telegram RSS bot. New listings will arrive without having to visit the site.',
+      ],
+      [
+        'Why do listings have different scores?',
+        'The score from 0 to 100 increases for clear task descriptions, stated budgets, relevant skills, and direct contacts. Closed and outdated listings are pruned from the feed.',
+      ],
+    ];
+  }
   return [
     [
       `Откуда берутся ${what} на этой странице?`,
@@ -467,38 +489,41 @@ export function renderCatalogPage(options: {
   lang?: SupportedLang;
 }): string {
   const { entry, leads, baseUrl, version } = options;
+  const ru = (options.lang ?? 'ru') !== 'en';
   const canonical = `${baseUrl}/catalog/${entry.slug}`;
   const feedHref = feedHrefOf(entry);
   const list = leads.length
-    ? leads.map((lead) => leadRow(lead, baseUrl)).join('')
-    : `<div class="empty"><h2>Пока пусто</h2><p>Новые публикации появятся здесь в течение нескольких минут — источники опрашиваются автоматически.</p></div>`;
-  const faq = catalogFaq(entry);
+    ? leads.map((lead) => leadRow(lead, baseUrl, options.lang)).join('')
+    : `<div class="empty"><h2>${ru ? 'Пока пусто' : 'No posts yet'}</h2><p>${ru ? 'Новые публикации появятся здесь в течение нескольких минут — источники опрашиваются автоматически.' : 'New listings will appear here within a few minutes — sources are polled automatically.'}</p></div>`;
+  const faq = catalogFaq(entry, options.lang);
   // Same kind first, so a page on orders links to other orders before vacancies.
   const related = SEO_CATALOG.filter((other) => other.slug !== entry.slug)
     .sort((a, b) => Number(b.type === entry.type) - Number(a.type === entry.type))
     .slice(0, 10);
 
   const body = `
-<nav class="crumbs" aria-label="Навигация"><a href="/">openradar</a> / <a href="/catalog">Категории</a> / ${escapeHtml(entry.h1)}</nav>
+<nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/">openradar</a> / <a href="/catalog">${ru ? 'Категории' : 'Categories'}</a> / ${escapeHtml(entry.h1)}</nav>
 <div class="page-head">
   <div>
     <h1>${escapeHtml(entry.h1)}</h1>
     <p class="muted small">${escapeHtml(entry.intro)}</p>
   </div>
   <div class="actions">
-    <a class="btn ghost" href="${escapeHtml(feedHref)}" rel="noopener">RSS-лента</a>
-    <a class="btn" href="/">Все заказы</a>
+    <a class="btn ghost" href="${escapeHtml(feedHref)}" rel="noopener">${ru ? 'RSS-лента' : 'RSS feed'}</a>
+    <a class="btn" href="/">${entry.type === 'job' ? (ru ? 'Все вакансии' : 'All jobs') : (ru ? 'Все заказы' : 'All gigs')}</a>
   </div>
 </div>
 <div class="list">${list}</div>
 <section class="prose">
-  <h2>Что здесь</h2>
+  <h2>${ru ? 'Что здесь' : 'Overview'}</h2>
   <p>${escapeHtml(entry.about)}</p>
-  <p>openradar — открытая база заказов и вакансий без платных тарифов. Код проекта открыт, любой может запустить свой узел и подключить свои источники. <a href="/about">Подробнее о проекте</a>.</p>
-  <h2>Вопросы</h2>
+  <p>${ru
+    ? 'openradar — открытая база заказов и вакансий без платных тарифов. Код проекта открыт, любой может запустить свой узел и подключить свои источники. <a href="/about">Подробнее о проекте</a>.'
+    : 'openradar is an open base of freelance orders and vacancies with no paid plans. Open source, anyone can run a node and connect their own sources. <a href="/about">About the project</a>.'}</p>
+  <h2>${ru ? 'Вопросы' : 'Questions'}</h2>
   ${faqHtml(faq)}
-  <h2>Похожие разделы</h2>
-  <div class="chip-links">${related.map((other) => `<a href="/catalog/${escapeHtml(other.slug)}">${escapeHtml(other.h1)}</a>`).join('')}<a href="/catalog">Все категории</a></div>
+  <h2>${ru ? 'Похожие разделы' : 'Related categories'}</h2>
+  <div class="chip-links">${related.map((other) => `<a href="/catalog/${escapeHtml(other.slug)}">${escapeHtml(other.h1)}</a>`).join('')}<a href="/catalog">${ru ? 'Все категории' : 'All categories'}</a></div>
 </section>`;
 
   const itemList = {
@@ -525,7 +550,7 @@ export function renderCatalogPage(options: {
 <link rel="canonical" href="${escapeHtml(canonical)}">
 <link rel="alternate" type="application/rss+xml" title="${escapeHtml(entry.h1)} — RSS" href="${escapeHtml(feedHref)}">
 ${ldScripts(
-  breadcrumbsJsonLd(baseUrl, [['openradar', '/'], ['Категории', '/catalog'], [entry.h1, `/catalog/${entry.slug}`]]),
+  breadcrumbsJsonLd(baseUrl, [['openradar', '/'], [ru ? 'Категории' : 'Categories', '/catalog'], [entry.h1, `/catalog/${entry.slug}`]]),
   ...(leads.length ? [itemList] : []),
   faqJsonLd(faq),
 )}`,
@@ -535,31 +560,33 @@ ${ldScripts(
 /** Index of every landing page, grouped into orders and vacancies. */
 export function renderCatalogIndex(options: { baseUrl: string; version: string; auth?: AuthDisplay; lang?: SupportedLang }): string {
   const { baseUrl, version } = options;
+  const ru = (options.lang ?? 'ru') !== 'en';
   const card = (entry: CatalogEntry): string =>
     `<a class="catalog-card" href="/catalog/${escapeHtml(entry.slug)}"><b>${escapeHtml(entry.h1)}</b><span>${escapeHtml(entry.intro)}</span></a>`;
   const gigs = SEO_CATALOG.filter((entry) => entry.type !== 'job');
   const jobs = SEO_CATALOG.filter((entry) => entry.type === 'job');
-  const description =
-    'Все разделы openradar: заказы для фрилансеров по направлениям и IT-вакансии по специальностям. У каждого раздела своя RSS-лента.';
+  const description = ru
+    ? 'Все разделы openradar: заказы для фрилансеров по направлениям и IT-вакансии по специальностям. У каждого раздела своя RSS-лента.'
+    : 'All openradar categories: freelance gigs by trade and IT vacancies by specialization. Each section has its own RSS feed.';
   const body = `
-<nav class="crumbs" aria-label="Навигация"><a href="/">openradar</a> / Категории</nav>
+<nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/">openradar</a> / ${ru ? 'Категории' : 'Categories'}</nav>
 <div class="page-head"><div>
-  <h1>Категории заказов и вакансий</h1>
+  <h1>${ru ? 'Категории заказов и вакансий' : 'Categories of orders and vacancies'}</h1>
   <p class="muted small">${escapeHtml(description)}</p>
 </div></div>
-<h2>Заказы для фрилансеров</h2>
+<h2>${ru ? 'Заказы для фрилансеров' : 'Freelance gigs'}</h2>
 <div class="catalog-grid">${gigs.map(card).join('')}</div>
-<h2 style="margin-top:32px">Вакансии</h2>
+<h2 style="margin-top:32px">${ru ? 'Вакансии' : 'Vacancies'}</h2>
 <div class="catalog-grid">${jobs.map(card).join('')}</div>`;
   return layout({
     auth: options.auth,
     lang: options.lang,
-    title: 'Категории заказов и вакансий',
+    title: ru ? 'Категории заказов и вакансий' : 'Categories of orders and vacancies',
     version,
     body,
     head: `<meta name="description" content="${escapeHtml(description)}">
 <link rel="canonical" href="${escapeHtml(baseUrl)}/catalog">
-${ldScripts(breadcrumbsJsonLd(baseUrl, [['openradar', '/'], ['Категории', '/catalog']]))}`,
+${ldScripts(breadcrumbsJsonLd(baseUrl, [['openradar', '/'], [ru ? 'Категории' : 'Categories', '/catalog']]))}`,
   });
 }
 

@@ -53,7 +53,7 @@ const envSchema = z.object({
   RADAR_DECIDE_KEY: optionalString,
   RADAR_DECIDE_APPLY: booleanFromEnv(false),
   // Pages read per hour for short posts of boards with thin feeds; 0 stops it.
-  RADAR_ENRICH_PER_HOUR: z.coerce.number().int().nonnegative().default(0),
+  RADAR_ENRICH_PER_HOUR: z.coerce.number().int().nonnegative().default(120),
   SUBQ_API_KEY: optionalString,
   RADAR_EXTRACT_PROVIDER: z.enum(['openai', 'gigachat']).default('openai'),
   GIGACHAT_AUTH_KEY: optionalString,

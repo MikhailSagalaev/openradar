@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { KIND_ACCESS, isDirectEmployerSource, layout } from '../src/server/ui.ts';
+import { KIND_ACCESS, isDirectEmployerSource, layout, renderLeadsPage } from '../src/server/ui.ts';
 import { createSourceRegistry } from '../src/sources/index.ts';
 import type { SourceRecord } from '../src/core/types.ts';
 
@@ -54,5 +54,28 @@ describe('layout accessibility', () => {
     const body = html.slice(html.indexOf('<body>') + '<body>'.length).trimStart();
     expect(body.startsWith('<a class="skip-link" href="#main">Skip to content</a>')).toBe(true);
     expect(html).toContain('id="main"');
+  });
+});
+
+describe('renderLeadsPage dropdowns and direction filters', () => {
+  it('renders direction filter and search input in dropdowns', () => {
+    const html = renderLeadsPage({
+      stats: { totalLeads: 10, sources: 2, totalSources: 2, last24h: 5 },
+      health: [],
+      leads: [],
+      page: 1,
+      hasMore: false,
+      version: 'test',
+      lang: 'en',
+      filters: { direction: 'backend' },
+      directions: [
+        { slug: 'backend', label: 'Backend', count: 12 },
+        { slug: 'frontend', label: 'Frontend', count: 8 },
+      ],
+    });
+    expect(html).toContain('data-name="direction"');
+    expect(html).toContain('dropdown-filter-search');
+    expect(html).toContain('Backend (12)');
+    expect(html).toContain('direction=backend');
   });
 });

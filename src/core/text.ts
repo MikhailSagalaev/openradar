@@ -101,9 +101,26 @@ export function normalizeWhitespace(input: string): string {
     .trim();
 }
 
+/** Strips application form boilerplate and telephone code chains from vacancy text. */
+export function stripFormBoilerplate(input: string): string {
+  const cutMarkers = [
+    /\n\s*Отклик на вакансию:[\s\S]*$/iu,
+    /\n\s*Откликнуться на вакансию[\s\S]*$/iu,
+    /\n\s*(?:Ваше имя\s+Фамилия|Фамилия\s+Телефон)\s+\+\d[\s\S]*$/iu,
+    /\n\s*Я даю согласие на обработку перс\S*\s+данных[\s\S]*$/iu,
+  ];
+  let cleaned = input;
+  for (const marker of cutMarkers) {
+    cleaned = cleaned.replace(marker, '');
+  }
+  // Strip long telephone country code lists like "+1 +7 +20 +27..."
+  cleaned = cleaned.replace(/(?:\+\d{1,4}\s+){5,}/g, '');
+  return cleaned.trim();
+}
+
 /** Plain text from an arbitrary feed/HTML fragment. */
 export function toPlainText(input: string): string {
-  return normalizeWhitespace(stripEmoji(stripHtml(input)));
+  return stripFormBoilerplate(normalizeWhitespace(stripEmoji(stripHtml(input))));
 }
 
 export function normalizeForMatch(input: string): string {

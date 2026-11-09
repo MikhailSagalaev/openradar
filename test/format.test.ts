@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { formatLeadText } from '../src/server/format.ts';
+import { stripFormBoilerplate } from '../src/core/text.ts';
 
 describe('lead text formatting', () => {
+  it('strips application form boilerplate and telephone code chains', () => {
+    const raw = 'Ищем опытного учителя математики.\n\nОтклик на вакансию: Ваше имя Фамилия Телефон +1 +7 +20 +27 +30 +31 +32 +33 +34 +36 Адрес эл. почты Я даю согласие на обработку перс. данных';
+    const cleaned = stripFormBoilerplate(raw);
+    expect(cleaned).toBe('Ищем опытного учителя математики.');
+  });
+
   it('lifts skill hashtags into tags and keeps the sentence', () => {
     const out = formatLeadText('Компания ищет аналитика. Можно удалённо. Требуемые навыки: #senior, #DWH, #OraclePL/SQL.');
     expect(out.tags).toEqual(['senior', 'DWH', 'OraclePL/SQL']);

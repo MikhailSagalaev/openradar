@@ -53,12 +53,17 @@ const SPAM_RULES: SpamRule[] = [
   {
     reason: 'COMMISSION_ONLY',
     pattern:
-      /(не\s+платим\s+(фиксированн[а-я]*|ставк[а-я]*)|оплата\s+(только|строго)?\s*за\s+процент\s+от\s+(продаж|дохода|чека)|пробное\s+задание\s+(бесплатно|за\s+отзыв)|партнерск[а-я]*\s+программ[а-я]*\s+с\s+%\s+от\s+дохода)/iu,
+      /(не\s+платим\s+(фиксированн[а-я]*|ставк[а-я]*)|оплата\s+(только|строго)?\s*за\s+процент\s+от\s+(продаж|дохода|чека)|пробное\s+задание\s+(бесплатно|за\s+отзыв)|партнерск[а-я]*\s+программ[а-я]*\s+с\s+%\s+от\s+дохода|\b\d+%\s*(?:за|от)\s*(?:каждого\s+)?клиента|лидогенератор[а-я]*\s+и\s+партн[её]р|партн[её]р[а-я]*\s+(?:за\s+процент|на\s+разработку\s+за\s+%|за\s+%\s+от\s+клиент)|ищу\s+лидогенератор)/iu,
   },
   {
     reason: 'MICRO_TASKS',
     pattern:
-      /(зарегистрироваться\s+по\s+реферальн|пройти\s+опрос\s+за\s+деньги|скачать\s+приложение\s+за\s+оплату|прием\s+звонков\s+от\s+банков)/iu,
+      /(зарегистрироваться\s+по\s+реферальн|пройти\s+опрос\s+за\s+деньги|скачать\s+приложение\s+за\s+оплату|прием\s+звонков\s+от\s+банков|перейти\s+по\s+ссылке\s+temu|перейти\s+по\s+ссылк[еи].*нового\s+аккаунта|установить\s+приложение\s+за\s+(?:деньги|оплату)|оплата\s+за\s+установку\s+приложени|скачать\s+и\s+оставить\s+отзыв)/iu,
+  },
+  {
+    reason: 'CHANNEL_NOISE',
+    pattern:
+      /(?:channel\s+photo\s+updated|узнать\s+стоимость\s+и\s+условия\s+размещения\s*:?\s*@|по\s+вопросам\s+размещения\s*(?:вакансий|рекламы)\s*:?\s*@|стоимость\s+публикации\s*:?\s*@)/iu,
   },
   {
     reason: 'RESALE_OR_RENTAL',
@@ -270,14 +275,24 @@ export function recalculateVoteScoreAndStatus(
   const S = votes.scam;
   const C = votes.closed;
 
-  // Community sentiment formula:
-  // community = (U - J - 3*S) / (U + J + S + 2)
+  // Community sentiment formula (scam has 4x penalty weight in sentiment):
   const totalVotes = U + J + S + C;
   const denominator = U + J + S + 2;
-  const community = (U - J - 3 * S) / denominator;
+  const community = (U - J - 4 * S) / denominator;
 
   // Score adjustment applies when total vote weight reaches quorum (>= 1.0)
-  const adjustment = totalVotes >= 1.0 ? Math.round(community * 25) : 0;
+  let adjustment = 0;
+  if (totalVotes >= 1.0) {
+    if (S >= 1) {
+      // Direct scam penalty drops score heavily
+      adjustment = Math.round(community * 35) - Math.round(S * 20);
+    } else if (J >= 2 && J > U) {
+      adjustment = Math.round(community * 30);
+    } else {
+      adjustment = Math.round(community * 25);
+    }
+  }
+
   const score = Math.max(0, Math.min(100, Math.round(baseScore + adjustment)));
 
   // Hiding is not decided here: weighted signals (src/hub/rating.ts) set the lead state.
