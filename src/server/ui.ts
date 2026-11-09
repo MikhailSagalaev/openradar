@@ -15,6 +15,7 @@ import { salaryLooksWrong } from '../core/salary-sanity.ts';
 import type { SourcePreset } from '../sources/presets.ts';
 import { ATS_LABELS, ATS_PROVIDERS } from '../sources/ats.ts';
 import { ROLES, roleLabel } from '../research/derive.ts';
+import type { LeadSort } from '../core/store.ts';
 
 export interface AuthDisplay {
   /** GitHub handle when the session belongs to a registered user. */
@@ -2857,9 +2858,10 @@ export function renderLeadsPage(data: LeadsPageData): string {
   };
 
   const sorts: LeadSort[] = query ? ['relevance', 'score', 'new', 'budget'] : ['score', 'new', 'budget'];
+  const sortLabelMap: Record<LeadSort, string> = { new: t.sortNew, score: t.sortScore, budget: t.sortBudget, relevance: t.sortRelevance };
   const sortItems: DropdownItem[] = sorts.map((sort) => ({
     value: sort === (filters.defaultSort ?? 'new') ? '' : sort,
-    label: { new: t.sortNew, score: t.sortScore, budget: t.sortBudget, relevance: t.sortRelevance }[sort],
+    label: sortLabelMap[sort],
     selected: filters.sort === sort,
   }));
   const sortSelect = renderDropdown('sort', t.sortSelectLabel, sortItems, Boolean(filters.sort && filters.sort !== (filters.defaultSort ?? 'new')));
@@ -2869,7 +2871,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
     ...(data.directions ?? ROLES.map((r) => ({ slug: r.slug, label: roleLabel(r.slug, lang) }))).map((d) => ({
       value: d.slug,
       label: d.label,
-      count: d.count,
+      count: 'count' in d ? (d as { count?: number }).count : undefined,
       selected: filters.direction === d.slug,
     })),
   ];

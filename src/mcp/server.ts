@@ -386,7 +386,7 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend): Pr
         leads = leads.filter((lead) => (lead.skills ?? []).some((skill) => wanted.has(skill.toLowerCase())));
       }
       if (grade) {
-        leads = leads.filter((lead) => (lead.grade?.toLowerCase() === grade) || lead.title.toLowerCase().includes(grade));
+        leads = leads.filter((lead) => ((lead as { grade?: string }).grade?.toLowerCase() === grade) || lead.title.toLowerCase().includes(grade));
       }
       if (company) {
         leads = leads.filter((lead) => (lead.company?.toLowerCase().includes(company)) || (lead.author?.toLowerCase().includes(company)));
