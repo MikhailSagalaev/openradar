@@ -105,20 +105,29 @@ hub.observe([{"source": {"platform": "telegram", "channel": "-1001234567890", "v
 
 ## Documentation
 
+Full index of all 29 guides: **[docs/README.md](docs/README.md)**.
+
 | Document | Contents |
 | --- | --- |
-| [GETTING_STARTED.md](docs/GETTING_STARTED_EN.md) | Scenarios: reading the hub, running a node, a server, a parser, sharing with the hub |
-| [PROTOCOL.md](docs/PROTOCOL.md) | radar/2: posts, signatures, merging, tiers, rating, moderation |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | The node pipeline, the score, the data model, HTTP routes |
-| [PARADEDB.md](docs/PARADEDB.md) | High-performance search with ParadeDB (pg_search / Tantivy BM25) |
-| [PLUGINS.md](docs/PLUGINS.md) | Writing a source or sink adapter |
-| [EXTENSION.md](docs/EXTENSION.md) | The browser extension and the market estimate |
-| [BACKUP_AND_RESTORE.md](docs/BACKUP_AND_RESTORE.md) | Backups |
-| [JOBSPY_EXPORT.md](docs/JOBSPY_EXPORT.md) | JobSpy-compatible CSV export for pandas pipelines |
-| [LOCAL_LLM.md](docs/LOCAL_LLM.md) | Running the classifier on ollama / LM Studio |
-| [ROADMAP.md](docs/ROADMAP.md) | Directions, epics and the v1.0 criteria |
-| [BRAND.md](docs/BRAND.md) | Logo and naming |
-| [sdk/python](sdk/python/README.md) | Python SDK |
+| [GETTING_STARTED_EN.md](docs/GETTING_STARTED_EN.md) | 9 step-by-step scenarios: reading the hub, running a node, a server, a parser, sharing with the hub |
+| [MCP.md](docs/MCP.md) | Connecting AI agents (Claude, Cursor, Gemini CLI, VS Code, Codex) to `/mcp` |
+| [SIGNALS.md](docs/SIGNALS.md) | Saved searches with Telegram & HMAC webhook delivery |
+| [PROTOCOL.md](docs/PROTOCOL.md) | `radar/2`: observations, BIP-340 signatures, deduplication, tiers, rating, moderation |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | The node pipeline, lead scoring (0–100), data model, HTTP routes |
+| [PARADEDB.md](docs/PARADEDB.md) | High-performance BM25 search with ParadeDB (`pg_search` / Tantivy) |
+| [QUALITY.md](docs/QUALITY.md) | Feed quality rules, spam filtering, and role vs. tech skill extraction |
+| [DECISIONS.md](docs/DECISIONS.md) | Cascade classifier (direction, workplace arrangement, seniority grade) and human review |
+| [RESEARCH_METHODOLOGY.md](docs/RESEARCH_METHODOLOGY.md) | How the `/research` market pay percentiles and role reports are computed (CC BY 4.0) |
+| [PLUGINS.md](docs/PLUGINS.md) | Writing a source or sink adapter (`pnpm new:connector`) |
+| [EXTENSION.md](docs/EXTENSION.md) | The browser extension, 1-click capture, market pay check, and X-Ray search |
+| [JOBSPY_EXPORT.md](docs/JOBSPY_EXPORT.md) | JobSpy-compatible CSV export (`--source`, `--type`, `--since`) for pandas pipelines |
+| [LOCAL_LLM.md](docs/LOCAL_LLM.md) | Running the classifier and fact extractor on Ollama, LM Studio, or Groq |
+| [BACKUP_AND_RESTORE.md](docs/BACKUP_AND_RESTORE.md) | Database backups and restore |
+| [ROADMAP.md](docs/ROADMAP.md) | Directions, epics, and v1.0 criteria |
+| [BRAND.md](docs/BRAND.md) | Logo and naming guidelines |
+| [integrations/](integrations/README.md) | Ready-to-import n8n workflows (Google Sheets, Slack) |
+| [sdk/python](sdk/python/README.md) | Zero-dependency Python SDK (`HubClient`, `NodeClient`, Telethon/Pyrogram helpers) |
+| [AGENTS.md](AGENTS.md) | Engineering guide & invariants for AI coding agents and contributors |
 
 ## Contributing
 
