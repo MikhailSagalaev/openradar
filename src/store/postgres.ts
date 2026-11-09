@@ -471,7 +471,7 @@ export class PostgresStore implements Store {
           lead.company ?? null,
           lead.companyKey ?? null,
           lead.direction ?? null,
-          lead.workplaceType ?? (lead.isRemote ? 'remote' : 'onsite'),
+          lead.workplaceType ?? (lead.isRemote === true ? 'remote' : lead.isRemote === false ? 'onsite' : null),
         ]
       );
 
@@ -1118,7 +1118,7 @@ export class PostgresStore implements Store {
       // Remote classification: requires is_remote = true or workplace_type = 'remote',
       // or explicit online city / text markers, avoiding blind city IS NULL assumptions.
       conditions.push(
-        `(is_remote = true OR workplace_type = 'remote' OR city ~* '^(онлайн|удал)' OR (title || ' ' || text) ~* 'удал[её]нн(?:ая|ое|ый|ую)\\s+(?:работ|формат|график)|100%\\s+remote|\\btelecommute\\b|работа\\s+из\\s+дома')`,
+        `(is_remote = true OR workplace_type = 'remote' OR city ~* '^(онлайн|удал)' OR (title || ' ' || text) ~* 'удал[её]нн(?:ая|ое|ый|ую)\\s+(?:работ|формат|график)|100%\\s+remote|\\btelecommute\\b|работа\\s+из\\s+дома' OR (COALESCE(type, 'gig') <> 'job' AND workplace_type IS NULL AND (city IS NULL OR btrim(city) = '')))`,
       );
     }
     if (options.workplaceType) {
@@ -2636,7 +2636,7 @@ export class PostgresStore implements Store {
       // 5. Remote format
       if (facts.remote === true) {
         await client.query(
-          `UPDATE leads SET is_remote = true, workplace_type = COALESCE(workplace_type, 'remote') WHERE id = $1`,
+          `UPDATE leads SET is_remote = true, workplace_type = 'remote' WHERE id = $1`,
           [id],
         );
       }
