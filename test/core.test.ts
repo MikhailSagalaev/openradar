@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cleanTitle, extractBudget, extractBudgetAndCurrency, extractCity, stripTitleNoiseAndBudget } from '../src/core/extract.ts';
 import { prepareRawLead } from '../src/core/prepare.ts';
-import { applyRules, scoreLead } from '../src/core/rules.ts';
+import { applyRules, recalculateVoteScoreAndStatus, scoreLead } from '../src/core/rules.ts';
 import { decodeHtmlEntities, normalizeTechTokens, stripHtml, stripInvisible } from '../src/core/text.ts';
 import { canonicalizeUrl } from '../src/core/url.ts';
 import { makeSource, TEST_NOW } from './helpers.ts';
@@ -223,6 +223,35 @@ describe('rules', () => {
       TEST_NOW,
     );
     expect(applyRules(lead, source, TEST_NOW).reasons).toContain('budget_below:1000');
+  });
+
+  it('rejects referral tasks, commission-only offers and channel noise', () => {
+    const s = makeSource();
+    const temu = prepareRawLead({ sourceId: s.id, title: 'Перейти по ссылке Temu, с нового аккаунта', text: 'Задание для новых пользователей' }, s, TEST_NOW);
+    expect(applyRules(temu, s, TEST_NOW).reasons).toContain('spam:MICRO_TASKS');
+
+    const commission = prepareRawLead({ sourceId: s.id, title: 'Ищу лидогенераторов и партнёров', text: '35% за каждого клиента на разработку сайтов' }, s, TEST_NOW);
+    expect(applyRules(commission, s, TEST_NOW).reasons).toContain('spam:COMMISSION_ONLY');
+
+    const noise = prepareRawLead({ sourceId: s.id, title: 'Channel photo updated', text: 'Новая аватарка канала' }, s, TEST_NOW);
+    expect(applyRules(noise, s, TEST_NOW).reasons).toContain('spam:CHANNEL_NOISE');
+  });
+
+  it('recalculates vote score with heavy penalty on scam and quorum on junk', () => {
+    // Scam vote drops score heavily
+    const scamRes = recalculateVoteScoreAndStatus('new', 85, { useful: 2, junk: 0, scam: 1, closed: 0 });
+    expect(scamRes.score).toBeLessThan(60);
+    expect(scamRes.status).toBe('new');
+
+    // 2+ junk votes exceeding useful drops score
+    const junkRes = recalculateVoteScoreAndStatus('new', 80, { useful: 0, junk: 2, scam: 0, closed: 0 });
+    expect(junkRes.score).toBeLessThan(70);
+    expect(junkRes.status).toBe('new');
+
+    // Useful votes boost score
+    const usefulRes = recalculateVoteScoreAndStatus('new', 70, { useful: 3, junk: 0, scam: 0, closed: 0 });
+    expect(usefulRes.score).toBeGreaterThan(70);
+    expect(usefulRes.status).toBe('new');
   });
 });
 

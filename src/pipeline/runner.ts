@@ -20,7 +20,7 @@ import type { UserTelegramRound } from './user-telegram.ts';
 const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000;
 const BACKGROUND_INTERVAL_MS = 60 * 1000;
 const LIVENESS_INTERVAL_MS = 5 * 60 * 1000;
-const EXTRACTION_INTERVAL_MS = 10 * 60 * 1000;
+const EXTRACTION_INTERVAL_MS = 2 * 60 * 1000;
 const USER_TELEGRAM_CHECK_MS = 5 * 60 * 1000;
 
 export class PollRunner {
@@ -235,14 +235,14 @@ export class PollRunner {
       });
   }
 
-  /** A batch of model extraction every ten minutes, sized to RADAR_EXTRACT_PER_HOUR. */
+  /** A batch of model extraction every two minutes, sized to RADAR_EXTRACT_PER_HOUR. */
   private runExtractionIfDue(): void {
     const env = this.deps.env;
     if (!extractionEnabled(env) || this.extractionRunning || env.RADAR_EXTRACT_PER_HOUR <= 0) return;
     if (Date.now() - this.lastExtractionAt < EXTRACTION_INTERVAL_MS) return;
     this.lastExtractionAt = Date.now();
     this.extractionRunning = true;
-    const limit = Math.max(1, Math.round(env.RADAR_EXTRACT_PER_HOUR / 6));
+    const limit = Math.max(1, Math.min(25, Math.round(env.RADAR_EXTRACT_PER_HOUR / 30)));
     void runModelExtraction({ store: this.deps.store, env, logger: this.deps.logger.child('extract'), fetchImpl: this.deps.fetchImpl }, { limit })
       .then((summary) => {
         if (summary.asked) this.logger.info('model extraction finished', { asked: summary.asked, saved: summary.saved, failed: summary.failed });

@@ -1,5 +1,5 @@
 import type { Store } from '../core/store.ts';
-import { normalizeWhitespace, stripHtml } from '../core/text.ts';
+import { normalizeWhitespace, stripFormBoilerplate, stripHtml } from '../core/text.ts';
 import type { Env, Logger } from '../core/types.ts';
 import { checkRobots } from '../net/robots.ts';
 import { extractPageFacts, hasFacts, isType, jsonLdObjects } from '../research/facts.ts';
@@ -12,7 +12,18 @@ import { factsFill, fetchPage } from './liveness.ts';
  */
 
 /** Boards whose pages carry JobPosting and answer the hub. */
-export const ENRICH_HOSTS = ['hh.ru', 'dribbble.com', 'jobicy.com'];
+export const ENRICH_HOSTS = [
+  'hh.ru',
+  'career.habr.com',
+  'himalayas.app',
+  'freelancehunt.com',
+  'kwork.ru',
+  'youdo.com',
+  'dribbble.com',
+  'jobicy.com',
+  'remotive.com',
+  'arbeitnow.com',
+];
 /** A post longer than this already says enough. */
 export const SHORT_TEXT = 600;
 const PAUSE_MS = 5000;
@@ -29,8 +40,14 @@ export interface EnrichDeps {
 /** The vacancy text of a page, with its paragraphs and lists. */
 export function pageVacancyText(html: string): string | undefined {
   const posting = jsonLdObjects(html).find((node) => isType(node, 'JobPosting'));
-  const description = typeof posting?.description === 'string' ? posting.description : '';
-  const text = normalizeWhitespace(stripHtml(stripHtml(description)));
+  let rawDesc = typeof posting?.description === 'string' ? posting.description : '';
+  if (!rawDesc || rawDesc.length < 80) {
+    const match = html.match(/<(?:div|section|article)[^>]*(?:class|id)=["'][^"']*(?:job-description|vacancy-description|project-description|task-description|description__text|job_description)[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|section|article)>/i);
+    if (match?.[1]) {
+      rawDesc = match[1];
+    }
+  }
+  const text = stripFormBoilerplate(normalizeWhitespace(stripHtml(stripHtml(rawDesc))));
   return text.length >= 100 ? text.slice(0, MAX_TEXT) : undefined;
 }
 

@@ -202,7 +202,7 @@ export interface ExtractionSummary {
  */
 export async function runModelExtraction(
   deps: { store: import('../core/store.ts').Store; env: Env; logger: Logger; fetchImpl?: typeof fetch },
-  options: { limit: number; concurrency?: number; since?: Date; withPayFirst?: boolean },
+  options: { limit: number; concurrency?: number; pauseMs?: number; since?: Date; withPayFirst?: boolean },
 ): Promise<ExtractionSummary> {
   const summary: ExtractionSummary = { asked: 0, saved: 0, failed: 0, ids: [] };
   const store = deps.store;
@@ -210,8 +210,12 @@ export async function runModelExtraction(
   const since = (options.since ?? new Date(Date.now() - 30 * 86_400_000)).toISOString();
   const leads = await store.listLeadsForModel({ limit: options.limit, since, version: MODEL_EXTRACT_VERSION, withPayFirst: options.withPayFirst });
   const queue = [...leads];
+  const pauseMs = options.pauseMs ?? (deps.env.RADAR_EXTRACT_PROVIDER === 'gigachat' ? 0 : 1200);
   const worker = async (): Promise<void> => {
     for (let lead = queue.shift(); lead; lead = queue.shift()) {
+      if (summary.asked > 0 && pauseMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, pauseMs));
+      }
       summary.asked++;
       let facts: ModelFacts | undefined;
       try {
@@ -220,7 +224,7 @@ export async function runModelExtraction(
         if (!(error instanceof GigachatBusyError)) throw error;
         // The posts stay without an answer and come first in the next batch.
         summary.failed++;
-        summary.pausedMs = error.retryAfterMs;
+        summary.pausedMs = Math.max(summary.pausedMs ?? 0, error.retryAfterMs);
         queue.length = 0;
         deps.logger.warn('model extraction paused', { reason: error.message });
         break;
@@ -235,8 +239,8 @@ export async function runModelExtraction(
       summary.ids.push(lead.id);
     }
   };
-  // A personal GigaChat plan serves one request at a time.
-  const concurrency = options.concurrency ?? (deps.env.RADAR_EXTRACT_PROVIDER === 'gigachat' ? 1 : 3);
+  // A personal GigaChat plan serves one request at a time. Concurrency 2 max for safe rate-limiting.
+  const concurrency = options.concurrency ?? (deps.env.RADAR_EXTRACT_PROVIDER === 'gigachat' ? 1 : 2);
   await Promise.all(Array.from({ length: Math.max(1, concurrency) }, worker));
   return summary;
 }

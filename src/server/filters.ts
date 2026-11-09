@@ -34,6 +34,7 @@ export interface FeedFilters {
   it?: boolean;
   budgetRub?: number;
   skill?: string;
+  direction?: string;
   language?: 'ru' | 'en';
   /** The order this page shows without ?sort: the home feed ranks, feeds and APIs stay newest first. */
   defaultSort?: LeadSort;
@@ -47,6 +48,7 @@ export function parseFeedFilters(c: Context, defaultSort: LeadSort = 'new', defa
   const rawRemote = c.req.query('remote');
   const budget = Number(c.req.query('budget'));
   const skill = (c.req.query('skill') ?? '').trim().slice(0, 40);
+  const direction = (c.req.query('direction') ?? '').trim().slice(0, 40);
   const language = c.req.query('language');
   return {
     language: language === 'ru' || language === 'en' ? language : language === 'all' ? undefined : defaultLanguage,
@@ -55,6 +57,7 @@ export function parseFeedFilters(c: Context, defaultSort: LeadSort = 'new', defa
     it: c.req.query('it') === '1' || c.req.query('it') === 'true',
     budgetRub: Number.isFinite(budget) && budget > 0 ? Math.min(Math.round(budget), 100_000_000) : undefined,
     skill: skill || undefined,
+    direction: direction || undefined,
     defaultSort,
     defaultLanguage,
   };
@@ -76,6 +79,7 @@ export function filterOptions(filters: FeedFilters, now: Date = new Date()): Lis
     minBudgetUsd: filters.budgetRub ? rubToUsd(filters.budgetRub) : undefined,
     skill: filters.skill,
     skillsAny: filters.it ? [...IT_SKILLS] : undefined,
+    directionsAny: filters.direction ? [filters.direction] : undefined,
     language: filters.language,
     createdAfter: rankedWindowApplies(filters) ? new Date(now.getTime() - RANKED_WINDOW_MS).toISOString() : undefined,
   };
@@ -89,6 +93,7 @@ export function activeFilterCount(filters: FeedFilters): number {
     Boolean(filters.it),
     Boolean(filters.budgetRub),
     Boolean(filters.skill),
+    Boolean(filters.direction),
     Boolean(filters.language && filters.language !== filters.defaultLanguage),
   ].filter(Boolean).length;
 }

@@ -85,6 +85,23 @@ describe('SEO catalog pages', () => {
     expect(faq).toContain('"@type": "FAQPage"');
     expect(faq).toContain('Это бесплатно?');
 
+    const indexEn = renderCatalogIndex({ baseUrl: 'https://openradar.fun', version: 'test', lang: 'en' });
+    expect(indexEn).toContain('Categories of orders and vacancies');
+    expect(indexEn).toContain('Freelance gigs');
+    expect(indexEn).toContain('Vacancies');
+
+    const catalogPageEn = renderCatalogPage({
+      entry,
+      leads: [],
+      baseUrl: 'https://openradar.fun',
+      version: 'test',
+      lang: 'en',
+    });
+    expect(catalogPageEn).toContain('No posts yet');
+    expect(catalogPageEn).toContain('RSS feed');
+    expect(catalogPageEn).toContain('Overview');
+    expect(catalogPageEn).toContain('Where do gigs on this page come from?');
+
     const llms = renderLlmsTxt('https://openradar.fun');
     expect(llms).toMatch(/^# openradar/);
     expect(llms).toContain('https://openradar.fun/catalog/vakansii-python');

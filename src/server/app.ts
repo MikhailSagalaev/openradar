@@ -37,7 +37,7 @@ import { TelegramAuthService } from './tg-auth.ts';
 import { sourceState } from '../core/source-health.ts';
 import { LABEL_VERDICTS, scoreSource } from '../core/source-quality.ts';
 import { REVIEW_ISSUES, isReviewVerdict, pickBucket, reviewConsensus, type ReviewIssue } from '../core/reviews.ts';
-import { roleDef, roleLabel } from '../research/derive.ts';
+import { roleDef, roleLabel, ROLES } from '../research/derive.ts';
 import { scoreDecisions } from '../core/decisions.ts';
 import { assertSafeUrl } from '../core/ssrf.ts';
 import { robotsFor } from '../pipeline/robots-audit.ts';
@@ -1175,6 +1175,29 @@ export function createApp(runtime: Runtime): Hono {
     return items;
   };
 
+  let directionsCache: { at: number; items: Array<{ slug: string; count: number }> } | undefined;
+  const popularDirections = async (lang: SupportedLang): Promise<Array<{ slug: string; label: string; count?: number }>> => {
+    if (directionsCache && Date.now() - directionsCache.at < 10 * 60_000) {
+      return directionsCache.items.map((i) => ({ slug: i.slug, label: roleLabel(i.slug, lang), count: i.count || undefined }));
+    }
+    const recent = await runtime.store.getLeadsForFeed({
+      limit: 2000,
+      createdAfter: new Date(Date.now() - 14 * 24 * 3600_000).toISOString(),
+    });
+    const counts = new Map<string, number>();
+    for (const lead of recent) {
+      if (lead.direction) {
+        counts.set(lead.direction, (counts.get(lead.direction) ?? 0) + 1);
+      }
+    }
+    const items = ROLES.map((r) => ({
+      slug: r.slug,
+      count: counts.get(r.slug) ?? 0,
+    })).sort((a, b) => b.count - a.count);
+    directionsCache = { at: Date.now(), items };
+    return items.map((i) => ({ slug: i.slug, label: roleLabel(i.slug, lang), count: i.count || undefined }));
+  };
+
   // Public feeds: generous per-IP limits, so a scraper loop cannot pin the database.
   // Limiters count in process memory, so each process (and each app instance) keeps its own buckets.
   const feedLimit = rateLimit({ windowMs: 60_000, max: runtime.env.RADAR_FEED_RATE_PER_MIN });
@@ -1232,9 +1255,9 @@ export function createApp(runtime: Runtime): Hono {
     const rawType = (c.req.query('type') ?? '').trim();
     const type: LeadType | undefined = rawType === 'job' || rawType === 'gig' ? rawType : undefined;
     const query = (c.req.query('q') ?? '').trim();
-    // The first screen ranks by quality; «Сначала новые» is one click away.
-    // …in the interface's market: a Russian page opens with Russian leads, «Любой язык» is one click away.
-    const filters = parseFeedFilters(c, 'score', lang === 'ru' ? 'ru' : undefined);
+    // The first screen ranks by quality; search queries rank by BM25 relevance.
+    const defaultSort = query ? 'relevance' : 'score';
+    const filters = parseFeedFilters(c, defaultSort, lang === 'ru' ? 'ru' : undefined);
     const page = Math.max(1, Math.min(Math.floor(Number(c.req.query('page')) || 1), 100));
     const pageSize = 50;
 
@@ -1278,6 +1301,7 @@ export function createApp(runtime: Runtime): Hono {
         hasMore,
         partialMatch,
         popularSkills: await popularSkills(),
+        directions: await popularDirections(lang),
         query,
         status,
         type: type ?? '',
@@ -1367,6 +1391,18 @@ export function createApp(runtime: Runtime): Hono {
       shownType: lead.type, shownDirection: lead.direction,
       bucket: bucket === 'random' || bucket === 'doubt' || bucket === 'control' ? bucket : undefined,
     });
+    const voteSignal: VoteSignal | undefined =
+      form.verdict === 'suspicious' ? 'scam' :
+      form.verdict === 'not_work' ? 'junk' :
+      form.verdict === 'closed' ? 'closed' : undefined;
+    if (voteSignal) {
+      try {
+        const voteRes = await runtime.store.recordUserVote?.(id, user.id, voteSignal);
+        if (voteRes) await recordWebSignal(runtime, id, user.id, voteRes.myVote ?? null);
+      } catch (err) {
+        runtime.logger.warn('review vote reflection failed', { id, error: String(err) });
+      }
+    }
     const direction = one(form.c);
     return c.redirect(`/review?last=${encodeURIComponent(id)}${direction ? `&c=${encodeURIComponent(direction)}` : ''}`);
   });
@@ -1727,6 +1763,21 @@ export function createApp(runtime: Runtime): Hono {
     const title = typeof body.title === 'string' ? body.title.trim() : '';
     const text = typeof body.text === 'string' ? body.text.trim() : '';
     const url = typeof body.url === 'string' ? body.url.trim() : '';
+    if (url) {
+      if (!/^https?:\/\//i.test(url)) return c.redirect('/submit');
+      try {
+        const parsed = new URL(url);
+        const host = parsed.hostname.toLowerCase();
+        if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host.endsWith('.local') || host.includes('openradar.fun')) {
+          return c.redirect('/submit');
+        }
+        if (parsed.pathname.includes('/resume/') || parsed.pathname.includes('/resumes/')) {
+          return c.redirect('/submit');
+        }
+      } catch {
+        return c.redirect('/submit');
+      }
+    }
     const rawType = typeof body.leadType === 'string' ? body.leadType.trim() : '';
     const type: LeadType = rawType === 'job' || rawType === 'gig' ? rawType : 'gig';
     const author = typeof body.author === 'string' ? body.author.trim() : undefined;
@@ -2398,6 +2449,25 @@ export function createApp(runtime: Runtime): Hono {
         const lead = await runtime.store.getLead(id);
         return lead && viewerCanSeeLead(viewer, lead, runtime.access) ? projectContacts(lead, viewer) : null;
       },
+      submitLead: async (args) => {
+        if (!agent) {
+          throw new Error('Submitting leads via MCP requires a personal agent token (Authorization: Bearer mcp_...)');
+        }
+        const outcome = await submitForUser(agent, args as Record<string, unknown>);
+        return {
+          ok: outcome.status === 200 && Boolean(outcome.json.ok),
+          id: (outcome.json.leadId as string) ?? undefined,
+          status: String(outcome.json.status ?? ''),
+        };
+      },
+      voteLead: async (id, verdict) => {
+        if (!agent) {
+          throw new Error('Voting via MCP requires a personal agent token (Authorization: Bearer mcp_...)');
+        }
+        const result = await runtime.store.recordUserVote?.(id, agent.id, verdict as VoteSignal);
+        if (result) await recordWebSignal(runtime, id, agent.id, result.myVote ?? null);
+        return { ok: Boolean(result), myVote: result?.myVote ?? undefined };
+      },
     });
     if (resp === null) return c.body(null, 202);
     return c.json(resp);
@@ -2559,6 +2629,26 @@ export function createApp(runtime: Runtime): Hono {
     if (!title && !text) return { status: 400, json: { error: 'title_or_text_required' } };
 
     const url = asString(body.url);
+    if (url) {
+      if (!/^https?:\/\//i.test(url)) {
+        return { status: 400, json: { error: 'invalid_url_protocol' } };
+      }
+      try {
+        const parsed = new URL(url);
+        const host = parsed.hostname.toLowerCase();
+        if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host.endsWith('.local')) {
+          return { status: 400, json: { error: 'invalid_url_host' } };
+        }
+        if (host.includes('openradar.fun')) {
+          return { status: 400, json: { error: 'internal_url_not_allowed' } };
+        }
+        if (parsed.pathname.includes('/resume/') || parsed.pathname.includes('/resumes/')) {
+          return { status: 400, json: { error: 'resume_urls_not_allowed' } };
+        }
+      } catch {
+        return { status: 400, json: { error: 'malformed_url' } };
+      }
+    }
     const rawType = asString(body.type);
     const type: LeadType = rawType === 'job' || rawType === 'gig' ? rawType : 'gig';
 
@@ -3038,6 +3128,13 @@ export function createApp(runtime: Runtime): Hono {
     return c.html(renderIndexPageEn({ index, baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime) }));
   });
   app.get('/en/research/methodology', async (c) => c.html(renderMethodologyPageEn({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime) })));
+  app.get('/en/research/roles/:slug', async (c) => {
+    const slug = c.req.param('slug');
+    const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+    const detail = report.jobs.roles.find((r) => r.slug === slug);
+    if (!detail) return c.html(renderNotFound(VERSION, 'en', await getAuthDisplay(c, runtime)), 404);
+    return c.html(renderRolePage({ detail, report, baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime), lang: 'en' }));
+  });
   app.get('/en/research/:period{[0-9]{4}-[0-9]{2}}', async (c) => {
     const report = await monthSnapshot(runtime.store, c.req.param('period'));
     if (!report) return c.html(renderNotFound(VERSION), 404);
@@ -3057,10 +3154,13 @@ export function createApp(runtime: Runtime): Hono {
     });
   });
   app.get('/research/roles/:slug', async (c) => {
+    const slug = c.req.param('slug');
+    const english = toEnglish(c, `/research/roles/${slug}`);
+    if (english) return english;
     const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
-    const detail = report.jobs.roles.find((r) => r.slug === c.req.param('slug'));
-    if (!detail) return c.html(renderNotFound(VERSION), 404);
-    return c.html(renderRolePage({ detail, report, baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime) }));
+    const detail = report.jobs.roles.find((r) => r.slug === slug);
+    if (!detail) return c.html(renderNotFound(VERSION, resolveLang(c), await getAuthDisplay(c, runtime)), 404);
+    return c.html(renderRolePage({ detail, report, baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c) }));
   });
   app.get('/research/:period{[0-9]{4}-[0-9]{2}(\.json)?}', async (c) => {
     const param = c.req.param('period');

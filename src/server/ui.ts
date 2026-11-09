@@ -14,6 +14,7 @@ import type { SourceRobots } from '../pipeline/robots-audit.ts';
 import { salaryLooksWrong } from '../core/salary-sanity.ts';
 import type { SourcePreset } from '../sources/presets.ts';
 import { ATS_LABELS, ATS_PROVIDERS } from '../sources/ats.ts';
+import { ROLES, roleLabel } from '../research/derive.ts';
 
 export interface AuthDisplay {
   /** GitHub handle when the session belongs to a registered user. */
@@ -40,6 +41,8 @@ export interface LeadsPageData {
   filters?: FeedFilters;
   /** Most frequent skills of the last week, for search suggestions. */
   popularSkills?: Array<{ name: string; count: number }>;
+  /** Directions/roles with counts for faceted filter. */
+  directions?: Array<{ slug: string; label: string; count?: number }>;
   /** No lead matched the whole query; these match some of its words. */
   partialMatch?: boolean;
   /** 1-based page of the feed and whether another page follows. */
@@ -1247,6 +1250,21 @@ dialog::backdrop {
   padding: 4px;
   overflow-y: auto;
   box-sizing: border-box;
+}
+.dropdown-filter-search {
+  width: 100%;
+  padding: 6px 9px;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+  margin-bottom: 4px;
+  box-sizing: border-box;
+  outline: none;
+}
+.dropdown-filter-search:focus {
+  border-color: var(--line-strong);
 }
 .custom-dropdown-item {
   display: flex;
@@ -2751,7 +2769,7 @@ function runsTable(
 }
 
 export function renderLeadsPage(data: LeadsPageData): string {
-  const { stats, health, leads, query, status, type = '', version, lang = 'ru' } = data;
+  const { stats, health, leads, query = '', status = '', type = '', version, lang = 'ru' } = data;
   const t = getTranslations(lang);
   const admin = data.isAdmin === true;
   const sourceById = new Map(health.map((item) => [item.source.id, item.source]));
@@ -2786,6 +2804,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
       sort: filters.sort === (filters.defaultSort ?? 'new') ? undefined : filters.sort,
       budget: filters.budgetRub ? String(filters.budgetRub) : undefined,
       skill: filters.skill,
+      direction: filters.direction,
       language: filters.language === filters.defaultLanguage ? undefined : (filters.language ?? 'all'),
       remote: filters.remote ? '1' : undefined,
       it: filters.it ? '1' : undefined,
@@ -2810,10 +2829,11 @@ export function renderLeadsPage(data: LeadsPageData): string {
     selected: boolean;
   }
 
-  const renderDropdown = (name: string, ariaLabel: string, items: DropdownItem[], isFilterActive?: boolean): string => {
+  const renderDropdown = (name: string, ariaLabel: string, items: DropdownItem[], isFilterActive?: boolean, searchable?: boolean): string => {
     const selectedItem = items.find((i) => i.selected) ?? items[0];
     const active = isFilterActive ?? Boolean(selectedItem && selectedItem.value !== '' && selectedItem.value !== 'all');
     const triggerLabel = selectedItem ? (selectedItem.displayLabel ?? selectedItem.label) : '';
+    const needsSearch = searchable ?? (items.length > 8);
 
     return `<div class="custom-dropdown" data-name="${escapeHtml(name)}">
       <select name="${escapeHtml(name)}" class="native-filter-select sr-only" tabindex="-1" aria-hidden="true" onchange="this.form.submit()">
@@ -2824,8 +2844,9 @@ export function renderLeadsPage(data: LeadsPageData): string {
         <svg class="custom-dropdown-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
       </button>
       <div class="custom-dropdown-menu" role="listbox" style="display:none">
+        ${needsSearch ? `<input type="search" class="dropdown-filter-search" placeholder="${lang === 'en' ? 'Search...' : 'Поиск...'}" autocomplete="off">` : ''}
         ${items.map((i) => `
-          <button type="button" class="custom-dropdown-item${i.selected ? ' selected' : ''}" role="option" aria-selected="${i.selected}" data-value="${escapeHtml(i.value)}">
+          <button type="button" class="custom-dropdown-item${i.selected ? ' selected' : ''}" role="option" aria-selected="${i.selected}" data-value="${escapeHtml(i.value)}" data-label="${escapeHtml(i.label)}">
             <span class="custom-dropdown-item-text">${escapeHtml(i.label)}</span>
             ${i.count !== undefined ? `<span class="custom-dropdown-count">${i.count}</span>` : ''}
             ${i.selected ? `<svg class="check-svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>` : ''}
@@ -2835,12 +2856,24 @@ export function renderLeadsPage(data: LeadsPageData): string {
     </div>`;
   };
 
-  const sortItems: DropdownItem[] = (['score', 'new', 'budget'] as const).map((sort) => ({
+  const sorts: LeadSort[] = query ? ['relevance', 'score', 'new', 'budget'] : ['score', 'new', 'budget'];
+  const sortItems: DropdownItem[] = sorts.map((sort) => ({
     value: sort === (filters.defaultSort ?? 'new') ? '' : sort,
-    label: { new: t.sortNew, score: t.sortScore, budget: t.sortBudget }[sort],
+    label: { new: t.sortNew, score: t.sortScore, budget: t.sortBudget, relevance: t.sortRelevance }[sort],
     selected: filters.sort === sort,
   }));
   const sortSelect = renderDropdown('sort', t.sortSelectLabel, sortItems, Boolean(filters.sort && filters.sort !== (filters.defaultSort ?? 'new')));
+
+  const directionItems: DropdownItem[] = [
+    { value: '', label: t.directionAny, selected: !filters.direction },
+    ...(data.directions ?? ROLES.map((r) => ({ slug: r.slug, label: roleLabel(r.slug, lang) }))).map((d) => ({
+      value: d.slug,
+      label: d.label,
+      count: d.count,
+      selected: filters.direction === d.slug,
+    })),
+  ];
+  const directionSelect = renderDropdown('direction', t.directionSelectLabel, directionItems, Boolean(filters.direction), true);
 
   const budgetItems: DropdownItem[] = [
     { value: '', label: t.budgetAny, selected: !filters.budgetRub },
@@ -2877,7 +2910,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
       selected: filters.skill?.toLowerCase() === item.name.toLowerCase(),
     })),
   ];
-  const skillSelect = renderDropdown('skill', t.skillSelectLabel, skillDropdownItems, Boolean(filters.skill));
+  const skillSelect = renderDropdown('skill', t.skillSelectLabel, skillDropdownItems, Boolean(filters.skill), true);
 
   const languageDropdownItems: DropdownItem[] = ([['all', t.langAny], ['ru', t.langRu], ['en', t.langEn]] as const).map(([value, label]) => ({
     value: (value === 'all' ? undefined : value) === filters.defaultLanguage ? '' : value,
@@ -2902,10 +2935,10 @@ export function renderLeadsPage(data: LeadsPageData): string {
   // On phones the filters fold under one button unless some are set (see the script below).
   const activeCount = activeFilterCount(filters);
   const filterBar = `<details class="filters" id="feed-filters"${hasActiveFilters(filters) ? ' open' : ''}><summary class="filters-toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>${escapeHtml(t.filtersTitle)}${activeCount ? `<span class="filters-count">${activeCount}</span>` : ''}<svg class="filters-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div class="filter-bar">
-    ${sortSelect}${budgetSelect}${skillSelect}${languageSelect}
+    ${sortSelect}${directionSelect}${budgetSelect}${skillSelect}${languageSelect}
     <label class="filter-check${filters.it ? ' active' : ''}"><input type="checkbox" name="it" value="1"${filters.it ? ' checked' : ''} onchange="this.form.submit()">${escapeHtml(t.itOnly)}</label>
     <label class="filter-check${filters.remote ? ' active' : ''}"><input type="checkbox" name="remote" value="1"${filters.remote ? ' checked' : ''} onchange="this.form.submit()">${escapeHtml(t.remoteOnly)}</label>
-    ${hasActiveFilters(filters) ? `<a class="filter-reset" href="${escapeHtml(hrefWith({ sort: undefined, budget: undefined, skill: undefined, language: undefined, remote: undefined, it: undefined }))}">${escapeHtml(t.resetFilters)}</a>` : ''}
+    ${hasActiveFilters(filters) ? `<a class="filter-reset" href="${escapeHtml(hrefWith({ sort: undefined, direction: undefined, budget: undefined, skill: undefined, language: undefined, remote: undefined, it: undefined }))}">${escapeHtml(t.resetFilters)}</a>` : ''}
     ${followControl}
     <a class="filter-rss" href="${escapeHtml(rssHref)}" target="_blank" rel="noopener">RSS</a>
   </div></details>
@@ -3102,6 +3135,12 @@ ${POLL_SCRIPT}
         if (!isOpen) {
           menu.style.display = 'block';
           trigger.setAttribute('aria-expanded', 'true');
+          const searchInput = menu.querySelector('.dropdown-filter-search');
+          if (searchInput instanceof HTMLInputElement) {
+            searchInput.value = '';
+            menu.querySelectorAll('.custom-dropdown-item').forEach((it) => { if (it instanceof HTMLElement) it.style.display = ''; });
+            setTimeout(() => searchInput.focus(), 10);
+          }
         }
       }
       return;
@@ -3122,6 +3161,22 @@ ${POLL_SCRIPT}
     if (!(e.target instanceof Element && e.target.closest('.custom-dropdown'))) {
       document.querySelectorAll('.custom-dropdown-menu').forEach((m) => { if (m instanceof HTMLElement) m.style.display = 'none'; });
       document.querySelectorAll('.custom-dropdown-btn').forEach((b) => { b.setAttribute('aria-expanded', 'false'); });
+    }
+  });
+
+  document.addEventListener('input', (e) => {
+    const search = e.target instanceof Element ? e.target.closest('.dropdown-filter-search') : null;
+    if (search instanceof HTMLInputElement) {
+      const query = search.value.trim().toLowerCase();
+      const menu = search.closest('.custom-dropdown-menu');
+      if (menu) {
+        menu.querySelectorAll('.custom-dropdown-item').forEach((item) => {
+          if (item instanceof HTMLElement) {
+            const text = item.getAttribute('data-label') || item.textContent || '';
+            item.style.display = (!query || text.toLowerCase().includes(query)) ? '' : 'none';
+          }
+        });
+      }
     }
   });
 
@@ -3548,17 +3603,19 @@ function renderPublicSources(data: SourcesPageData, health: SourceHealth[]): str
 
 /** Russian-language boards; the rest of the boards are foreign. */
 const RU_PRESETS = new Set(['fl-all', 'habr-career', 'kwork-all', 'trudvsem-remote', 'hh-it', 'hh-remote-project', 'freelancehunt', 'getmatch']);
-const CATALOG_GROUPS: Array<{ title: string; test: (preset: SourcePreset) => boolean }> = [
-  { title: 'Российские биржи и вакансии', test: (preset) => RU_PRESETS.has(preset.id) },
-  { title: 'Зарубежные доски', test: (preset) => !RU_PRESETS.has(preset.id) && preset.kind !== 'ats' },
-  { title: 'Карьерные страницы компаний', test: (preset) => preset.kind === 'ats' },
+const CATALOG_GROUPS: Array<{ titleRu: string; titleEn: string; test: (preset: SourcePreset) => boolean }> = [
+  { titleRu: 'Российские биржи и вакансии', titleEn: 'Russian boards and vacancies', test: (preset) => RU_PRESETS.has(preset.id) },
+  { titleRu: 'Зарубежные доски', titleEn: 'International boards', test: (preset) => !RU_PRESETS.has(preset.id) && preset.kind !== 'ats' },
+  { titleRu: 'Карьерные страницы компаний', titleEn: 'Company career pages', test: (preset) => preset.kind === 'ats' },
 ];
 
 /** Ready-made platforms: what each one is and whether this node already reads it. */
 export function renderSourceCatalogPage(data: SourceCatalogPageData): string {
+  const lang = data.lang ?? 'ru';
+  const ru = lang !== 'en';
   const missing = data.items.filter((item) => !item.sourceId).length;
   const groups = CATALOG_GROUPS.map((group) => ({
-    title: group.title,
+    title: ru ? group.titleRu : group.titleEn,
     items: data.items.filter((item) => group.test(item.preset)),
   })).filter((group) => group.items.length);
   const card = (item: SourceCatalogPageData['items'][number]): string => `<div class="catalog-card">
@@ -3568,20 +3625,20 @@ export function renderSourceCatalogPage(data: SourceCatalogPageData): string {
       <p class="catalog-card-desc">${escapeHtml(item.preset.description)}</p>
     </div>
     <div class="catalog-card-side">${item.sourceId
-      ? `<a class="btn ghost" href="/sources/${escapeHtml(item.sourceId)}">${item.enabled ? 'Подключено' : 'Выключено'}</a>`
-      : `<form method="post" action="/sources/catalog/${escapeHtml(item.preset.id)}"><button class="btn" type="submit">Подключить</button></form>`}</div>
+      ? `<a class="btn ghost" href="/sources/${escapeHtml(item.sourceId)}">${item.enabled ? (ru ? 'Подключено' : 'Connected') : (ru ? 'Выключено' : 'Off')}</a>`
+      : `<form method="post" action="/sources/catalog/${escapeHtml(item.preset.id)}"><button class="btn" type="submit">${ru ? 'Подключить' : 'Connect'}</button></form>`}</div>
   </div>`;
   const body = `
-<a class="back" href="/sources">← Источники</a>
+<a class="back" href="/sources">← ${ru ? 'Источники' : 'Sources'}</a>
 <div class="page-head">
   <div>
-    <h1>Каталог площадок</h1>
-    <p class="muted small">Готовые настройки проверенных бирж и досок. Подключённая площадка становится источником этого узла и опрашивается сразу.</p>
+    <h1>${ru ? 'Каталог площадок' : 'Platform catalog'}</h1>
+    <p class="muted small">${ru ? 'Готовые настройки проверенных бирж и досок. Подключённая площадка становится источником этого узла и опрашивается сразу.' : 'Preconfigured settings for vetted boards and job sites. A connected platform becomes a source of this node and is polled immediately.'}</p>
   </div>
-  ${missing ? `<div class="actions"><form method="post" action="/sources/presets"><button class="btn ghost" type="submit">Подключить все (${missing})</button></form></div>` : ''}
+  ${missing ? `<div class="actions"><form method="post" action="/sources/presets"><button class="btn ghost" type="submit">${ru ? `Подключить все (${missing})` : `Connect all (${missing})`}</button></form></div>` : ''}
 </div>
 ${groups.map((group) => `<section><h2>${escapeHtml(group.title)}</h2><div class="catalog-grid">${group.items.map(card).join('')}</div></section>`).join('')}`;
-  return layout({ title: 'Каталог площадок', version: data.version, active: 'sources', body, auth: data.auth, lang: data.lang });
+  return layout({ title: ru ? 'Каталог площадок' : 'Platform catalog', version: data.version, active: 'sources', body, auth: data.auth, lang: data.lang });
 }
 
 export function renderSourcesPage(data: SourcesPageData): string {
@@ -4800,24 +4857,24 @@ export function renderSubmitPage(data: SubmitPageData): string {
 
     <div class="field">
       <label for="title-input">${escapeHtml(t.titleLabel)}</label>
-      <input id="title-input" name="title" required placeholder="Например, Разработчик веб-интерфейсов">
+      <input id="title-input" name="title" required placeholder="${lang === 'en' ? 'e.g. Senior Frontend Developer' : 'Например, Разработчик веб-интерфейсов'}">
     </div>
 
     <div class="grid">
       <div class="field">
         <label for="author-input">${escapeHtml(t.authorLabel)}</label>
-        <input id="author-input" name="author" placeholder="Компания или заказчик">
+        <input id="author-input" name="author" placeholder="${lang === 'en' ? 'Company or client name' : 'Компания или заказчик'}">
       </div>
       <div class="field">
         <label for="category-input">${escapeHtml(t.categoryLabel)}</label>
-        <input id="category-input" name="category" placeholder="Например: Разработка и IT, Дизайн, Маркетинг...">
+        <input id="category-input" name="category" placeholder="${lang === 'en' ? 'e.g. Development & IT, Design, Marketing...' : 'Например: Разработка и IT, Дизайн, Маркетинг...'}">
       </div>
     </div>
 
     <div class="grid">
       <div class="field">
         <label for="city-input">${escapeHtml(t.locationLabel)}</label>
-        <input id="city-input" name="city" placeholder="Москва, Ставрополь или Удалённо">
+        <input id="city-input" name="city" placeholder="${lang === 'en' ? 'Remote, London, Berlin...' : 'Москва, Ставрополь или Удалённо'}">
       </div>
       <div class="field" style="display:flex;align-items:center;padding-top:20px">
         <label class="radio-label" style="font-size:13px;cursor:pointer">
@@ -4830,7 +4887,7 @@ export function renderSubmitPage(data: SubmitPageData): string {
     <div class="grid">
       <div class="field">
         <label for="budget-input">${escapeHtml(t.budgetLabel)}</label>
-        <input id="budget-input" name="budget" type="number" placeholder="Например, 150000">
+        <input id="budget-input" name="budget" type="number" placeholder="${lang === 'en' ? 'e.g. 150000' : 'Например, 150000'}">
       </div>
       <div class="field">
         <label for="currency-input">${escapeHtml(t.currencyLabel)}</label>
@@ -4845,7 +4902,7 @@ export function renderSubmitPage(data: SubmitPageData): string {
 
     <div class="field">
       <label for="text-input">${escapeHtml(t.descLabel)}</label>
-      <textarea id="text-input" name="text" rows="8" required placeholder="Описание вакансии или проекта..." style="width:100%;resize:vertical"></textarea>
+      <textarea id="text-input" name="text" rows="8" required placeholder="${lang === 'en' ? 'Vacancy or order description...' : 'Описание вакансии или проекта...'}" style="width:100%;resize:vertical"></textarea>
     </div>
 
     <div style="display:flex;align-items:center;justify-content:space-between;padding-top:16px;margin-top:12px">
@@ -4883,7 +4940,7 @@ export function renderSubmitPage(data: SubmitPageData): string {
     const raw = (manualUrl || urlInput.value || '').trim();
     if (!raw || fetching) return;
     if (!/^https?:\\/\\//i.test(raw)) {
-      fetchStatus.textContent = 'Укажите ссылку, начиная с http:// или https://';
+      fetchStatus.textContent = '${lang === 'en' ? 'Please enter a URL starting with http:// or https://' : 'Укажите ссылку, начиная с http:// или https://'}';
       fetchStatus.style.color = 'var(--rose)';
       return;
     }
@@ -4924,10 +4981,10 @@ export function renderSubmitPage(data: SubmitPageData): string {
       if (Array.isArray(p.skills) && p.skills.length) skillsInput.value = p.skills.join(', ');
       if (p.text) textInput.value = p.text;
 
-      fetchStatus.textContent = 'Данные успешно загружены.';
+      fetchStatus.textContent = '${lang === 'en' ? 'Data fetched successfully.' : 'Данные успешно загружены.'}';
       fetchStatus.style.color = 'var(--emerald)';
     } catch (err) {
-      fetchStatus.textContent = 'Не удалось извлечь данные: ' + err.message;
+      fetchStatus.textContent = '${lang === 'en' ? 'Failed to fetch data: ' : 'Не удалось извлечь данные: '}' + err.message;
       fetchStatus.style.color = 'var(--rose)';
     } finally {
       fetching = false;
@@ -4962,19 +5019,19 @@ export function renderSubmitPage(data: SubmitPageData): string {
     const text = textInput.value.trim();
 
     if (!url) {
-      submitStatus.textContent = 'Введите URL.';
+      submitStatus.textContent = '${lang === 'en' ? 'Enter a URL.' : 'Введите URL.'}';
       submitStatus.style.color = 'var(--rose)';
       urlInput.focus();
       return;
     }
     if (!title) {
-      submitStatus.textContent = 'Укажите заголовок.';
+      submitStatus.textContent = '${lang === 'en' ? 'Enter a title.' : 'Укажите заголовок.'}';
       submitStatus.style.color = 'var(--rose)';
       titleInput.focus();
       return;
     }
     if (!text) {
-      submitStatus.textContent = 'Укажите описание.';
+      submitStatus.textContent = '${lang === 'en' ? 'Enter a description.' : 'Укажите описание.'}';
       submitStatus.style.color = 'var(--rose)';
       textInput.focus();
       return;
@@ -5016,7 +5073,7 @@ export function renderSubmitPage(data: SubmitPageData): string {
         window.location.href = '/';
       }
     } catch (err) {
-      submitStatus.textContent = 'Ошибка публикации: ' + err.message;
+      submitStatus.textContent = '${lang === 'en' ? 'Publish failed: ' : 'Ошибка публикации: '}' + err.message;
       submitStatus.style.color = 'var(--rose)';
       submitBtn.disabled = false;
     }

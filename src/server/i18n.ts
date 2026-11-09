@@ -117,14 +117,17 @@ export interface Translations {
   sortSelectLabel: string;
   budgetSelectLabel: string;
   skillSelectLabel: string;
+  directionSelectLabel: string;
   langSelectLabel: string;
   closeDialog: string;
   sortNew: string;
   sortScore: string;
   sortBudget: string;
+  sortRelevance: string;
   budgetAny: string;
   budgetFrom: string;
   skillAny: string;
+  directionAny: string;
   remoteOnly: string;
   itOnly: string;
   resetFilters: string;
@@ -300,14 +303,17 @@ export const RU: Translations = {
   sortSelectLabel: 'Сортировка ленты',
   budgetSelectLabel: 'Минимальный бюджет',
   skillSelectLabel: 'Фильтр по навыку',
+  directionSelectLabel: 'Фильтр по направлению',
   langSelectLabel: 'Язык публикаций',
   closeDialog: 'Закрыть окно',
   sortNew: 'Сначала новые',
   sortScore: 'Сначала лучшие',
   sortBudget: 'Сначала дорогие',
+  sortRelevance: 'По релевантности',
   budgetAny: 'Любой бюджет',
   budgetFrom: 'от {n} ₽',
   skillAny: 'Все навыки',
+  directionAny: 'Все направления',
   remoteOnly: 'Только удалённо',
   itOnly: 'Только IT',
   resetFilters: 'Сбросить фильтры',
@@ -478,14 +484,17 @@ export const EN: Translations = {
   sortSelectLabel: 'Feed sort order',
   budgetSelectLabel: 'Minimum budget',
   skillSelectLabel: 'Filter by skill',
+  directionSelectLabel: 'Filter by direction',
   langSelectLabel: 'Publication language',
   closeDialog: 'Close dialog',
   sortNew: 'Newest first',
   sortScore: 'Best first',
   sortBudget: 'Highest budget first',
+  sortRelevance: 'Most relevant',
   budgetAny: 'Any budget',
   budgetFrom: 'from {n} ₽',
   skillAny: 'All skills',
+  directionAny: 'All directions',
   remoteOnly: 'Remote only',
   itOnly: 'IT only',
   resetFilters: 'Reset filters',

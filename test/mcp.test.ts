@@ -82,7 +82,17 @@ describe('MCP server', () => {
   it('lists the tools', async () => {
     const resp = (await handleMcpRequest({ jsonrpc: '2.0', id: 2, method: 'tools/list' }, backend)) as Content;
     expect((resp.result?.tools as unknown[]).length).toBe(MCP_TOOLS.length);
-    expect(MCP_TOOLS.map((t) => t.name)).toEqual(['search_leads', 'get_lead_details', 'get_market_analytics', 'save_search', 'list_saved_searches', 'xray_generate_dorks']);
+    expect(MCP_TOOLS.map((t) => t.name)).toEqual([
+      'search_leads',
+      'get_lead_details',
+      'estimate_compensation',
+      'submit_lead',
+      'vote_lead',
+      'get_market_analytics',
+      'save_search',
+      'list_saved_searches',
+      'xray_generate_dorks',
+    ]);
   });
 
   it('searches by query, skills and minimum budget', async () => {
@@ -161,6 +171,77 @@ describe('MCP server', () => {
 
     const err = await call('xray_generate_dorks', { company: '  ' });
     expect(err.error?.code).toBe(-32602);
+  });
+
+  it('estimates compensation through market estimator', async () => {
+    const res = parsed(await call('estimate_compensation', { title: 'Senior Golang Engineer', type: 'job', skills: ['Golang'] }));
+    expect(res).toHaveProperty('type', 'job');
+    expect(res).toHaveProperty('period', 'month');
+  });
+
+  it('submits leads via submit_lead tool', async () => {
+    let submitted: unknown;
+    const submitBackend: McpBackend = {
+      ...backend,
+      async submitLead(l) {
+        submitted = l;
+        return { ok: true, id: 'new-lead-1', status: 'inserted' };
+      },
+    };
+    const resp = (await handleMcpRequest(
+      { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'submit_lead', arguments: { title: 'New Role', text: 'Work description', type: 'job', budget: 150000 } } },
+      submitBackend,
+    )) as Content;
+    const res = JSON.parse(resp.result!.content![0]!.text);
+    expect(res.ok).toBe(true);
+    expect(res.id).toBe('new-lead-1');
+    expect(submitted).toMatchObject({ title: 'New Role', type: 'job', budget: 150000 });
+  });
+
+  it('casts quality and verification votes via vote_lead', async () => {
+    let voted: unknown;
+    const voteBackend: McpBackend = {
+      ...backend,
+      async voteLead(id, verdict, reason) {
+        voted = { id, verdict, reason };
+        return { ok: true, myVote: verdict };
+      },
+    };
+    const resp = (await handleMcpRequest(
+      { jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'vote_lead', arguments: { id: 'lead-go', verdict: 'useful' } } },
+      voteBackend,
+    )) as Content;
+    const res = JSON.parse(resp.result!.content![0]!.text);
+    expect(res.ok).toBe(true);
+    expect(voted).toEqual({ id: 'lead-go', verdict: 'useful', reason: undefined });
+
+    const badVerdict = await handleMcpRequest(
+      { jsonrpc: '2.0', id: 6, method: 'tools/call', params: { name: 'vote_lead', arguments: { id: 'lead-go', verdict: 'bad_verdict' } } },
+      voteBackend,
+    ) as Content;
+    expect(badVerdict.error?.code).toBe(-32602);
+  });
+
+  it('filters search_leads by company, grade, and has_budget', async () => {
+    const customLeads = [
+      lead({ id: 'l-senior', title: 'Senior Python Dev', grade: 'senior', company: 'Acme Corp', budget: 250000 }),
+      lead({ id: 'l-junior', title: 'Junior Go Dev', grade: 'junior', company: 'Beta LLC' }),
+    ];
+    const customBackend: McpBackend = {
+      ...backend,
+      async listLeads() { return customLeads; },
+    };
+    const search = async (args: Record<string, unknown>) => {
+      const resp = await handleMcpRequest(
+        { jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'search_leads', arguments: args } },
+        customBackend,
+      ) as Content;
+      return JSON.parse(resp.result!.content![0]!.text).results.map((l: Lead) => l.id);
+    };
+
+    expect(await search({ grade: 'senior' })).toEqual(['l-senior']);
+    expect(await search({ company: 'Acme' })).toEqual(['l-senior']);
+    expect(await search({ has_budget: true })).toEqual(['l-senior']);
   });
 
   it('rejects unknown tools and methods', async () => {
