@@ -106,16 +106,29 @@ hub.observe([{"source": {"platform": "telegram", "channel": "-1001234567890", "v
 
 ## Документация
 
+Полный каталог всех 29 руководств: **[docs/README.md](docs/README.md)**.
+
 | Документ | Что внутри |
 | --- | --- |
-| [GETTING_STARTED.md](docs/GETTING_STARTED.md) | Сценарии: читать хаб, свой узел, сервер, парсер, обмен с хабом |
-| [PROTOCOL.md](docs/PROTOCOL.md) | radar/2: посты, подписи, склейка, уровни, рейтинг, модерация |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Конвейер узла, рейтинг заказа, модель данных, HTTP-маршруты |
-| [PARADEDB.md](docs/PARADEDB.md) | Быстрый поиск через ParadeDB (pg_search / Tantivy BM25) |
-| [PLUGINS.md](docs/PLUGINS.md) | Как написать адаптер источника или получателя |
-| [EXTENSION.md](docs/EXTENSION.md) | Расширение для браузера и оценка рынка |
-| [BACKUP_AND_RESTORE.md](docs/BACKUP_AND_RESTORE.md) | Резервные копии |
-| [sdk/python](sdk/python/README.md) | Python SDK |
+| [GETTING_STARTED.md](docs/GETTING_STARTED.md) | 9 сценариев: читать хаб, свой узел, сервер, Telegram-аккаунт, парсер, обмен с хабом, расширение, MCP |
+| [MCP.md](docs/MCP.md) | Подключение ИИ-агентов (Claude, Cursor, Gemini CLI, VS Code, Codex) к `/mcp` |
+| [SIGNALS.md](docs/SIGNALS.md) | Signals: сохранённые поиски с уведомлениями в Telegram и на вебхук |
+| [PROTOCOL.md](docs/PROTOCOL.md) | `radar/2`: посты, BIP-340 подписи, склейка дублей, уровни доступа, рейтинг, модерация |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Конвейер узла, рейтинг заказа (0–100), модель данных, HTTP-маршруты |
+| [PARADEDB.md](docs/PARADEDB.md) | Быстрый BM25-поиск через ParadeDB (`pg_search` / Tantivy) |
+| [QUALITY.md](docs/QUALITY.md) | Правила качества ленты, фильтрация спама и извлечение навыков |
+| [DECISIONS.md](docs/DECISIONS.md) | Каскадный классификатор (направление, формат работы, грейд) и ручная разметка `/review` |
+| [RESEARCH_METHODOLOGY.md](docs/RESEARCH_METHODOLOGY.md) | Методология расчёта зарплат и бюджетов в исследовании `/research` (CC BY 4.0) |
+| [PLUGINS.md](docs/PLUGINS.md) | Как написать адаптер источника (`pnpm new:connector`) или получателя |
+| [EXTENSION.md](docs/EXTENSION.md) | Расширение для браузера, оценка рынка и X-Ray поиск нанимающих менеджеров |
+| [JOBSPY_EXPORT.md](docs/JOBSPY_EXPORT.md) | Выгрузка в JobSpy-совместимый CSV (`--source`, `--type`, `--since`) для pandas |
+| [LOCAL_LLM.md](docs/LOCAL_LLM.md) | Запуск классификатора и извлечения фактов на Ollama, LM Studio или Groq |
+| [BACKUP_AND_RESTORE.md](docs/BACKUP_AND_RESTORE.md) | Резервные копии базы данных и восстановление |
+| [ROADMAP.md](docs/ROADMAP.md) | Дорожная карта, эпики и критерии релиза v1.0 |
+| [BRAND.md](docs/BRAND.md) | Логотипы и правила оформления |
+| [integrations/](integrations/README.md) | Готовые сценарии n8n (Google Таблицы, Slack) |
+| [sdk/python](sdk/python/README.md) | Python SDK без зависимостей (`HubClient`, `NodeClient`, Telethon/Pyrogram) |
+| [AGENTS.md](AGENTS.md) | Памятка по архитектуре и проверкам для ИИ-агентов и разработчиков |
 
 ## Как помочь
 
