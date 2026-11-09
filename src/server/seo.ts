@@ -608,6 +608,7 @@ const ABOUT_EN = `
     <li>Telegram channels with orders and vacancies, public and private.</li>
     <li>Participants: posts added by link, through the <a href="/extension">browser extension</a> and from their own nodes.</li>
   </ul>
+  <p>The public list of connected boards is on the <a href="/sources">sources page</a>.</p>
   <p>The same post found in several places is shown as one card. Closed orders and stale vacancies leave the feed: the server rechecks source pages, and participants mark closed posts.</p>
 
   <h2>Scoring and moderation</h2>
@@ -667,6 +668,7 @@ export function renderAboutPage(options: { baseUrl: string; version: string; aut
     <li>Telegram-каналы с заказами и вакансиями, публичные и закрытые.</li>
     <li>Участники: публикации по ссылке, через <a href="/extension">расширение для браузера</a> и от своих узлов.</li>
   </ul>
+  <p>Публичный список подключённых площадок — на <a href="/sources">странице источников</a>.</p>
   <p>Одна и та же публикация, найденная в разных местах, показывается одной карточкой. Закрытые заказы и устаревшие вакансии убираются из ленты: сервер проверяет страницы источников, а участники отмечают закрытые публикации.</p>
 
   <h2>Оценка и модерация</h2>
@@ -791,6 +793,7 @@ export function renderFaqPage(options: { baseUrl: string; version: string; auth?
 <section class="prose" style="margin-top:0">
   ${faqHtml(SITE_FAQ_EN)}
   <p style="margin-top:20px">No answer here? Read <a href="/about">about the project</a> or <a href="${REPO_URL}/issues" target="_blank" rel="noopener">ask on GitHub</a>.</p>
+  <p>Which boards openradar already reads: the <a href="/sources">sources page</a>.</p>
 </section>`,
       head: `<meta name="description" content="${escapeHtml(descriptionEn)}">
 <link rel="canonical" href="${escapeHtml(baseUrl)}/faq">`,
@@ -806,6 +809,7 @@ export function renderFaqPage(options: { baseUrl: string; version: string; auth?
 <section class="prose" style="margin-top:0">
   ${faqHtml(SITE_FAQ)}
   <p style="margin-top:20px">Не нашли ответ? Прочитайте <a href="/about">о проекте</a> или <a href="${REPO_URL}/issues" target="_blank" rel="noopener">задайте вопрос на GitHub</a>.</p>
+  <p>Какие площадки уже читает openradar — на <a href="/sources">странице источников</a>.</p>
 </section>`;
   return layout({
     auth: options.auth,
@@ -1569,8 +1573,8 @@ export function renderContributePage(options: {
       <li>${ru ? '<b>Стена историй:</b> нашли заказ — <a href="' + REPO_URL + '/issues/new?template=i-found-work.yml" target="_blank" rel="noopener">расскажите</a>, ваша история появится в README.' : '<b>Story wall:</b> found work through openradar? <a href="' + REPO_URL + '/issues/new?template=i-found-work.yml" target="_blank" rel="noopener">Tell the story</a> — it lands in the README.'}</li>
     </ul>
     <p class="muted small">${ru
-      ? 'Не готовы делиться? Подпишитесь на RSS любого запроса — это тоже участие. Правила приёма источников: <a href="/sources">что уже подключено</a>.'
-      : 'Not ready to share? Subscribe to the RSS of any query — that counts too. What is already connected: <a href="/sources">the sources page</a>.'}</p>
+      ? 'Не готовы делиться? Подпишитесь на RSS любого запроса — это тоже участие. Публичный список уже подключённых площадок — на <a href="/sources">странице источников</a>.'
+      : 'Not ready to share? Subscribe to the RSS of any query — that counts too. The public list of connected boards is on the <a href="/sources">sources page</a>.'}</p>
   </section>
   <section class="prose" style="margin-top:14px">
     <h2>${ru ? 'Уровни доступа' : 'Access tiers'}</h2>
@@ -1666,6 +1670,7 @@ export function renderLlmsTxt(baseUrl: string): string {
 - [Лента заказов и вакансий](${baseUrl}/): поиск, фильтры по навыкам, бюджету и удалёнке.
 - [Исследования рынка](${baseUrl}/research): зарплаты в вакансиях и бюджеты заказов — медианы и квартили по направлениям, уровням, языкам, городам и навыкам. Данные открыты (CC BY 4.0): [CSV](${baseUrl}/research/dataset.csv), [JSON](${baseUrl}/research/report.json), [методика](${baseUrl}/research/methodology).
 - [О проекте](${baseUrl}/about): как устроен openradar и откуда публикации.
+- [Источники](${baseUrl}/sources): публичный список площадок, с которых собираются заказы и вакансии.
 - [Вопросы и ответы](${baseUrl}/faq)
 - [Расширение для браузера](${baseUrl}/extension): отправка вакансии с любого сайта и оценка рыночной оплаты.
 - [RSS-лента](${baseUrl}/feed.rss): параметры q (поиск) и type (gig — заказы, job — вакансии).
@@ -1726,6 +1731,8 @@ export function renderSitemapXml(
     { loc: `${baseUrl}/research`, priority: '0.9', lastmod: today, changefreq: 'daily' },
     { loc: `${baseUrl}/research/methodology`, priority: '0.5' },
     ...extraPaths.map((path) => ({ loc: `${baseUrl}${path}`, priority: '0.6', lastmod: today })),
+    // Public list only. Operator routes stay out: /sources/new, /sources/catalog, /sources/*/edit.
+    { loc: `${baseUrl}/sources`, priority: '0.6', lastmod: today, changefreq: 'daily' },
     { loc: `${baseUrl}/about`, priority: '0.5' },
     { loc: `${baseUrl}/faq`, priority: '0.5' },
     { loc: `${baseUrl}/extension`, priority: '0.5' },
