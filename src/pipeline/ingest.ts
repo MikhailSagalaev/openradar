@@ -20,6 +20,7 @@ import type {
 } from '../core/types.ts';
 import type { Store } from '../core/store.ts';
 import type { SinkRegistry } from '../sinks/index.ts';
+import type { ServiceMonitor } from '../core/services.ts';
 
 export interface IngestDeps {
   store: Store;
@@ -31,6 +32,7 @@ export interface IngestDeps {
   fetchImpl?: typeof fetch;
   /** Recent MinHash sketches for merge rule 4 (similar text, no shared contact). */
   similar?: SimilarIndex;
+  services?: ServiceMonitor;
 }
 
 export type IngestStatus = 'inserted' | 'duplicate' | 'rejected' | 'delivered' | 'failed';

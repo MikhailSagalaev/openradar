@@ -55,6 +55,7 @@ export interface Env {
   OPENAI_MODEL: string;
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_CHAT_ID?: string;
+  RADAR_ADMIN_CHAT_ID?: string;
   WEBHOOK_URL?: string;
   WEBHOOK_SECRET?: string;
   RADAR_CONSOLE_SINK: boolean;

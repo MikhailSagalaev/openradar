@@ -1,6 +1,7 @@
 import type { AdminStats } from '../core/store.ts';
 import { escapeHtml } from '../core/text.ts';
 import type { SourceHealth, Stats } from '../core/types.ts';
+import type { ServiceCheck } from '../core/services.ts';
 import type { AnalyticsConfig } from './analytics.ts';
 import type { SupportedLang } from './i18n.ts';
 import { type AuthDisplay, layout } from './ui.ts';
@@ -13,6 +14,7 @@ export interface AdminPageData {
   admin: AdminStats;
   health: SourceHealth[];
   analytics: AnalyticsConfig;
+  services?: ServiceCheck[];
 }
 
 const number = (value: number): string => new Intl.NumberFormat('ru-RU').format(value);
@@ -62,6 +64,25 @@ export function renderAdminPage(data: AdminPageData): string {
     })
     .join('');
 
+  const servicesRows = (data.services ?? [])
+    .map((s) => {
+      const isOk = s.status === 'ok';
+      const isErr = s.status === 'error';
+      const badgeStyle = isOk
+        ? 'background:#e6f4ea;color:#137333;'
+        : isErr
+        ? 'background:#fce8e6;color:#c5221f;'
+        : 'background:#fef7e0;color:#b06000;';
+      const badgeText = isOk ? 'в порядке' : isErr ? 'требует внимания' : 'деградация';
+      return `<tr>
+        <td><strong>${escapeHtml(s.label)}</strong> <span class="muted small">(${escapeHtml(s.name)})</span></td>
+        <td><span style="${badgeStyle}font-weight:600;padding:2px 8px;border-radius:4px;font-size:12px;">${badgeText}</span></td>
+        <td class="small muted">${s.lastChecked ? escapeHtml(s.lastChecked.replace('T', ' ').slice(0, 19)) : '—'}</td>
+        <td class="small ${isErr ? 'text-warn' : 'muted'}">${s.error ? escapeHtml(s.error) : isOk ? 'Запросы выполняются успешно' : '—'}</td>
+      </tr>`;
+    })
+    .join('');
+
   const consoles = [
     analytics.yandexMetrikaId ? ['Яндекс Метрика', `https://metrika.yandex.ru/dashboard?id=${analytics.yandexMetrikaId}`] : undefined,
     analytics.googleAnalyticsId ? ['Google Analytics', 'https://analytics.google.com/analytics/web/'] : undefined,
@@ -85,6 +106,11 @@ export function renderAdminPage(data: AdminPageData): string {
   <table class="admin-table"><thead><tr><th>Источник</th><th class="num">Новых</th><th class="num">Отклонено</th><th>Состояние</th></tr></thead>
   <tbody>${sourceRows}</tbody></table>
 </section>
+${servicesRows ? `<section class="admin-section">
+  <h2>Внешние сервисы и API</h2>
+  <table class="admin-table"><thead><tr><th>Сервис</th><th>Состояние</th><th>Последний опрос</th><th>Детали</th></tr></thead>
+  <tbody>${servicesRows}</tbody></table>
+</section>` : ''}
 <section class="admin-section">
   <h2>Ссылки</h2>
   <div class="admin-links">

@@ -62,6 +62,7 @@ const envSchema = z.object({
   GIGACHAT_OAUTH_URL: z.string().url().default('https://ngw.devices.sberbank.ru:9443/api/v2/oauth'),
   TELEGRAM_BOT_TOKEN: optionalString,
   TELEGRAM_CHAT_ID: optionalString,
+  RADAR_ADMIN_CHAT_ID: optionalString,
   WEBHOOK_URL: z.string().url().optional().or(z.literal('').transform(() => undefined)),
   WEBHOOK_SECRET: optionalString,
   RADAR_CONSOLE_SINK: booleanFromEnv(true),

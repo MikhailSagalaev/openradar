@@ -9,6 +9,7 @@ import { createSourceRegistry, type SourceRegistry } from './sources/index.ts';
 import { MemoryStore } from './store/memory.ts';
 import { PostgresStore } from './store/postgres.ts';
 import { SimilarIndex } from './pipeline/similar.ts';
+import { ServiceMonitor } from './core/services.ts';
 
 export interface Runtime {
   env: Env;
@@ -21,6 +22,8 @@ export interface Runtime {
   access: AccessPolicy;
   /** Recent-sketch index for merge rule 4 (similar text). */
   similar?: SimilarIndex;
+  /** Tracks external services (SubQ, LLM extract, etc.) health and triggers alerts. */
+  services?: ServiceMonitor;
 }
 
 export interface RuntimeOverrides {
@@ -62,6 +65,7 @@ export async function createRuntime(env: Env = loadEnv(), overrides: RuntimeOver
     fetchImpl: overrides.fetchImpl ?? fetch,
     access: accessPolicyFromEnv(env),
     similar: new SimilarIndex(store),
+    services: new ServiceMonitor({ env, fetchImpl: overrides.fetchImpl ?? fetch }),
   };
 }
 

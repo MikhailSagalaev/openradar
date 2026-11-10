@@ -218,6 +218,29 @@ export class PollRunner {
     void runDecisions({ store: this.deps.store, env, logger: this.deps.logger.child('decide'), fetchImpl: fetch }, Math.max(1, Math.round(perHour / 6)))
       .then((summary) => {
         if (summary.asked) this.logger.info('decisions finished', { ...summary });
+        if (this.deps.services) {
+          if (summary.stopped) {
+            const isQuota = summary.stopped === 402;
+            const isAuth = summary.stopped === 401;
+            const isForbidden = summary.stopped === 403;
+            const isRateLimit = summary.stopped === 429;
+            const label = isQuota
+              ? 'HTTP 402 Insufficient credits (баланс исчерпан)'
+              : isAuth
+              ? 'HTTP 401 Unauthorized (недействительный ключ)'
+              : isForbidden
+              ? 'HTTP 403 Forbidden (доступ запрещен)'
+              : isRateLimit
+              ? 'HTTP 429 Too Many Requests (превышен лимит)'
+              : `HTTP ${summary.stopped}`;
+            this.deps.services.record('subq', 'SubQ AI (классификация)', 'error', {
+              error: label,
+              httpStatus: summary.stopped,
+            });
+          } else if (summary.asked > 0 && summary.failed === 0) {
+            this.deps.services.record('subq', 'SubQ AI (классификация)', 'ok');
+          }
+        }
         return applyDecisions({ store: this.deps.store, env, logger: this.deps.logger.child('decide'), fetchImpl: fetch }, 500).then((done) => {
           if (done.hidden || done.closed || done.moved) this.logger.info('decisions applied', { ...done });
           return summary;
@@ -246,6 +269,20 @@ export class PollRunner {
     void runModelExtraction({ store: this.deps.store, env, logger: this.deps.logger.child('extract'), fetchImpl: this.deps.fetchImpl }, { limit })
       .then((summary) => {
         if (summary.asked) this.logger.info('model extraction finished', { asked: summary.asked, saved: summary.saved, failed: summary.failed });
+        if (this.deps.services) {
+          if (summary.pausedMs) {
+            this.deps.services.record('extract', 'LLM (аналитика зарплат)', 'degraded', {
+              error: 'Rate limit / Busy (HTTP 429)',
+              httpStatus: 429,
+            });
+          } else if (summary.asked > 0 && summary.saved > 0) {
+            this.deps.services.record('extract', 'LLM (аналитика зарплат)', 'ok');
+          } else if (summary.asked > 0 && summary.failed === summary.asked) {
+            this.deps.services.record('extract', 'LLM (аналитика зарплат)', 'degraded', {
+              error: 'Запросы к модели завершились ошибкой',
+            });
+          }
+        }
       })
       .catch((error) => {
         this.logger.warn('model extraction failed', { error: error instanceof Error ? error.message : String(error) });

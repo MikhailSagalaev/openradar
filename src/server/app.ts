@@ -990,14 +990,26 @@ export function createApp(runtime: Runtime): Hono {
 
   app.get('/health', async (c) => {
     const stats = await runtime.store.getStats();
+    const services = runtime.services?.all() ?? [];
+    const hasServiceErrors = runtime.services?.hasErrors() ?? false;
     return c.json({
-      ok: true,
+      ok: !hasServiceErrors,
+      status: hasServiceErrors ? 'degraded' : 'ok',
       version: VERSION,
       uptimeSec: Math.round(process.uptime()),
       sources: stats.sources,
       // Disabled sources stay in the count above; this is what is actually polled.
       enabledSources: stats.enabledSources,
       last24h: stats.last24h,
+      services: services.map((s) => ({
+        name: s.name,
+        label: s.label,
+        status: s.status,
+        error: s.error,
+        httpStatus: s.httpStatus,
+        lastChecked: s.lastChecked,
+        lastSuccess: s.lastSuccess,
+      })),
     });
   });
 
@@ -1460,6 +1472,7 @@ export function createApp(runtime: Runtime): Hono {
         stats,
         health,
         admin,
+        services: runtime.services?.all() ?? [],
         analytics: analyticsFromEnv(runtime.env),
       }),
     );

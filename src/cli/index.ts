@@ -107,6 +107,7 @@ function pollDeps(runtime: Runtime): PollDeps {
     fetchImpl: runtime.fetchImpl,
     similar: runtime.similar,
     sources: runtime.sources,
+    services: runtime.services,
   };
 }
 
