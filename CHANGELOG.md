@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.64.0 — 2026-11-10
+
+- **Публичные API аналитики и работодателей (`/api/insights`, `/api/companies/suggest`):** агрегатная сводка по гостевой ленте (трендовые навыки, направления, доля удалёнки/гибрида/офиса, квартили зарплат и бюджетов в USD/RUB, доля AI-вакансий) и автодополнение страниц компаний (`/employers/:key`).
+- **Качество выдачи MCP и классификатора:** исправлено определение `hybrid` при `explicitRemote=false` (включая `híbrido` / `hybride`), убраны ложные срабатывания навыка `Vue` на сертификационные центры `Pearson VUE` и роли `hr` на упоминания `talentos` / `recrutar` в описании компании; в компактной выдаче MCP скрываются аномально низкие зарплаты вакансий (`salaryLooksWrong`), а `get_market_analytics` обогащён метриками `computeInsights`.
+- **Экспорт JobSpy с фильтрами (#57):** `radar export --jobspy` поддерживает `--source <slug>`, `--type job|gig`, `--since 24h|7d|30d|<ISO>`.
+- **Документация и политики к v1.0:** английское руководство `docs/GETTING_STARTED_EN.md` (#56), каталог документации `docs/README.md`, инженерная памятка `AGENTS.md`, журнал источников `docs/SOURCE_INDEXING_LOG.md` (#54, #58), контракт данных `docs/DATA_CONTRACT.md`, политика `docs/TAKEDOWN.md`, манифесты `smithery.yaml` и `glama.json`, а также `/sources` в `sitemap.xml` (#74).
+
 ## 0.63.0
 
 - **Pay is compensation.** Ad spend, Facebook Ads budgets and a client's project budget no longer become the salary. An hourly rate written as PLN/h stays hourly.

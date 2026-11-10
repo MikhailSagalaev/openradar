@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { classifyWorkplace, isRemoteLead } from '../src/core/text.ts';
+import { classifyWorkplace, extractSkills, isRemoteLead } from '../src/core/text.ts';
+import { classifyRole } from '../src/research/derive.ts';
 
 describe('classifyWorkplace', () => {
   it('classifies physical on-site roles as onsite and not remote', () => {
@@ -166,5 +167,30 @@ describe('classifyWorkplace', () => {
     expect(isRemoteLead({ title: 'Разработчик', text: '', isRemote: true })).toBe(true);
     expect(isRemoteLead({ title: 'Дизайнер', text: '', workplaceType: 'hybrid' })).toBe(false);
     expect(isRemoteLead({ title: 'Курьер', text: '' })).toBe(false);
+  });
+  it('keeps hybrid arrangement even when an adapter passes explicitRemote: false', () => {
+    const msEng = classifyWorkplace({
+      title: 'Senior Microsoft Infrastructure Engineer (Oeiras) | Hybrid',
+      city: 'Oeiras',
+      type: 'job',
+      explicitRemote: false,
+    });
+    expect(msEng.workplaceType).toBe('hybrid');
+    expect(msEng.isRemote).toBe(false);
+
+    const ptHybrid = classifyWorkplace({
+      title: 'Consultor de SAP MM/SD',
+      text: 'Disponibilidade para trabalhar num modelo híbrido 2x por semana no Porto.',
+      city: 'Porto',
+      type: 'job',
+      explicitRemote: false,
+    });
+    expect(ptHybrid.workplaceType).toBe('hybrid');
+  });
+
+  it('does not tag Pearson VUE as Vue or company talentos blurbs as HR', () => {
+    const sapText = 'Unimos os nossos talentos em ERP SAP MM/SD. Damos acesso a centro de exames Pearson VUE.';
+    expect(extractSkills('Consultor de SAP MM/SD', sapText)).not.toContain('Vue');
+    expect(classifyRole('job', 'Consultor de SAP MM/SD', sapText)).toBe('other');
   });
 });

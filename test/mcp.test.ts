@@ -244,6 +244,40 @@ describe('MCP server', () => {
     expect(await search({ has_budget: true })).toEqual(['l-senior']);
   });
 
+  it('hides corrupt sub-floor job salaries and marks cityless gigs as remote in MCP output', async () => {
+    const customLeads = [
+      lead({ id: 'l-corrupt-job', type: 'job', title: 'Tecnico de Redes', budget: 50, currency: 'EUR', isRemote: false, city: 'Madeira' }),
+      lead({ id: 'l-gig-remote', type: 'gig', title: 'Build Telegram Bot', budget: 300, currency: 'USD', isRemote: false, city: undefined, workplaceType: undefined }),
+    ];
+    const customBackend: McpBackend = {
+      ...backend,
+      async listLeads() { return customLeads; },
+      async getLeadById(id: string) { return customLeads.find(l => l.id === id); },
+    };
+    const searchResp = await handleMcpRequest(
+      { jsonrpc: '2.0', id: 8, method: 'tools/call', params: { name: 'search_leads', arguments: {} } },
+      customBackend,
+    ) as Content;
+    const results = JSON.parse(searchResp.result!.content![0]!.text).results;
+    const jobRes = results.find((r: Record<string, unknown>) => r.id === 'l-corrupt-job');
+    expect(jobRes.budget).toBeUndefined();
+    expect(jobRes.currency).toBeUndefined();
+
+    const gigRes = results.find((r: Record<string, unknown>) => r.id === 'l-gig-remote');
+    expect(gigRes.where).toBe('remote');
+    expect(gigRes.workplace_type).toBe('remote');
+    expect(gigRes.budget).toBe(300);
+
+    const analyticsResp = await handleMcpRequest(
+      { jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name: 'get_market_analytics', arguments: {} } },
+      customBackend,
+    ) as Content;
+    const analytics = JSON.parse(analyticsResp.result!.content![0]!.text);
+    expect(analytics.workplace).toBeDefined();
+    expect(analytics.directions).toBeDefined();
+    expect(analytics.ai_exposure).toBeDefined();
+  });
+
   it('rejects unknown tools and methods', async () => {
     expect((await call('verify_lead_url', { lead_id: 'lead-go' })).error?.code).toBe(-32601);
     const resp = (await handleMcpRequest({ jsonrpc: '2.0', id: 3, method: 'resources/list' }, backend)) as Content;

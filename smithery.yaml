@@ -1,0 +1,10 @@
+# Smithery MCP configuration for openradar
+startCommand:
+  type: http
+  url: https://openradar.fun/mcp
+  configSchema:
+    type: object
+    properties:
+      personalToken:
+        type: string
+        description: Optional personal AI agent token (mcp_...) from https://openradar.fun/me for early access, saved searches, and submitting leads.

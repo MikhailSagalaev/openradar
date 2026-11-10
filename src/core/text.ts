@@ -165,7 +165,7 @@ export const ONSITE_TEXT_RE =
 
 /** Explicit hybrid work markers (office + remote mix). */
 export const HYBRID_TEXT_RE =
-  /(?:гибрид(?:ный|но|ная|ное)?|hybrid|офис\s*\/\s*удал[её]н|удал[её]нка\s*\/\s*офис|\d\s*(?:дня|дней|днях|дн\.)\s*(?:в\s*офисе|из\s*дома)|выезд\w*\s+в\s+офис|периодическ\w*\s+(?:выезд\w*|посещен\w*)\s+(?:в\s+)?офис)/i;
+  /(?:гибрид(?:ный|но|ная|ное)?|\bhybrid\b|\bh[ií]brido\b|\bhybride\b|офис\s*\/\s*удал[её]н|удал[её]нка\s*\/\s*офис|\d\s*(?:дня|дней|днях|дн\.|x)\s*(?:в\s*офисе|из\s*дома|por\s*semana)|выезд\w*\s+в\s+офис|периодическ\w*\s+(?:выезд\w*|посещен\w*)\s+(?:в\s+)?офис)/i;
 
 /** Explicit positive remote work markers. */
 export const REMOTE_POSITIVE_RE =
@@ -198,19 +198,21 @@ export function classifyWorkplace(lead: {
     }
   }
 
-  // 2. Explicit source indicator (e.g. from structured board fields)
-  if (lead.explicitRemote === false) {
-    return { workplaceType: 'onsite', isRemote: false };
-  }
-
   const hasFalsePositive = REMOTE_FALSE_POSITIVE_RE.test(fullText);
   const hasPositiveRemote = REMOTE_POSITIVE_RE.test(fullText);
   const hasHybrid = HYBRID_TEXT_RE.test(fullText);
   const hasOnsite = ONSITE_TEXT_RE.test(fullText);
   const isCityOnline = Boolean(lead.city && /^(онлайн|удал)/i.test(lead.city));
 
+  // Hybrid takes precedence over boolean explicitRemote=false from adapters that only
+  // distinguish 100% remote (true) from everything else (false).
   if (hasHybrid) {
     return { workplaceType: 'hybrid', isRemote: false };
+  }
+
+  // 2. Explicit source indicator (e.g. from structured board fields)
+  if (lead.explicitRemote === false) {
+    return { workplaceType: 'onsite', isRemote: false };
   }
 
   if (hasOnsite && !hasPositiveRemote) {
@@ -269,7 +271,7 @@ const TECH_SKILL_PATTERNS: Array<[RegExp, string]> = [
   [/\bjavascript\b|\bjs\b/i, 'JavaScript'],
   [/\btypescript\b|\bts\b/i, 'TypeScript'],
   [/\breact\b|react native/i, 'React'],
-  [/\bvue\b/i, 'Vue'],
+  [/(?<!pearson\s)\bvue(?:\.js|js)?\b/i, 'Vue'],
   // A bare «node» is usually a server: «node management».
   [/\bnode\.?js\b|\bnest\.?js\b|\bnode\s+(?:developer|engineer|разработчик)/i, 'Node.js'],
   [/\bphp\b/i, 'PHP'],

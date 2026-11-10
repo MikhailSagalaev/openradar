@@ -136,7 +136,7 @@ export const ROLES: RoleDef[] = [
   { slug: 'fullstack', label: 'Fullstack-разработчик', plural: 'fullstack-разработчики', types: ['job'],
     pattern: rx(`full[- ]?stack|фулстек|фуллстек`) },
   { slug: 'frontend', label: 'Frontend-разработчик', plural: 'frontend-разработчики', types: ['job'],
-    pattern: rx(`front[- ]?end|фронтенд|фронт-енд|верстальщик|${W}react${E}|${W}vue|angular|javascript-разработчик|js-разработчик`) },
+    pattern: rx(`front[- ]?end|фронтенд|фронт-енд|верстальщик|${W}react${E}|(?<!pearson\\s)${W}vue(?:\\.js|js)?${E}|angular|javascript-разработчик|js-разработчик`) },
   { slug: 'embedded', label: 'Embedded-разработчик', plural: 'embedded-разработчики', types: ['job'],
     pattern: rx(`embedded|встраиваем|микроконтрол|${W}плис${E}|fpga|${W}stm32`) },
   { slug: 'backend', label: 'Backend-разработчик', plural: 'backend-разработчики', types: ['job'],
@@ -152,7 +152,7 @@ export const ROLES: RoleDef[] = [
   { slug: 'sales', label: 'Продажи', plural: 'менеджеры по продажам', types: ['job'],
     pattern: rx(`продаж|sales|account manager|account executive|account development|менеджер по работе с клиентами|развити\\p{L}* бизнеса|business development|${W}kam${E}|${W}sdr${E}|${W}bdr${E}|solutions? consult|partnerships?${E}|пресейл|presale|аккаунт`) },
   { slug: 'hr', label: 'HR и рекрутинг', plural: 'HR-специалисты', types: ['job'],
-    pattern: rx(`${W}hr${E}|${W}hrbp${E}|рекрутер|рекрутмент|recruit|sourcer|сорсер|${W}talent|people (?:partner|relations|business)|employer brand|organization development|training & development|подбор\\p{L}* персонала|кадр`) },
+    pattern: rx(`${W}hr${E}|${W}hrbp${E}|рекрутер|рекрутмент|${W}(?:recruiter|recruitment|recruiting|sourcer)${E}|сорсер|${W}talent\\s+(?:acquisition|partner|manager|lead|specialist)|people (?:partner|relations|business)|employer brand|organization development|training & development|подбор\\p{L}* персонала|кадр`) },
   // Orders only: the kinds of work that rarely come as vacancies.
   { slug: 'web', label: 'Сайты', plural: 'веб-разработчики', types: ['gig'],
     pattern: rx(`сайт|лендинг|landing|wordpress|tilda|тильд|битрикс|bitrix|верстк|интернет-магазин|${W}cms${E}|opencart|woocommerce`) },
