@@ -8,11 +8,11 @@ import { fetchText } from './http.ts';
  * to read, without a key. One source holds a list of companies of one system; each poll
  * reads a few of them in turn.
  */
-export type AtsProvider = 'greenhouse' | 'lever' | 'ashby' | 'workable' | 'recruitee' | 'smartrecruiters' | 'pinpoint' | 'bamboohr';
+export type AtsProvider = 'greenhouse' | 'lever' | 'ashby' | 'workable' | 'recruitee' | 'smartrecruiters' | 'pinpoint' | 'bamboohr' | 'personio';
 
-export const ATS_PROVIDERS: AtsProvider[] = ['greenhouse', 'lever', 'ashby', 'workable', 'recruitee', 'smartrecruiters', 'pinpoint', 'bamboohr'];
+export const ATS_PROVIDERS: AtsProvider[] = ['greenhouse', 'lever', 'ashby', 'workable', 'recruitee', 'smartrecruiters', 'pinpoint', 'bamboohr', 'personio'];
 export const ATS_LABELS: Record<AtsProvider, string> = {
-  greenhouse: 'Greenhouse', lever: 'Lever', ashby: 'Ashby', workable: 'Workable', recruitee: 'Recruitee', smartrecruiters: 'SmartRecruiters', pinpoint: 'Pinpoint', bamboohr: 'BambooHR',
+  greenhouse: 'Greenhouse', lever: 'Lever', ashby: 'Ashby', workable: 'Workable', recruitee: 'Recruitee', smartrecruiters: 'SmartRecruiters', pinpoint: 'Pinpoint', bamboohr: 'BambooHR', personio: 'Personio',
 };
 const PROVIDERS = ATS_PROVIDERS;
 const MAX_TEXT = 8000;
@@ -398,6 +398,57 @@ function fromBambooHr(source: SourceRecord, slug: string, name: string | undefin
   });
 }
 
+function xmlTag(block: string, tag: string): string | undefined {
+  const m = block.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i'));
+  if (!m) return undefined;
+  return decodeHtmlEntities(m[1]!.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')).trim() || undefined;
+}
+
+function fromPersonio(source: SourceRecord, slug: string, name: string | undefined, xml: string): RawLead[] {
+  const positions = [...xml.matchAll(/<position>([\s\S]*?)<\/position>/gi)].map((m) => m[1]!);
+  return positions
+    .map((pos): RawLead | undefined => {
+      const id = xmlTag(pos, 'id');
+      const title = xmlTag(pos, 'name');
+      if (!id || !title) return undefined;
+      const company = name ?? xmlTag(pos, 'subcompany') ?? slug;
+      const office = xmlTag(pos, 'office');
+      const department = xmlTag(pos, 'department') ?? xmlTag(pos, 'recruitingCategory');
+      const schedule = xmlTag(pos, 'schedule') ?? xmlTag(pos, 'employmentType');
+      const createdAt = xmlTag(pos, 'createdAt');
+      const descParts: string[] = [];
+      for (const dm of pos.matchAll(/<jobDescription>([\s\S]*?)<\/jobDescription>/gi)) {
+        const dName = xmlTag(dm[1]!, 'name');
+        const dVal = stripHtml(xmlTag(dm[1]!, 'value') ?? '').trim();
+        if (dVal) descParts.push(dName ? `${dName}\n${dVal}` : dVal);
+      }
+      const remote = REMOTE.test(`${title} ${office ?? ''}`);
+      return {
+        sourceId: source.id,
+        type: 'job',
+        externalId: `personio:${slug}:${id}`,
+        url: `https://${slug}.jobs.personio.de/job/${id}`,
+        title,
+        text: text(
+          title,
+          [
+            `Company: ${company}`,
+            office ? `Location: ${office}` : undefined,
+            department ? `Department: ${department}` : undefined,
+            schedule ? `Type: ${schedule}` : undefined,
+          ],
+          descParts.join('\n\n'),
+        ),
+        author: company,
+        city: cityFor(office, company, remote),
+        isRemote: remote,
+        publishedAt: createdAt && !Number.isNaN(Date.parse(createdAt)) ? new Date(createdAt).toISOString() : undefined,
+        raw: { ats: 'personio', board: slug },
+      };
+    })
+    .filter((item): item is RawLead => item !== undefined);
+}
+
 const ENDPOINTS: Record<AtsProvider, (slug: string) => string> = {
   greenhouse: (slug) => `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(slug)}/jobs?content=true`,
   lever: (slug) => `https://api.lever.co/v0/postings/${encodeURIComponent(slug)}?mode=json`,
@@ -408,6 +459,7 @@ const ENDPOINTS: Record<AtsProvider, (slug: string) => string> = {
   smartrecruiters: (slug) => `https://api.smartrecruiters.com/v1/companies/${encodeURIComponent(slug)}/postings?limit=100`,
   pinpoint: (slug) => `https://${encodeURIComponent(slug)}.pinpointhq.com/postings.json`,
   bamboohr: (slug) => `https://${encodeURIComponent(slug)}.bamboohr.com/careers/list`,
+  personio: (slug) => `https://${encodeURIComponent(slug)}.jobs.personio.de/xml?language=en`,
 };
 
 /**
@@ -444,6 +496,7 @@ const PARSERS: Record<AtsProvider, (source: SourceRecord, slug: string, name: st
   smartrecruiters: fromSmartRecruiters,
   pinpoint: fromPinpoint,
   bamboohr: fromBambooHr,
+  personio: fromPersonio,
 };
 
 export const atsSource: SourceAdapter = {

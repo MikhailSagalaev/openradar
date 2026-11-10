@@ -35,3 +35,16 @@
 | **Golang Cafe** (`https://golang.cafe/rss`) | 2026-11-09 | `HTTP/2 429`, `server: Vercel` (`text/html`) | `blocked` | Vercel Security Checkpoint блокирует автоматические запросы к RSS из облачных сетей ([#58](https://github.com/MikhailSagalaev/openradar/issues/58)). |
 | **JustJoin.it** (`https://justjoin.it/api/offers`) | 2026-11-09 | `HTTP/2 404` | `retired` | Неофициальный публичный JSON-эндпоинт v1 `/api/offers` отключён площадкой; новый фронтенд использует внутренние защищённые маршруты ([#54](https://github.com/MikhailSagalaev/openradar/issues/54)). |
 | **Adzuna** (`api.adzuna.com`) | 2026-11-09 | Требует `app_id` / `app_key` | `api-key` | Адаптер `src/sources/adzuna.ts` готов; включается оператором узла при наличии собственных ключей `RADAR_ADZUNA_APP_ID` и `RADAR_ADZUNA_APP_KEY`. |
+
+## Ревизия и расширение источников (v0.66.0 — 2026-11-10)
+
+| Источник / Провайдер | Формат | Статус | Замер из ЦОД (EU) |
+| --- | --- | --- | --- |
+| `ats-personio` (`tado`, `clark`, `orderbird`, `personio-gmbh`, `tonies`) | XML (`.jobs.personio.de/xml?language=en`) | **indexed** | HTTP 200, чистый `<workzag-jobs>` XML без ключей и капчи |
+| `ats-smartrecruiters` (+ `Wise`, `ServiceNow`, `Devoteam`, `Ubisoft2`, `Endava`, `Wix2`, `CDPROJEKTRED`, `Equinox`, `BoschGroup`) | JSON API | **indexed** | HTTP 200, суммарно 8 500+ активных вакансий |
+| `ats-workable` (+ `skroutz`, `epignosis`) и `ats-bamboohr` (+ `posthog`, `reddwarf`) | JSON API | **indexed** | HTTP 200, открытые виджеты вакансий |
+| `hh-selectel`, `hh-pt` (Positive Technologies), `hh-cian`, `hh-tensor`, `hh-diasoft` | RSS (`hh.ru`) | **indexed** | HTTP 200, по 20 свежих вакансий на каждого работодателя |
+| `vuejobs` (`vuejobs.com/feed`) | RSS 2.0 | **indexed** | HTTP 200 (859 КБ), вакансии Vue.js / Nuxt / Frontend |
+| `djangojobs` (`djangojobs.net/jobs/feed/`) | RSS 2.0 | **indexed** | HTTP 200 (101 КБ), вакансии Python / Django |
+| `berlinstartupjobs` (`berlinstartupjobs.com/engineering/feed/`) | RSS 2.0 | **indexed** | HTTP 200 (17 КБ), инженерные вакансии стартапов ЕС |
+| `hasjob` (`hasjob.co/feed`) | Atom | **indexed** | HTTP 200 (72 КБ), вакансии и заказы HasGeek |

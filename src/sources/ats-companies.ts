@@ -1090,8 +1090,32 @@ export const ATS_COMPANIES: Partial<Record<AtsProvider, string[]>> = {
   ],
   workable: [
     'bloomlife=Bloomlife',
+    'epignosis=Epignosis',
     'european-dynamics=EUROPEAN DYNAMICS',
+    'skroutz=Skroutz',
     'sperasoft=Sperasoft',
     'zyte=Zyte',
+  ],
+  smartrecruiters: [
+    'Wise=Wise',
+    'ServiceNow=ServiceNow',
+    'Devoteam=Devoteam',
+    'Ubisoft2=Ubisoft',
+    'Endava=Endava',
+    'Wix2=Wix',
+    'CDPROJEKTRED=CD PROJEKT RED',
+    'Equinox=Equinox',
+    'BoschGroup=Bosch',
+  ],
+  bamboohr: [
+    'posthog=PostHog',
+    'reddwarf=Red Dwarf',
+  ],
+  personio: [
+    'tado=tado',
+    'clark=Clark',
+    'orderbird=orderbird',
+    'personio-gmbh=Personio',
+    'tonies=tonies',
   ],
 };

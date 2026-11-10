@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.66.0 — 2026-11-10
+
+- **Personio ATS XML adapter (`ats-personio`)**: added 9th native ATS provider (`personio`) in `src/sources/ats.ts` reading public `<workzag-jobs>` XML feeds (`tado`, `clark`, `orderbird`, `personio-gmbh`, `tonies`).
+- **Expanded SmartRecruiters, Workable & BambooHR company boards**: added verified live boards to `src/sources/ats-companies.ts` (`Wise`, `ServiceNow`, `Devoteam`, `Ubisoft`, `Endava`, `Wix`, `CD PROJEKT RED`, `Equinox`, `Bosch`, `Skroutz`, `Epignosis`, `PostHog`, `Red Dwarf`).
+- **Expanded Russian IT employers on hh.ru**: added `Selectel`, `Positive Technologies`, `Циан`, `Тензор`, and `Диасофт` to `HH_EMPLOYERS` in `src/sources/career-sites.ts`.
+- **4 new international tech RSS/Atom presets**: added `vuejobs`, `djangojobs`, `berlinstartupjobs`, and `hasjob` in `src/sources/presets.ts` and documented all probes in `docs/SOURCE_INDEXING_LOG.md`.
+
 ## 0.65.1
 
 - Deploys of 0.64.0 and 0.65.0 failed between the image build and the restart: pg-upgrade.sh extracted the wanted postgres major with a pgvector-only regex, but the compose file now runs ParadeDB (latest-pg18). The major parses from any image line with a pgN tag, so deploys proceed.

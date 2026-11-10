@@ -86,6 +86,25 @@ describe('ats boards without a description API', () => {
     expect(leads[0]).toMatchObject({ title: 'Analyst', author: 'Acme', city: 'Limassol', externalId: 'pinpoint:acme:1' });
   });
 
+  it('reads a Personio XML board', async () => {
+    const xml = '<?xml version="1.0" encoding="UTF-8"?><workzag-jobs><position><id>2502124</id><subcompany>tado GmbH</subcompany><office>Remote - Munich</office><department>Engineering</department><name>Senior Go Engineer</name><jobDescriptions><jobDescription><name>Role</name><value><![CDATA[<p>Build distributed systems in Go.</p>]]></value></jobDescription></jobDescriptions></position></workzag-jobs>';
+    const xmlCtx = {
+      fetchImpl: (async () => new Response(xml, { status: 200 })) as typeof fetch,
+      userAgent: 'test', timeoutMs: 1000, now: () => new Date('2026-11-10'),
+      logger: { info() {}, warn() {}, error() {}, debug() {} },
+    } as never;
+    const source = makeSource({ kind: 'ats', title: 'Pe', config: { provider: 'personio', companies: ['tado=tado'] } });
+    const leads = await atsSource.poll!(source, xmlCtx);
+    expect(leads[0]).toMatchObject({
+      title: 'Senior Go Engineer',
+      author: 'tado',
+      url: 'https://tado.jobs.personio.de/job/2502124',
+      isRemote: true,
+      externalId: 'personio:tado:2502124',
+    });
+    expect(leads[0]!.text).toContain('Build distributed systems in Go.');
+  });
+
   it('reads a BambooHR board', async () => {
     const source = makeSource({ kind: 'ats', title: 'B', config: { provider: 'bamboohr', companies: ['acme=Acme'] } });
     const leads = await atsSource.poll!(source, ctx({ result: [{ id: '7', jobOpeningName: 'Manager', departmentLabel: 'Ops', location: { city: 'Paphos' } }] }));

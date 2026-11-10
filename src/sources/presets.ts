@@ -659,6 +659,54 @@ const BASE_PRESETS: SourcePreset[] = [
     },
   },
   {
+    id: 'ats-personio',
+    kind: 'ats',
+    title: 'Карьерные страницы компаний — Personio',
+    description: 'Публичный XML-фид вакансий европейских компаний на платформе Personio, без ключа.',
+    config: {
+      provider: 'personio',
+      perPoll: 3,
+      maxAgeDays: 30,
+      companies: ['tado=tado', 'clark=Clark', 'orderbird=orderbird', 'personio-gmbh=Personio', 'tonies=tonies'],
+    },
+  },
+  {
+    id: 'vuejobs',
+    kind: 'rss',
+    title: 'VueJobs — Вакансии Vue.js и Frontend',
+    description: 'Международный RSS-фид вакансий для разработчиков Vue.js, Nuxt и современного фронтенда',
+    config: {
+      url: 'https://vuejobs.com/feed',
+    },
+  },
+  {
+    id: 'djangojobs',
+    kind: 'rss',
+    title: 'DjangoJobs — Вакансии Python и Django',
+    description: 'Международный RSS-фид вакансий по Python и фреймворку Django',
+    config: {
+      url: 'https://djangojobs.net/jobs/feed/',
+    },
+  },
+  {
+    id: 'berlinstartupjobs',
+    kind: 'rss',
+    title: 'Berlin Startup Jobs — Engineering',
+    description: 'Инженерные вакансии технологических стартапов Берлина и ЕС (удалёнка и релокация)',
+    config: {
+      url: 'https://berlinstartupjobs.com/engineering/feed/',
+    },
+  },
+  {
+    id: 'hasjob',
+    kind: 'rss',
+    title: 'HasJob — Инженерные вакансии и проекты',
+    description: 'Официальный Atom-фид технологических вакансий и заказов сообщества HasGeek (HasJob)',
+    config: {
+      url: 'https://hasjob.co/feed',
+    },
+  },
+  {
     id: 'getmatch',
     kind: 'sitemap',
     title: 'getmatch — IT-вакансии',

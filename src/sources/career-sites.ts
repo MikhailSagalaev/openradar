@@ -97,6 +97,11 @@ const HH_EMPLOYERS: Array<[id: string, name: string, employer: number]> = [
   ['hh-t1', 'Т1', 4649269],
   ['hh-12storeez', '12 STOREEZ', 2458132],
   ['hh-tochka', 'Точка Банк', 2324020],
+  ['hh-selectel', 'Selectel', 633069],
+  ['hh-pt', 'Positive Technologies', 26624],
+  ['hh-cian', 'Циан', 1429999],
+  ['hh-tensor', 'Тензор', 67611],
+  ['hh-diasoft', 'Диасофт', 1057],
 ];
 
 export const HH_EMPLOYER_PRESETS: SourcePreset[] = HH_EMPLOYERS.map(([id, name, employer]) => ({
