@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.66.1 — 2026-11-10
+
+- **Complete ISCO-08 role coverage**: mapped all 33 derived `role`/`direction` slugs (`project`, `sysadmin`, `data-engineer`, `analyst-system`, `analyst-business`, `analyst-data`, `ml`, `1c`, `embedded`, `education`, `translation`, `bots`, `parsing`, `marketplaces`, `video`) in `src/core/isco.ts` and widened the scan window for `/v2/feed?occupation_code_or=...`.
+
 ## 0.66.0 — 2026-11-10
 
 - **Personio ATS XML adapter (`ats-personio`)**: added 9th native ATS provider (`personio`) in `src/sources/ats.ts` reading public `<workzag-jobs>` XML feeds (`tado`, `clark`, `orderbird`, `personio-gmbh`, `tonies`).

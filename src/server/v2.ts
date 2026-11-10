@@ -121,7 +121,7 @@ export function registerV2Routes(app: Hono, runtime: Runtime, h: V2Helpers): voi
       after,
     };
     const occupationCodes = parseOccupationCodes([c.req.query("occupation_code") ?? "", c.req.query("occupation_code_or") ?? ""]);
-    const rawLeads = await runtime.store.getLeadsForFeed(occupationCodes.length ? { ...options, limit: Math.min(limit * 4, 200) } : options);
+    const rawLeads = await runtime.store.getLeadsForFeed(occupationCodes.length ? { ...options, limit: Math.max(limit * 10, 200) } : options);
     const leads = occupationCodes.length ? rawLeads.filter((l) => matchesOccupationCodes(l, occupationCodes)).slice(0, limit) : rawLeads;
     // Without a cursor the newest leads come first; the cursor then points at the newest one.
     const newest = filters.sort !== 'new' ? undefined : after ? leads[leads.length - 1] : leads[0];

@@ -87,26 +87,53 @@ export const ISCO_OCCUPATIONS: Record<string, IscoOccupation> = {
     label: 'Administrative and executive secretaries (Support)',
     labelRu: 'Специалисты технической и клиентской поддержки',
   },
+  '2359': {
+    code: '2359',
+    label: 'Teaching professionals NEC (Education & Mentoring)',
+    labelRu: 'Преподаватели, методисты и менторы',
+  },
+  '2643': {
+    code: '2643',
+    label: 'Translators, interpreters and other linguists',
+    labelRu: 'Переводчики и лингвисты',
+  },
 };
 
 const DIRECTION_TO_ISCO: Record<string, string> = {
   backend: '2512',
   mobile: '2512',
   gamedev: '2512',
+  embedded: '2512',
+  'dev-other': '2512',
   frontend: '2513',
   fullstack: '2513',
+  web: '2513',
+  '1c': '2514',
+  bots: '2514',
+  parsing: '2514',
   qa: '2519',
   devops: '2522',
+  sysadmin: '2522',
   security: '2529',
   ai: '2120',
+  ml: '2120',
   data: '2521',
+  'data-engineer': '2521',
   analytics: '2511',
+  'analyst-system': '2511',
+  'analyst-business': '2511',
+  'analyst-data': '2511',
   design: '2166',
+  video: '2166',
   product: '2421',
+  project: '2421',
   hr: '2423',
   marketing: '2431',
+  marketplaces: '2431',
   sales: '2433',
   content: '2641',
+  translation: '2643',
+  education: '2359',
   support: '3343',
 };
 
@@ -145,6 +172,9 @@ export function classifyIsco08(
   }
 
   // Fallback heuristics on title + skills when direction is absent
+  if (/\b(system\s+analyst|systems\s+analyst|business\s+analyst|analityk\s+systemowy|системн\w*\s+аналитик|бизнес[-\s]?аналитик|аналитик\s+данных|bi\s+analyst)\b/i.test(title)) {
+    return ISCO_OCCUPATIONS['2511'];
+  }
   if (/\b(data\s+scien|machine\s+learning|ml\s+engineer|ai\s+engineer|llm|nlp|computer\s+vision|нейросет)\b/i.test(title) || skills.has('ml') || skills.has('ai / ml')) {
     return ISCO_OCCUPATIONS['2120'];
   }
@@ -160,13 +190,10 @@ export function classifyIsco08(
   if (/\b(qa\b|test\s+engineer|sdet|тестировщик|автотест)\b/i.test(title) || skills.has('тестирование')) {
     return ISCO_OCCUPATIONS['2519'];
   }
-  if (/\b(system\s+analyst|business\s+analyst|системный\s+аналитик|бизнес[-\s]?аналитик|аналитик\s+данных|bi\s+analyst)\b/i.test(title)) {
-    return ISCO_OCCUPATIONS['2511'];
-  }
   if (/\b(дизайнер|designer|ui\/ux|ux\/ui|figma|иллюстратор|motion\s+design)\b/i.test(title) || skills.has('figma')) {
     return ISCO_OCCUPATIONS['2166'];
   }
-  if (/\b(product\s+manager|project\s+manager|продакт|проджект|руководитель\s+проект|scrum\s+master)\b/i.test(title)) {
+  if (/\b(product\s+manager|project\s+manager|pmo\b|продакт|проджект|руководитель\s+проект|scrum\s+master)\b/i.test(title)) {
     return ISCO_OCCUPATIONS['2421'];
   }
   if (/\b(recruiter|рекрутер|сорсер|sourcer|talent\s+acquisition|hr\s+manager)\b/i.test(title)) {
