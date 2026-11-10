@@ -1,3 +1,4 @@
+import { classifyRole } from "../src/research/derive.ts";
 import { describe, expect, it } from 'vitest';
 import { classifyIsco08, matchesOccupationCodes, parseOccupationCodes } from '../src/core/isco.ts';
 import { computeInsights } from '../src/core/market.ts';
@@ -49,6 +50,18 @@ describe('ISCO-08 occupation taxonomy (#61 [F-04])', () => {
     expect(matchesOccupationCodes(designLead, codes)).toBe(true);
     expect(matchesOccupationCodes(hrLead, codes)).toBe(true); // matches prefix 242 -> 2423
     expect(matchesOccupationCodes(salesLead, codes)).toBe(false); // 2433 does not match
+  });
+
+  it('prevents "Global Regulatory Lead" and English "go" verb from matching backend/2512, and classifies Russian HR/Brand/Security roles', () => {
+    expect(classifyRole('job', 'Global Regulatory Lead', 'individual growth go hand in hand')).toBe('other');
+    expect(classifyIsco08(makeLead({ title: 'Global Regulatory Lead', direction: 'backend' }))).toBeUndefined();
+    expect(classifyRole('job', 'Ведущий специалист по подбору и развитию персонала')).toBe('hr');
+    expect(classifyIsco08(makeLead({ title: 'Ведущий специалист по подбору и развитию персонала' }))?.code).toBe('2423');
+    expect(classifyRole('job', 'Бренд-менеджер StarHit.ru')).toBe('marketing');
+    expect(classifyIsco08(makeLead({ title: 'Бренд-менеджер StarHit.ru' }))?.code).toBe('2431');
+    expect(classifyRole('job', 'Специалист по защите информации')).toBe('security');
+    expect(classifyIsco08(makeLead({ title: 'Специалист по защите информации' }))?.code).toBe('2529');
+    expect(classifyIsco08(makeLead({ title: 'Старший бухгалтер по учету расходов', skills: ['Бухгалтерия'] }))?.code).toBe('2411');
   });
 
   it('aggregates ISCO-08 occupations in computeInsights', () => {

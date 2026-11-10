@@ -456,6 +456,10 @@ function toPublicLead(lead: Lead): Record<string, unknown> {
   if (typeof out.text === 'string') out.text = stripInvisible(out.text);
   // A date the source never gave is the collection moment: say so, never pass it off as the real one.
   if ((lead.metadata as Record<string, unknown> | undefined)?.publishedAtEstimated === true) out.publishedAtEstimated = true;
+  if ((lead.type ?? 'gig') === 'gig' && (!lead.city || /^(?:онлайн|удал)/i.test(lead.city)) && lead.workplaceType !== 'hybrid') {
+    out.isRemote = true;
+    out.workplaceType = 'remote';
+  }
   const isco = classifyIsco08(lead);
   if (isco) {
     out.occupationCode = isco.code;
@@ -2416,6 +2420,17 @@ export function createApp(runtime: Runtime): Hono {
     });
     c.header('Cache-Control', 'public, max-age=600');
     return c.json(computeInsights(leads, days));
+  });
+
+  // Public stories wall JSON (Epic #60 [C-03]).
+  app.get('/api/stories', rateLimit({ windowMs: 60_000, max: 60 }), async (c) => {
+    try {
+      const raw = await import('node:fs/promises').then((m) => m.readFile(new URL('../../docs/stories.json', import.meta.url), 'utf8'));
+      c.header('cache-control', 'public, max-age=300');
+      return c.json(JSON.parse(raw));
+    } catch {
+      return c.json({ updated: new Date().toISOString(), count: 0, stories: [] });
+    }
   });
 
   // Employer / company autocomplete over guest-visible employer pages (Epic #61 [F-06]).

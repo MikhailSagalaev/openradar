@@ -1,3 +1,4 @@
+import { classifyRole } from '../research/derive.ts';
 import { classifyIsco08 } from "./isco.ts";
 import { RUB_PER } from './fx.ts';
 import { budgetUsd } from './salary.ts';
@@ -214,13 +215,15 @@ export function computeInsights(leads: Lead[], windowDays: number = 30): MarketI
   let aiCount = 0;
 
   for (const lead of leads) {
-    const wp = lead.workplaceType ?? (lead.isRemote !== false ? 'remote' : 'onsite');
+    const gigRemote = (lead.type ?? 'gig') === 'gig' && (!lead.city || /^(?:онлайн|удал)/i.test(lead.city)) && lead.workplaceType !== 'hybrid';
+    const wp = lead.workplaceType === 'hybrid' ? 'hybrid' : (lead.isRemote || gigRemote || lead.workplaceType === 'remote' ? 'remote' : 'onsite');
     if (wp === 'remote') remote++;
     else if (wp === 'hybrid') hybrid++;
     else onsite++;
 
-    if (lead.direction) {
-      dirCounts.set(lead.direction, (dirCounts.get(lead.direction) ?? 0) + 1);
+    const rawDir = lead.direction && lead.direction !== 'other' ? lead.direction : classifyRole(lead.type ?? 'job', lead.title);
+    if (rawDir && rawDir !== 'other') {
+      dirCounts.set(rawDir, (dirCounts.get(rawDir) ?? 0) + 1);
     }
     const isco = classifyIsco08(lead);
     if (isco) {

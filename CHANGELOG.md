@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.66.2 — 2026-11-10
+
+- **Production audit fixes**:
+  - Excluded `direction: "other"` from `/api/insights` direction rankings and added live `classifyRole` fallback.
+  - Fixed `backend` role pattern in `src/research/derive.ts` so English verb `"go"` (e.g. `"growth go hand in hand"`, `"Go-to-Market"`) no longer misclassifies non-technical roles as `backend` / ISCO `2512`.
+  - Expanded Russian HR, marketing, security, accounting (`2411`), and engineering (`2142`) patterns in `src/research/derive.ts` and `src/core/isco.ts`.
+  - Ensured cityless `gig` orders report `workplaceType: "remote"` in `computeInsights` and `toPublicLead`.
+  - Added `vuejobs.com`, `djangojobs.net`, `berlinstartupjobs.com`, `hasjob.co`, and ATS domains to `JOB_BOARD_URL` in `src/core/prepare.ts`.
+  - Exposed `GET /api/stories` serving `docs/stories.json`.
+
 ## 0.66.1 — 2026-11-10
 
 - **Complete ISCO-08 role coverage**: mapped all 33 derived `role`/`direction` slugs (`project`, `sysadmin`, `data-engineer`, `analyst-system`, `analyst-business`, `analyst-data`, `ml`, `1c`, `embedded`, `education`, `translation`, `bots`, `parsing`, `marketplaces`, `video`) in `src/core/isco.ts` and widened the scan window for `/v2/feed?occupation_code_or=...`.

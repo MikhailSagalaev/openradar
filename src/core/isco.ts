@@ -97,6 +97,16 @@ export const ISCO_OCCUPATIONS: Record<string, IscoOccupation> = {
     label: 'Translators, interpreters and other linguists',
     labelRu: 'Переводчики и лингвисты',
   },
+  '2411': {
+    code: '2411',
+    label: 'Accountants and financial specialists',
+    labelRu: 'Бухгалтеры, экономисты и финансовые специалисты',
+  },
+  '2142': {
+    code: '2142',
+    label: 'Civil and production engineers',
+    labelRu: 'Инженеры ПТО, технадзора и производства',
+  },
 };
 
 const DIRECTION_TO_ISCO: Record<string, string> = {
@@ -125,6 +135,7 @@ const DIRECTION_TO_ISCO: Record<string, string> = {
   'analyst-data': '2511',
   design: '2166',
   video: '2166',
+  architect: '2512',
   product: '2421',
   project: '2421',
   hr: '2423',
@@ -151,7 +162,7 @@ export function classifyIsco08(
   if (
     skills.has('1с') ||
     skills.has('telegram bot') ||
-    /\b(1с|1c|битрикс|bitrix|sap\b|abap|erp\b|telegram[-\s]+bot|телеграм[-\s]+бот)\b/i.test(title)
+    /(?:^|[^a-zа-яё0-9])(1с|1c|битрикс|bitrix|sap\b|abap|erp\b|telegram[-\s]+bot|телеграм[-\s]+бот)(?=$|[^a-zа-яё0-9])/i.test(title)
   ) {
     return ISCO_OCCUPATIONS['2514'];
   }
@@ -162,57 +173,59 @@ export function classifyIsco08(
     skills.has('tilda') ||
     skills.has('woocommerce') ||
     skills.has('opencart') ||
-    /\b(верстк|лендинг|landing\s+page|tilda|тильд|wordpress|webflow|frontend|фронтэнд|фронтенд)\b/i.test(title)
+    /(?:^|[^a-zа-яё0-9])(верстк|лендинг|landing\s+page|tilda|тильд|wordpress|webflow|frontend|фронтэнд|фронтенд)(?=$|[^a-zа-яё0-9])/i.test(title)
   ) {
     return ISCO_OCCUPATIONS['2513'];
   }
 
-  if (lead.direction && DIRECTION_TO_ISCO[lead.direction]) {
+  // Guard against historical false 'backend' direction on non-software roles (e.g. "Global Regulatory Lead" matching English word "go")
+  const nonSoftwareTitle = /\b(regulatory|clinical|pharmac|medical|врач|бухгалтер|accountant|юрист|legal|counsel|склад|курьер|повар|кассир|инженер\s+(?:пто|технадзора|по\s+охране))\b/i.test(title);
+  if (lead.direction && DIRECTION_TO_ISCO[lead.direction] && !(lead.direction === 'backend' && nonSoftwareTitle)) {
     return ISCO_OCCUPATIONS[DIRECTION_TO_ISCO[lead.direction]!];
   }
 
   // Fallback heuristics on title + skills when direction is absent
-  if (/\b(system\s+analyst|systems\s+analyst|business\s+analyst|analityk\s+systemowy|системн\w*\s+аналитик|бизнес[-\s]?аналитик|аналитик\s+данных|bi\s+analyst)\b/i.test(title)) {
+  if (/(?:^|[^a-zа-яё0-9])(system\s+analyst|systems\s+analyst|business\s+analyst|analityk\s+systemowy|системн[a-zа-яё]*\s+аналитик|бизнес[-\s]?аналитик|аналитик\s+данных|bi\s+analyst)(?=$|[^a-zа-яё0-9])/i.test(title)) {
     return ISCO_OCCUPATIONS['2511'];
   }
-  if (/\b(data\s+scien|machine\s+learning|ml\s+engineer|ai\s+engineer|llm|nlp|computer\s+vision|нейросет)\b/i.test(title) || skills.has('ml') || skills.has('ai / ml')) {
+  if (/(?:^|[^a-zа-яё0-9])(data\s+scien|machine\s+learning|ml\s+engineer|ai\s+engineer|llm|nlp|computer\s+vision|нейросет[a-zа-яё]*)(?=$|[^a-zа-яё0-9])/i.test(title) || skills.has('ml') || skills.has('ai / ml')) {
     return ISCO_OCCUPATIONS['2120'];
   }
   if (/\b(data\s+engineer|dba\b|database\s+admin|etl\b|clickhouse|airflow)\b/i.test(title)) {
     return ISCO_OCCUPATIONS['2521'];
   }
-  if (/\b(devops|sre\b|sysadmin|сисадмин|системный\s+администратор|kubernetes|infrastructure\s+engineer)\b/i.test(title) || skills.has('devops') || skills.has('kubernetes')) {
+  if (/(?:^|[^a-zа-яё0-9])(devops|sre\b|sysadmin|сисадмин|системный\s+администратор|kubernetes|infrastructure\s+engineer)(?=$|[^a-zа-яё0-9])/i.test(title) || skills.has('devops') || skills.has('kubernetes')) {
     return ISCO_OCCUPATIONS['2522'];
   }
-  if (/\b(infosec|cybersecurity|pentest|soc\s+analyst|appsec|информационн\w+\s+безопасн)\b/i.test(title)) {
+  if (/(?:^|[^a-zа-яё0-9])(infosec|cybersecurity|pentest|soc\s+analyst|appsec|информационн[a-zа-яё]+\s+безопасн|защит[a-zа-яё]*\s+информац[a-zа-яё]*)(?=$|[^a-zа-яё0-9])/i.test(title)) {
     return ISCO_OCCUPATIONS['2529'];
   }
-  if (/\b(qa\b|test\s+engineer|sdet|тестировщик|автотест)\b/i.test(title) || skills.has('тестирование')) {
+  if (/(?:^|[^a-zа-яё0-9])(qa\b|test\s+engineer|sdet|тестировщик|автотест)(?=$|[^a-zа-яё0-9])/i.test(title) || skills.has('тестирование')) {
     return ISCO_OCCUPATIONS['2519'];
   }
-  if (/\b(дизайнер|designer|ui\/ux|ux\/ui|figma|иллюстратор|motion\s+design)\b/i.test(title) || skills.has('figma')) {
+  if (/(?:^|[^a-zа-яё0-9])(дизайнер|designer|ui\/ux|ux\/ui|figma|иллюстратор|motion\s+design)(?=$|[^a-zа-яё0-9])/i.test(title) || skills.has('figma')) {
     return ISCO_OCCUPATIONS['2166'];
   }
-  if (/\b(product\s+manager|project\s+manager|pmo\b|продакт|проджект|руководитель\s+проект|scrum\s+master)\b/i.test(title)) {
+  if (/(?:^|[^a-zа-яё0-9])(product\s+manager|project\s+manager|pmo\b|продакт|проджект|руководитель\s+проект|scrum\s+master)(?=$|[^a-zа-яё0-9])/i.test(title)) {
     return ISCO_OCCUPATIONS['2421'];
   }
-  if (/\b(recruiter|рекрутер|сорсер|sourcer|talent\s+acquisition|hr\s+manager)\b/i.test(title)) {
+  if (/(?:^|[^a-zа-яё0-9])(recruiter|рекрутер|сорсер|sourcer|talent\s+acquisition|hr\s+manager|подбор[a-zа-яё]*(?:\s+и\s+[a-zа-яё]+)?\s+персонала|специалист\s+по\s+персоналу|менеджер\s+по\s+персоналу)(?=$|[^a-zа-яё0-9])/i.test(title)) {
     return ISCO_OCCUPATIONS['2423'];
   }
-  if (/\b(маркетолог|таргетолог|smm\b|seo[-\s]|директолог|performance\s+marketing|media\s+buyer)\b/i.test(title)) {
+  if (/(?:^|[^a-zа-яё0-9])(маркетолог|бренд[-\s]?менеджер|brand[-\s]?manager|таргетолог|smm\b|seo[-\s]|директолог|performance\s+marketing|media\s+buyer)(?=$|[^a-zа-яё0-9])/i.test(title)) {
     return ISCO_OCCUPATIONS['2431'];
   }
-  if (/\b(менеджер\s+по\s+продажам|sales\s+manager|account\s+executive|bizdev|business\s+development|моп\b|роп\b)\b/i.test(title)) {
+  if (/(?:^|[^a-zа-яё0-9])(менеджер\s+по\s+продажам|sales\s+manager|account\s+executive|bizdev|business\s+development|моп\b|роп\b)(?=$|[^a-zа-яё0-9])/i.test(title)) {
     return ISCO_OCCUPATIONS['2433'];
   }
-  if (/\b(копирайтер|copywriter|редактор|technical\s+writer|техписатель|сценарист)\b/i.test(title)) {
+  if (/(?:^|[^a-zа-яё0-9])(копирайтер|copywriter|редактор|technical\s+writer|техписатель|сценарист)(?=$|[^a-zа-яё0-9])/i.test(title)) {
     return ISCO_OCCUPATIONS['2641'];
   }
-  if (/\b(саппорт|оператор\s+поддержки|customer\s+support|helpdesk|ассистент)\b/i.test(title)) {
+  if (/(?:^|[^a-zа-яё0-9])(саппорт|оператор\s+поддержки|customer\s+support|helpdesk|ассистент)(?=$|[^a-zа-яё0-9])/i.test(title)) {
     return ISCO_OCCUPATIONS['3343'];
   }
   if (
-    /\b(разработчик|программист|developer|software\s+engineer|backend|golang|python|java\b|kotlin|swift|c\+\+|rust\b)\b/i.test(title) ||
+    /(?:^|[^a-zа-яё0-9])(разработчик|программист|developer|software\s+engineer|backend|golang|python|java\b|kotlin|swift|c\+\+|rust\b)(?=$|[^a-zа-яё0-9])/i.test(title) ||
     skills.has('python') ||
     skills.has('golang') ||
     skills.has('java') ||
@@ -221,6 +234,13 @@ export function classifyIsco08(
     skills.has('разработка')
   ) {
     return ISCO_OCCUPATIONS['2512'];
+  }
+
+  if (/(?:^|[^a-zа-яё0-9])(бухгалтер|аудитор|экономист|accountant|bookkeeper|казначей|финансист)(?=$|[^a-zа-яё0-9])/i.test(title) || skills.has('бухгалтерия')) {
+    return ISCO_OCCUPATIONS['2411'];
+  }
+  if (/(?:^|[^a-zа-яё0-9])(инженер\s+(?:пто|технадзора|ппр|сметчик|конструктор|проектировщик))(?=$|[^a-zа-яё0-9])/i.test(title)) {
+    return ISCO_OCCUPATIONS['2142'];
   }
 
   return undefined;
