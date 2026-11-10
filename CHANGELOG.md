@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.65.1
+
+- Deploys of 0.64.0 and 0.65.0 failed between the image build and the restart: pg-upgrade.sh extracted the wanted postgres major with a pgvector-only regex, but the compose file now runs ParadeDB (latest-pg18). The major parses from any image line with a pgN tag, so deploys proceed.
+
 ## 0.65.0 — 2026-11-10
 
 - **ISCO-08 occupation taxonomy (`#61 [F-04]`)**: added `src/core/isco.ts` mapping roles, directions, and tech stacks to 4-digit ILO ISCO-08 occupation unit groups (`2512` Software developers, `2513` Web & multimedia developers, `2514` Applications programmers, `2522` Systems administrators / DevOps, `2120` Data Science & AI, `2166` Graphic & multimedia designers, `2421` Product & Project managers, `2423` HR / Recruiters, etc.).
