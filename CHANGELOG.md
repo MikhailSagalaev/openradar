@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.65.0 — 2026-11-10
+
+- **ISCO-08 occupation taxonomy (`#61 [F-04]`)**: added `src/core/isco.ts` mapping roles, directions, and tech stacks to 4-digit ILO ISCO-08 occupation unit groups (`2512` Software developers, `2513` Web & multimedia developers, `2514` Applications programmers, `2522` Systems administrators / DevOps, `2120` Data Science & AI, `2166` Graphic & multimedia designers, `2421` Product & Project managers, `2423` HR / Recruiters, etc.).
+- **API & MCP occupation filters**: added `occupation_code` / `occupation_code_or` query filters to `GET /v2/feed` and MCP `search_leads`, added `occupationCode` and `occupationLabel` to public lead projections, and added `occupations` breakdown to `GET /api/insights` and MCP `get_market_analytics`.
+- **Rebased on monitoring & enrichment pipeline**: merged service health monitoring (`dc84b04`) with `v0.64.0` workplace/HR/Vue/salary fixes, `DATA_CONTRACT.md`, `TAKEDOWN.md`, and Smithery/Glama manifests.
+
 ## 0.64.0 — 2026-11-10
 
 - **Публичные API аналитики и работодателей (`/api/insights`, `/api/companies/suggest`):** агрегатная сводка по гостевой ленте (трендовые навыки, направления, доля удалёнки/гибрида/офиса, квартили зарплат и бюджетов в USD/RUB, доля AI-вакансий) и автодополнение страниц компаний (`/employers/:key`).

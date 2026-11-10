@@ -142,6 +142,7 @@ export function renderOpenApi(baseUrl: string): Record<string, unknown> {
             q(), type(),
             { name: 'workplace', in: 'query', schema: { type: 'string', enum: ['remote', 'hybrid', 'onsite'] }, description: 'Workplace arrangement: remote, hybrid, or onsite' },
             { name: 'direction', in: 'query', schema: { type: 'string' }, description: 'Role or trade direction' },
+            { name: 'occupation_code_or', in: 'query', schema: { type: 'string' }, description: 'Comma-separated ILO ISCO-08 occupation unit group codes or prefixes (e.g. 2512,2513,2166)' },
           ],
           responses: {
             '200': { description: 'Feed page and cursor', content: { 'application/json': { schema: { type: 'object' } }, 'application/x-ndjson': { schema: { type: 'string' } } } },

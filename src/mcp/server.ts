@@ -1,3 +1,4 @@
+import { classifyIsco08, matchesOccupationCodes, parseOccupationCodes } from "../core/isco.ts";
 /**
  * openradar Model Context Protocol (MCP) server.
  * A free machine interface over the same feed people read: the caller's tier
@@ -69,6 +70,7 @@ export const MCP_TOOLS: McpTool[] = [
         remote: { type: 'boolean', description: 'Only work that can be done remotely' },
         workplace: { type: 'string', enum: ['remote', 'hybrid', 'onsite'], description: 'Workplace arrangement: remote, hybrid, or onsite' },
         direction: { type: 'string', description: 'Role or trade direction, e.g. "backend", "frontend", "qa", "devops", "design", "ai"' },
+        occupation_code: { type: 'string', description: 'ISCO-08 4-digit occupation code(s) or prefix (comma-separated), e.g. "2512" (Software developers), "2513" (Web/Frontend), "2166" (Designers), "2423" (HR)' },
         skills: { type: 'array', items: { type: 'string' }, description: 'At least one of these skills, e.g. ["Python", "Django"]' },
         grade: { type: 'string', enum: ['intern', 'junior', 'middle', 'senior', 'lead'], description: 'Seniority level' },
         company: { type: 'string', description: 'Filter by employer or client company name' },
@@ -248,6 +250,7 @@ function leadCompact(lead: Lead): Record<string, unknown> {
     where: effectiveRemote ? 'remote' : lead.city,
     workplace_type: workplaceType,
     direction: lead.direction,
+    occupation_code: classifyIsco08(lead)?.code,
     grade: lead.grade,
     company: lead.company ?? lead.author,
     skills: lead.skills?.slice(0, 6),
@@ -284,6 +287,7 @@ function leadSummary(lead: Lead): Record<string, unknown> {
     remote: effectiveRemote,
     workplace_type: lead.workplaceType ?? (effectiveRemote ? 'remote' : 'onsite'),
     direction: lead.direction,
+    occupation_code: classifyIsco08(lead)?.code,
     skills: lead.skills,
     flags: qualityFlagsOf(lead).length ? qualityFlagsOf(lead) : undefined,
     url: lead.canonicalUrl || lead.url,
@@ -357,12 +361,13 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend): Pr
       const direction = typeof args.direction === 'string' && args.direction.trim() ? args.direction.trim() : undefined;
       const grade = typeof args.grade === 'string' && ['intern', 'junior', 'middle', 'senior', 'lead'].includes(args.grade) ? args.grade.toLowerCase() : undefined;
       const company = typeof args.company === 'string' && args.company.trim() ? args.company.trim().toLowerCase() : undefined;
+      const occupationCodes = parseOccupationCodes([args.occupation_code ?? "", args.occupation_code_or ?? ""]);
       const hasBudget = args.has_budget === true;
       const sort: LeadSort = args.sort === 'score' || args.sort === 'budget' || args.sort === 'relevance' ? args.sort : 'new';
       const since = sinceInstant(args.since);
       // One skill and the rouble floor go to the database; several skills, grade, company or a floor in the
       // lead's own currency are checked here, so a wider page is read for them.
-      const filteredHere = skills.length > 1 || (Number.isFinite(minBudget) && minBudget > 0) || Boolean(grade || company || hasBudget);
+      const filteredHere = skills.length > 1 || (Number.isFinite(minBudget) && minBudget > 0) || Boolean(grade || company || hasBudget || occupationCodes.length > 0);
       const options: ListLeadsOptions = {
         query: typeof args.query === 'string' && args.query.trim() ? args.query.trim() : undefined,
         type: asType(args.type),
@@ -397,6 +402,9 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend): Pr
       }
       if (company) {
         leads = leads.filter((lead) => (lead.company?.toLowerCase().includes(company)) || (lead.author?.toLowerCase().includes(company)));
+      }
+      if (occupationCodes.length > 0) {
+        leads = leads.filter((lead) => matchesOccupationCodes(lead, occupationCodes));
       }
       const page = filteredHere ? leads.slice(offset, offset + limit + 1) : leads;
       const more = page.length > limit;
@@ -487,6 +495,7 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend): Pr
         budget_samples_count: budgets.length,
         workplace: insights.workplace,
         directions: insights.directions,
+        occupations: insights.occupations,
         salary_percentiles: insights.salary_percentiles,
         ai_exposure: insights.ai_exposure,
       });

@@ -1,3 +1,4 @@
+import { classifyIsco08 } from "./isco.ts";
 import { RUB_PER } from './fx.ts';
 import { budgetUsd } from './salary.ts';
 import { salaryLooksWrong } from './salary-sanity.ts';
@@ -155,6 +156,7 @@ export interface MarketInsights {
   total_leads: number;
   trending_skills: Array<{ name: string; count: number; share_pct: number }>;
   directions: Array<{ direction: string; count: number; share_pct: number }>;
+  occupations: Array<{ code: string; label: string; count: number; share_pct: number }>;
   workplace: {
     remote: number;
     hybrid: number;
@@ -205,6 +207,7 @@ export function computeInsights(leads: Lead[], windowDays: number = 30): MarketI
 
   const skillCounts = new Map<string, number>();
   const dirCounts = new Map<string, number>();
+  const iscoCounts = new Map<string, { label: string; count: number }>();
   let remote = 0;
   let hybrid = 0;
   let onsite = 0;
@@ -218,6 +221,11 @@ export function computeInsights(leads: Lead[], windowDays: number = 30): MarketI
 
     if (lead.direction) {
       dirCounts.set(lead.direction, (dirCounts.get(lead.direction) ?? 0) + 1);
+    }
+    const isco = classifyIsco08(lead);
+    if (isco) {
+      const prev = iscoCounts.get(isco.code);
+      iscoCounts.set(isco.code, { label: isco.label, count: (prev?.count ?? 0) + 1 });
     }
 
     const skills = lead.skills ?? [];
@@ -240,11 +248,16 @@ export function computeInsights(leads: Lead[], windowDays: number = 30): MarketI
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .map(([direction, count]) => ({ direction, count, share_pct: pct(count) }));
 
+  const occupations = [...iscoCounts.entries()]
+    .sort((a, b) => b[1].count - a[1].count || a[0].localeCompare(b[0]))
+    .map(([code, { label, count }]) => ({ code, label, count, share_pct: pct(count) }));
+
   return {
     window_days: windowDays,
     total_leads: total,
     trending_skills,
     directions,
+    occupations,
     workplace: {
       remote,
       hybrid,

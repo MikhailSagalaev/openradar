@@ -1,3 +1,4 @@
+import { matchesOccupationCodes, parseOccupationCodes } from "../core/isco.ts";
 import { webPubkey } from '../hub/web-key.ts';
 import type { Context, Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
@@ -119,7 +120,9 @@ export function registerV2Routes(app: Hono, runtime: Runtime, h: V2Helpers): voi
       maxAgeDays: feedMaxAge(runtime.env),
       after,
     };
-    const leads = await runtime.store.getLeadsForFeed(options);
+    const occupationCodes = parseOccupationCodes([c.req.query("occupation_code") ?? "", c.req.query("occupation_code_or") ?? ""]);
+    const rawLeads = await runtime.store.getLeadsForFeed(occupationCodes.length ? { ...options, limit: Math.min(limit * 4, 200) } : options);
+    const leads = occupationCodes.length ? rawLeads.filter((l) => matchesOccupationCodes(l, occupationCodes)).slice(0, limit) : rawLeads;
     // Without a cursor the newest leads come first; the cursor then points at the newest one.
     const newest = filters.sort !== 'new' ? undefined : after ? leads[leads.length - 1] : leads[0];
     const cursor = newest ? encodeCursor(newest) : filters.sort !== 'new' ? null : c.req.query('cursor') ?? null;

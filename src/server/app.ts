@@ -1,3 +1,4 @@
+import { classifyIsco08 } from "../core/isco.ts";
 import { Hono } from 'hono';
 import type { Context, Next } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -455,6 +456,11 @@ function toPublicLead(lead: Lead): Record<string, unknown> {
   if (typeof out.text === 'string') out.text = stripInvisible(out.text);
   // A date the source never gave is the collection moment: say so, never pass it off as the real one.
   if ((lead.metadata as Record<string, unknown> | undefined)?.publishedAtEstimated === true) out.publishedAtEstimated = true;
+  const isco = classifyIsco08(lead);
+  if (isco) {
+    out.occupationCode = isco.code;
+    out.occupationLabel = isco.label;
+  }
   const flags = qualityFlagsOf(lead);
   if (flags.length) out.qualityFlags = flags;
   return out;

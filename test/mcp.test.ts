@@ -252,7 +252,7 @@ describe('MCP server', () => {
     const customBackend: McpBackend = {
       ...backend,
       async listLeads() { return customLeads; },
-      async getLeadById(id: string) { return customLeads.find(l => l.id === id); },
+      async getLead(id: string) { return customLeads.find(l => l.id === id) ?? null; },
     };
     const searchResp = await handleMcpRequest(
       { jsonrpc: '2.0', id: 8, method: 'tools/call', params: { name: 'search_leads', arguments: {} } },
