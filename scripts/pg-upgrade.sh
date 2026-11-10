@@ -11,9 +11,10 @@ set -euo pipefail
 cd "${RADAR_DIR:-.}"
 
 CONTAINER="${PG_CONTAINER:-radar_postgres}"
-# The major of the image the compose file asks for: pgvector/pgvector:pg18 → 18.
-WANT=$(grep -E '^\s*image:\s*pgvector/pgvector:pg[0-9]+' docker-compose.yml | head -1 | sed -E 's/.*:pg([0-9]+).*/\1/')
-[ -n "$WANT" ] || { echo "pg-upgrade: no pgvector image in docker-compose.yml" >&2; exit 1; }
+# The major of the image the compose file asks for: the tag ends in pg18 — pgvector/pgvector:pg18,
+# paradedb/paradedb:latest-pg18, a ${RADAR_PG_IMAGE:-...} default — every shape carries pgN.
+WANT=$(grep -E '^\s*image:.*pg[0-9]+' docker-compose.yml | head -1 | sed -E 's/.*pg([0-9]+).*/\1/')
+[ -n "$WANT" ] || { echo "pg-upgrade: no postgres image with a pgN tag in docker-compose.yml" >&2; exit 1; }
 
 if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
   echo "pg-upgrade: $CONTAINER is not running, nothing to move"
