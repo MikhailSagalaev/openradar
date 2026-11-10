@@ -1,0 +1,12 @@
+{
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
+  "maintainers": [
+    "MikhailSagalaev"
+  ],
+  "name": "openradar",
+  "description": "Open base of job vacancies and freelance orders from job boards, ATS career sites, RSS feeds, and Telegram. Search leads, estimate market compensation, generate X-Ray hiring manager queries, and contribute leads.",
+  "remote": {
+    "type": "streamable-http",
+    "url": "https://openradar.fun/mcp"
+  }
+}

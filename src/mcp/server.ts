@@ -12,7 +12,7 @@ import { savedFiltersFrom, type SavedFilters } from '../core/subscriptions.ts';
 import type { LeadSort, ListLeadsOptions } from '../core/store.ts';
 import { rubToUsd } from '../core/salary.ts';
 import { buildXRayResult } from '../core/xray.ts';
-import { estimateMarket } from '../core/market.ts';
+import { computeInsights, estimateMarket } from '../core/market.ts';
 import { VERSION } from '../version.ts';
 import type { Lead, LeadType } from '../core/types.ts';
 
@@ -235,15 +235,18 @@ function marketOf(lead: Lead): 'ru' | 'intl' {
 
 /** What an agent needs to pick a lead, a few lines each; the text comes with get_lead_details. */
 function leadCompact(lead: Lead): Record<string, unknown> {
+  const saneBudget = !salaryLooksWrong(lead) ? lead.budget : undefined;
+  const effectiveRemote = Boolean(lead.isRemote || ((lead.type ?? 'gig') === 'gig' && !lead.city && lead.workplaceType !== 'hybrid'));
+  const workplaceType = lead.workplaceType === 'hybrid' ? 'hybrid' : (effectiveRemote ? 'remote' : (lead.workplaceType ?? 'onsite'));
   return {
     id: lead.id,
     type: lead.type,
     title: stripInvisible(lead.title),
-    budget: lead.budget,
-    currency: lead.budget !== undefined ? lead.currency : undefined,
+    budget: saneBudget,
+    currency: saneBudget !== undefined ? lead.currency : undefined,
     market: marketOf(lead),
-    where: lead.isRemote ? 'remote' : lead.city,
-    workplace_type: lead.workplaceType ?? (lead.isRemote ? 'remote' : 'onsite'),
+    where: effectiveRemote ? 'remote' : lead.city,
+    workplace_type: workplaceType,
     direction: lead.direction,
     grade: lead.grade,
     company: lead.company ?? lead.author,
@@ -269,15 +272,17 @@ export function sinceInstant(value: unknown, now: Date = new Date()): string | u
 }
 
 function leadSummary(lead: Lead): Record<string, unknown> {
+  const saneBudget = !salaryLooksWrong(lead) ? lead.budget : undefined;
+  const effectiveRemote = Boolean(lead.isRemote || (lead.type === 'gig' && !lead.city && lead.workplaceType !== 'onsite' && lead.workplaceType !== 'hybrid'));
   return {
     id: lead.id,
     type: lead.type,
     title: stripInvisible(lead.title),
-    budget: lead.budget,
-    currency: lead.currency,
+    budget: saneBudget,
+    currency: saneBudget ? lead.currency : undefined,
     city: lead.city,
-    remote: lead.isRemote,
-    workplace_type: lead.workplaceType ?? (lead.isRemote ? 'remote' : 'onsite'),
+    remote: effectiveRemote,
+    workplace_type: lead.workplaceType ?? (effectiveRemote ? 'remote' : 'onsite'),
     direction: lead.direction,
     skills: lead.skills,
     flags: qualityFlagsOf(lead).length ? qualityFlagsOf(lead) : undefined,
@@ -471,14 +476,19 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend): Pr
           const key = skill.toLowerCase();
           skills.set(key, (skills.get(key) ?? 0) + 1);
         }
-        if (typeof lead.budget === 'number' && lead.budget > 0) budgets.push(lead.budget);
+        if (typeof lead.budget === 'number' && lead.budget > 0 && !salaryLooksWrong(lead)) budgets.push(lead.budget);
       }
       budgets.sort((a, b) => a - b);
+      const insights = computeInsights(leads, 30);
       return text(id, {
         total_analyzed_leads: leads.length,
         top_skills: [...skills.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15).map(([skill, count]) => ({ skill, count })),
         median_budget: budgets.length ? budgets[Math.floor(budgets.length / 2)] : 0,
         budget_samples_count: budgets.length,
+        workplace: insights.workplace,
+        directions: insights.directions,
+        salary_percentiles: insights.salary_percentiles,
+        ai_exposure: insights.ai_exposure,
       });
     }
 

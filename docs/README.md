@@ -53,6 +53,8 @@
 
 | Документ | Описание / Description |
 | --- | --- |
+| [DATA_CONTRACT.md](DATA_CONTRACT.md) | Контракт сохранности данных, `.env` и обратной совместимости при обновлении узлов |
+| [TAKEDOWN.md](TAKEDOWN.md) | Политика удаления публикаций (takedown), защиты контактов и уважения источников |
 | [BACKUP_AND_RESTORE.md](BACKUP_AND_RESTORE.md) | Резервное копирование PostgreSQL и восстановление из дампа |
 | [PUBLISHING.md](PUBLISHING.md) | Выпуск релизов, автодеплой по git-тегам и публикация в MCP Registry через GitHub OIDC |
 | [ROADMAP.md](ROADMAP.md) | Дорожная карта, эпики и критерии релиза v1.0 |
