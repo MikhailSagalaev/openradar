@@ -48,7 +48,7 @@ export interface StoredModelFacts {
 }
 
 const ROLE_SLUGS = ROLES.map((role) => role.slug);
-const CURRENCIES = new Set(['RUB', 'USD', 'EUR', 'KZT', 'BYN', 'UAH', 'GBP']);
+const CURRENCIES = new Set(['RUB', 'USD', 'EUR', 'KZT', 'BYN', 'UAH', 'GBP', 'PLN', 'CHF', 'CAD', 'AUD', 'INR']);
 const PERIODS = new Set(['month', 'year', 'hour', 'project']);
 
 const SYSTEM_PROMPT = `You extract structured facts from a job vacancy or a freelance order for a labour-market statistics project.
@@ -64,7 +64,7 @@ Return ONLY a JSON object with these keys (use null when the post does not say; 
 - city (string|null): city in Russian if the work is tied to a place.
 - remote (boolean|null): true if remote work is allowed.
 - payMin, payMax (number|null): the pay as written, as plain numbers ("от 150 тыс" → payMin 150000; "до 5к" → payMax 5000; one amount → both equal).
-- currency (string|null): RUB, USD, EUR, KZT, BYN, UAH or GBP.
+- currency (string|null): RUB, USD, EUR, KZT, BYN, UAH, GBP, PLN, CHF, CAD, AUD or INR.
 - period (string|null): month, year, hour, or project (a fixed price for the whole order).
 - skills (string[]): up to 8 tools and technologies named in the post.`;
 

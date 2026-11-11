@@ -98,7 +98,7 @@ export function extractCity(text: string): string | undefined {
 }
 
 const CURRENCY_MARKERS: Array<{ re: RegExp; currency: string }> = [
-  { re: /(?:byn|бел\.?\s*руб[а-я]*)/i, currency: 'BYN' },
+  { re: /(?:byn|бел\.?\s*руб[а-я]*|^br$)/i, currency: 'BYN' },
   { re: /(?:₽|руб(?:\.|лей|ля|ль)?|р\.|rur)/i, currency: 'RUB' },
   { re: /(?:\$|usd|usdt|usdc|долл[а-я]*)/i, currency: 'USD' },
   { re: /(?:€|eur|евро)/i, currency: 'EUR' },
@@ -143,7 +143,7 @@ export function extractBudgetAndCurrency(text: string, options: { keepNotPay?: b
   }
 
   // 2. Amount followed by currency marker or symbol, e.g. "1500PLN", "1500 zł", "5000 руб", "150 000 ₽", "3000 USD"
-  const suffixRe = /(\d{1,3}(?:[ \u00a0,]\d{3})+|\d{2,7})\s*(₽|руб(?:\.|лей|ля|ль)?|р\.|rur|\$|usd|usdt|usdc|долл[а-я]*|€|eur|евро|pln|zł|zl|злот[а-я]*|₸|kzt|тенге|byn|бел\.?\s*руб[а-я]*|₴|uah|грн[а-я]*|£|gbp|chf|cad|aud|₹|inr|рупи[а-я]*)(?!\p{L})/giu;
+  const suffixRe = /(\d{1,3}(?:[ \u00a0,]\d{3})+|\d{2,7})\s*(₽|руб(?:\.|лей|ля|ль)?|р\.|rur|\$|usd|usdt|usdc|долл[а-я]*|€|eur|евро|pln|zł|zl|злот[а-я]*|₸|kzt|тенге|byn|Br|бел\.?\s*руб[а-я]*|₴|uah|грн[а-я]*|£|gbp|chf|cad|aud|₹|inr|рупи[а-я]*)(?!\p{L})/giu;
   for (const m of source.matchAll(suffixRe)) {
     const rawMarker = m[2] ?? '';
     const num = Number.parseInt((m[1] ?? '').replace(/[ \u00a0,]/g, ''), 10);

@@ -58,4 +58,36 @@ describe('payment period bounds', () => {
     expect(wrong.paymentPeriod).toBe('monthly');
     expect(normalizeSalary({ text: 'Pay: 40 USD per hour', budget: 40, type: 'job', currency: 'USD' }).paymentPeriod).toBe('hourly');
   });
+
+  it('uses foreign currency in rawSalary even when caller defaulted currency to RUB', () => {
+    const plnHourly = normalizeSalary({
+      text: 'Analityk Systemowy',
+      rawSalary: '120–135 PLN в час',
+      currency: 'RUB',
+      type: 'job',
+    });
+    expect(plnHourly.currency).toBe('PLN');
+    expect(plnHourly.paymentPeriod).toBe('hourly');
+    expect(plnHourly.normalizedUsdMin).toBeGreaterThanOrEqual(28);
+
+    const eurMonthly = normalizeSalary({
+      text: 'Senior Infrastructure & Security Architect',
+      rawSalary: '13500–13700 EUR в месяц',
+      currency: 'RUB',
+      type: 'job',
+    });
+    expect(eurMonthly.currency).toBe('EUR');
+    expect(eurMonthly.paymentPeriod).toBe('monthly');
+    expect(eurMonthly.normalizedUsdMin).toBeGreaterThanOrEqual(14000);
+  });
+
+  it('treats per-visit and per-consultation rates as hourly rather than monthly', () => {
+    const visit = normalizeSalary({
+      text: 'Compensation ~$60 per visit',
+      budget: 60,
+      currency: 'USD',
+      type: 'job',
+    });
+    expect(visit.paymentPeriod).toBe('hourly');
+  });
 });

@@ -172,9 +172,14 @@ export function factsFill(facts: PageFacts, type: LeadType): LeadFactsFill {
     fill.budget = facts.salary.max ?? facts.salary.min;
     fill.currency = facts.salary.currency;
     fill.paymentPeriod = pay.period === 'hour' ? 'hourly' : pay.period === 'month' ? 'monthly' : 'fixed';
-    // The stored budget stays as the page gives it; «per year» tells readers and normalizeSalary it is not monthly.
-    const perYear = facts.salary.period === 'year' ? ' per year' : '';
-    fill.rawSalary = [facts.salary.min, facts.salary.max].filter((v) => v !== undefined).join('–') + ` ${facts.salary.currency}${perYear}`;
+    // The stored budget stays as the page gives it; «per year» / «per hour» tells readers and normalizeSalary it is not monthly.
+    const periodSuffix =
+      facts.salary.period === 'year'
+        ? ' per year'
+        : facts.salary.period === 'hour'
+          ? ' per hour'
+          : '';
+    fill.rawSalary = [facts.salary.min, facts.salary.max].filter((v) => v !== undefined).join('–') + ` ${facts.salary.currency}${periodSuffix}`;
     fill.normalizedUsdMin = usd(pay.min ?? pay.max);
     fill.normalizedUsdMax = usd(pay.max ?? pay.min);
   }

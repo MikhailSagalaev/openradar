@@ -46,8 +46,12 @@ export const rssSource: SourceAdapter = {
   async poll(source, ctx): Promise<RawLead[]> {
     let url = typeof source.config.url === 'string' ? source.config.url.trim() : '';
     if (!url) throw new Error('RSS source requires config.url');
-    if (/^https?:\/\/(?:www\.)?hh\.ru\/search\/vacancy\/rss\?/i.test(url) && /[?&]text=/i.test(url) && !/[?&](?:search_field|professional_role)=/i.test(url)) {
-      url += '&search_field=name';
+    if (/^https?:\/\/(?:www\.)?hh\.ru\/search\/vacancy\/rss\?/i.test(url)) {
+      // Role 120 on hh.ru is physical security guards (ТЦ, склады, транспорт), not InfoSec (116).
+      url = url.replace(/([?&])professional_role=120&/gi, '$1').replace(/&professional_role=120(?=$|#)/gi, '');
+      if (/[?&]text=/i.test(url) && !/[?&](?:search_field|professional_role)=/i.test(url)) {
+        url += '&search_field=name';
+      }
     }
 
     const xml = await fetchText(ctx, url);

@@ -372,6 +372,7 @@ export interface LeadMoney {
   normalizedUsdMin?: number;
   normalizedUsdMax?: number;
   skills: string[];
+  city?: string;
 }
 
 export interface LeadFactsFill {

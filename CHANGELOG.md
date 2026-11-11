@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.67.4 — 2026-11-11
+
+- **Foreign salary & currency normalization**: `sitemap` (`leadFromPosting`), `prepareRawLead`, and `normalizeSalary` now preserve and prioritize explicit foreign currencies (`PLN`, `EUR`, `USD`, `BYN`/`Br`) in `rawSalary` and anchored text over the default `RUB` fallback, eliminating false `RUB` division on `justjoin.it` and Belarusian `hh.ru` vacancies; Russian rouble salaries are never divided by 12 as yearly figures, and per-visit/per-consultation rates are classified as `hourly`.
+- **LLM & page-facts salary period enrichment**: `applyLeadModelEnrichment`, `factsFill`, and `rescoreLeads` now preserve `hour` / `year` / `project` payment periods and foreign currencies when enriching or re-pricing leads.
+- **Role, InfoSec & employer precision + startup auto-heal**: Removed physical security role `professional_role=120` from `hh-infosec`, tightened `classifyRole` for `security`, `mobile`, `support`, `sales`, and `1c`, expanded `employerOf` / `detectCompany` for GeekJob and bank branch suffixes, and added a non-blocking startup data-hygiene pass in `radar serve` (`rescoreLeads`, `fillDirections`, `fillEmployers`).
+
 ## 0.67.3 (2026-11-11)
 
 - **566-Lead Parsing & Formatting Audit Fixes**:

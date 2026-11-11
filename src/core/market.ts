@@ -153,8 +153,9 @@ const AI_SKILLS = new Set([
  */
 const UMBRELLA_CATEGORY_TAGS = new Set([
   'продажи', 'разработка', 'аналитика', 'маркетинг', 'дизайн', 'тестирование', 'техподдержка',
+  'поддержка', 'бухгалтерия', 'юриспруденция', 'обучение', 'фото', 'видеомонтаж', 'тексты', 'переводы',
   'администрирование', 'контент', 'инфобез', 'sales', 'development', 'analytics', 'marketing',
-  'design', 'qa', 'tech support', 'sysadmin', 'content', 'security', 'it', 'engineering',
+  'design', 'qa', 'tech support', 'support', 'customer support', 'sysadmin', 'content', 'security', 'it', 'engineering',
   'software development', 'system and network administration',
 ]);
 

@@ -92,7 +92,7 @@ export function prepareRawLead(
       : undefined;
   const extractedMoney = extractBudgetAndCurrency(`${raw.title || ''}\n${normalizedText}`);
   let budget = explicitBudget ?? extractedMoney.budget;
-  const detected = detectCurrency(`${raw.title || ''}\n${normalizedText}`);
+  const detected = detectCurrency(`${raw.title || ''}\n${raw.rawSalary || ''}\n${normalizedText}`);
   let currency = cleanShortField(raw.currency, 8);
   if (!currency || (!explicitBudget && extractedMoney.currency)) {
     currency = extractedMoney.currency || detected || 'RUB';
@@ -114,6 +114,9 @@ export function prepareRawLead(
     currency,
     type,
   });
+  if (salaryInfo.currency) {
+    currency = salaryInfo.currency;
+  }
   const implausible = salaryInfo.implausible === true || payNotOffered({ url, title }, salaryInfo.normalizedUsdMax ?? salaryInfo.normalizedUsdMin);
   if (implausible) budget = undefined;
 
