@@ -453,10 +453,12 @@ export interface Store extends HubStore {
   /** Answers not acted on yet, with the post's score. */
   listDecisionsToApply?(limit: number): Promise<Array<{ decision: ModelDecision; score: number }>>;
   markDecisionApplied?(leadId: string, applied: string): Promise<void>;
-  /** Fills the research direction of a lead that has none: a model answer is data, not a feed action. */
+  /** Fills empty/other research direction from a sure model answer: data, not a feed action. */
   applyLeadDirection?(leadId: string, direction: string): Promise<void>;
-  /** Updates the workplace arrangement (onsite, hybrid, remote) of a lead. */
+  /** Fills workplace only when the column is still empty (rules win when they already wrote one). */
   applyLeadWorkplace?(leadId: string, workplaceType: 'remote' | 'hybrid' | 'onsite', isRemote: boolean): Promise<void>;
+  /** Backfill: copy sure SubQ directions onto leads still stuck on empty/other. */
+  applyDirectionsFromDecisions?(minConfidence?: number): Promise<number>;
   /** Posts the model took off the feed, the newest first. */
   listAppliedDecisions?(limit: number): Promise<Array<{ lead: Lead; decision: ModelDecision }>>;
   /** A person says the model was wrong: the post comes back and counts as a good one. */

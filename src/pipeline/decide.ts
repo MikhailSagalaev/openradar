@@ -85,11 +85,17 @@ export async function applyDecisions(deps: DecideDeps, limit: number): Promise<{
       await store.updateLeadScore?.(decision.leadId, Math.max(0, Math.min(100, score + shift)));
       summary.moved++;
     }
-    // A sure direction fills an empty one: data for the catalogs, never a hide.
-    if (decision.direction && (decision.directionConfidence ?? 0) >= 0.8 && store.applyLeadDirection) {
+    // A sure non-other direction fills an empty one or replaces "other" from the rules.
+    if (
+      decision.direction
+      && decision.direction !== 'other'
+      && (decision.directionConfidence ?? 0) >= 0.8
+      && store.applyLeadDirection
+    ) {
       await store.applyLeadDirection(decision.leadId, decision.direction);
       summary.directed++;
     }
+    // Only fill workplace when rules left it empty: SubQ remote is noul, not hybrid-aware.
     if (decision.remote !== undefined && store.applyLeadWorkplace) {
       let wp: 'remote' | 'hybrid' | 'onsite' | undefined;
       if (typeof decision.remote === 'string') {

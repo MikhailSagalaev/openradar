@@ -33,6 +33,8 @@ export interface Env {
   RADAR_LLM_ENABLED: boolean;
   RADAR_EXTRACT_ENABLED: boolean;
   RADAR_EXTRACT_MODEL?: string;
+  /** Second OpenAI-compatible model tried when the primary returns nothing usable. */
+  RADAR_EXTRACT_FALLBACK_MODEL?: string;
   RADAR_EXTRACT_PER_HOUR: number;
   RADAR_EXTRACT_APPLY: boolean;
   RADAR_DECIDE_ENABLED?: boolean;

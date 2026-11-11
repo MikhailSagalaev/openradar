@@ -21,6 +21,8 @@ const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000;
 const BACKGROUND_INTERVAL_MS = 60 * 1000;
 const LIVENESS_INTERVAL_MS = 5 * 60 * 1000;
 const EXTRACTION_INTERVAL_MS = 2 * 60 * 1000;
+/** Batches per hour at EXTRACTION_INTERVAL_MS: keep decide/enrich/extract caps honest. */
+const BATCHES_PER_HOUR = 30;
 const USER_TELEGRAM_CHECK_MS = 5 * 60 * 1000;
 
 export class PollRunner {
@@ -188,14 +190,14 @@ export class PollRunner {
       });
   }
 
-  /** Pages of short posts, every ten minutes, sized to RADAR_ENRICH_PER_HOUR. */
+  /** Pages of short posts, every two minutes, sized to RADAR_ENRICH_PER_HOUR. */
   private runEnrichmentIfDue(): void {
     const env = this.deps.env;
     const perHour = env.RADAR_ENRICH_PER_HOUR ?? 0;
     if (perHour <= 0 || this.enrichmentRunning || Date.now() < this.nextEnrichmentAt) return;
     this.nextEnrichmentAt = Date.now() + EXTRACTION_INTERVAL_MS;
     this.enrichmentRunning = true;
-    void runEnrichment({ store: this.deps.store, env, logger: this.deps.logger.child('enrich'), fetchImpl: fetch }, Math.max(1, Math.round(perHour / 6)))
+    void runEnrichment({ store: this.deps.store, env, logger: this.deps.logger.child('enrich'), fetchImpl: fetch }, Math.max(1, Math.round(perHour / BATCHES_PER_HOUR)))
       .then((summary) => {
         if (summary.checked) this.logger.info('pages read', { ...summary });
       })
@@ -207,7 +209,7 @@ export class PollRunner {
       });
   }
 
-  /** A batch of decisions every ten minutes, sized to RADAR_DECIDE_PER_HOUR. */
+  /** A batch of decisions every two minutes, sized to RADAR_DECIDE_PER_HOUR. */
   private runDecisionsIfDue(): void {
     const env = this.deps.env;
     const perHour = env.RADAR_DECIDE_PER_HOUR ?? 0;
@@ -215,7 +217,7 @@ export class PollRunner {
     if (Date.now() < this.nextDecisionsAt) return;
     this.nextDecisionsAt = Date.now() + EXTRACTION_INTERVAL_MS;
     this.decisionsRunning = true;
-    void runDecisions({ store: this.deps.store, env, logger: this.deps.logger.child('decide'), fetchImpl: fetch }, Math.max(1, Math.round(perHour / 6)))
+    void runDecisions({ store: this.deps.store, env, logger: this.deps.logger.child('decide'), fetchImpl: fetch }, Math.max(1, Math.round(perHour / BATCHES_PER_HOUR)))
       .then((summary) => {
         if (summary.asked) this.logger.info('decisions finished', { ...summary });
         if (this.deps.services) {
@@ -242,12 +244,12 @@ export class PollRunner {
           }
         }
         return applyDecisions({ store: this.deps.store, env, logger: this.deps.logger.child('decide'), fetchImpl: fetch }, 500).then((done) => {
-          if (done.hidden || done.closed || done.moved) this.logger.info('decisions applied', { ...done });
+          if (done.hidden || done.closed || done.moved || done.directed) this.logger.info('decisions applied', { ...done });
           return summary;
         });
       })
       .then((summary) => {
-        // No credits or too many requests: an hour's pause, not a request every ten minutes.
+        // No credits or too many requests: an hour's pause, not a request every two minutes.
         if (summary.stopped) this.nextDecisionsAt = Date.now() + 60 * 60 * 1000;
       })
       .catch((error) => {
@@ -265,12 +267,19 @@ export class PollRunner {
     if (Date.now() - this.lastExtractionAt < EXTRACTION_INTERVAL_MS) return;
     this.lastExtractionAt = Date.now();
     this.extractionRunning = true;
-    const limit = Math.max(1, Math.min(25, Math.round(env.RADAR_EXTRACT_PER_HOUR / 30)));
+    const limit = Math.max(1, Math.min(25, Math.round(env.RADAR_EXTRACT_PER_HOUR / BATCHES_PER_HOUR)));
     void runModelExtraction({ store: this.deps.store, env, logger: this.deps.logger.child('extract'), fetchImpl: this.deps.fetchImpl }, { limit })
       .then((summary) => {
-        if (summary.asked) this.logger.info('model extraction finished', { asked: summary.asked, saved: summary.saved, failed: summary.failed });
+        if (summary.asked) this.logger.info('model extraction finished', { asked: summary.asked, saved: summary.saved, failed: summary.failed, stopped: summary.stopped });
+        if (summary.pausedMs) this.lastExtractionAt = Date.now() + summary.pausedMs - EXTRACTION_INTERVAL_MS;
+        if (summary.stopped) this.lastExtractionAt = Date.now() + 60 * 60 * 1000 - EXTRACTION_INTERVAL_MS;
         if (this.deps.services) {
-          if (summary.pausedMs) {
+          if (summary.stopped) {
+            this.deps.services.record('extract', 'LLM (аналитика зарплат)', 'error', {
+              error: `HTTP ${summary.stopped}`,
+              httpStatus: summary.stopped,
+            });
+          } else if (summary.pausedMs) {
             this.deps.services.record('extract', 'LLM (аналитика зарплат)', 'degraded', {
               error: 'Rate limit / Busy (HTTP 429)',
               httpStatus: 429,
@@ -319,6 +328,11 @@ export class PollRunner {
           },
         });
         if (notices.sent) this.logger.info('points notices sent', { ...notices });
+      }
+      // Sure SubQ directions onto leads still stuck on empty/other (ingest always wrote a slug).
+      if (this.deps.env.RADAR_DECIDE_APPLY && store.applyDirectionsFromDecisions) {
+        const directed = await store.applyDirectionsFromDecisions(0.8);
+        if (directed) this.logger.info('directions backfilled from decisions', { directed });
       }
       // Last month's market report is frozen once, early in the next month.
       const snapshot = await ensureMonthlySnapshot(store, new Date(), { useModel: this.deps.env.RADAR_EXTRACT_APPLY });

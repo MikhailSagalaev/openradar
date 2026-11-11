@@ -369,15 +369,28 @@ export class MemoryStore implements Store {
 
   async applyLeadDirection(leadId: string, direction: string): Promise<void> {
     const lead = this.leads.get(leadId);
-    if (lead && (!lead.direction || lead.direction === '')) lead.direction = direction;
+    if (lead && (!lead.direction || lead.direction === '' || lead.direction === 'other')) lead.direction = direction;
   }
 
   async applyLeadWorkplace(leadId: string, workplaceType: 'remote' | 'hybrid' | 'onsite', isRemote: boolean): Promise<void> {
     const lead = this.leads.get(leadId);
-    if (lead) {
+    if (lead && lead.workplaceType == null) {
       lead.workplaceType = workplaceType;
       lead.isRemote = isRemote;
     }
+  }
+
+  async applyDirectionsFromDecisions(minConfidence = 0.8): Promise<number> {
+    let n = 0;
+    for (const decision of this.modelDecisions.values()) {
+      if (decision.overruled || !decision.direction || decision.direction === 'other') continue;
+      if ((decision.directionConfidence ?? 0) < minConfidence) continue;
+      const lead = this.leads.get(decision.leadId);
+      if (!lead || (lead.direction && lead.direction !== '' && lead.direction !== 'other')) continue;
+      lead.direction = decision.direction;
+      n++;
+    }
+    return n;
   }
 
   async listAppliedDecisions(limit: number): Promise<Array<{ lead: Lead; decision: ModelDecision }>> {
@@ -692,10 +705,12 @@ export class MemoryStore implements Store {
   async listLeadsForModel(options: { limit: number; since: string; version: number; withPayFirst?: boolean }): Promise<Array<Pick<Lead, 'id' | 'title' | 'text' | 'type'>>> {
     const version = (l: Lead): number => Number((l.metadata?.model as { v?: number } | undefined)?.v ?? 0);
     const noPay = (l: Lead): number => (l.normalizedUsdMin === undefined && l.normalizedUsdMax === undefined ? 1 : 0);
+    const money = (l: Lead): boolean => /(?:₽|\$|€|руб|usd|eur|оклад|бюджет|з[./\s]?п\b|тысяч|\d[\d\s\u00a0]{2,}[кk]\b)/i.test(`${l.title}\n${l.text}`);
     const rank = (l: Lead): number => (l.type === 'gig' ? 0 : 2) + (/[А-Яа-яЁё]/.test(l.title) ? 0 : 1);
     return Array.from(this.leads.values())
       .filter((l) => l.createdAt >= options.since && l.state !== 'hidden_junk' && l.state !== 'hidden_scam'
-        && l.status !== 'rejected' && l.status !== 'failed' && version(l) < options.version)
+        && l.status !== 'rejected' && l.status !== 'failed' && version(l) < options.version
+        && (options.withPayFirst || (noPay(l) === 1 && money(l))))
       .sort((a, b) => rank(a) - rank(b) || (options.withPayFirst ? noPay(a) - noPay(b) : noPay(b) - noPay(a)) || b.createdAt.localeCompare(a.createdAt))
       .slice(0, options.limit)
       .map((l) => ({ id: l.id, title: l.title, text: l.text.slice(0, 2500), type: l.type }));

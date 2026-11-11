@@ -4,12 +4,13 @@
  * rest as strict JSON. The rules and the page markup still win; the model only fills gaps,
  * and only answers it is confident in reach the report.
  *
- * Any OpenAI-compatible API works (Groq, OpenAI, DeepSeek, OpenRouter, a local Ollama or
- * vLLM), and GigaChat.
+ * Any OpenAI-compatible API works (Coarena, Groq, OpenAI, DeepSeek, OpenRouter, a local
+ * Ollama or vLLM), and GigaChat.
  */
 import type { Env, Lead, Logger } from '../core/types.ts';
 import { getProxyAgent } from '../net/proxy.ts';
 import { fetch as undiciFetch } from 'undici';
+import { scrubContacts } from '../server/collector.ts';
 import { GRADE_ORDER, MIN_CONFIDENCE, ROLES, type Grade } from './derive.ts';
 import { GigachatBusyError, gigachatFetch, gigachatToken, markGigachatBusy, resetGigachatToken, retryAfterMs } from './gigachat.ts';
 
@@ -41,7 +42,9 @@ export interface StoredModelFacts {
   v: number;
   model: string;
   at: string;
-  facts: ModelFacts;
+  facts?: ModelFacts;
+  /** Set when every model refused or returned unusable JSON: the post leaves the queue. */
+  failed?: boolean;
 }
 
 const ROLE_SLUGS = ROLES.map((role) => role.slug);
@@ -64,6 +67,36 @@ Return ONLY a JSON object with these keys (use null when the post does not say; 
 - currency (string|null): RUB, USD, EUR, KZT, BYN, UAH or GBP.
 - period (string|null): month, year, hour, or project (a fixed price for the whole order).
 - skills (string[]): up to 8 tools and technologies named in the post.`;
+
+/** OpenAI-style json_schema so the decoder cannot invent free-form roles or currencies. */
+export function extractResponseSchema(): Record<string, unknown> {
+  const strOrNull = (extra: Record<string, unknown> = {}) => ({ type: ['string', 'null'], ...extra });
+  const numOrNull = { type: ['number', 'null'] };
+  return {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      isPost: { type: 'boolean' },
+      postType: { type: ['string', 'null'], enum: ['job', 'gig', null] },
+      confidence: { type: 'number' },
+      role: strOrNull({ enum: [...ROLE_SLUGS, null] }),
+      grade: strOrNull({ enum: [...GRADE_ORDER, null] }),
+      language: strOrNull(),
+      company: strOrNull(),
+      city: strOrNull(),
+      remote: { type: ['boolean', 'null'] },
+      payMin: numOrNull,
+      payMax: numOrNull,
+      currency: strOrNull({ enum: [...CURRENCIES, null] }),
+      period: strOrNull({ enum: [...PERIODS, null] }),
+      skills: { type: 'array', items: { type: 'string' } },
+    },
+    required: [
+      'isPost', 'postType', 'confidence', 'role', 'grade', 'language', 'company', 'city',
+      'remote', 'payMin', 'payMax', 'currency', 'period', 'skills',
+    ],
+  };
+}
 
 function num(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 && value < 1e9 ? Math.round(value) : undefined;
@@ -117,9 +150,23 @@ export function parseModelAnswer(content: string): ModelFacts | undefined {
 }
 
 const GIGACHAT_MODEL = 'GigaChat-2-Pro';
+const STOP = new Set([401, 402, 403]);
+
+/** Auth or quota: the batch pauses instead of burning the queue. */
+export class ExtractStoppedError extends Error {
+  constructor(readonly status: number) {
+    super(`Model extraction stopped: HTTP ${status}`);
+  }
+}
 
 export function modelName(env: Env): string {
   return env.RADAR_EXTRACT_MODEL || (env.RADAR_EXTRACT_PROVIDER === 'gigachat' ? GIGACHAT_MODEL : env.OPENAI_MODEL);
+}
+
+export function extractModelCascade(env: Env): string[] {
+  const primary = modelName(env);
+  const fallback = env.RADAR_EXTRACT_FALLBACK_MODEL?.trim();
+  return fallback && fallback !== primary ? [primary, fallback] : [primary];
 }
 
 export function extractionEnabled(env: Env): boolean {
@@ -131,58 +178,95 @@ interface ChatResponse {
   choices?: Array<{ message?: { content?: string } }>;
 }
 
+function responseFormat(gigachat: boolean, useSchema: boolean): Record<string, unknown> {
+  if (gigachat) return { temperature: 0.01 };
+  if (useSchema) {
+    return {
+      temperature: 0,
+      response_format: {
+        type: 'json_schema',
+        json_schema: { name: 'extract', strict: true, schema: extractResponseSchema() },
+      },
+    };
+  }
+  return { temperature: 0, response_format: { type: 'json_object' } };
+}
+
+async function askModel(
+  lead: Pick<Lead, 'title' | 'text'>,
+  model: string,
+  deps: { env: Env; logger: Logger; fetchImpl: typeof fetch; dispatcher?: unknown },
+  useSchema: boolean,
+): Promise<ModelFacts | undefined> {
+  const { env } = deps;
+  const gigachat = env.RADAR_EXTRACT_PROVIDER === 'gigachat';
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const base = gigachat ? env.GIGACHAT_BASE_URL : env.OPENAI_BASE_URL;
+    const key = gigachat ? await gigachatToken(env, deps.fetchImpl, controller.signal) : env.OPENAI_API_KEY;
+    const title = scrubContacts(lead.title);
+    const text = scrubContacts(lead.text).slice(0, 2500);
+    const response = await deps.fetchImpl(`${base.replace(/\/+$/, '')}/chat/completions`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+      ...(deps.dispatcher ? { dispatcher: deps.dispatcher } : {}),
+      body: JSON.stringify({
+        model,
+        ...responseFormat(gigachat, useSchema),
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: JSON.stringify({ title, text }) },
+        ],
+      }),
+    } as RequestInit);
+    if (response.status === 429) {
+      const ms = retryAfterMs(response);
+      if (gigachat) markGigachatBusy(ms);
+      throw new GigachatBusyError('chat', ms);
+    }
+    if (STOP.has(response.status)) {
+      if (gigachat && response.status === 401) resetGigachatToken();
+      throw new ExtractStoppedError(response.status);
+    }
+    if (!response.ok) {
+      if (gigachat && response.status === 401) resetGigachatToken();
+      // Some hosts reject json_schema: retry once with plain json_object.
+      if (!gigachat && useSchema && response.status === 400) {
+        return askModel(lead, model, deps, false);
+      }
+      deps.logger.warn('model extraction HTTP error', { status: response.status, model, body: (await response.text().catch(() => '')).slice(0, 200) });
+      return undefined;
+    }
+    const content = ((await response.json()) as ChatResponse).choices?.[0]?.message?.content;
+    return content ? parseModelAnswer(content) : undefined;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function extractWithModel(
   lead: Pick<Lead, 'title' | 'text' | 'type'>,
   deps: { env: Env; logger: Logger; fetchImpl?: typeof fetch },
 ): Promise<ModelFacts | undefined> {
   const { env } = deps;
   const gigachat = env.RADAR_EXTRACT_PROVIDER === 'gigachat';
-  // The runtime hands everyone the global fetch, which does not trust GigaChat's root:
-  // only a substitute (a test's) replaces gigachatFetch.
   const injected = deps.fetchImpl && deps.fetchImpl !== globalThis.fetch ? deps.fetchImpl : undefined;
   const proxyUrl = env.RADAR_PROXY_URL?.trim();
   const dispatcher = (!gigachat && !injected && proxyUrl) ? getProxyAgent(proxyUrl) : undefined;
   const fetchImpl = injected ?? (gigachat ? gigachatFetch : (dispatcher ? (undiciFetch as unknown as typeof fetch) : fetch));
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 30_000);
+  const callDeps = { env, logger: deps.logger, fetchImpl, dispatcher };
   try {
-    const base = gigachat ? env.GIGACHAT_BASE_URL : env.OPENAI_BASE_URL;
-    const key = gigachat ? await gigachatToken(env, fetchImpl, controller.signal) : env.OPENAI_API_KEY;
-    const response = await fetchImpl(`${base.replace(/\/+$/, '')}/chat/completions`, {
-      method: 'POST',
-      signal: controller.signal,
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-      ...(dispatcher ? { dispatcher } : {}),
-      body: JSON.stringify({
-        model: modelName(env),
-        // GigaChat wants a temperature above zero and has no JSON mode: the prompt asks for JSON.
-        ...(gigachat ? { temperature: 0.01 } : { temperature: 0, response_format: { type: 'json_object' } }),
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: JSON.stringify({ title: lead.title, text: lead.text.slice(0, 2500) }) },
-        ],
-      }),
-    });
-    // Any provider's 429 stops the batch: Groq's free plan counts requests per day and tokens per minute.
-    if (response.status === 429) {
-      const ms = retryAfterMs(response);
-      if (gigachat) markGigachatBusy(ms);
-      throw new GigachatBusyError('chat', ms);
+    for (const model of extractModelCascade(env)) {
+      const facts = await askModel(lead, model, callDeps, !gigachat);
+      if (facts) return facts;
     }
-    if (!response.ok) {
-      if (gigachat && response.status === 401) resetGigachatToken();
-      deps.logger.warn('model extraction HTTP error', { status: response.status, body: (await response.text().catch(() => '')).slice(0, 200) });
-      return undefined;
-    }
-    const content = ((await response.json()) as ChatResponse).choices?.[0]?.message?.content;
-    return content ? parseModelAnswer(content) : undefined;
+    return undefined;
   } catch (error) {
-    // A 429 is not this post's fault: the batch decides what to do with it.
-    if (error instanceof GigachatBusyError) throw error;
+    if (error instanceof GigachatBusyError || error instanceof ExtractStoppedError) throw error;
     deps.logger.warn('model extraction failed', { error: error instanceof Error ? error.message : String(error) });
     return undefined;
-  } finally {
-    clearTimeout(timer);
   }
 }
 
@@ -191,14 +275,15 @@ export interface ExtractionSummary {
   saved: number;
   failed: number;
   ids: string[];
-  /** Set when GigaChat answered 429 and the rest of the batch was left for the next run. */
+  /** Set when the provider answered 429 and the rest of the batch was left for the next run. */
   pausedMs?: number;
+  /** Auth or quota: pause the runner. */
+  stopped?: number;
 }
 
 /**
- * One batch: the newest posts with no model answer yet. Orders and Russian posts come first,
- * since boards with structured fields need the model least, then the ones the rules left
- * without pay. A few requests at a time, so a slow API does not pile up.
+ * One batch: posts without pay that still mention money in the text (and calibration's
+ * with-pay set). Orders and Russian posts come first. A few requests at a time.
  */
 export async function runModelExtraction(
   deps: { store: import('../core/store.ts').Store; env: Env; logger: Logger; fetchImpl?: typeof fetch },
@@ -213,6 +298,7 @@ export async function runModelExtraction(
   const pauseMs = options.pauseMs ?? (deps.env.RADAR_EXTRACT_PROVIDER === 'gigachat' ? 0 : 1200);
   const worker = async (): Promise<void> => {
     for (let lead = queue.shift(); lead; lead = queue.shift()) {
+      if (summary.stopped !== undefined) break;
       if (summary.asked > 0 && pauseMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, pauseMs));
       }
@@ -221,8 +307,14 @@ export async function runModelExtraction(
       try {
         facts = await extractWithModel(lead, deps);
       } catch (error) {
+        if (error instanceof ExtractStoppedError) {
+          summary.failed++;
+          summary.stopped = error.status;
+          queue.length = 0;
+          deps.logger.warn('model extraction stopped', { status: error.status });
+          break;
+        }
         if (!(error instanceof GigachatBusyError)) throw error;
-        // The posts stay without an answer and come first in the next batch.
         summary.failed++;
         summary.pausedMs = Math.max(summary.pausedMs ?? 0, error.retryAfterMs);
         queue.length = 0;
@@ -231,6 +323,13 @@ export async function runModelExtraction(
       }
       if (!facts) {
         summary.failed++;
+        // Leave the queue: a hard failure on this post should not be retried every two minutes.
+        await store.saveLeadModelFacts!(lead.id, {
+          v: MODEL_EXTRACT_VERSION,
+          model: modelName(deps.env),
+          at: new Date().toISOString(),
+          failed: true,
+        }, { applyToLead: false });
         continue;
       }
       const stored: StoredModelFacts = { v: MODEL_EXTRACT_VERSION, model: modelName(deps.env), at: new Date().toISOString(), facts };
@@ -239,7 +338,6 @@ export async function runModelExtraction(
       summary.ids.push(lead.id);
     }
   };
-  // A personal GigaChat plan serves one request at a time. Concurrency 2 max for safe rate-limiting.
   const concurrency = options.concurrency ?? (deps.env.RADAR_EXTRACT_PROVIDER === 'gigachat' ? 1 : 2);
   await Promise.all(Array.from({ length: Math.max(1, concurrency) }, worker));
   return summary;

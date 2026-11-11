@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.67.0 — 2026-11-11
+
+- **Extract via Coarena (GLM + MiniMax)**: OpenAI-compatible path gains `json_schema` constrained decoding, `RADAR_EXTRACT_FALLBACK_MODEL`, contact scrubbing before the call, STOP on 401/402/403, tombstones for failed posts, and a queue that only asks for posts still without pay that mention money in the text. Hub defaults documented in `.env.example`: `glm-5-3-flash` with `minimax-m3-1-flash` fallback.
+- **Decide / enrich rate honesty**: batch size uses `/30` to match the 2-minute timer (was `/6`, ~5× over the hourly caps). Extract respects `pausedMs` / STOP pauses.
+- **Catalog directions from SubQ**: `applyLeadDirection` may replace `other`; sure non-`other` decisions are backfilled in maintenance. Workplace from SubQ fills only an empty `workplace_type` so rules are not overwritten.
+- **Health / CSRF hardening**: `/health` hides service error details from guests; localhost Origin is not accepted against a public Host; `escapeHtml` escapes single quotes.
+
 ## 0.66.2 — 2026-11-10
 
 - **Production audit fixes**:

@@ -379,6 +379,8 @@ describe('model extraction', () => {
     expect(summary).toEqual({ asked: 1, saved: 1, failed: 0, ids: ['m1'] });
     expect(requests[0]!.url).toBe('https://llm.example/v1/chat/completions');
     expect(requests[0]!.body.messages[0]!.content).toContain('untrusted data');
+    expect((requests[0]!.body as { response_format?: { type?: string } }).response_format?.type).toBe('json_schema');
+    expect(JSON.parse((requests[0]!.body.messages[1] as { content: string }).content).text).toContain('15 тысяч');
     expect(deriveRecord((await runtime.store.getLead('m1'))!)).toMatchObject({ pay: 15000, payOrigin: 'model', role: 'bots' });
 
     expect((await runModelExtraction({ ...runtime, fetchImpl }, { limit: 10 })).asked).toBe(0);
@@ -390,7 +392,7 @@ describe('model extraction', () => {
     resetGigachatToken();
     const runtime = makeTestRuntime({ RADAR_EXTRACT_ENABLED: true, RADAR_EXTRACT_PROVIDER: 'gigachat', GIGACHAT_AUTH_KEY: 'k', GIGACHAT_OAUTH_URL: 'https://127.0.0.1:1/oauth' });
     const source = await runtime.store.createSource({ kind: 'telegram', title: 'tg', config: { channel: 'jobs' } });
-    await runtime.store.insertLead(lead('n1', { sourceId: source.id, type: 'gig', title: 'Нужен бот' }));
+    await runtime.store.insertLead(lead('n1', { sourceId: source.id, type: 'gig', title: 'Нужен бот', text: 'Бюджет 10 тысяч' }));
     const global = globalThis.fetch;
     let called = false;
     globalThis.fetch = (async () => { called = true; return new Response('{}'); }) as typeof fetch;
@@ -436,7 +438,7 @@ describe('model extraction', () => {
     resetGigachatToken();
     const runtime = makeTestRuntime({ RADAR_EXTRACT_ENABLED: true, RADAR_EXTRACT_PROVIDER: 'gigachat', GIGACHAT_AUTH_KEY: 'auth-key' });
     const source = await runtime.store.createSource({ kind: 'telegram', title: 'tg', config: { channel: 'jobs' } });
-    for (const id of ['g1', 'g2']) await runtime.store.insertLead(lead(id, { sourceId: source.id, type: 'gig', title: 'Нужен бот', text: 'Бот для записи' }));
+    for (const id of ['g1', 'g2']) await runtime.store.insertLead(lead(id, { sourceId: source.id, type: 'gig', title: 'Нужен бот', text: 'Бот для записи, бюджет 10 тысяч' }));
     const calls: Array<{ url: string; headers: Record<string, string>; body: string }> = [];
     const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = input.toString();
@@ -468,7 +470,7 @@ describe('model extraction', () => {
     resetGigachatToken();
     const runtime = makeTestRuntime({ RADAR_EXTRACT_ENABLED: true, RADAR_EXTRACT_PROVIDER: 'gigachat', GIGACHAT_AUTH_KEY: 'auth-key' });
     const source = await runtime.store.createSource({ kind: 'telegram', title: 'tg', config: { channel: 'jobs' } });
-    for (const id of ['b1', 'b2', 'b3', 'b4']) await runtime.store.insertLead(lead(id, { sourceId: source.id, type: 'gig', title: 'Нужен бот', text: 'Бот для записи' }));
+    for (const id of ['b1', 'b2', 'b3', 'b4']) await runtime.store.insertLead(lead(id, { sourceId: source.id, type: 'gig', title: 'Нужен бот', text: 'Бот для записи, бюджет 10 тысяч' }));
     let oauthCalls = 0;
     const fetchImpl = (async (input: RequestInfo | URL) => {
       if (input.toString().endsWith('/oauth')) {

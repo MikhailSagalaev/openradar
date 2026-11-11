@@ -41,6 +41,7 @@ const envSchema = z.object({
   // Model extraction of pay, role and grade for the research reports (same API as above).
   RADAR_EXTRACT_ENABLED: booleanFromEnv(false),
   RADAR_EXTRACT_MODEL: optionalString,
+  RADAR_EXTRACT_FALLBACK_MODEL: optionalString,
   RADAR_EXTRACT_PER_HOUR: z.coerce.number().int().nonnegative().default(300),
   // Answers are saved either way; figures use them only once their quality is checked.
   RADAR_EXTRACT_APPLY: booleanFromEnv(false),

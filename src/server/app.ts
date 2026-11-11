@@ -497,13 +497,21 @@ function sameOrigin(c: Context): boolean {
   try {
     const originHost = new URL(origin).host.toLowerCase();
     const hostHeader = host.toLowerCase();
-    return (
-      originHost === hostHeader ||
-      originHost.startsWith('127.0.0.1:') ||
-      originHost.startsWith('localhost:') ||
-      originHost === '127.0.0.1' ||
-      originHost === 'localhost'
-    );
+    if (originHost === hostHeader) return true;
+    const isLocalHost =
+      hostHeader === 'localhost' ||
+      hostHeader.startsWith('localhost:') ||
+      hostHeader === '127.0.0.1' ||
+      hostHeader.startsWith('127.0.0.1:');
+    if (isLocalHost) {
+      return (
+        originHost.startsWith('127.0.0.1:') ||
+        originHost.startsWith('localhost:') ||
+        originHost === '127.0.0.1' ||
+        originHost === 'localhost'
+      );
+    }
+    return false;
   } catch {
     return false;
   }
@@ -929,6 +937,18 @@ export function createApp(runtime: Runtime): Hono {
   const app = new Hono();
   setPublicBaseUrl(runtime.env.RADAR_PUBLIC_URL);
 
+  if (runtime.env.RADAR_ADMIN_GITHUB) {
+    const nonNumeric = runtime.env.RADAR_ADMIN_GITHUB
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s && !/^\d+$/.test(s));
+    if (nonNumeric.length > 0) {
+      runtime.logger.warn('RADAR_ADMIN_GITHUB uses GitHub logins instead of immutable numeric IDs: consider switching to numeric IDs to prevent account-rename spoofing', {
+        logins: nonNumeric,
+      });
+    }
+  }
+
   // Security Headers: Clickjacking, MIME-sniffing, XSS, CSRF
   const analytics = analyticsFromEnv(runtime.env);
   setAnalytics(analytics);
@@ -1002,6 +1022,7 @@ export function createApp(runtime: Runtime): Hono {
     const stats = await runtime.store.getStats();
     const services = runtime.services?.all() ?? [];
     const hasServiceErrors = runtime.services?.hasErrors() ?? false;
+    const admin = await isAdmin(c, runtime);
     return c.json({
       ok: !hasServiceErrors,
       status: hasServiceErrors ? 'degraded' : 'ok',
@@ -1015,8 +1036,7 @@ export function createApp(runtime: Runtime): Hono {
         name: s.name,
         label: s.label,
         status: s.status,
-        error: s.error,
-        httpStatus: s.httpStatus,
+        ...(admin ? { error: s.error, httpStatus: s.httpStatus } : {}),
         lastChecked: s.lastChecked,
         lastSuccess: s.lastSuccess,
       })),

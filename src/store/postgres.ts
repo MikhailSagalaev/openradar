@@ -680,16 +680,34 @@ export class PostgresStore implements Store {
 
   async applyLeadDirection(leadId: string, direction: string): Promise<void> {
     await this.pool.query(
-      `UPDATE leads SET direction = $2 WHERE id = $1 AND (direction IS NULL OR direction = '')`,
+      `UPDATE leads SET direction = $2
+        WHERE id = $1 AND (direction IS NULL OR direction = '' OR direction = 'other')`,
       [leadId, direction],
     );
   }
 
   async applyLeadWorkplace(leadId: string, workplaceType: 'remote' | 'hybrid' | 'onsite', isRemote: boolean): Promise<void> {
     await this.pool.query(
-      `UPDATE leads SET workplace_type = $2, is_remote = $3 WHERE id = $1`,
+      `UPDATE leads SET workplace_type = $2, is_remote = $3
+        WHERE id = $1 AND workplace_type IS NULL`,
       [leadId, workplaceType, isRemote],
     );
+  }
+
+  /** Writes sure SubQ directions onto leads still stuck on empty/other (catalog backfill). */
+  async applyDirectionsFromDecisions(minConfidence = 0.8): Promise<number> {
+    const res = await this.pool.query(
+      `UPDATE leads l
+          SET direction = d.direction
+         FROM model_decisions d
+        WHERE l.id = d.lead_id
+          AND NOT COALESCE(d.overruled, false)
+          AND d.direction IS NOT NULL AND d.direction <> 'other'
+          AND COALESCE(d.direction_confidence, 0) >= $1
+          AND (l.direction IS NULL OR l.direction = '' OR l.direction = 'other')`,
+      [minConfidence],
+    );
+    return res.rowCount ?? 0;
   }
 
   async listAppliedDecisions(limit: number): Promise<Array<{ lead: Lead; decision: ModelDecision }>> {
@@ -2529,11 +2547,18 @@ export class PostgresStore implements Store {
   }
 
   async listLeadsForModel(options: { limit: number; since: string; version: number; withPayFirst?: boolean }): Promise<Array<Pick<Lead, 'id' | 'title' | 'text' | 'type'>>> {
+    // Production queue: no normalized pay yet, but the text still hints at money — skip the ~47% already filled by rules.
+    // Calibration (withPayFirst) keeps the old broader set so agreement with rules can be scored.
+    const money = `(title || E'\\n' || left(text, 2500)) ~* '(₽|\\$|€|руб|usd|eur|оклад|бюджет|з[./\\s]?п\\b|тысяч|\\d[\\d\\s\\u00a0]{2,}[кk]\\b)'`;
+    const target = options.withPayFirst
+      ? 'TRUE'
+      : `normalized_usd_min IS NULL AND normalized_usd_max IS NULL AND ${money}`;
     const result = await this.pool.query(
       `SELECT id, title, left(text, 2500) AS text, type FROM leads
         WHERE created_at >= $1::timestamptz
           AND state NOT IN ('hidden_junk', 'hidden_scam') AND status NOT IN ('rejected', 'failed')
           AND COALESCE((metadata_json->'model'->>'v')::int, 0) < $2
+          AND (${target})
         ORDER BY (type = 'gig') DESC, (title ~ '[А-Яа-яЁё]') DESC,
           (normalized_usd_min IS NULL AND normalized_usd_max IS NULL) ${options.withPayFirst ? 'ASC' : 'DESC'}, created_at DESC
         LIMIT $3`,

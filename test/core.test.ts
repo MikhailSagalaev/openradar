@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cleanTitle, extractBudget, extractBudgetAndCurrency, extractCity, stripTitleNoiseAndBudget } from '../src/core/extract.ts';
 import { prepareRawLead } from '../src/core/prepare.ts';
 import { applyRules, recalculateVoteScoreAndStatus, scoreLead } from '../src/core/rules.ts';
-import { decodeHtmlEntities, normalizeTechTokens, stripHtml, stripInvisible } from '../src/core/text.ts';
+import { decodeHtmlEntities, escapeHtml, normalizeTechTokens, stripHtml, stripInvisible } from '../src/core/text.ts';
 import { canonicalizeUrl } from '../src/core/url.ts';
 import { makeSource, TEST_NOW } from './helpers.ts';
 
@@ -330,6 +330,12 @@ describe('score', () => {
   it('replaces <br> and <br /> with newlines in stripHtml', () => {
     expect(stripHtml('Строка 1<br>Строка 2<br />Строка 3<br class="spacer"/>Строка 4')).toBe(
       'Строка 1\nСтрока 2\nСтрока 3\nСтрока 4',
+    );
+  });
+
+  it('escapes special characters including single and double quotes for HTML safety', () => {
+    expect(escapeHtml('<script>alert("xss") & it\'s fine</script>')).toBe(
+      '&lt;script&gt;alert(&quot;xss&quot;) &amp; it&#39;s fine&lt;/script&gt;',
     );
   });
 });

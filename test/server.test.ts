@@ -6,6 +6,7 @@ import type { Runtime } from '../src/runtime.ts';
 import type { Env } from '../src/core/types.ts';
 import { loadEnv } from '../src/config.ts';
 import { makeTestRuntime, makeUserSession } from './helpers.ts';
+import { ServiceMonitor } from '../src/core/services.ts';
 
 // Every runtime opens its own store (a PostgreSQL pool in CI): close them all after
 // each test, or the database runs out of connections.
@@ -81,6 +82,34 @@ describe('http server', () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as { ok: boolean; enabledSources: number; last24h: number };
     expect(body).toMatchObject({ ok: true, enabledSources: 0, last24h: 0 });
+    await runtime.store.close();
+  });
+
+  it('hides service error details on /health for unauthenticated callers and reveals them to admin', async () => {
+    const runtime = makeRuntime();
+    runtime.services = new ServiceMonitor();
+    runtime.services.record('test_svc', 'Test Service', 'error', { error: 'Secret internal API failed', httpStatus: 500 });
+    const app = createApp(runtime);
+
+    // Unauthenticated guest
+    const guestRes = await app.request('/health');
+    expect(guestRes.status).toBe(200);
+    const guestBody = (await guestRes.json()) as any;
+    const guestSvc = guestBody.services.find((s: any) => s.name === 'test_svc');
+    expect(guestSvc).toBeDefined();
+    expect(guestSvc.status).toBe('error');
+    expect(guestSvc.error).toBeUndefined();
+    expect(guestSvc.httpStatus).toBeUndefined();
+
+    // Authenticated admin
+    const adminSession = await makeAdminSession(runtime);
+    const adminRes = await app.request('/health', { headers: { cookie: `radar_session=${adminSession}` } });
+    expect(adminRes.status).toBe(200);
+    const adminBody = (await adminRes.json()) as any;
+    const adminSvc = adminBody.services.find((s: any) => s.name === 'test_svc');
+    expect(adminSvc.error).toBe('Secret internal API failed');
+    expect(adminSvc.httpStatus).toBe(500);
+
     await runtime.store.close();
   });
 
@@ -442,6 +471,26 @@ describe('http server', () => {
 
     expect(response.status).toBe(403);
     expect(await runtime.store.listSources()).toHaveLength(0);
+    await runtime.store.close();
+  });
+
+  it('rejects localhost cross-origin requests when target host is a public domain', async () => {
+    const runtime = makeRuntime();
+    const sessionId = await makeAdminSession(runtime);
+    const app = createApp(runtime);
+
+    const response = await app.request('/sources', {
+      method: 'POST',
+      headers: {
+        host: 'openradar.fun',
+        'content-type': 'application/x-www-form-urlencoded',
+        cookie: `radar_session=${sessionId}`,
+        origin: 'http://localhost:3000',
+      },
+      body: formBody({ kind: 'rss', title: 'LocalEvil', url: 'https://example.com/rss' }),
+    });
+
+    expect(response.status).toBe(403);
     await runtime.store.close();
   });
 
