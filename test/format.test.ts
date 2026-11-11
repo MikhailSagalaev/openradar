@@ -27,6 +27,15 @@ describe('lead text formatting', () => {
     expect(out.html).toContain('<button type="button" class="redacted-btn" onclick="openLoginModal()" title="Войдите, чтобы увидеть контакты">[контакт скрыт]</button>');
   });
 
+  it('strips leading adapter metadata headers and Freelancer budget/job trailers', () => {
+    const raw = 'Senior Frontend Developer (Angular)\nКомпания: Craftware\nГород: Warszawa\nУдалённо\n\n**About the role**\nWe build enterprise Angular applications. (Budget: ₹750 - ₹1250 INR, Jobs: Angular, TypeScript, Machine Learning (ML))';
+    const out = formatLeadText(raw, 'en', 'Senior Frontend Developer (Angular)');
+    expect(out.html).not.toContain('Компания: Craftware');
+    expect(out.html).not.toContain('Budget:');
+    expect(out.html).toContain('<strong>About the role</strong>');
+    expect(out.tags).toEqual(['Angular', 'TypeScript', 'Machine Learning (ML)']);
+  });
+
   it('splits a long wall of text into paragraphs', () => {
     const wall = Array.from({ length: 12 }, (_, i) => `Предложение номер ${i} про задачу и детали проекта.`).join(' ');
     expect(formatLeadText(wall).html.match(/<p>/g)?.length).toBeGreaterThan(1);

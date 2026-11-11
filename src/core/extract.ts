@@ -2,8 +2,8 @@ import { normalizeMoneyText } from './salary.ts';
 import { decodeHtmlEntities, firstLine, normalizeWhitespace, stripEmoji, toPlainText, truncate } from './text.ts';
 
 const CITY_PATTERNS: Array<{ city: string; pattern: RegExp }> = [
-  { city: 'Москва', pattern: /(?:^|[^\p{L}])(?:москв[а-я]*|мск|зеленоград[а-я]*|химк[а-я]*|мытищ[а-я]*|подольск[а-я]*|люберц[а-я]*|балаших[а-я]*|одинцов[а-я]*)(?:[^\p{L}]|$)/iu },
-  { city: 'Санкт-Петербург', pattern: /(?:^|[^\p{L}])(?:санкт-петербург[а-я]*|спб|петербург[а-я]*|пушкин[а-я]*|колпин[а-я]*)(?:[^\p{L}]|$)/iu },
+  { city: 'Москва', pattern: /(?:^|[^\p{L}])(?:москв[а-я]*|мск|зеленоград[а-я]*|химк[а-я]*|мытищ[а-я]*|подольск[а-я]*|люберц[а-я]*|балаших[а-я]*|одинцов[а-я]*|красногорск[а-я]*|долгопрудн[а-я]*|реутов[а-я]*|королев[а-я]*|королёв[а-я]*|домодедов[а-я]*)(?:[^\p{L}]|$)/iu },
+  { city: 'Санкт-Петербург', pattern: /(?:^|[^\p{L}])(?:санкт-петербург[а-я]*|спб|петербург[а-я]*|пушкин[а-я]*|колпин[а-я]*|мурин[а-я]*|кудров[а-я]*|сестрорецк[а-я]*|петергоф[а-я]*)(?:[^\p{L}]|$)/iu },
   { city: 'Ставрополь', pattern: /(?:^|[^\p{L}])(?:ставропол[а-я]*|михайловск[а-я]*|пятигорск[а-я]*|кисловодск[а-я]*|ессентук[а-я]*|невинномысск[а-я]*|минеральн[а-я]*\s+вод[а-я]*)(?:[^\p{L}]|$)/iu },
   { city: 'Краснодар', pattern: /(?:^|[^\p{L}])(?:краснодар[а-я]*|крд|юмр|фмр|гмр|чмр|пашковск[а-я]*)(?:[^\p{L}]|$)/iu },
   { city: 'Сочи', pattern: /(?:^|[^\p{L}])(?:сочи|адлер[а-я]*|лазаревск[а-я]*|хост[а-я]*|красн[а-я]*\s+полян[а-я]*|сириус[а-я]*|кудепст[а-я]*|мацест[а-я]*)(?:[^\p{L}]|$)/iu },
@@ -12,12 +12,84 @@ const CITY_PATTERNS: Array<{ city: string; pattern: RegExp }> = [
   { city: 'Екатеринбург', pattern: /(?:^|[^\p{L}])(?:екатеринбург[а-я]*|екб)(?:[^\p{L}]|$)/iu },
   { city: 'Казань', pattern: /(?:^|[^\p{L}])(?:казан[а-я]*|кзн)(?:[^\p{L}]|$)/iu },
   { city: 'Нижний Новгород', pattern: /(?:^|[^\p{L}])(?:нижн[а-я]*\s+новгород[а-я]*|ннов)(?:[^\p{L}]|$)/iu },
+  { city: 'Самара', pattern: /(?:^|[^\p{L}])самар[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Омск', pattern: /(?:^|[^\p{L}])омск[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Челябинск', pattern: /(?:^|[^\p{L}])челябинск[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Уфа', pattern: /(?:^|[^\p{L}])(?:уфа|уфе|уфу|уфой)(?:[^\p{L}]|$)/iu },
+  { city: 'Волгоград', pattern: /(?:^|[^\p{L}])волгоград[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Пермь', pattern: /(?:^|[^\p{L}])перм[ьиюя][а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Воронеж', pattern: /(?:^|[^\p{L}])воронеж[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Саратов', pattern: /(?:^|[^\p{L}])саратов[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Красноярск', pattern: /(?:^|[^\p{L}])красноярск[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Тюмень', pattern: /(?:^|[^\p{L}])тюмен[ьиюя][а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Тольятти', pattern: /(?:^|[^\p{L}])тольятти(?:[^\p{L}]|$)/iu },
+  { city: 'Ижевск', pattern: /(?:^|[^\p{L}])ижевск[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Барнаул', pattern: /(?:^|[^\p{L}])барнаул[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Ульяновск', pattern: /(?:^|[^\p{L}])ульяновск[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Иркутск', pattern: /(?:^|[^\p{L}])иркутск[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Хабаровск', pattern: /(?:^|[^\p{L}])хабаровск[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Ярославль', pattern: /(?:^|[^\p{L}])ярославл[ьяею][а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Владивосток', pattern: /(?:^|[^\p{L}])владивосток[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Махачкала', pattern: /(?:^|[^\p{L}])махачкал[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Томск', pattern: /(?:^|[^\p{L}])томск[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Оренбург', pattern: /(?:^|[^\p{L}])оренбург[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Кемерово', pattern: /(?:^|[^\p{L}])кемеров[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Новокузнецк', pattern: /(?:^|[^\p{L}])новокузнецк[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Рязань', pattern: /(?:^|[^\p{L}])рязан[ьиюя][а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Астрахань', pattern: /(?:^|[^\p{L}])астрахан[ьиюя][а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Набережные Челны', pattern: /(?:^|[^\p{L}])набережн[а-я]*\s+челн[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Пенза', pattern: /(?:^|[^\p{L}])пенз[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Липецк', pattern: /(?:^|[^\p{L}])липецк[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Киров', pattern: /(?:^|[^\p{L}])киров[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Чебоксары', pattern: /(?:^|[^\p{L}])чебоксар[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Тула', pattern: /(?:^|[^\p{L}])тул[аеуой](?:[^\p{L}]|$)/iu },
+  { city: 'Калининград', pattern: /(?:^|[^\p{L}])калининград[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Курск', pattern: /(?:^|[^\p{L}])курск[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Севастополь', pattern: /(?:^|[^\p{L}])севастопол[ьяею][а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Симферополь', pattern: /(?:^|[^\p{L}])симферопол[ьяею][а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Улан-Удэ', pattern: /(?:^|[^\p{L}])улан-удэ(?:[^\p{L}]|$)/iu },
+  { city: 'Тверь', pattern: /(?:^|[^\p{L}])твер[ьиюя][а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Магнитогорск', pattern: /(?:^|[^\p{L}])магнитогорск[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Иваново', pattern: /(?:^|[^\p{L}])иванов[оеа](?:[^\p{L}]|$)/iu },
+  { city: 'Брянск', pattern: /(?:^|[^\p{L}])брянск[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Белгород', pattern: /(?:^|[^\p{L}])белгород[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Сургут', pattern: /(?:^|[^\p{L}])сургут[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Владимир', pattern: /(?:^|[^\p{L}])владимир[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Чита', pattern: /(?:^|[^\p{L}])чит[аеуой](?:[^\p{L}]|$)/iu },
+  { city: 'Архангельск', pattern: /(?:^|[^\p{L}])архангельск[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Калуга', pattern: /(?:^|[^\p{L}])калуг[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Смоленск', pattern: /(?:^|[^\p{L}])смоленск[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Якутск', pattern: /(?:^|[^\p{L}])якутск[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Мурманск', pattern: /(?:^|[^\p{L}])мурманск[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Петрозаводск', pattern: /(?:^|[^\p{L}])петрозаводск[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Новороссийск', pattern: /(?:^|[^\p{L}])новороссийск[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Минск', pattern: /(?:^|[^\p{L}])минск[а-я]*(?:[^\p{L}]|$)/iu },
+  { city: 'Алматы', pattern: /(?:^|[^\p{L}])алмат[ыае](?:[^\p{L}]|$)/iu },
+  { city: 'Астана', pattern: /(?:^|[^\p{L}])астан[а-я]*(?:[^\p{L}]|$)/iu },
 ];
 
 const REMOTE_PATTERN = /(?:удаленн[а-я]*|дистанционн[а-я]*|онлайн|по\s+всей\s+россии|из\s+любой\s+точки)/iu;
 const OFFLINE_PATTERN = /(?:выезд[а-я]*|очно|на\s+объект[а-я]*|на\s+месте|личн[а-я]*\s+встреч[а-я]*|в\s+офис[а-я]*|в\s+магазин[а-я]*|в\s+салон[а-я]*)/iu;
+const EXPLICIT_CITY_LINE_RE = /(?:^|\n)\s*(?:Регион|Город|Локация|Location|City)\s*:\s*([^\n|•]+)/iu;
+const NON_CITY_VALUE_RE = /^(?:не\s+указан[а-я]*|удаленн[а-я]*|удалённ[а-я]*|дистанционн[а-я]*|онлайн|remote|worldwide|anywhere|global|любой|россия|рф|снг|eu|europe|european\s+union|us|usa|united\s+states|uk|аутсорсинг)$/iu;
 
 export function extractCity(text: string): string | undefined {
+  const explicitMatch = EXPLICIT_CITY_LINE_RE.exec(text);
+  if (explicitMatch?.[1]) {
+    const rawRegion = explicitMatch[1].trim();
+    for (const { city, pattern } of CITY_PATTERNS) {
+      if (pattern.test(rawRegion)) return city;
+    }
+    const cleaned = rawRegion
+      .replace(/^(?:г\.|город)\s*/iu, '')
+      .replace(/^[^,]+(?:область|край|республика|округ)\s*,\s*/iu, '')
+      .replace(/\s*\([^)]*\)\s*$/u, '')
+      .split(/s*[,;/]s*/)[0]!
+      .trim();
+    if (cleaned.length >= 2 && cleaned.length <= 35 && !NON_CITY_VALUE_RE.test(cleaned)) {
+      return cleaned;
+    }
+  }
   for (const { city, pattern } of CITY_PATTERNS) {
     if (pattern.test(text)) return city;
   }
@@ -37,6 +109,7 @@ const CURRENCY_MARKERS: Array<{ re: RegExp; currency: string }> = [
   { re: /(?:chf|франк[а-я]*)/i, currency: 'CHF' },
   { re: /(?:ca\$|c\$|cad)/i, currency: 'CAD' },
   { re: /(?:a\$|aud)/i, currency: 'AUD' },
+  { re: /(?:₹|inr|рупи[а-я]*)/i, currency: 'INR' },
 ];
 
 function identifyCurrency(token: string): string | undefined {
@@ -60,7 +133,7 @@ export function extractBudgetAndCurrency(text: string, options: { keepNotPay?: b
   const candidates: Array<{ amount: number; currency: string; priority: number }> = [];
 
   // 1. Symbol before amount, e.g. "$3500", "€ 2,500", "£1000", "zł 1500"
-  const prefixRe = /([$€£₸₴])\s*(\d{1,3}(?:[ \u00a0,]\d{3})+|\d{2,7})(?!\d)/gu;
+  const prefixRe = /([$€£₸₴₹])\s*(\d{1,3}(?:[ \u00a0,]\d{3})+|\d{2,7})(?!\d)/gu;
   for (const m of source.matchAll(prefixRe)) {
     const curr = identifyCurrency(m[1] ?? '');
     const num = Number.parseInt((m[2] ?? '').replace(/[ \u00a0,]/g, ''), 10);
@@ -70,7 +143,7 @@ export function extractBudgetAndCurrency(text: string, options: { keepNotPay?: b
   }
 
   // 2. Amount followed by currency marker or symbol, e.g. "1500PLN", "1500 zł", "5000 руб", "150 000 ₽", "3000 USD"
-  const suffixRe = /(\d{1,3}(?:[ \u00a0,]\d{3})+|\d{2,7})\s*(₽|руб(?:\.|лей|ля|ль)?|р\.|rur|\$|usd|usdt|usdc|долл[а-я]*|€|eur|евро|pln|zł|zl|злот[а-я]*|₸|kzt|тенге|byn|бел\.?\s*руб[а-я]*|₴|uah|грн[а-я]*|£|gbp|chf|cad|aud)(?!\p{L})/giu;
+  const suffixRe = /(\d{1,3}(?:[ \u00a0,]\d{3})+|\d{2,7})\s*(₽|руб(?:\.|лей|ля|ль)?|р\.|rur|\$|usd|usdt|usdc|долл[а-я]*|€|eur|евро|pln|zł|zl|злот[а-я]*|₸|kzt|тенге|byn|бел\.?\s*руб[а-я]*|₴|uah|грн[а-я]*|£|gbp|chf|cad|aud|₹|inr|рупи[а-я]*)(?!\p{L})/giu;
   for (const m of source.matchAll(suffixRe)) {
     const rawMarker = m[2] ?? '';
     const num = Number.parseInt((m[1] ?? '').replace(/[ \u00a0,]/g, ''), 10);
@@ -142,14 +215,15 @@ function augmentShortTitle(title: string, fallbackText: string): string {
   if (!fallbackText) return title;
 
   const sentences = fallbackText
-    .split('\n')
-    .filter((line) => !isTagOnlyLine(line))
-    .join('\n')
-    .split(/(?<=[.!?\n])\s+/)
+    .split(/\r?\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line && !isTagOnlyLine(line) && !isLocationOrMetadataLine(line))
+    .flatMap((line) => line.split(/(?<=[.!?])\s+/))
     .map((s) => s.trim().replace(/^[\s«"„“]+|[\s»"”\.…]+$/g, ''))
     .filter((s) => {
       if (s.length < 8) return false;
-      if (/^(?:кратко|всем привет|привет|здравствуйте|добрый день|добрый вечер|описание|суть|внимание|тз)\b/i.test(s)) {
+      if (s.toLowerCase() === title.trim().toLowerCase()) return false;
+      if (/^(?:кратко|всем привет|привет|здравствуйте|добрый день|добрый вечер|описание|суть|внимание|тз|требования|обязанности|условия)\b/i.test(s)) {
         return false;
       }
       return true;
@@ -174,7 +248,7 @@ function isTagOnlyLine(line: string): boolean {
 function isLocationOrMetadataLine(line: string): boolean {
   const trimmed = line.trim().toLowerCase().replace(/^[\s«"„“—–·•|*=*-]+|[\s»"”\.…—–·•|*=*-]+$/g, '');
   if (!trimmed) return true;
-  if (/^(?:локация|город|формат|занятость|тип занятости|location|city|format)\s*:/iu.test(trimmed)) {
+  if (/^(?:локация|город|регион|формат|занятость|тип занятости|вакансия компании|компания|работодатель|создана|опубликовано|предполагаемый уровень месячного дохода|зп|зарплата|вилка|location|city|format|company|department|team|type|category)\s*:/iu.test(trimmed)) {
     return true;
   }
   const pureMarkers = /^(?:санкт-петербург|петербург|спб|москва|мск|краснодар|крд|ростов-на-дону|новосибирск|екатеринбург|казань|нижний новгород|сочи|ставрополь|минск|киев|алматы|астана|удаленка|удалёнка|удаленно|удалённо|remote|онлайн|офис|гибрид|полная занятость|частичная занятость|парт-тайм|full-time|part-time)(?:[,\s/·|—–-]+(?:санкт-петербург|петербург|спб|москва|мск|краснодар|крд|ростов-на-дону|новосибирск|екатеринбург|казань|нижний новгород|сочи|ставрополь|минск|киев|алматы|астана|удаленка|удалёнка|удаленно|удалённо|remote|онлайн|офис|гибрид|полная занятость|частичная занятость|парт-тайм|full-time|part-time))*$/iu;
@@ -216,7 +290,7 @@ export function cleanTitle(rawTitle: string, fallbackText = ''): string {
   }
 
   // Strip glued metadata labels like "Компания: ...", "Формат: ...", "Локация: ..." if they follow the job title
-  candidate = candidate.replace(/(?:\s+|[a-zа-яё0-9\)])(?:Компания|Город|Работодатель|Company|City|Формат\s+работы|Формат|Локация|Уровень|Занятость|Вилка|ЗП|Зарплата)\s*:[^·\n]*/iu, '');
+  candidate = candidate.replace(/(?:\s*[-–—|·]\s*)?Вакансия\s+компании\s*:[\s\S]*$/iu, '').replace(/(?:\s+|[a-zа-яё0-9\)])(?:Компания|Город|Регион|Работодатель|Создана|Company|City|Location|Формат\s+работы|Формат|Локация|Уровень|Занятость|Вилка|ЗП|Зарплата)\s*:[^·\n]*/iu, '');
 
   let title = stripEmoji(toPlainText(candidate))
     .replace(/^[\s«"„“—–·•|*:-]+|[\s»"”\.…—–·•|*:-]+$/g, '')

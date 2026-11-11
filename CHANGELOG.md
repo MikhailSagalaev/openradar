@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.67.3 (2026-11-11)
+
+- **566-Lead Parsing & Formatting Audit Fixes**:
+  - Moved trade tags (`Продажи`, `Поддержка`, `Бухгалтерия`, `Юриспруденция`, `Обучение`) from `TECH_SKILL_PATTERNS` to `ROLE_SKILL_PATTERNS` so company blurbs no longer false-tag engineering roles.
+  - Expanded `extractCity` to 50+ Russian/CIS cities and explicit `Регион:` / `Город:` / `Location:` headers (raising `hh.ru` city coverage from 41.2% to 100%).
+  - Added `INR` (`₹`) and international currency rates (`SGD`, `HKD`, `BRL`, `AED`, `TRY`) and lifted Freelancer.com `(Budget: ..., Jobs: ...)` trailers into clean skill tags.
+  - Fixed `cleanTitle` / `augmentShortTitle` and `leadTitle` so single-word titles no longer glue multiline `hh.ru` RSS headers (`Вакансия компании: ...`).
+  - Updated `formatLeadText` to strip redundant leading adapter metadata headers and render Markdown headings (`###`) and inline bold (`**text**`).
+  - Fixed `hh-1c` RSS query (`search_field=name`) and deduplicated multi-city clones per employer in `rssSource.poll`.
+
 ## [0.67.2] - 2026-11-11
 
 ### Fixed

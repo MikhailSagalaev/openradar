@@ -65,6 +65,10 @@ describe('extraction', () => {
     expect(extractCity('Нужен сантехник в Ставрополе')).toBe('Ставрополь');
     expect(extractCity('Работа в Москве, оплата 5000')).toBe('Москва');
     expect(extractCity('Можно удаленно, по всей России')).toBe('Онлайн');
+    expect(extractCity('Регион: Омск\nУдаленно')).toBe('Омск');
+    expect(extractCity('Город: Warszawa\nУдалённо')).toBe('Warszawa');
+    expect(extractBudgetAndCurrency('Budget: ₹750 - ₹1250 INR')).toEqual({ budget: 1250, currency: 'INR' });
+    expect(cleanTitle('Механик', 'Вакансия компании: Rekord\nСоздана: 11.11.2026\nРегион: Уфа\nПредполагаемый уровень месячного дохода: от 130 000 р.\nРемонт и обслуживание техники в парке.')).toBe('Механик — Ремонт и обслуживание техники в парке');
   });
 
   it('cleans emoji and trailing punctuation', () => {

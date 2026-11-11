@@ -84,7 +84,7 @@ export function normalizeMoneyText(text: string, options: { keepNotPay?: boolean
     .replace(new RegExp(`(${NUM})(${MULT})`, 'giu'), (_m, a: string, word: string) => groupThousands(scaled(a, multiplierOf(word.trim()))))
     // «45.000,00 ₽», «€ 1.500»: dots group thousands only next to a currency.
     .replace(new RegExp(`(\\d{1,3}(?:\\.\\d{3})+)(?:,\\d{1,2})?(?=${CURRENCY_NEAR})`, 'giu'), (m) => groupThousands(Number(m.split(',')[0]!.replace(/\./g, ''))))
-    .replace(/([$€£₸₴]\s*)(\d{1,3}(?:\.\d{3})+)(?:,\d{1,2})?(?![\d.,])/gu, (_m, sign: string, n: string) => `${sign}${groupThousands(Number(n.replace(/\./g, '')))}`)
+    .replace(/([$€£₸₴₹]\s*)(\d{1,3}(?:\.\d{3})+)(?:,\d{1,2})?(?![\d.,])/gu, (_m, sign: string, n: string) => `${sign}${groupThousands(Number(n.replace(/\./g, '')))}`)
     // Kopecks and cents after grouped thousands: «150 000,50», «3,500.00».
     .replace(/(\d{1,3}(?:[  ]\d{3})+),\d{2}(?!\d)/g, '$1')
     .replace(/(\d{1,3}(?:,\d{3})+)\.\d{2}(?!\d)/g, '$1');
@@ -163,6 +163,7 @@ const CURRENCY_MARKERS: Array<[string, RegExp]> = [
   ['CHF', /(?<![a-z])chf(?![a-z])|швейцарск\S*\s+франк/i],
   ['AUD', /a\$|(?<![a-z])aud(?![a-z])|australian\s+dollar/i],
   ['CAD', /c\$|(?<![a-z])cad(?![a-z])|canadian\s+dollar/i],
+  ['INR', /₹|(?<![a-z])inr(?![a-z])|(?<![а-яё])рупи[ийя]/i],
 ];
 
 export function detectCurrency(text: string): string {
@@ -175,7 +176,7 @@ export function detectCurrency(text: string): string {
 
 export function parseSalaryRange(text: string): { min?: number; max?: number } {
   // Strip currency symbols in front of digits, e.g. $3000 -> 3000
-  const clean = normalizeMoneyText(text).replace(/zł|[$€₽£₸₴]/gi, ' ').replace(/\s+/g, ' ');
+  const clean = normalizeMoneyText(text).replace(/zł|[$€₽£₸₴₹]/gi, ' ').replace(/\s+/g, ' ');
 
   // Match pattern "от X до Y" or "X - Y"
   const rangeMatch = clean.match(/(?:от\s+)?(\d[\d\s.,]*\d|\d+)\s*(?:-|до|—|–)\s*(\d[\d\s.,]*\d|\d+)/i);

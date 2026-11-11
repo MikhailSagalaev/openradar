@@ -2667,8 +2667,11 @@ function metricRow(values: Array<{ value: string | number; label: string }>): st
 export function leadTitle(lead: Lead): string {
   let title = lead.title.trim() || firstLine(lead.text, 100) || 'Без заголовка';
   title = decodeHtmlEntities(title);
+  // Strip hh.ru multi-line metadata suffixes like "— Вакансия компании: ..."
+  title = title.replace(/(?:\s*[-–—|·]\s*)?Вакансия\s+компании\s*:[\s\S]*$/iu, '');
+  title = title.replace(/\r?\n+/g, ' · ');
   // Strip glued metadata labels like "Компания: ...", "Формат: ..."
-  title = title.replace(/(?:\s+|[a-zа-яё0-9\)])(?:Компания|Город|Работодатель|Company|City|Формат\s+работы|Формат|Локация|Уровень|Занятость|Вилка|ЗП|Зарплата)\s*:[^·\n]*/iu, '');
+  title = title.replace(/(?:\s+|[a-zа-яё0-9\)])(?:Компания|Город|Регион|Работодатель|Создана|Company|City|Location|Формат\s+работы|Формат|Локация|Уровень|Занятость|Вилка|ЗП|Зарплата)\s*:[^·\n]*/iu, '');
   // Strip leading/trailing noise characters like bullets, pipes, colons, braille blanks
   title = title.replace(/^[\s\u2800«"„“—–·•|*:-]+|[\s\u2800»"”\.…—–·•|*:-]+$/g, '').trim();
   return title || 'Без заголовка';
@@ -3396,7 +3399,7 @@ document.getElementById('share-lead')?.addEventListener('click', async (event) =
   </form>`
     : '';
 
-  const formatted = formatLeadText(lead.text, lang);
+  const formatted = formatLeadText(lead.text, lang, lead.title);
   const myVote = data.myVote;
   const undoVoteTitle = lang === 'en' ? 'Click to undo your vote' : 'Нажмите, чтобы отменить свой голос';
   const voteControls = isUser
