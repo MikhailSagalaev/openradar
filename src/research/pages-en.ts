@@ -6,7 +6,7 @@
  */
 import { escapeHtml, jsonForScript } from '../core/text.ts';
 import { layout, type AuthDisplay } from '../server/ui.ts';
-import { translateSkill } from '../server/i18n.ts';
+import { translateSkill, translateSourceTitle } from '../server/i18n.ts';
 import type { IndexSeries, OpenradarIndex } from './index.ts';
 import { lineChart } from './index-page.ts';
 import { MIN_MEDIAN, RELIABLE, REPORT_VERSION, rubMonthToUsdYear, type Dist, type Report, type Slice } from './report.ts';
@@ -238,7 +238,7 @@ ${findings.length ? `<section class="rs-section">
 <section class="rs-section"><h2>AI in vacancies</h2>
   <p class="small">Neural networks, LLMs, GPT, Cursor, Copilot or machine learning appear in <b>${pct(jobs.ai.share)}</b> of vacancies.</p>
   ${rangeChart([{ label: 'Mention AI', pay: jobs.ai.with }, { label: 'Do not', pay: jobs.ai.without }])}</section>
-${jobs.companies.length ? `<section class="rs-section"><h2>Who hires most</h2>${countBars(jobs.companies.slice(0, 12).map((c) => ({ label: c.name, n: c.n })))}</section>` : ''}
+${jobs.companies.length ? `<section class="rs-section"><h2>Who hires most</h2>${countBars(jobs.companies.slice(0, 12).map((c) => ({ label: translateSourceTitle(c.name, 'en'), n: c.n })))}</section>` : ''}
 <section class="rs-section"><h2>Freelance order budgets</h2>
   <p class="small">Russian-language orders. <b>${pct(gigs.budgetShare)}</b> of them state a budget, for the whole project.${totals.intlGigs ? ` English-language orders (${num(totals.intlGigs)}) stay out.` : ''}</p>
   ${rangeChart(translate(gigs.byCategory.filter((s) => s.key !== 'other'), ROLE_EN))}</section>

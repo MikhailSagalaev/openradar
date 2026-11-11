@@ -1818,6 +1818,15 @@ describe('http server', () => {
     expect(await (await app.request('/about', { headers: { cookie: 'openradar_lang=en' } })).text()).toContain('About openradar');
     expect(await (await app.request('/faq', { headers: { cookie: 'openradar_lang=en' } })).text()).toContain('Is it free?');
 
+    // /network caches data only, never leaking a guest English page to a signed-in Russian reader.
+    const netEnGuest = await (await app.request('/network?lang=en')).text();
+    expect(netEnGuest).toContain('The openradar network');
+    const user = await runtime.store.upsertGitHubUser!({ githubId: 901, handle: 'mikhail' });
+    await runtime.store.createSession!('sess-net-ru', new Date(Date.now() + 3600_000).toISOString(), user.id);
+    const netRuUser = await (await app.request('/network', { headers: { cookie: 'openradar_lang=ru; radar_session=sess-net-ru' } })).text();
+    expect(netRuUser).toContain('Сеть openradar');
+    expect(netRuUser).toContain('@mikhail');
+
     // The footer switch lands on the twin of the page.
     expect((await app.request('/lang/ru?return=/en/research/index')).headers.get('location')).toBe('/research/index');
     expect((await app.request('/lang/en?return=/research/methodology')).headers.get('location')).toBe('/en/research/methodology');

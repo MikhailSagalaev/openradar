@@ -4,7 +4,7 @@
  */
 import { escapeHtml, jsonForScript } from '../core/text.ts';
 import { layout, type AuthDisplay } from '../server/ui.ts';
-import { translateCity, translateSkill, type SupportedLang } from '../server/i18n.ts';
+import { translateCity, translateSkill, translateSourceTitle, type SupportedLang } from '../server/i18n.ts';
 import { periodEn } from './pages-en.ts';
 import { GRADE_LABELS, MIN_CONFIDENCE, ROLES, roleLabel } from './derive.ts';
 
@@ -769,7 +769,7 @@ ${quote ? `<p class="small">${escapeHtml(quote)} ${quoteButton(quote, options.la
 ${detail.byLanguage.some((s) => s.pay.median) ? `<section class="rs-section"><h2>${ru ? 'По языку' : 'By language'}</h2>${rangeChart(sliceRows(detail.byLanguage), { lang: options.lang })}</section>` : ''}
 <section class="rs-section"><h2>${ru ? 'По городам' : 'By city'}</h2>${rangeChart(regionRows, { lang: options.lang })}</section>
 ${skillRows.length ? `<section class="rs-section"><h2>${ru ? 'Навыки' : 'Skills'}</h2>${rangeChart(skillRows, { lang: options.lang })}</section>` : ''}
-${detail.companies.length ? `<section class="rs-section"><h2>${ru ? 'Кто нанимает' : 'Who is hiring'}</h2>${countBars(detail.companies.map((c) => ({ label: c.name, n: c.n })))}` + '</section>' : ''}
+${detail.companies.length ? `<section class="rs-section"><h2>${ru ? 'Кто нанимает' : 'Who is hiring'}</h2>${countBars(detail.companies.map((c) => ({ label: translateSourceTitle(c.name, options.lang), n: c.n })))}` + '</section>' : ''}
 <section class="rs-section prose" style="margin-top:36px">
   <p>${ru
     ? 'Свежие вакансии этого направления — в <a href="/?type=job">ленте вакансий</a>. Как считаются цифры — в <a href="/research/methodology">методике</a>. Все направления — в <a href="/research">общем отчёте</a>.'

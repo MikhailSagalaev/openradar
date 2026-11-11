@@ -97,6 +97,23 @@ const AI_ENGINEER = rx(`вайб|vibe|${W}llm${E}|prompt[- ]?engineer|промп
 const ANY_ENGINEER = rx(`developer|engineer`);
 const NOT_SOFTWARE = rx(`process|civil|mechanical|electrical|hardware|manufactur|chemical|field|curriculum|relations|facilit|environment`);
 
+/**
+ * Physical construction, HVAC, civil engineering, furniture, and interior design work where
+ * words like «разработка» («разработка раздела ОВ», «разработка мебели») or «инженер-проектировщик»
+ * mean blueprints and physical goods rather than software.
+ */
+export const NON_IT_PHYSICAL_WORK = rx(
+  `проектировщик|инженер[- ]?проектировщик|инженер\\s*пто|раздел\\p{L}*\\s+(?:ов|вк|кж|км|эом|ар|ппр|гп|тх|сс|овик|аов)(?![\\p{L}])|отоплени|вентиляц|водоснабжен|канализац|газоснабжен|электроснабжен|сметчик|сметн\\p{L}*\\s+документац|мебел[ьи]|коттедж|планировочн\\p{L}*\\s+решен|дизайн[- ]?проект\\s+(?:интерьер|квартир|дом|коттедж)|ландшафтн\\p{L}*|градостроит|геодез|кадастр|сантехник|сварщик|токарь|фрезеровщик|чертеж\\p{L}*\\s+(?:км|кж|мебел|детал)|конструктор\\s+мебели|швея|закройщик`
+);
+const EXPLICIT_SOFTWARE_IN_TITLE = rx(`\\b(?:1[сc]|python|java|javascript|typescript|react|vue|angular|node\\.?js|php|golang|rust|kotlin|swift|flutter|django|fastapi|laravel|wordpress|tilda|тильд|битрикс|bitrix|sql|postgres|docker|kubernetes|devops|qa|тестировщик|сайт|лендинг|интернет-магазин|telegram[- ]?бот|чат[- ]?бот|парсер|парсинг|фронтенд|бэкенд|frontend|backend|fullstack|ios|android)\\b`);
+
+export function isPhysicalNonItWork(title: string, text = ''): boolean {
+  if (EXPLICIT_SOFTWARE_IN_TITLE.test(title)) return false;
+  if (NON_IT_PHYSICAL_WORK.test(title)) return true;
+  if (text && NON_IT_PHYSICAL_WORK.test(text) && !EXPLICIT_SOFTWARE_IN_TITLE.test(text)) return true;
+  return false;
+}
+
 /** Ordered: the first match wins, so narrow roles go before broad ones. */
 export const ROLES: RoleDef[] = [
   { slug: 'ai', label: 'AI-инженер и вайб-кодинг', plural: 'AI-инженеры', types: ['job', 'gig'],
@@ -228,6 +245,7 @@ export function roleLabel(slug: string, lang: 'ru' | 'en' = 'ru'): string {
 }
 
 export function classifyRole(type: LeadType, title: string, extra = ''): string {
+  if (isPhysicalNonItWork(title, extra)) return OTHER_ROLE.slug;
   if (type === 'gig') {
     // The title decides; the text helps when the title is «Нужна помощь».
     for (const slug of GIG_ORDER) if (roleDef(slug)!.pattern.test(title)) return slug;

@@ -1,3 +1,4 @@
+import { classifyRole, isPhysicalNonItWork } from '../research/derive.ts';
 import { escapeHtml, jsonForScript } from '../core/text.ts';
 import type { Lead, LeadType } from '../core/types.ts';
 import { layout, type AuthDisplay, formatBudget, salaryRange, safeHttpUrl, leadTitle, formatRelative } from './ui.ts';
@@ -41,7 +42,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Здесь собраны заказы на программирование из FL.ru, Kwork, Freelancehunt и Telegram-каналов: сайты, боты, парсеры, интеграции, доработки. Один и тот же заказ, опубликованный на двух биржах, показывается одной карточкой, а у каждой карточки есть оценка от 0 до 100: за бюджет, понятное ТЗ и прямой контакт заказчика.',
     q: 'разработка',
-    directions: ['backend', 'frontend', 'fullstack', 'web', 'mobile', 'dev-other', 'embedded'],
+    directions: ['backend', 'frontend', 'fullstack', 'web', 'bots', 'parsing', 'mobile', 'dev-other', 'embedded'],
     type: 'gig',
   },
   {
@@ -68,6 +69,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Чаще всего на Python заказывают парсеры, Telegram-ботов, обработку таблиц, интеграции по API и бэкенд на Django или FastAPI. Небольшие задачи на день-два здесь соседствуют с проектами на несколько недель, бюджет указан в карточке, если заказчик его назвал.',
     q: 'python',
+    directions: ['backend', 'parsing', 'bots', 'ai', 'dev-other'],
     type: 'gig',
   },
   {
@@ -206,6 +208,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Инфографика и фото для карточек, SEO-описания, заливка товаров, аналитика продаж и ведение магазинов на Wildberries, Ozon и Яндекс Маркете. Работы много у дизайнеров и менеджеров маркетплейсов.',
     q: 'маркетплейс',
+    directions: ['marketplaces', 'design', 'marketing'],
     type: 'gig',
   },
   {
@@ -217,6 +220,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Сайты под ключ на WordPress, правки тем, настройка WooCommerce, плагины, перенос на другой хостинг, ускорение и исправление ошибок. Небольшие доработки на WordPress — один из самых частых типов заказа на биржах.',
     q: 'wordpress',
+    directions: ['web', 'dev-other'],
     type: 'gig',
   },
   {
@@ -275,6 +279,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Доработка и поддержка сайтов на PHP, проекты на Laravel и Yii, интеграции по API, исправление ошибок и перенос на новую версию PHP. Большая часть заказов — поддержка уже работающих проектов.',
     q: 'php',
+    directions: ['backend', 'web', 'dev-other'],
     type: 'gig',
   },
   {
@@ -286,6 +291,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Мобильные и браузерные игры, прототипы на Unity и Unreal Engine, 3D-модели, анимация и игровая графика. Заказы приходят с бирж и из каналов для геймдев-фрилансеров.',
     q: 'unity',
+    directions: ['gamedev', 'mobile'],
     type: 'gig',
   },
   {
@@ -297,6 +303,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Проверка сайтов и приложений перед запуском, тест-кейсы, автотесты на Selenium и Playwright, нагрузочное тестирование. Хороший вход во фриланс для начинающих QA.',
     q: 'тестир',
+    directions: ['qa'],
     type: 'gig',
   },
   {
@@ -308,6 +315,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Вакансии бэкенд-разработчиков на Django и FastAPI, инженеров данных, специалистов по автоматизации и ML. В карточке видно вилку, город или удалёнку и стек, который ждёт работодатель.',
     q: 'python',
+    directions: ['backend', 'data-engineer', 'ml', 'ai', 'qa', 'devops'],
     type: 'job',
   },
   {
@@ -319,6 +327,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Вакансии фронтенд-разработчиков на React, Vue и Angular, верстальщиков и fullstack-разработчиков с упором на клиентскую часть. Отфильтровать удалёнку можно на главной ленте.',
     q: 'frontend',
+    directions: ['frontend', 'fullstack'],
     type: 'job',
   },
   {
@@ -330,6 +339,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Вакансии DevOps-инженеров, SRE и системных администраторов: Kubernetes, Docker, CI/CD, Terraform, мониторинг, облака. Часть вакансий полностью удалённая.',
     q: 'devops',
+    directions: ['devops', 'sysadmin', 'security'],
     type: 'job',
   },
   {
@@ -341,6 +351,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Вакансии системных и бизнес-аналитиков, аналитиков данных и продуктовых аналитиков: SQL, BI, требования, A/B-тесты. Вилка и формат работы указаны в карточке.',
     q: 'аналитик',
+    directions: ['analyst-system', 'analyst-business', 'analyst-data', 'data-engineer', 'product'],
     type: 'job',
   },
   {
@@ -352,6 +363,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Вакансии QA-инженеров и тестировщиков: ручное тестирование, автотесты на Java, Python и JavaScript, нагрузочное тестирование. Есть вакансии для начинающих.',
     q: 'тестир',
+    directions: ['qa'],
     type: 'job',
   },
   {
@@ -363,6 +375,7 @@ export const SEO_CATALOG: CatalogEntry[] = [
     about:
       'Вакансии продуктовых и UI/UX-дизайнеров, графических дизайнеров и моушн-дизайнеров в студиях, агентствах и продуктовых компаниях. Заказы для дизайнеров на фрилансе собраны в разделе «Заказы на дизайн».',
     q: 'дизайнер',
+    directions: ['design'],
     type: 'job',
   },
 ];
@@ -571,6 +584,19 @@ export function localizeCatalogEntry(entry: CatalogEntry, lang?: SupportedLang):
   if (lang !== "en") return entry;
   const en = SEO_CATALOG_EN[entry.slug];
   return en ? { ...entry, ...en } : entry;
+}
+
+/**
+ * Post-filter for catalog pages: guards against legacy rows in the database whose stored
+ * `direction` was derived before physical construction/furniture/HVAC noise rules existed.
+ */
+export function isCatalogLeadRelevant(lead: Lead, entry: CatalogEntry): boolean {
+  if (isPhysicalNonItWork(lead.title, lead.text)) return false;
+  if (entry.directions?.length && lead.direction === 'dev-other') {
+    const liveRole = classifyRole(lead.type ?? entry.type ?? 'gig', lead.title, lead.text);
+    if (liveRole === 'other') return false;
+  }
+  return true;
 }
 
 export function findCatalogEntry(slug: string): CatalogEntry | undefined {

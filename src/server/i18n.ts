@@ -770,6 +770,18 @@ const SOURCE_PLATFORM_EN: Record<string, string> = {
   "Магнит Tech": "Magnit Tech",
   "Честный Знак (CRPT)": "Chestny ZNAK (CRPT)",
   "КРОК": "CROC",
+  "Т1": "T1",
+  "2ГИС": "2GIS",
+  "Альфа-Банк": "Alfa-Bank",
+  "Пятёрочка": "Pyaterochka",
+  "Пятёрочка. Команда магазинов": "Pyaterochka (Store Team)",
+  "МАГНИТ, Розничная сеть. Магазины продуктов": "Magnit Retail",
+  "Fix Price. Магазины": "Fix Price Stores",
+  "Правительство Москвы": "Moscow City Government",
+  "Сбер. IT": "Sber IT",
+  "Алабуга. Менеджмент": "Alabuga Management",
+  "Team.Inno / Фабрика инноваций и решений": "Team.Inno",
+  "Freelance Таверна": "Freelance Tavern",
 };
 
 const SOURCE_SCOPE_EN: Record<string, string> = {
@@ -814,7 +826,91 @@ const SOURCE_SCOPE_EN: Record<string, string> = {
   "Digital-вакансии": "Digital jobs",
   "заказы": "gigs",
   "Вакансии (из браузера)": "Vacancies (browser)",
+  "DevOps, SRE и K8s": "DevOps, SRE & K8s",
+  "Data Science, ML и AI": "Data Science, ML & AI",
+  "Data Science, AI и ML": "Data Science, AI & ML",
+  "Дизайн, UI/UX и графика": "Design, UI/UX & graphics",
+  "Product и Project Management": "Product & Project Management",
+  "Backend разработка": "Backend development",
+  "Frontend разработка": "Frontend development",
+  "Мобильная разработка": "Mobile development",
+  "Тестирование и QA": "Testing & QA",
+  "Системный и бизнес-анализ": "Systems & Business Analysis",
+  "Информационная безопасность (ИБ)": "Information Security",
+  "Job for Analysts и Data Scientists": "Job for Analysts & Data Scientists",
+  "Job for HR (IT и Digital)": "Job for HR (IT & Digital)",
+  "WorkASAP: удалённая работа": "WorkASAP: remote work",
+  "Remocate: релокация и удалёнка": "Remocate: relocation & remote",
 };
+
+function translateSourceFragment(frag: string): string {
+  if (!frag) return frag;
+  if (SOURCE_PLATFORM_EN[frag]) return SOURCE_PLATFORM_EN[frag]!;
+  if (SOURCE_SCOPE_EN[frag]) return SOURCE_SCOPE_EN[frag]!;
+  if (frag.includes(':')) {
+    const idx = frag.indexOf(':');
+    const chan = frag.slice(0, idx).trim();
+    const desc = frag.slice(idx + 1).trim();
+    const descMap: Record<string, string> = {
+      "вакансии продукта": "product jobs",
+      "продукт": "product",
+      "продуктовый дизайн": "product design",
+      "motion-дизайн": "motion design",
+      "джуны и стажировки": "juniors & internships",
+      "удалёнка для джунов": "remote junior jobs",
+      "аналитики без опыта": "junior analysts",
+      "стажировки": "internships",
+      "стартапы": "startups",
+      "SMM и маркетинг": "SMM & marketing",
+      "удалённая работа": "remote work",
+      "релокация и удалёнка": "relocation & remote",
+    };
+    if (chan && desc && descMap[desc]) return `${chan}: ${descMap[desc]}`;
+    if (chan && desc) {
+      return `${chan}: ${desc
+        .replace(/вакансии для продактов и проджектов/gi, "product & project jobs")
+        .replace(/вакансии стартапов/gi, "startup jobs")
+        .replace(/вакансии дизайнеров/gi, "designer jobs")
+        .replace(/вакансии на/gi, "jobs in")
+        .replace(/вакансии/gi, "jobs")
+        .replace(/заказы/gi, "gigs")
+        .replace(/разработка/gi, "development")
+        .replace(/тестирование/gi, "QA")
+        .replace(/дизайн/gi, "design")
+        .replace(/маркетинг/gi, "marketing")
+        .replace(/релокация и удалёнка/gi, "relocation & remote")
+        .replace(/удалёнка/gi, "remote")}`;
+    }
+  }
+  return frag
+    .replace(/Вакансии для продактов и проджектов/g, "Product & project jobs")
+    .replace(/Дизайн, UX\/UI и графика/g, "Design, UX/UI & graphics")
+    .replace(/Дизайн, UI\/UX и графика/g, "Design, UI/UX & graphics")
+    .replace(/Дизайн, UI\/UX & graphics/g, "Design, UI/UX & graphics")
+    .replace(/Backend разработка/g, "Backend development")
+    .replace(/Frontend разработка/g, "Frontend development")
+    .replace(/Мобильная разработка/g, "Mobile development")
+    .replace(/Product и Project Management/g, "Product & Project Management")
+    .replace(/Data Science, AI и ML/g, "Data Science, AI & ML")
+    .replace(/Data Science, ML и AI/g, "Data Science, ML & AI")
+    .replace(/DevOps, SRE и K8s/g, "DevOps, SRE & K8s")
+    .replace(/Job for Analysts и Data Scientists/g, "Job for Analysts & Data Scientists")
+    .replace(/\(IT и Digital\)/g, "(IT & Digital)")
+    .replace(/и автотестирование/g, "& automation QA")
+    .replace(/и тестирование/g, "& QA")
+    .replace(/и инфраструктура/g, "& infrastructure")
+    .replace(/и администрирование/g, "& sysadmin")
+    .replace(/и графика/g, "& graphics")
+    .replace(/и маркетинг/g, "& marketing")
+    .replace(/Дизайн и/g, "Design &")
+    .replace(/релокация и удалёнка/g, "relocation & remote")
+    .replace(/удалённая работа/g, "remote work")
+    .replace(/вакансии на/gi, "jobs in")
+    .replace(/Вакансии/g, "Vacancies")
+    .replace(/вакансии/g, "jobs")
+    .replace(/Заказы/g, "Gigs")
+    .replace(/заказы/g, "gigs");
+}
 
 export function translateSourceTitle(title: string, lang: SupportedLang = "ru"): string {
   if (!title || lang !== "en") return title;
@@ -824,59 +920,11 @@ export function translateSourceTitle(title: string, lang: SupportedLang = "ru"):
   if (parts.length === 2) {
     const [left, right] = parts as [string, string];
     if (left === "Карьерные страницы компаний") {
-      return `${right} — Company career pages`;
+      return `${translateSourceFragment(right)} — Company career pages`;
     }
-    const enLeft = SOURCE_PLATFORM_EN[left] ?? left;
-    let enRight = SOURCE_SCOPE_EN[right] ?? right;
-    if (enRight === right && right.includes(":")) {
-      const [chan, desc] = right.split(":\s*", 2);
-      const descMap: Record<string, string> = {
-        "вакансии продукта": "product jobs",
-        "продукт": "product",
-        "продуктовый дизайн": "product design",
-        "motion-дизайн": "motion design",
-        "джуны и стажировки": "juniors & internships",
-        "удалёнка для джунов": "remote junior jobs",
-        "аналитики без опыта": "junior analysts",
-        "стажировки": "internships",
-        "стартапы": "startups",
-        "SMM и маркетинг": "SMM & marketing",
-      };
-      if (chan && desc && descMap[desc]) enRight = `${chan}: ${descMap[desc]}`;
-      else if (chan && desc) {
-        enRight = `${chan}: ${desc
-          .replace(/вакансии для продактов и проджектов/gi, "product & project jobs")
-          .replace(/вакансии стартапов/gi, "startup jobs")
-          .replace(/вакансии дизайнеров/gi, "designer jobs")
-          .replace(/вакансии на/gi, "jobs in")
-          .replace(/вакансии/gi, "jobs")
-          .replace(/заказы/gi, "gigs")
-          .replace(/разработка/gi, "development")
-          .replace(/тестирование/gi, "QA")
-          .replace(/дизайн/gi, "design")
-          .replace(/маркетинг/gi, "marketing")
-          .replace(/релокация и удалёнка/gi, "relocation & remote")
-          .replace(/удалёнка/gi, "remote")}`;
-      }
-    } else if (enRight === right) {
-      enRight = right
-        .replace(/Вакансии для продактов и проджектов/g, "Product & project jobs")
-        .replace(/Дизайн, UX\/UI и графика/g, "Design, UX/UI & graphics")
-        .replace(/и автотестирование/g, "& automation QA")
-        .replace(/и тестирование/g, "& QA")
-        .replace(/и инфраструктура/g, "& infrastructure")
-        .replace(/и администрирование/g, "& sysadmin")
-        .replace(/и графика/g, "& graphics")
-        .replace(/и маркетинг/g, "& marketing")
-        .replace(/Дизайн и/g, "Design &")
-        .replace(/релокация и удалёнка/g, "relocation & remote")
-        .replace(/вакансии на/gi, "jobs in")
-        .replace(/Вакансии/g, "Vacancies")
-        .replace(/вакансии/g, "jobs")
-        .replace(/Заказы/g, "Gigs")
-        .replace(/заказы/g, "gigs");
-    }
+    const enLeft = translateSourceFragment(left);
+    const enRight = translateSourceFragment(right);
     return `${enLeft} — ${enRight}`;
   }
-  return title;
+  return translateSourceFragment(title);
 }

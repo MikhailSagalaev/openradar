@@ -1,4 +1,4 @@
-import { classifyRole } from '../research/derive.ts';
+import { classifyRole, isPhysicalNonItWork } from '../research/derive.ts';
 import { classifyIsco08 } from "./isco.ts";
 import { RUB_PER } from './fx.ts';
 import { budgetUsd } from './salary.ts';
@@ -146,6 +146,25 @@ const AI_SKILLS = new Set([
   'ai / ml', 'ai', 'ml', 'llm', 'openai', 'langchain', 'pytorch', 'tensorflow', 'rag', 'nlp', 'computer vision',
 ]);
 
+/**
+ * Broad role-umbrella tags assigned by dictionary categories: these duplicate `directions`
+ * (sales, backend, marketing, qa, support, etc.), so `trending_skills` focuses on concrete
+ * technologies, tools, and stack skills.
+ */
+const UMBRELLA_CATEGORY_TAGS = new Set([
+  'продажи', 'разработка', 'аналитика', 'маркетинг', 'дизайн', 'тестирование', 'техподдержка',
+  'администрирование', 'контент', 'инфобез', 'sales', 'development', 'analytics', 'marketing',
+  'design', 'qa', 'tech support', 'sysadmin', 'content', 'security', 'it', 'engineering',
+  'software development', 'system and network administration',
+]);
+
+const IT_DIRECTIONS = new Set([
+  'ai', '1c', 'security', 'qa', 'devops', 'architect', 'sysadmin', 'data-engineer',
+  'analyst-system', 'analyst-business', 'analyst-data', 'ml', 'product', 'project',
+  'gamedev', 'mobile', 'fullstack', 'frontend', 'embedded', 'backend', 'web', 'bots',
+  'parsing', 'dev-other',
+]);
+
 export interface PaySummary {
   count: number;
   usd?: MarketRange;
@@ -155,6 +174,8 @@ export interface PaySummary {
 export interface MarketInsights {
   window_days: number;
   total_leads: number;
+  it_leads?: number;
+  it_share_pct?: number;
   trending_skills: Array<{ name: string; count: number; share_pct: number }>;
   directions: Array<{ direction: string; count: number; share_pct: number }>;
   occupations: Array<{ code: string; label: string; count: number; share_pct: number }>;
@@ -213,6 +234,7 @@ export function computeInsights(leads: Lead[], windowDays: number = 30): MarketI
   let hybrid = 0;
   let onsite = 0;
   let aiCount = 0;
+  let itCount = 0;
 
   for (const lead of leads) {
     const gigRemote = (lead.type ?? 'gig') === 'gig' && (!lead.city || /^(?:онлайн|удал)/i.test(lead.city)) && lead.workplaceType !== 'hybrid';
@@ -221,18 +243,26 @@ export function computeInsights(leads: Lead[], windowDays: number = 30): MarketI
     else if (wp === 'hybrid') hybrid++;
     else onsite++;
 
-    const rawDir = lead.direction && lead.direction !== 'other' ? lead.direction : classifyRole(lead.type ?? 'job', lead.title);
+    const physicalNoise = isPhysicalNonItWork(lead.title, lead.text);
+    const rawDir = physicalNoise
+      ? 'other'
+      : (lead.direction && lead.direction !== 'other' ? lead.direction : classifyRole(lead.type ?? 'job', lead.title));
     if (rawDir && rawDir !== 'other') {
       dirCounts.set(rawDir, (dirCounts.get(rawDir) ?? 0) + 1);
+      if (IT_DIRECTIONS.has(rawDir)) itCount++;
     }
-    const isco = classifyIsco08(lead);
-    if (isco) {
-      const prev = iscoCounts.get(isco.code);
-      iscoCounts.set(isco.code, { label: isco.label, count: (prev?.count ?? 0) + 1 });
+
+    if (!physicalNoise) {
+      const isco = classifyIsco08(lead);
+      if (isco) {
+        const prev = iscoCounts.get(isco.code);
+        iscoCounts.set(isco.code, { label: isco.label, count: (prev?.count ?? 0) + 1 });
+      }
     }
 
     const skills = lead.skills ?? [];
     for (const s of skills) {
+      if (UMBRELLA_CATEGORY_TAGS.has(s.trim().toLowerCase())) continue;
       skillCounts.set(s, (skillCounts.get(s) ?? 0) + 1);
     }
 
@@ -258,6 +288,8 @@ export function computeInsights(leads: Lead[], windowDays: number = 30): MarketI
   return {
     window_days: windowDays,
     total_leads: total,
+    it_leads: itCount,
+    it_share_pct: pct(itCount),
     trending_skills,
     directions,
     occupations,

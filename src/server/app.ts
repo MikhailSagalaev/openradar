@@ -27,7 +27,7 @@ import { VERSION } from '../version.ts';
 import { githubOAuthConfigured, startGitHubOAuth, handleGitHubCallback } from './auth.ts';
 import { renderAdminPage } from './admin.ts';
 import { analyticsFromEnv, contentSecurityPolicy } from './analytics.ts';
-import { filterOptions, matchesSavedFilters, parseFeedFilters, type FeedFilters } from './filters.ts';
+import { filterOptions, IT_SKILLS, matchesSavedFilters, parseFeedFilters, type FeedFilters } from './filters.ts';
 import { computeInsights, estimateMarket } from '../core/market.ts';
 import { COLLECTOR_MAX_ORDERS, COLLECTOR_PLATFORMS, collectedOrderToRaw, type CollectorPlatform, COLLECTOR_SITES, collectedVacancyToRaw, type CollectorSite } from './collector.ts';
 import { rateLimit } from './ratelimit.ts';
@@ -35,7 +35,7 @@ import { indexCsv, openradarIndex } from '../research/index.ts';
 import { qualityFlagsOf } from '../core/quality.ts';
 import { rubToUsd } from '../core/salary.ts';
 import { TelegramAuthService } from './tg-auth.ts';
-import { sourceState } from '../core/source-health.ts';
+import { runSourceHygiene, sourceState } from '../core/source-health.ts';
 import { LABEL_VERDICTS, scoreSource } from '../core/source-quality.ts';
 import { REVIEW_ISSUES, isReviewVerdict, pickBucket, reviewConsensus, type ReviewIssue } from '../core/reviews.ts';
 import { roleDef, roleLabel, ROLES } from '../research/derive.ts';
@@ -81,6 +81,7 @@ import { registerV2Routes } from './v2.ts';
 import {
   SEO_CATALOG,
   findCatalogEntry,
+  isCatalogLeadRelevant,
   renderAboutPage,
   renderNetworkPage,
   renderParticipantPage,
@@ -2306,8 +2307,20 @@ export function createApp(runtime: Runtime): Hono {
     if (!sameOrigin(c)) return c.text('Forbidden', 403);
     const source = await runtime.store.getSource(c.req.param('id'));
     if (!source) return c.html(renderNotFound(VERSION, resolveLang(c), await getAuthDisplay(c, runtime)), 404);
-    await runtime.store.updateSource(source.id, { enabled: !source.enabled });
+    const nextEnabled = !source.enabled;
+    const nextConfig = { ...source.config };
+    if (nextEnabled) {
+      delete nextConfig.autoDisabledAt;
+      delete nextConfig.autoDisableReason;
+    }
+    await runtime.store.updateSource(source.id, { enabled: nextEnabled, config: nextConfig });
     return c.redirect(`/sources/${source.id}`);
+  });
+
+  app.post('/api/sources/hygiene', async (c) => {
+    if (!await isAdmin(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
+    const summary = await runSourceHygiene(runtime.store);
+    return c.json(summary);
   });
 
   app.post('/sources/:id/delete', async (c) => {
@@ -2435,15 +2448,20 @@ export function createApp(runtime: Runtime): Hono {
     if (!await canRead(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
     const rawType = c.req.query('type')?.trim();
     const type: LeadType | undefined = rawType === 'job' || rawType === 'gig' ? rawType : undefined;
+    const itOnly = c.req.query('it') === '1' || c.req.query('it') === 'true';
+    const direction = c.req.query('direction')?.trim().slice(0, 40) || undefined;
     const days = Math.max(1, Math.min(Number(c.req.query('days') ?? 30) || 30, 90));
     const now = new Date();
     const leads = await runtime.store.getLeadsForFeed({
       type,
+      skillsAny: itOnly ? [...IT_SKILLS] : undefined,
+      directionsAny: direction ? [direction] : undefined,
       limit: 3000,
       createdAfter: new Date(now.getTime() - days * 86_400_000).toISOString(),
       createdBefore: visibleBefore({ tier: 'guest' }, runtime.access, now),
     });
     c.header('Cache-Control', 'public, max-age=600');
+    c.header('Vary', 'Cookie');
     const insights = computeInsights(leads, days);
     if (resolveLang(c) === 'en') {
       const merged = new Map<string, number>();
@@ -3333,65 +3351,72 @@ export function createApp(runtime: Runtime): Hono {
     c.html(renderTrustPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c) })));
 
   // The network made visible: the 30-day leaderboard and the sources of the week.
-  let networkCache: { at: number; body: string } | undefined;
+  // Only the underlying data is cached; the page shell renders per request with the visitor's auth and language.
+  let networkCache: {
+    at: number;
+    participants: Array<{ shortPubkey: string; name?: string; about?: string; handle?: string; posts: number; points: number; tier: string }>;
+    topSources: Array<{ title: string; leads: number; href?: string }>;
+  } | undefined;
   app.get('/network', rateLimit({ windowMs: 60_000, max: 60 }), async (c) => {
-    if (networkCache && Date.now() - networkCache.at < 10 * 60_000) return c.html(networkCache.body);
     const lang = resolveLang(c);
-    const since = new Date(Date.now() - RATING_WINDOW_MS).toISOString();
-    const sums = [...(await runtime.store.sumLedger(since)).entries()]
-      .filter(([pubkey, points]) => /^[0-9a-f]{64}$/.test(pubkey) && points > 0)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 30);
-    const moderators = parseModerators(runtime.env.RADAR_MODERATORS);
-    const participants = [];
-    const accounts = await accountsByKey();
-    for (const [pubkey, points] of sums) {
-      const participant = await runtime.store.getParticipant(pubkey);
-      const account = accounts.get(pubkey) ?? (participant?.githubUserId ? await runtime.store.getUserById(participant.githubUserId) ?? undefined : undefined);
-      const shown = account && account.publicProfile !== false ? account : undefined;
-      const posts = await runtime.store.countObservationsByPubkey(pubkey);
-      const profileName = participant?.profile?.name;
-      const profileAbout = participant?.profile?.about;
-      participants.push({
-        shortPubkey: `${pubkey.slice(0, 8)}…${pubkey.slice(-4)}`,
-        name: typeof profileName === 'string' && profileName.trim() ? profileName.trim() : undefined,
-        about: typeof profileAbout === 'string' && profileAbout.trim() ? profileAbout.trim() : undefined,
-        points,
-        posts,
-        handle: shown?.handle,
-        tier: tierFor({ rating: points, moderator: moderators.has(pubkey), githubLinked: Boolean(participant?.githubUserId) }),
-      });
+    if (!networkCache || Date.now() - networkCache.at >= 10 * 60_000) {
+      const since = new Date(Date.now() - RATING_WINDOW_MS).toISOString();
+      const sums = [...(await runtime.store.sumLedger(since)).entries()]
+        .filter(([pubkey, points]) => /^[0-9a-f]{64}$/.test(pubkey) && points > 0)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 30);
+      const moderators = parseModerators(runtime.env.RADAR_MODERATORS);
+      const participants = [];
+      const accounts = await accountsByKey();
+      for (const [pubkey, points] of sums) {
+        const participant = await runtime.store.getParticipant(pubkey);
+        const account = accounts.get(pubkey) ?? (participant?.githubUserId ? await runtime.store.getUserById(participant.githubUserId) ?? undefined : undefined);
+        const shown = account && account.publicProfile !== false ? account : undefined;
+        const posts = await runtime.store.countObservationsByPubkey(pubkey);
+        const profileName = participant?.profile?.name;
+        const profileAbout = participant?.profile?.about;
+        participants.push({
+          shortPubkey: `${pubkey.slice(0, 8)}…${pubkey.slice(-4)}`,
+          name: typeof profileName === 'string' && profileName.trim() ? profileName.trim() : undefined,
+          about: typeof profileAbout === 'string' && profileAbout.trim() ? profileAbout.trim() : undefined,
+          points,
+          posts,
+          handle: shown?.handle,
+          tier: tierFor({ rating: points, moderator: moderators.has(pubkey), githubLinked: Boolean(participant?.githubUserId) }),
+        });
+      }
+      const weekLeads = await feedFor(runtime, { tier: 'guest' }, { limit: 3000, createdAfter: new Date(Date.now() - 7 * 24 * 3600_000).toISOString() });
+      const bySource = new Map<string, number>();
+      for (const lead of weekLeads) {
+        const id = lead.sourceRef ? `${lead.sourceRef.platform}:${lead.sourceRef.channel}` : lead.sourceId;
+        bySource.set(id, (bySource.get(id) ?? 0) + 1);
+      }
+      const sources = await runtime.store.listSources();
+      const titleById = new Map(sources.map((s) => [s.id, s]));
+      const topSources = [...bySource.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 7)
+        .map(([key, leads]) => {
+          const source = titleById.get(key) ?? sources.find((s) => `${s.kind}:${s.id}` === key);
+          return {
+            title: source?.title ?? sources.find((s) => s.id === key)?.title ?? key,
+            leads,
+            href: source ? `/sources/${source.id}` : undefined,
+          };
+        });
+      networkCache = { at: Date.now(), participants, topSources };
     }
-    const weekLeads = await feedFor(runtime, { tier: 'guest' }, { limit: 3000, createdAfter: new Date(Date.now() - 7 * 24 * 3600_000).toISOString() });
-    const bySource = new Map<string, number>();
-    for (const lead of weekLeads) {
-      const id = lead.sourceRef ? `${lead.sourceRef.platform}:${lead.sourceRef.channel}` : lead.sourceId;
-      bySource.set(id, (bySource.get(id) ?? 0) + 1);
-    }
-    const sources = await runtime.store.listSources();
-    const titleById = new Map(sources.map((s) => [s.id, s]));
-    const topSources = [...bySource.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 7)
-      .map(([key, leads]) => {
-        const source = titleById.get(key) ?? sources.find((s) => `${s.kind}:${s.id}` === key);
-        return {
-          title: source?.title ?? sources.find((s) => s.id === key)?.title ?? key,
-          leads,
-          href: source ? `/sources/${source.id}` : undefined,
-        };
-      });
     const body = renderNetworkPage({
       baseUrl: seoBaseUrl(c),
       version: VERSION,
       auth: await getAuthDisplay(c, runtime),
       lang,
-      participants,
-      sources: topSources,
+      participants: networkCache.participants,
+      sources: networkCache.topSources,
       windowDays: RATING_WINDOW_MS / 86_400_000,
     });
-    networkCache = { at: Date.now(), body };
-    c.header('Cache-Control', 'public, max-age=600');
+    c.header('Cache-Control', 'private, no-cache');
+    c.header('Vary', 'Cookie');
     return c.html(body);
   });
   // Employers: who hires now, one page per company. What a guest may read, without contacts.
@@ -3513,7 +3538,7 @@ export function createApp(runtime: Runtime): Hono {
       remote: entry.remote || undefined,
       // These pages are Russian: an English post is on them only by a shared word.
       language: 'ru',
-    })).filter((lead) => lead.status !== 'rejected' && lead.status !== 'failed').slice(0, 20);
+    })).filter((lead) => lead.status !== 'rejected' && lead.status !== 'failed' && isCatalogLeadRelevant(lead, entry)).slice(0, 20);
 
     return c.html(
       renderCatalogPage({

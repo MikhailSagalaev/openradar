@@ -10,6 +10,7 @@ import {
   renderNetworkPage,
   renderReviewPage,
   renderRobotsTxt,
+  isCatalogLeadRelevant,
   localizeCatalogEntry,
   renderSitemapXml,
 } from '../src/server/seo.ts';
@@ -275,5 +276,40 @@ describe('English localization parity (lang = en)', () => {
     expect(translateCity('Москва', 'en')).toBe('Moscow');
     expect(translateCity('Санкт-Петербург', 'en')).toBe('Saint Petersburg');
     expect(translateSourceTitle('Работа России — Государственная база вакансий (IT)', 'en')).toBe('Rabota Rossii — National Job Bank (IT)');
+  });
+});
+
+describe('SEO catalog filtering quality', () => {
+  it('excludes physical construction, furniture, and HVAC blueprints from IT development catalog', () => {
+    const devEntry = findCatalogEntry('zakazy-na-razrabotku')!;
+    const furnitureLead = {
+      id: 'f1',
+      sourceId: 's1',
+      title: 'Разработка планировочного решения Мебели коттедж 320 м2',
+      text: 'Нужна разработка планировочного решения мебели для коттеджа.',
+      type: 'gig' as const,
+      direction: 'dev-other',
+      status: 'new' as const,
+      score: 60,
+      createdAt: '2026-11-11T00:00:00Z',
+      fingerprint: 'fp1',
+      titleKey: 'f1',
+      reasons: [],
+    };
+    const hvacLead = {
+      ...furnitureLead,
+      id: 'f2',
+      title: 'Ведущий инженер-проектировщик ОВ',
+      text: 'Разработка проектной документации раздела ОВ и ВК.',
+    };
+    const realPhpLead = {
+      ...furnitureLead,
+      id: 'f3',
+      title: 'Внести правки сайта на PHP и доработать API',
+      text: 'Нужна разработка модуля оплаты на PHP Laravel.',
+    };
+    expect(isCatalogLeadRelevant(furnitureLead, devEntry)).toBe(false);
+    expect(isCatalogLeadRelevant(hvacLead, devEntry)).toBe(false);
+    expect(isCatalogLeadRelevant(realPhpLead, devEntry)).toBe(true);
   });
 });

@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.67.2] - 2026-11-11
+
+### Fixed
+- **Network Page (`/network`)**: Cache only leaderboard and source data in `networkCache` instead of pre-rendered HTML, and render `renderNetworkPage` per request with the visitor's `auth` session and `lang` cookie (`Cache-Control: private, no-cache`, `Vary: Cookie`). Fixes `/network` getting stuck in English or hiding the signed-in user menu.
+- **English Source & Employer Names**: Fix `translateSourceTitle` fragment splitting and add translations for standalone source titles and major Russian employers on `/sources?lang=en`, `/sources/quality?lang=en`, and `/en/research`.
+- **SEO Catalog & `/api/insights` Filtering Quality**:
+  - Exclude physical construction, furniture, and HVAC blueprint posts (`isPhysicalNonItWork`, `isCatalogLeadRelevant`) from `classifyRole`, `/catalog/:slug`, and `/api/insights`.
+  - Add `directions` to all remaining `SEO_CATALOG` entries.
+  - Exclude broad umbrella role labels (`Продажи`, `Разработка`, etc.) from `trending_skills` in `/api/insights` so concrete technologies/skills surface at the top; add `it_leads`, `it_share_pct`, and `?it=1` / `?direction=...` query parameters.
+
+### Added
+- **Automatic Source Hygiene**: Adaptive polling backoff (`pollBackoffFactor`: 2x/3x/4x/8x) for unstable/blocked sources, automatic quarantine (`shouldQuarantineSource`) for dead endpoints (HTTP 404/410/DNS) and chronic 24h failures, and `POST /api/sources/hygiene`.
+
 ## [0.67.1] - 2026-11-11
 
 ### Fixed
