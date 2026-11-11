@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.67.1] - 2026-11-11
+
+### Fixed
+- **Docker**: Copy `docs/stories.json` into runtime image so `GET /api/stories` returns public stories in production.
+- **English Localization (100% Parity)**:
+  - Translate footer SEO catalog links, RSS link title, add-source modal placeholder, and polling toast messages on all English pages (`?lang=en` / `openradar_lang=en`).
+  - Localize `/login`, `/admin`, and all `404` pages into English when `lang === 'en'`.
+  - Translate all 28 `/catalog` and `/catalog/:slug` SEO landing pages, `/employers/:slug`, `/network`, `/sources/quality`, `/decisions`, `/about`, and `/llms.txt` (`/en/llms.txt`).
+  - Translate Russian skill tags, city names, and source preset titles across the feed (`/?lang=en`), lead detail pages, source catalog, employer pages, research reports, and `/api/insights?lang=en`.
+  - Fix Russian month names, quote copy buttons, range chart tooltips/legends, and clickable role links on `/en/research` and `/en/research/roles/:slug`.
+
 ## 0.67.0 — 2026-11-11
 
 - **Extract via Coarena (GLM + MiniMax)**: OpenAI-compatible path gains `json_schema` constrained decoding, `RADAR_EXTRACT_FALLBACK_MODEL`, contact scrubbing before the call, STOP on 401/402/403, tombstones for failed posts, and a queue that only asks for posts still without pay that mention money in the text. Hub defaults documented in `.env.example`: `glm-5-3-flash` with `minimax-m3-1-flash` fallback.

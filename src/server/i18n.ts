@@ -610,3 +610,273 @@ export function resolveLang(c: Context): SupportedLang {
   }
   return detectBrowserLang(c.req.header('accept-language'));
 }
+
+
+const SKILL_EN: Record<string, string> = {
+  "1С": "1C",
+  "Битрикс": "Bitrix",
+  "Нейросети": "Neural Networks",
+  "Видеомонтаж": "Video Editing",
+  "Моушн-дизайн": "Motion Design",
+  "Брендинг": "Branding",
+  "Иллюстрация": "Illustration",
+  "Тексты": "Copywriting & Content",
+  "Копирайтинг": "Copywriting",
+  "Переводы": "Translation",
+  "Таргет": "Targeted Ads",
+  "Контекстная реклама": "PPC Advertising",
+  "Авито": "Avito",
+  "Маркетплейсы": "Marketplaces",
+  "Бухгалтерия": "Accounting",
+  "Юриспруденция": "Legal",
+  "Обучение": "Education & Mentoring",
+  "Фото": "Photography",
+  "Продажи": "Sales",
+  "Поддержка": "Support",
+  "Вайб-кодинг": "Vibe Coding",
+  "Разработка": "Development",
+  "Аналитика": "Analytics",
+  "Тестирование": "QA & Testing",
+  "Управление проектами": "Project Management",
+  "Продакт-менеджмент": "Product Management",
+  "Рекрутинг": "Recruiting & HR",
+  "Маркетинг": "Marketing",
+  "Дизайн": "Design",
+  "Администрирование": "System Administration",
+  "Верстка": "HTML/CSS Layout",
+  "Вёрстка": "HTML/CSS Layout",
+  "Парсинг": "Web Scraping",
+  "Информационная безопасность": "Information Security",
+  "Информационные технологии": "Information Technology",
+  "Боты": "Bots",
+  "Сайты": "Websites",
+  "Видео и анимация": "Video & Animation",
+};
+
+export function translateSkill(skill: string, lang: SupportedLang = "ru"): string {
+  if (lang !== "en" || !skill) return skill;
+  return SKILL_EN[skill] ?? skill;
+}
+
+const CITY_EN: Record<string, string> = {
+  "Онлайн": "Online",
+  "Удаленно": "Remote",
+  "Удалённо": "Remote",
+  "Москва": "Moscow",
+  "Санкт-Петербург": "Saint Petersburg",
+  "Нижний Новгород": "Nizhny Novgorod",
+  "Екатеринбург": "Yekaterinburg",
+  "Новосибирск": "Novosibirsk",
+  "Казань": "Kazan",
+  "Ростов-на-Дону": "Rostov-on-Don",
+  "Краснодар": "Krasnodar",
+  "Самара": "Samara",
+  "Воронеж": "Voronezh",
+  "Пермь": "Perm",
+  "Уфа": "Ufa",
+  "Челябинск": "Chelyabinsk",
+  "Омск": "Omsk",
+  "Волгоград": "Volgograd",
+  "Красноярск": "Krasnoyarsk",
+  "Саратов": "Saratov",
+  "Тюмень": "Tyumen",
+  "Тольятти": "Tolyatti",
+  "Ижевск": "Izhevsk",
+  "Барнаул": "Barnaul",
+  "Ульяновск": "Ulyanovsk",
+  "Иркутск": "Irkutsk",
+  "Хабаровск": "Khabarovsk",
+  "Ярославль": "Yaroslavl",
+  "Владивосток": "Vladivostok",
+  "Махачкала": "Makhachkala",
+  "Томск": "Tomsk",
+  "Оренбург": "Orenburg",
+  "Кемерово": "Kemerovo",
+  "Новокузнецк": "Novokuznetsk",
+  "Рязань": "Ryazan",
+  "Астрахань": "Astrakhan",
+  "Пенза": "Penza",
+  "Липецк": "Lipetsk",
+  "Тула": "Tula",
+  "Киров": "Kirov",
+  "Чебоксары": "Cheboksary",
+  "Калининград": "Kaliningrad",
+  "Брянск": "Bryansk",
+  "Курск": "Kursk",
+  "Иваново": "Ivanovo",
+  "Магнитогорск": "Magnitogorsk",
+  "Тверь": "Tver",
+  "Ставрополь": "Stavropol",
+  "Белгород": "Belgorod",
+  "Сочи": "Sochi",
+  "Владимир": "Vladimir",
+  "Архангельск": "Arkhangelsk",
+  "Калуга": "Kaluga",
+  "Смоленск": "Smolensk",
+  "Одинцово": "Odintsovo",
+  "Мытищи": "Mytishchi",
+  "Химки": "Khimki",
+  "Подольск": "Podolsk",
+  "Балашиха": "Balashikha",
+  "Люберцы": "Lyubertsy",
+  "Королёв": "Korolyov",
+  "Красногорск": "Krasnogorsk",
+  "Другие города": "Other cities",
+  "Не указан": "Not stated",
+};
+
+export function translateCity(city: string | undefined, lang: SupportedLang = "ru"): string | undefined {
+  if (!city || lang !== "en") return city;
+  const trimmed = city.trim();
+  if (CITY_EN[trimmed]) return CITY_EN[trimmed];
+  if (trimmed.includes(",")) {
+    return trimmed
+      .split(",")
+      .map((part) => {
+        const p = part.trim();
+        return CITY_EN[p] ?? p;
+      })
+      .join(", ");
+  }
+  return city;
+}
+
+const SOURCE_PLATFORM_EN: Record<string, string> = {
+  "Хабр Карьера": "Habr Career",
+  "Работа России": "Rabota Rossii",
+  "Карьерные страницы компаний": "Company career pages",
+  "Ручное добавление": "Manual submissions",
+  "Яндекс": "Yandex",
+  "Яндекс Услуги": "Yandex Services",
+  "Профи.ру": "Profi.ru",
+  "Сбер": "Sber",
+  "Сбер2Б": "Sber2B",
+  "СберЗдоровье": "SberHealth",
+  "Т-Банк": "T-Bank",
+  "Точка Банк": "Tochka Bank",
+  "МТС": "MTS",
+  "Ростелеком": "Rostelecom",
+  "билайн": "Beeline",
+  "Золотое Яблоко": "Gold Apple",
+  "Контур": "Kontur",
+  "Фоксфорд": "Foxford",
+  "Хантфлоу": "Huntflow",
+  "Туту": "Tutu",
+  "Циан": "Cian",
+  "Тензор": "Tensor",
+  "Диасофт": "Diasoft",
+  "Авито": "Avito",
+  "Озон": "Ozon",
+  "Магнит Tech": "Magnit Tech",
+  "Честный Знак (CRPT)": "Chestny ZNAK (CRPT)",
+  "КРОК": "CROC",
+};
+
+const SOURCE_SCOPE_EN: Record<string, string> = {
+  "Все заказы": "All gigs",
+  "Государственная база вакансий (IT)": "National Job Bank (IT)",
+  "Вакансии и заказы": "Jobs and gigs",
+  "Вакансии IT и Digital": "IT & Digital jobs",
+  "Все вакансии": "All vacancies",
+  "Удалённая работа": "Remote work",
+  "IT-вакансии": "IT vacancies",
+  "Удалённая проектная работа": "Remote project work",
+  "Все проекты": "All projects",
+  "Все проекты и заказы": "All projects and gigs",
+  "Вакансии Германии и ЕС": "Germany & EU jobs",
+  "Отобранные вакансии": "Curated vacancies",
+  "Web3 вакансии": "Web3 jobs",
+  "Вакансии Европы": "European jobs",
+  "Go-вакансии": "Go jobs",
+  "Laravel и PHP": "Laravel & PHP",
+  "Вакансии стартапов YC": "YC startup jobs",
+  "Вакансии дизайнеров": "Designer jobs",
+  "Удалённо из любой страны": "Remote from anywhere",
+  "Удалённые вакансии": "Remote vacancies",
+  "Карьерные страницы компаний": "Company career pages",
+  "Вакансии": "Vacancies",
+  "Карьерные вакансии": "Career vacancies",
+  "Вакансии Vue.js и Frontend": "Vue.js & Frontend jobs",
+  "Вакансии Python и Django": "Python & Django jobs",
+  "Инженерные вакансии и проекты": "Engineering jobs & projects",
+  "Вакансии США": "US jobs",
+  "Продакт-менеджеры": "Product managers",
+  "Проджект-менеджеры": "Project managers",
+  "Аналитики": "Analysts",
+  "Дизайнеры": "Designers",
+  "Тестировщики (QA)": "QA & testers",
+  "DevOps и администрирование": "DevOps & sysadmin",
+  "Маркетинг и реклама": "Marketing & advertising",
+  "Техподдержка": "Tech support",
+  "Продажи": "Sales",
+  "Информационная безопасность": "Information security",
+  "1С": "1C",
+  "Digital-вакансии": "Digital jobs",
+  "заказы": "gigs",
+  "Вакансии (из браузера)": "Vacancies (browser)",
+};
+
+export function translateSourceTitle(title: string, lang: SupportedLang = "ru"): string {
+  if (!title || lang !== "en") return title;
+  if (SOURCE_PLATFORM_EN[title]) return SOURCE_PLATFORM_EN[title]!;
+  if (SOURCE_SCOPE_EN[title]) return SOURCE_SCOPE_EN[title]!;
+  const parts = title.split(/\s+—\s+/, 2);
+  if (parts.length === 2) {
+    const [left, right] = parts as [string, string];
+    if (left === "Карьерные страницы компаний") {
+      return `${right} — Company career pages`;
+    }
+    const enLeft = SOURCE_PLATFORM_EN[left] ?? left;
+    let enRight = SOURCE_SCOPE_EN[right] ?? right;
+    if (enRight === right && right.includes(":")) {
+      const [chan, desc] = right.split(":\s*", 2);
+      const descMap: Record<string, string> = {
+        "вакансии продукта": "product jobs",
+        "продукт": "product",
+        "продуктовый дизайн": "product design",
+        "motion-дизайн": "motion design",
+        "джуны и стажировки": "juniors & internships",
+        "удалёнка для джунов": "remote junior jobs",
+        "аналитики без опыта": "junior analysts",
+        "стажировки": "internships",
+        "стартапы": "startups",
+        "SMM и маркетинг": "SMM & marketing",
+      };
+      if (chan && desc && descMap[desc]) enRight = `${chan}: ${descMap[desc]}`;
+      else if (chan && desc) {
+        enRight = `${chan}: ${desc
+          .replace(/вакансии для продактов и проджектов/gi, "product & project jobs")
+          .replace(/вакансии стартапов/gi, "startup jobs")
+          .replace(/вакансии дизайнеров/gi, "designer jobs")
+          .replace(/вакансии на/gi, "jobs in")
+          .replace(/вакансии/gi, "jobs")
+          .replace(/заказы/gi, "gigs")
+          .replace(/разработка/gi, "development")
+          .replace(/тестирование/gi, "QA")
+          .replace(/дизайн/gi, "design")
+          .replace(/маркетинг/gi, "marketing")
+          .replace(/релокация и удалёнка/gi, "relocation & remote")
+          .replace(/удалёнка/gi, "remote")}`;
+      }
+    } else if (enRight === right) {
+      enRight = right
+        .replace(/Вакансии для продактов и проджектов/g, "Product & project jobs")
+        .replace(/Дизайн, UX\/UI и графика/g, "Design, UX/UI & graphics")
+        .replace(/и автотестирование/g, "& automation QA")
+        .replace(/и тестирование/g, "& QA")
+        .replace(/и инфраструктура/g, "& infrastructure")
+        .replace(/и администрирование/g, "& sysadmin")
+        .replace(/и графика/g, "& graphics")
+        .replace(/и маркетинг/g, "& marketing")
+        .replace(/Дизайн и/g, "Design &")
+        .replace(/релокация и удалёнка/g, "relocation & remote")
+        .replace(/вакансии на/gi, "jobs in")
+        .replace(/Вакансии/g, "Vacancies")
+        .replace(/вакансии/g, "jobs")
+        .replace(/Заказы/g, "Gigs")
+        .replace(/заказы/g, "gigs");
+    }
+    return `${enLeft} — ${enRight}`;
+  }
+  return title;
+}

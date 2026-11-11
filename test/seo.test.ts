@@ -10,8 +10,10 @@ import {
   renderNetworkPage,
   renderReviewPage,
   renderRobotsTxt,
+  localizeCatalogEntry,
   renderSitemapXml,
 } from '../src/server/seo.ts';
+import { translateCity, translateSkill, translateSourceTitle } from '../src/server/i18n.ts';
 import { renderLeadPage, renderLeadsPage } from '../src/server/ui.ts';
 import { makeSource } from './helpers.ts';
 
@@ -224,5 +226,54 @@ describe('participants table', () => {
     expect(row).toContain('<td class="num">12</td>');
     expect(row).toContain('<td class="num">35</td>');
     expect(row).toContain('href="/u/mona"');
+  });
+});
+
+describe('English localization parity (lang = en)', () => {
+  it('translates all 28 SEO catalog entries without Cyrillic', () => {
+    for (const entry of SEO_CATALOG) {
+      const en = localizeCatalogEntry(entry, 'en');
+      expect(en.slug).toBe(entry.slug);
+      expect(en.title).not.toMatch(/[а-яё]/i);
+      expect(en.h1).not.toMatch(/[а-яё]/i);
+      expect(en.description).not.toMatch(/[а-яё]/i);
+      expect(en.intro).not.toMatch(/[а-яё]/i);
+    }
+    const indexHtml = renderCatalogIndex({ baseUrl: 'https://openradar.fun', version: 'test', lang: 'en' });
+    expect(indexHtml).toContain('Categories of orders and vacancies');
+    expect(indexHtml).not.toMatch(/[а-яё]/i);
+
+    const catHtml = renderCatalogPage({ entry: SEO_CATALOG[0]!, baseUrl: 'https://openradar.fun', version: 'test', leads: [], lang: 'en' });
+    expect(catHtml).toContain('Development gigs');
+    expect(catHtml).not.toMatch(/[а-яё]/i);
+  });
+
+  it('renders English /about, /faq, /network, and /llms.txt without Cyrillic', () => {
+    const aboutEn = renderAboutPage({ baseUrl: 'https://openradar.fun', version: 'test', lang: 'en' });
+    expect(aboutEn).not.toMatch(/[а-яё]/i);
+    const faqEn = renderFaqPage({ baseUrl: 'https://openradar.fun', version: 'test', lang: 'en' });
+    expect(faqEn).not.toMatch(/[а-яё]/i);
+    const netEn = renderNetworkPage({
+      baseUrl: 'https://openradar.fun',
+      version: 'test',
+      participants: [{ shortPubkey: 'abcd', handle: 'mona', posts: 5, points: 2.0, tier: 'member' }],
+      sources: [{ title: 'Хабр Карьера — Вакансии и заказы', leads: 10 }],
+      windowDays: 30,
+      lang: 'en',
+    });
+    expect(netEn).toContain('Habr Career — Jobs and gigs');
+    expect(netEn).not.toMatch(/[а-яё]/i);
+
+    const llmsEn = renderLlmsTxt('https://openradar.fun', 'en');
+    expect(llmsEn).toContain('# openradar');
+    expect(llmsEn).not.toMatch(/[а-яё]/i);
+  });
+
+  it('translates skills, cities, and source titles into English', () => {
+    expect(translateSkill('Продажи', 'en')).toBe('Sales');
+    expect(translateSkill('Разработка', 'en')).toBe('Development');
+    expect(translateCity('Москва', 'en')).toBe('Moscow');
+    expect(translateCity('Санкт-Петербург', 'en')).toBe('Saint Petersburg');
+    expect(translateSourceTitle('Работа России — Государственная база вакансий (IT)', 'en')).toBe('Rabota Rossii — National Job Bank (IT)');
   });
 });

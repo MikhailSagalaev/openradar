@@ -1,3 +1,4 @@
+import type { SupportedLang } from './i18n.ts';
 import { CONTACT_PLACEHOLDER } from '../core/contacts.ts';
 import { escapeHtml } from '../core/text.ts';
 
@@ -11,12 +12,13 @@ const URL_RE = /\bhttps?:\/\/[^\s<>"«»]+[^\s<>"«».,;:!?)\]]/giu;
 const SKILLS_LINE_RE = /(?:Требуемые\s+навыки|Ключевые\s+навыки|Навыки|Skills|Tags)\s*:\s*((?:#[\p{L}\p{N}_+./-]+[,;\s]*)+)\.?/giu;
 const HASHTAG_RE = /#([\p{L}\p{N}_+./-]{2,40})/gu;
 const BULLET_RE = /^\s*(?:[-–—•*·▪●]|\d{1,2}[.)])\s+/u;
+
 /** A wall of text longer than this, with no line breaks, is split into paragraphs. */
 const WALL_LENGTH = 420;
 const PARAGRAPH_TARGET = 280;
 
 /** Escapes text, turns URLs into links and the contact placeholder into a muted label. */
-function inline(text: string): string {
+function inline(text: string, lang: SupportedLang = 'ru'): string {
   let out = '';
   let last = 0;
   for (const match of text.matchAll(URL_RE)) {
@@ -30,7 +32,7 @@ function inline(text: string): string {
   out += escapeHtml(text.slice(last));
   return out.replaceAll(
     escapeHtml(CONTACT_PLACEHOLDER),
-    `<button type="button" class="redacted-btn" onclick="openLoginModal()" title="Войдите, чтобы увидеть контакты">${escapeHtml(CONTACT_PLACEHOLDER)}</button>`,
+    `<button type="button" class="redacted-btn" onclick="openLoginModal()" title="${lang === 'en' ? 'Sign in to see contacts' : 'Войдите, чтобы увидеть контакты'}">${escapeHtml(CONTACT_PLACEHOLDER)}</button>`,
   );
 }
 
@@ -50,30 +52,30 @@ function splitWall(block: string): string[] {
   return paragraphs;
 }
 
-function renderBlock(block: string): string {
+function renderBlock(block: string, lang: SupportedLang = 'ru'): string {
   const lines = block.split('\n').map((line) => line.trimEnd()).filter((line) => line.trim());
   if (!lines.length) return '';
   const bullets = lines.filter((line) => BULLET_RE.test(line));
   // A list: every line after an optional heading is a bullet.
   if (bullets.length >= 2 && bullets.length >= lines.length - 1) {
-    const heading = BULLET_RE.test(lines[0]!) ? '' : `<p class="lead-heading">${inline(lines[0]!)}</p>`;
-    return `${heading}<ul>${bullets.map((line) => `<li>${inline(line.replace(BULLET_RE, ''))}</li>`).join('')}</ul>`;
+    const heading = BULLET_RE.test(lines[0]!) ? '' : `<p class="lead-heading">${inline(lines[0]!, lang)}</p>`;
+    return `${heading}<ul>${bullets.map((line) => `<li>${inline(line.replace(BULLET_RE, ''), lang)}</li>`).join('')}</ul>`;
   }
   if (lines.length === 1 && lines[0]!.length > WALL_LENGTH) {
-    return splitWall(lines[0]!).map((p) => `<p>${inline(p)}</p>`).join('');
+    return splitWall(lines[0]!).map((p) => `<p>${inline(p, lang)}</p>`).join('');
   }
   return `<p>${lines
-    .map((line) => (line.length < 70 && /:\s*$/.test(line) ? `<strong>${inline(line)}</strong>` : inline(line)))
+    .map((line) => (line.length < 70 && /:\s*$/.test(line) ? `<strong>${inline(line, lang)}</strong>` : inline(line, lang)))
     .join('<br>')}</p>`;
 }
 
 /** Lead text as readable HTML: paragraphs, lists, links; skill hashtags lifted into tags. */
-export function formatLeadText(text: string): FormattedText {
+export function formatLeadText(text: string, lang: SupportedLang = 'ru'): FormattedText {
   const tags: string[] = [];
   const withoutSkills = (text || '').replace(/\r\n?/g, '\n').replace(SKILLS_LINE_RE, (_all, list: string) => {
     for (const match of list.matchAll(HASHTAG_RE)) tags.push(match[1]!.replace(/[.,;/-]+$/, ''));
     return '';
   });
   const blocks = withoutSkills.trim().split(/\n\s*\n/);
-  return { html: blocks.map(renderBlock).join(''), tags: Array.from(new Set(tags)) };
+  return { html: blocks.map((b) => renderBlock(b, lang)).join(''), tags: Array.from(new Set(tags)) };
 }

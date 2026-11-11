@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto';
 import type { AccessKind, Contact, Lead, LeadVoteSignal, RunRecord, SourceHealth, SourceRecord, Stats } from '../core/types.ts';
 import { decodeHtmlEntities, escapeHtml, firstLine, jsonForScript, truncate } from '../core/text.ts';
-import { type SupportedLang, getTranslations } from './i18n.ts';
+import { type SupportedLang, getTranslations, translateCity, translateSkill, translateSourceTitle } from './i18n.ts';
 import { renderLogo } from './logo.ts';
 import { type AnalyticsConfig, analyticsBody, analyticsHead } from './analytics.ts';
 import { formatLeadText } from './format.ts';
 import { activeFilterCount, budgetStepsFor, type FeedFilters, hasActiveFilters, rankedWindowApplies } from './filters.ts';
-import { SEO_CATALOG } from './seo.ts';
+import { SEO_CATALOG, localizeCatalogEntry } from './seo.ts';
 import { qualityFlagsOf } from '../core/quality.ts';
 import { BROKEN_AFTER, sourceState, type SourceState } from '../core/source-health.ts';
 import { feedQuery, type SubscriptionRecord } from '../core/subscriptions.ts';
@@ -2317,7 +2317,7 @@ ${publicBaseUrl ? `<meta property="og:image" content="${escapeHtml(publicBaseUrl
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="${escapeHtml(publicBaseUrl)}/og.png">` : '<meta name="twitter:card" content="summary">'}
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="alternate" type="application/rss+xml" title="openradar — свежие заказы и вакансии" href="/feed.rss">
+<link rel="alternate" type="application/rss+xml" title="${lang === 'en' ? 'openradar — fresh gigs and jobs' : 'openradar — свежие заказы и вакансии'}" href="/feed.rss">
 ${input.head ?? ''}
 <link rel="stylesheet" href="${STYLE_PATH}">
 ${analyticsHeadHtml}
@@ -2349,14 +2349,14 @@ ${input.body}
     <div class="footer-col">
       <div class="footer-col-title">${escapeHtml(lang === 'ru' ? 'Категории' : 'Categories')}</div>
       <div class="footer-catalog-grid">
-        ${SEO_CATALOG.slice(0, FOOTER_CATALOG_SIZE).map((entry) => `<a href="/catalog/${escapeHtml(entry.slug)}">${escapeHtml((entry.title.split('—')[0] ?? entry.h1).trim())}</a>`).join('')}
+        ${SEO_CATALOG.slice(0, FOOTER_CATALOG_SIZE).map((raw) => { const entry = localizeCatalogEntry(raw, lang); return `<a href="/catalog/${escapeHtml(entry.slug)}">${escapeHtml((entry.title.split('—')[0] ?? entry.h1).trim())}</a>`; }).join('')}
         <a href="/catalog">${escapeHtml(lang === 'ru' ? 'Все категории →' : 'All categories →')}</a>
       </div>
     </div>
     <div class="footer-col">
       <div class="footer-col-title">${escapeHtml(lang === 'ru' ? 'Проект' : 'Project')}</div>
       <div class="footer-links-grid">
-        <a href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md" target="_blank" rel="noopener noreferrer">${escapeHtml(t.guideLink)}</a>
+        <a href="${REPO_URL}/blob/main/docs/${lang === 'en' ? 'GETTING_STARTED_EN.md' : 'GETTING_STARTED.md'}" target="_blank" rel="noopener noreferrer">${escapeHtml(t.guideLink)}</a>
         <a href="/research">${escapeHtml(lang === 'ru' ? 'Исследования рынка' : 'Market research')}</a>
         <a href="/employers">${escapeHtml(lang === 'ru' ? 'Работодатели' : 'Employers')}</a>
         <a href="/review">${escapeHtml(lang === 'ru' ? 'Разбор постов' : 'Review posts')}</a>
@@ -2475,7 +2475,7 @@ document.addEventListener('click', function(e) {
     </div>
     <div style="display:grid;gap:5px">
       <label style="font-size:12px;color:var(--muted)">${escapeHtml(t.sourceName)}</label>
-      <input name="title" required placeholder="Например: Мой блог или Закрытая рассылка">
+      <input name="title" required placeholder="${lang === 'en' ? 'E.g. My blog or Private newsletter' : 'Например: Мой блог или Закрытая рассылка'}">
     </div>
     <div id="dlg-url-grp" style="display:grid;gap:5px">
       <label style="font-size:12px;color:var(--muted)">${escapeHtml(t.urlFeed)}</label>
@@ -2523,12 +2523,12 @@ async function poll(url, button) {
   try {
     const response = await fetch(url, { method: 'POST', headers: { accept: 'application/json' } });
     if (!response.ok) {
-      showToast('Ошибка: ' + (await response.text()).slice(0, 300), true);
+      showToast((document.documentElement.lang === 'en' ? 'Error: ' : 'Ошибка: ') + (await response.text()).slice(0, 300), true);
       return;
     }
     location.reload();
   } catch (err) {
-    showToast('Ошибка: ' + (err && err.message ? err.message : 'сеть недоступна'), true);
+    showToast((document.documentElement.lang === 'en' ? 'Error: ' : 'Ошибка: ') + (err && err.message ? err.message : (document.documentElement.lang === 'en' ? 'network unavailable' : 'сеть недоступна')), true);
   } finally {
     button.disabled = false;
   }
@@ -2618,20 +2618,41 @@ const SOURCE_STATE_VIEW: Record<SourceState, { dot: string; admin: string; reade
   waiting: { dot: '', admin: 'нет запусков', reader: 'ожидает первого опроса' },
 };
 
-function healthStatus(health: SourceHealth): { dot: string; label: string } {
+const SOURCE_STATE_VIEW_EN: Record<SourceState, { admin: string; reader: string }> = {
+  ok: { admin: 'working', reader: 'working' },
+  empty: { admin: 'empty in 24h', reader: 'no new posts' },
+  unstable: { admin: 'poll failed', reader: 'temporarily unavailable' },
+  error: { admin: `broken: ${BROKEN_AFTER} failures in a row`, reader: 'down' },
+  blocked: { admin: 'blocking us', reader: 'access blocked' },
+  disabled: { admin: 'disabled', reader: 'disabled' },
+  waiting: { admin: 'no runs yet', reader: 'awaiting first poll' },
+};
+
+function healthStatus(health: SourceHealth, lang: SupportedLang = 'ru'): { dot: string; label: string } {
   const state = sourceState(health);
-  if (state === 'waiting' && health.source.kind === 'webhook') return { dot: '', label: 'ожидает данных' };
-  return { dot: SOURCE_STATE_VIEW[state].dot, label: SOURCE_STATE_VIEW[state].admin };
+  if (state === 'waiting' && health.source.kind === 'webhook') {
+    return { dot: '', label: lang === 'en' ? 'awaiting data' : 'ожидает данных' };
+  }
+  return {
+    dot: SOURCE_STATE_VIEW[state].dot,
+    label: lang === 'en' ? SOURCE_STATE_VIEW_EN[state].admin : SOURCE_STATE_VIEW[state].admin,
+  };
 }
 
 /** Source state for readers who are not the operator: no raw errors. */
-function publicHealthStatus(health: SourceHealth): { dot: string; label: string } {
+function publicHealthStatus(health: SourceHealth, lang: SupportedLang = 'ru'): { dot: string; label: string } {
   const state = sourceState(health);
-  if (state === 'waiting' && health.source.kind === 'webhook') return { dot: '', label: 'принимает данные' };
-  return { dot: SOURCE_STATE_VIEW[state].dot, label: SOURCE_STATE_VIEW[state].reader };
+  if (state === 'waiting' && health.source.kind === 'webhook') {
+    return { dot: '', label: lang === 'en' ? 'accepting data' : 'принимает данные' };
+  }
+  return {
+    dot: SOURCE_STATE_VIEW[state].dot,
+    label: lang === 'en' ? SOURCE_STATE_VIEW_EN[state].reader : SOURCE_STATE_VIEW[state].reader,
+  };
 }
 
-function newLeadsLabel(count: number): string {
+function newLeadsLabel(count: number, lang: SupportedLang = 'ru'): string {
+  if (lang === 'en') return `${count} new in 24 h`;
   return `${count} ${plural(count, ['новый', 'новых', 'новых'])} за 24 ч`;
 }
 
@@ -2661,14 +2682,15 @@ function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru', 
   // An absurd salary stays off the feed: the row says «проверить» instead of the number.
   const salarySuspect = salaryLooksWrong(lead);
   const money = typeof lead.budget === 'number' ? formatBudget(lead.budget, lead.currency) : lead.rawSalary;
+  const displayCity = translateCity(lead.city, lang);
   const locationLabel = lead.workplaceType === 'hybrid'
-    ? (lead.city ? `${lead.city} (${t.hybridFormat})` : t.hybridFormat)
-    : (lead.isRemote ? (lead.city ?? t.remote) : lead.city);
+    ? (displayCity ? `${displayCity} (${t.hybridFormat})` : t.hybridFormat)
+    : (lead.isRemote ? (displayCity ?? t.remote) : displayCity);
 
   const meta = [
     lead.type === 'job' ? t.jobType : t.gigType,
-    source?.title,
-    lead.category,
+    source?.title ? translateSourceTitle(source.title, lang) : undefined,
+    lead.category ? translateSkill(lead.category, lang) : undefined,
     locationLabel,
     salarySuspect ? undefined : money,
     formatRelative(lead.createdAt, lang),
@@ -2697,7 +2719,7 @@ function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru', 
     details.push(signals.join(', '));
   }
   if (lead.skills?.length) {
-    details.push(`<span class="tag-inline">${escapeHtml(lead.skills.slice(0, 5).join(', '))}</span>`);
+    details.push(`<span class="tag-inline">${escapeHtml(lead.skills.slice(0, 5).map((s) => translateSkill(s, lang)).join(', '))}</span>`);
   }
 
   const subLine = details.length
@@ -2726,7 +2748,7 @@ function leadsTable(leads: Lead[], sourceById?: Map<string, SourceRecord>, lang:
       return `<tr>
         <td class="muted">${lead.score}</td>
         <td><a href="/leads/${escapeHtml(lead.id)}">${escapeHtml(leadTitle(lead))}</a>
-          <div class="small muted">${escapeHtml([source?.title, lead.city].filter(Boolean).join(' · '))}</div>
+          <div class="small muted">${escapeHtml([source?.title ? translateSourceTitle(source.title, lang) : undefined, translateCity(lead.city, lang)].filter(Boolean).join(' · '))}</div>
         </td>
         <td class="small">${formatBudget(lead.budget, lead.currency)}</td>
         <td class="small">${statusDot(lead.status, lang)}</td>
@@ -2735,7 +2757,7 @@ function leadsTable(leads: Lead[], sourceById?: Map<string, SourceRecord>, lang:
     })
     .join('');
   return `<table>
-    <thead><tr><th>${escapeHtml(t.score)}</th><th>${escapeHtml(t.gigType)}</th><th>${escapeHtml(t.budget)}</th><th>Статус</th><th>${escapeHtml(t.published)}</th></tr></thead>
+    <thead><tr><th>${escapeHtml(t.score)}</th><th>${escapeHtml(t.gigType)}</th><th>${escapeHtml(t.budget)}</th><th>${lang === 'en' ? 'Status' : 'Статус'}</th><th>${escapeHtml(t.published)}</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
 }
@@ -2747,12 +2769,12 @@ function runsTable(
   lang: SupportedLang = 'ru',
 ): string {
   const t = getTranslations(lang);
-  if (!runs.length) return '<div class="empty">Запусков ещё не было.</div>';
+  if (!runs.length) return `<div class="empty">${lang === 'en' ? 'No runs yet.' : 'Запусков ещё не было.'}</div>`;
   const rows = runs
     .map((run) => {
       const source = sourceById?.get(run.sourceId);
       return `<tr>
-        ${showSource ? `<td>${source ? escapeHtml(source.title) : escapeHtml(run.sourceId)}</td>` : ''}
+        ${showSource ? `<td>${source ? escapeHtml(translateSourceTitle(source.title, lang)) : escapeHtml(run.sourceId)}</td>` : ''}
         <td>${run.found}</td>
         <td>${run.inserted}</td>
         <td>${run.duplicates}</td>
@@ -2764,7 +2786,7 @@ function runsTable(
     })
     .join('');
   return `<table>
-    <thead><tr>${showSource ? `<th>${escapeHtml(t.source)}</th>` : ''}<th>Найдено</th><th>Новых</th><th>Дубли</th><th>Отклонено</th><th>Доставлено</th><th>Когда</th><th>Ошибка</th></tr></thead>
+    <thead><tr>${showSource ? `<th>${escapeHtml(t.source)}</th>` : ''}${lang === 'en' ? '<th>Found</th><th>New</th><th>Duplicates</th><th>Rejected</th><th>Delivered</th><th>When</th><th>Error</th>' : '<th>Найдено</th><th>Новых</th><th>Дубли</th><th>Отклонено</th><th>Доставлено</th><th>Когда</th><th>Ошибка</th>'}</tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
 }
@@ -2908,7 +2930,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
     { value: '', label: t.skillAny, selected: !filters.skill },
     ...skillItems.map((item) => ({
       value: item.name,
-      label: item.name,
+      label: translateSkill(item.name, lang),
       count: item.count,
       selected: filters.skill?.toLowerCase() === item.name.toLowerCase(),
     })),
@@ -2984,7 +3006,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
     // The number leads to /sources, where it breaks down by platform.
     `<a class="found-today" href="/sources" title="${escapeHtml(t.foundTodayHint)}">${t.feedFoundToday.replace('{n}', `<strong>${new Intl.NumberFormat('ru-RU').format(stats.last24h)}${stats.last24h >= FOUND_TODAY_CAP ? '+' : ''}</strong>`)}</a>`,
     delay > 0 ? escapeHtml(t.feedDelayNote.replace('{d}', delayLabel)) + (data.auth ? '' : `, ${escapeHtml(t.contactsHiddenShort)}`) : '',
-    delay > 0 ? `<a href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md#5-делиться-с-хабом-и-получать-рейтинг" target="_blank" rel="noopener noreferrer">${escapeHtml(t.removeDelay)}</a>` : '',
+    delay > 0 ? `<a href="${REPO_URL}/blob/main/docs/${lang === 'en' ? 'GETTING_STARTED_EN.md#5-sharing-with-the-hub-and-earning-reputation' : 'GETTING_STARTED.md#5-делиться-с-хабом-и-получать-рейтинг'}" target="_blank" rel="noopener noreferrer">${escapeHtml(t.removeDelay)}</a>` : '',
   ].filter(Boolean).join(' · ');
   const pageNo = data.page ?? 1;
   const loadMore = data.hasMore
@@ -3000,7 +3022,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
   <p>${escapeHtml(t.heroText)}</p>
   <div class="intro-actions">
     ${githubHref ? `<a class="intro-action primary" href="${githubHref}">${escapeHtml(t.heroSignIn)}<span>${escapeHtml(t.heroSignInHint)}</span></a>` : ''}
-    <a class="intro-action" href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md" target="_blank" rel="noopener noreferrer">${escapeHtml(t.heroNode)}<span>${escapeHtml(t.heroNodeHint)}</span></a>
+    <a class="intro-action" href="${REPO_URL}/blob/main/docs/${lang === 'en' ? 'GETTING_STARTED_EN.md' : 'GETTING_STARTED.md'}" target="_blank" rel="noopener noreferrer">${escapeHtml(t.heroNode)}<span>${escapeHtml(t.heroNodeHint)}</span></a>
     <a class="intro-action" href="${REPO_URL}/blob/main/docs/PROTOCOL.md" target="_blank" rel="noopener noreferrer">${escapeHtml(t.heroSend)}<span>${escapeHtml(t.heroSendHint)}</span></a>
   </div>
 </section>
@@ -3033,7 +3055,7 @@ ${intro}
         ${popular.length ? `<div class="suggestions-group">
           <div class="suggestions-header">${escapeHtml(t.popularSkills)}</div>
           <div class="suggestions-chips">
-            ${popular.slice(0, 10).map((item) => `<a class="sug-chip" href="${escapeHtml(hrefWith({ skill: item.name, page: undefined }))}">${escapeHtml(item.name)} <span class="sug-count">${item.count}</span></a>`).join('')}
+            ${popular.slice(0, 10).map((item) => `<a class="sug-chip" href="${escapeHtml(hrefWith({ skill: item.name, page: undefined }))}">${escapeHtml(translateSkill(item.name, lang))} <span class="sug-count">${item.count}</span></a>`).join('')}
           </div>
         </div>` : ''}
         <div class="suggestions-group">
@@ -3369,19 +3391,20 @@ document.getElementById('share-lead')?.addEventListener('click', async (event) =
   </form>
   <form method="post" action="/leads/${escapeHtml(lead.id)}/feedback" style="display:flex;gap:6px;align-items:center">
     <span class="small muted" style="margin-right:4px">${escapeHtml(t.score)}:</span>
-    <button name="feedback" value="up" class="btn ghost small" title="Подходит">+10</button>
-    <button name="feedback" value="down" class="btn ghost small" title="Мусор">-20</button>
+    <button name="feedback" value="up" class="btn ghost small" title="${lang === 'en' ? 'Good fit' : 'Подходит'}">+10</button>
+    <button name="feedback" value="down" class="btn ghost small" title="${lang === 'en' ? 'Junk' : 'Мусор'}">-20</button>
   </form>`
     : '';
 
-  const formatted = formatLeadText(lead.text);
+  const formatted = formatLeadText(lead.text, lang);
   const myVote = data.myVote;
+  const undoVoteTitle = lang === 'en' ? 'Click to undo your vote' : 'Нажмите, чтобы отменить свой голос';
   const voteControls = isUser
     ? `<form method="post" action="/leads/${escapeHtml(lead.id)}/vote" class="community-votes">
-    <button name="signal" value="useful" class="vote-btn ${myVote === 'useful' ? 'active' : ''}" type="submit" title="${myVote === 'useful' ? 'Нажмите, чтобы отменить свой голос' : ''}">${escapeHtml(t.useful)} <span class="vote-count">${lead.votes_up ?? 0}</span></button>
-    <button name="signal" value="junk" class="vote-btn ${myVote === 'junk' ? 'active' : ''}" type="submit" title="${myVote === 'junk' ? 'Нажмите, чтобы отменить свой голос' : ''}">${escapeHtml(t.junk)} <span class="vote-count">${lead.votes_down ?? 0}</span></button>
-    <button name="signal" value="scam" class="vote-btn vote-btn-danger ${myVote === 'scam' ? 'active' : ''}" type="submit" title="${myVote === 'scam' ? 'Нажмите, чтобы отменить свой голос' : ''}">${escapeHtml(t.scam)} <span class="vote-count">${lead.votes_scam ?? 0}</span></button>
-    <button name="signal" value="closed" class="vote-btn ${myVote === 'closed' ? 'active' : ''}" type="submit" title="${myVote === 'closed' ? 'Нажмите, чтобы отменить свой голос' : ''}">${escapeHtml(t.closed)} <span class="vote-count">${lead.votes_closed ?? 0}</span></button>
+    <button name="signal" value="useful" class="vote-btn ${myVote === 'useful' ? 'active' : ''}" type="submit" title="${myVote === 'useful' ? undoVoteTitle : ''}">${escapeHtml(t.useful)} <span class="vote-count">${lead.votes_up ?? 0}</span></button>
+    <button name="signal" value="junk" class="vote-btn ${myVote === 'junk' ? 'active' : ''}" type="submit" title="${myVote === 'junk' ? undoVoteTitle : ''}">${escapeHtml(t.junk)} <span class="vote-count">${lead.votes_down ?? 0}</span></button>
+    <button name="signal" value="scam" class="vote-btn vote-btn-danger ${myVote === 'scam' ? 'active' : ''}" type="submit" title="${myVote === 'scam' ? undoVoteTitle : ''}">${escapeHtml(t.scam)} <span class="vote-count">${lead.votes_scam ?? 0}</span></button>
+    <button name="signal" value="closed" class="vote-btn ${myVote === 'closed' ? 'active' : ''}" type="submit" title="${myVote === 'closed' ? undoVoteTitle : ''}">${escapeHtml(t.closed)} <span class="vote-count">${lead.votes_closed ?? 0}</span></button>
   </form>`
     : `<div class="community-votes" title="${escapeHtml(t.signInToVote)}">
     <button type="button" class="vote-btn" onclick="openAuthVoteModal()">${escapeHtml(t.useful)} <span class="vote-count">${lead.votes_up ?? 0}</span></button>
@@ -3429,9 +3452,9 @@ ${cautionBanner}
     <h2>${escapeHtml(t.details)}</h2>
     <dl class="meta-list">
       <div><dt>${escapeHtml(t.type)}</dt><dd>${lead.type === 'job' ? escapeHtml(t.jobType) : escapeHtml(t.gigType)}</dd></div>
-      <div><dt>${escapeHtml(t.source)}</dt><dd>${source ? `<a href="/sources/${escapeHtml(source.id)}">${escapeHtml(source.title)}</a>` : escapeHtml(lead.sourceId)}</dd></div>
-      ${lead.category ? `<div><dt>${escapeHtml(t.category)}</dt><dd><b>${escapeHtml(lead.category)}</b></dd></div>` : ''}
-      <div><dt>${escapeHtml(t.location)}</dt><dd>${escapeHtml(lead.city ?? (lead.isRemote ? t.remote : '—'))}</dd></div>
+      <div><dt>${escapeHtml(t.source)}</dt><dd>${source ? `<a href="/sources/${escapeHtml(source.id)}">${escapeHtml(translateSourceTitle(source.title, lang))}</a>` : escapeHtml(lead.sourceId)}</dd></div>
+      ${lead.category ? `<div><dt>${escapeHtml(t.category)}</dt><dd><b>${escapeHtml(translateSkill(lead.category, lang))}</b></dd></div>` : ''}
+      <div><dt>${escapeHtml(t.location)}</dt><dd>${escapeHtml(translateCity(lead.city, lang) ?? (lead.isRemote ? t.remote : '—'))}</dd></div>
       <div><dt>${escapeHtml(t.format)}</dt><dd>${lead.workplaceType === 'hybrid' ? escapeHtml(t.hybridFormat) : (lead.isRemote ? escapeHtml(t.remoteFormat) : escapeHtml(t.onsiteFormat))}</dd></div>
       <div><dt>${escapeHtml(t.budget)}</dt><dd>${salaryDisplay}${usdEstimate}</dd></div>
       <div><dt>${escapeHtml(t.score)}</dt><dd>${scoreCell(lead.score, lang)}</dd></div>
@@ -3450,7 +3473,7 @@ ${cautionBanner}
     ${lead.skills?.length ? `
       <h2 style="margin-top:20px">${escapeHtml(t.skills)}</h2>
       <div style="margin-top:8px;line-height:1.6">
-        ${lead.skills.map((s) => `<span class="tag">${escapeHtml(s)}</span>`).join(', ')}
+        ${lead.skills.map((s) => `<span class="tag">${escapeHtml(translateSkill(s, lang))}</span>`).join(', ')}
       </div>` : ''}
   </aside>
 </div>
@@ -3569,13 +3592,14 @@ function renderPublicSources(data: SourcesPageData, health: SourceHealth[]): str
   const total = sorted.reduce((sum, item) => sum + item.last24h.inserted, 0);
   const cards = sorted
     .map((item) => {
-      const [platform, scope] = item.source.title.split(/\s+—\s+/, 2);
+      const displaySourceTitle = translateSourceTitle(item.source.title, lang);
+      const [platform, scope] = displaySourceTitle.split(/\s+—\s+/, 2);
       const fromPeople = item.source.kind === 'webhook';
       const home = fromPeople ? undefined : sourceHomepage(item.source);
       const down = Boolean(item.lastRun?.error);
       return `<div class="source-card">
         <div class="source-card-head">
-          <a class="source-card-title" href="/sources/${escapeHtml(item.source.id)}">${escapeHtml(platform ?? item.source.title)}</a>
+          <a class="source-card-title" href="/sources/${escapeHtml(item.source.id)}">${escapeHtml(platform ?? displaySourceTitle)}</a>
           ${scope ? `<span class="source-scope">${escapeHtml(scope)}</span>` : fromPeople ? `<span class="source-scope">${ru ? 'от участников' : 'from participants'}</span>` : ''}
         </div>
         <div class="source-card-meta">
@@ -3599,7 +3623,7 @@ function renderPublicSources(data: SourcesPageData, health: SourceHealth[]): str
 <div class="source-grid">${cards}</div>
 <div class="sources-cta">
   <a class="btn ghost" href="${REPO_URL}/issues/new?template=source-request.yml" target="_blank" rel="noopener noreferrer">${ru ? 'Предложить источник' : 'Suggest a source'}</a>
-  <a class="btn ghost" href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md#5-делиться-с-хабом-и-получать-рейтинг" target="_blank" rel="noopener noreferrer">${ru ? 'Подключить свой узел или парсер' : 'Connect your node or parser'}</a>
+  <a class="btn ghost" href="${REPO_URL}/blob/main/docs/${ru ? 'GETTING_STARTED.md#5-делиться-с-хабом-и-получать-рейтинг' : 'GETTING_STARTED_EN.md#5-sharing-with-the-hub-and-earning-reputation'}" target="_blank" rel="noopener noreferrer">${ru ? 'Подключить свой узел или парсер' : 'Connect your node or parser'}</a>
 </div>`;
   return layout({ title: t.navSources, version: data.version, active: 'sources', body, auth: data.auth, lang });
 }
@@ -3623,7 +3647,7 @@ export function renderSourceCatalogPage(data: SourceCatalogPageData): string {
   })).filter((group) => group.items.length);
   const card = (item: SourceCatalogPageData['items'][number]): string => `<div class="catalog-card">
     <div class="catalog-card-body">
-      <div class="catalog-card-title">${escapeHtml(item.preset.title)}</div>
+      <div class="catalog-card-title">${escapeHtml(translateSourceTitle(item.preset.title, lang))}</div>
       <div class="catalog-card-meta">${escapeHtml(KIND_LABELS[item.preset.kind] ?? item.preset.kind)}</div>
       <p class="catalog-card-desc">${escapeHtml(item.preset.description)}</p>
     </div>
@@ -3652,11 +3676,11 @@ export function renderSourcesPage(data: SourcesPageData): string {
   if (!isAdmin) return renderPublicSources(data, health);
   const rows = health
     .map((item) => {
-      const status = healthStatus(item);
+      const status = healthStatus(item, lang);
       const error = item.lastRun?.error;
       return `<a class="row" href="/sources/${escapeHtml(item.source.id)}">
         <div>
-          <div class="row-title">${escapeHtml(item.source.title)}</div>
+          <div class="row-title">${escapeHtml(translateSourceTitle(item.source.title, lang))}</div>
           <div class="row-meta">${escapeHtml(KIND_LABELS[item.source.kind] ?? item.source.kind)} · <span class="dot ${status.dot}"></span>${status.label} · ${formatRelative(item.lastRun?.startedAt, lang)}</div>
           ${error ? formatSourceError(error, item.source.kind) : ''}
         </div>
@@ -3702,19 +3726,20 @@ export function renderSourcesPage(data: SourcesPageData): string {
 export function renderSourcePage(data: SourcePageData): string {
   const { source, health, leads, runs, version, notice, lang = 'ru' } = data;
   const t = getTranslations(lang);
+  const displaySourceTitle = translateSourceTitle(source.title, lang);
   if (!data.isAdmin) {
-    const publicStatus = publicHealthStatus(health);
+    const publicStatus = publicHealthStatus(health, lang);
     const rows = leads.map((lead) => leadRow(lead, source, lang, false)).join('');
     return layout({
-      title: source.title,
+      title: displaySourceTitle,
       version,
       active: 'sources',
       body: `
 <a class="back" href="/sources">← ${escapeHtml(t.navSources)}</a>
 <div class="page-head">
   <div>
-    <h1>${escapeHtml(source.title)}</h1>
-    <p class="muted small">${escapeHtml(KIND_LABELS[source.kind] ?? source.kind)} · <span class="dot ${publicStatus.dot}"></span>${publicStatus.label} · ${newLeadsLabel(health.last24h.inserted)}</p>
+    <h1>${escapeHtml(displaySourceTitle)}</h1>
+    <p class="muted small">${escapeHtml(KIND_LABELS[source.kind] ?? source.kind)} · <span class="dot ${publicStatus.dot}"></span>${publicStatus.label} · ${newLeadsLabel(health.last24h.inserted, lang)}</p>
   </div>
 </div>
 <div class="list">${rows || `<div class="empty">${escapeHtml(t.emptyTitle)}</div>`}</div>`,

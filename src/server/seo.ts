@@ -2,7 +2,7 @@ import { escapeHtml, jsonForScript } from '../core/text.ts';
 import type { Lead, LeadType } from '../core/types.ts';
 import { layout, type AuthDisplay, formatBudget, salaryRange, safeHttpUrl, leadTitle, formatRelative } from './ui.ts';
 import { formatLeadText } from './format.ts';
-import type { SupportedLang } from './i18n.ts';
+import { translateCity, translateSkill, translateSourceTitle, type SupportedLang } from './i18n.ts';
 import type { SourceQuality, SourceQualityInput } from '../core/source-quality.ts';
 import type { DecisionScore, FlagScore, ModelDecision } from '../core/decisions.ts';
 
@@ -367,6 +367,212 @@ export const SEO_CATALOG: CatalogEntry[] = [
   },
 ];
 
+
+const SEO_CATALOG_EN: Record<string, { h1: string; title: string; description: string; intro: string; about: string }> = {
+  "zakazy-na-razrabotku": {
+    h1: "Development gigs",
+    title: "Development gigs — fresh freelance projects every hour",
+    description: "Fresh software development gigs from open freelance boards and Telegram channels, deduplicated with direct links to the client.",
+    intro: "Fresh development orders from open boards and channels. Every card links to the original post with duplicates removed.",
+    about: "This section collects software development orders: backend, web apps, APIs, parsers and custom automation from freelance boards and Telegram channels.",
+  },
+  "razrabotka-saytov": {
+    h1: "Website development gigs",
+    title: "Website development gigs — landing pages, online stores, CMS",
+    description: "Freelance orders for website creation and updates: landing pages, corporate sites, e-commerce stores and CMS integrations.",
+    intro: "Website projects from landing pages to online stores, updated automatically every five minutes.",
+    about: "Orders for turnkey websites, layout, redesigns and CMS setup from open freelance platforms and Telegram feeds.",
+  },
+  "python-zakazy": {
+    h1: "Python gigs",
+    title: "Python gigs — scrapers, backends, automation",
+    description: "Freelance Python orders: web scraping, Django/FastAPI backends, Telegram bots, data scripts and automation.",
+    intro: "Python tasks from open sources: backend services, scrapers and automation.",
+    about: "Python projects covering backend APIs, data parsing, bots and workflow automation with stated client budgets.",
+  },
+  "boty-zakazy": {
+    h1: "Telegram bot gigs",
+    title: "Telegram bot and chatbot gigs",
+    description: "Orders for building Telegram bots, chatbots, mini-apps, payment integrations and messenger automation.",
+    intro: "Bot development and messenger automation — new orders every five minutes.",
+    about: "Freelance tasks for Telegram bots, WebApps, customer support chatbots and CRM/payment integrations.",
+  },
+  "1s-zakazy": {
+    h1: "1C gigs",
+    title: "1C developer gigs — customization and integration",
+    description: "Freelance orders for 1C:Enterprise configuration, reports, data exchange and CRM/ERP integration.",
+    intro: "1C customization and rollout — orders updated automatically.",
+    about: "Tasks for 1C programmers: configuration updates, external integrations, exchange setup and accounting automation.",
+  },
+  "dizayn-zakazy": {
+    h1: "Design gigs",
+    title: "Design gigs — logos, UI/UX interfaces, banners",
+    description: "Freelance design orders: UI/UX in Figma, logos, brand identity, banners, presentations and illustrations.",
+    intro: "Graphic and product design — fresh orders from open sources.",
+    about: "Design projects across UI/UX, web and mobile interfaces, branding, social media graphics and marketplace cards.",
+  },
+  "mobilnaya-razrabotka": {
+    h1: "Mobile app gigs",
+    title: "Mobile app gigs — iOS, Android, Flutter, React Native",
+    description: "Freelance mobile development projects for iOS, Android, Flutter and React Native.",
+    intro: "Mobile apps and games — projects for iOS and Android developers.",
+    about: "Orders for native and cross-platform mobile applications, MVP builds, store publishing and app updates.",
+  },
+  "kopirayting-zakazy": {
+    h1: "Copywriting & content gigs",
+    title: "Copywriting, editing and content gigs",
+    description: "Freelance orders for copywriting, articles, technical writing, editing, scripts and social media posts.",
+    intro: "Copywriting, editing and content marketing — new orders every hour.",
+    about: "Writing tasks from blogs and landing page copy to technical documentation, scripts and editorial work.",
+  },
+  "vakansii-razrabotchikov": {
+    h1: "Developer jobs",
+    title: "Software developer vacancies — fresh IT job offers",
+    description: "Software developer vacancies from official APIs, career pages and IT job boards with salary ranges and stack tags.",
+    intro: "IT vacancies from official APIs and feeds: salary ranges, tech stack and workplace format.",
+    about: "Full-time and contract developer roles aggregated from IT job boards, company ATS pages and specialized channels.",
+  },
+  "udalennye-vakansii": {
+    h1: "Remote IT jobs",
+    title: "Remote IT vacancies — work from anywhere",
+    description: "Remote-friendly IT vacancies from Russian and international employers with stated salary ranges.",
+    intro: "Remote only: IT vacancies from Russia and worldwide with salary ranges.",
+    about: "Curated remote vacancies across engineering, data, QA, DevOps, design and product management.",
+  },
+  "videomontazh-zakazy": {
+    h1: "Video editing gigs",
+    title: "Video editing gigs — Reels, Shorts, YouTube, motion design",
+    description: "Fresh video editing orders for YouTube, Reels, Shorts, motion graphics and 2D/3D animation.",
+    intro: "Video editing, Reels, Shorts and motion design. Every card links to the original source.",
+    about: "Projects for video editors and motion designers: short-form vertical video, YouTube cuts, explainers and color grading.",
+  },
+  "reklama-i-marketing": {
+    h1: "Marketing & ads gigs",
+    title: "Marketing & advertising gigs — PPC, targeted ads, SMM",
+    description: "Freelance marketing orders: PPC campaigns, targeted ads, Yandex Direct, Avito promotion and SMM.",
+    intro: "Targeted ads, PPC, Avito and social media: fresh orders with budgets and direct links.",
+    about: "Orders for digital marketers, media buyers, traffic specialists and SMM managers.",
+  },
+  "perevody-zakazy": {
+    h1: "Translation gigs",
+    title: "Translation gigs — texts, websites, documents",
+    description: "Fresh freelance orders for translating texts, websites, apps and documents.",
+    intro: "Translation of texts, websites and documents: orders from freelance boards updated every five minutes.",
+    about: "Localization and translation tasks across English, Russian and other languages.",
+  },
+  "marketpleysy-zakazy": {
+    h1: "Marketplace gigs",
+    title: "Marketplace gigs — product cards, infographics, Wildberries & Ozon",
+    description: "Orders for marketplace product cards, infographics, SEO descriptions and store management on Wildberries and Ozon.",
+    intro: "Product cards, infographics and store management on marketplaces — fresh orders from boards.",
+    about: "Freelance tasks for e-commerce and marketplace specialists: card design, rich content, analytics and store operations.",
+  },
+  "wordpress-zakazy": {
+    h1: "WordPress gigs",
+    title: "WordPress gigs — websites, themes, plugins, fixes",
+    description: "Fresh WordPress orders: turnkey sites, theme customization, plugins, WooCommerce and speed optimization.",
+    intro: "Websites and customizations on WordPress and WooCommerce from boards and channels.",
+    about: "Projects for WordPress developers covering Elementor, custom themes, WooCommerce stores and site migrations.",
+  },
+  "bitrix-zakazy": {
+    h1: "Bitrix gigs",
+    title: "1C-Bitrix and Bitrix24 gigs — customization and CRM",
+    description: "Orders for 1C-Bitrix and Bitrix24: website development, 1C sync, CRM setup and business workflow automation.",
+    intro: "Bitrix and Bitrix24: website updates, 1C integrations and CRM setup.",
+    about: "Freelance tasks for 1C-Bitrix and Bitrix24 specialists: e-commerce catalogs, CRM pipelines and custom modules.",
+  },
+  "parsing-zakazy": {
+    h1: "Web scraping gigs",
+    title: "Web scraping and data extraction gigs",
+    description: "Fresh orders for web scrapers: data collection from websites and marketplaces into Excel, CSV or databases.",
+    intro: "Scrapers for websites, marketplaces and social networks — fresh orders with budgets.",
+    about: "Data extraction, price monitoring and catalog parsing projects using Python, Node.js, Playwright and APIs.",
+  },
+  "neyroseti-zakazy": {
+    h1: "AI & LLM gigs",
+    title: "AI & neural network gigs — GPT bots, automation, content generation",
+    description: "Orders for AI and LLMs: GPT chatbots, RAG pipelines, n8n/Make automation, and AI image/video generation.",
+    intro: "AI in action: LLM assistants, workflow automation and generative media.",
+    about: "Freelance projects involving OpenAI, Claude, LangChain, RAG agents, ComfyUI and AI-powered business automation.",
+  },
+  "seo-prodvizhenie": {
+    h1: "SEO gigs",
+    title: "SEO gigs — website promotion, technical audits, keyword research",
+    description: "Fresh SEO orders: search engine optimization, technical audits, semantic core collection, SEO copy and link building.",
+    intro: "SEO promotion, technical audits and keyword research from boards and channels.",
+    about: "Tasks for SEO specialists: on-page optimization, site structure, audit reports and organic growth.",
+  },
+  "php-zakazy": {
+    h1: "PHP gigs",
+    title: "PHP gigs — Laravel, backend development, website fixes",
+    description: "Fresh PHP orders: Laravel, Symfony, Yii, backend APIs, payment integrations and legacy site maintenance.",
+    intro: "Backend and website development in PHP: Laravel, Yii and custom CMS.",
+    about: "Freelance PHP tasks ranging from API integrations and bug fixes to full Laravel web applications.",
+  },
+  "igry-unity-zakazy": {
+    h1: "Game development gigs",
+    title: "Game development gigs — Unity, Unreal Engine, 3D & game art",
+    description: "Orders for game development in Unity and Unreal Engine, 3D modeling, shaders and game design.",
+    intro: "Gamedev: Unity and Unreal games, 3D assets and game art.",
+    about: "Freelance projects for game programmers, Unity/Unreal developers, 3D artists and level designers.",
+  },
+  "testirovanie-zakazy": {
+    h1: "QA & testing gigs",
+    title: "QA & testing gigs — manual QA, automated tests, web & mobile",
+    description: "Fresh orders for website and app testing: manual QA, Playwright/Selenium automation and pre-release audits.",
+    intro: "Manual testing and test automation — gigs for QA engineers.",
+    about: "Short-term and project-based QA tasks covering functional testing, regression suites and E2E test automation.",
+  },
+  "vakansii-python": {
+    h1: "Python developer jobs",
+    title: "Python developer vacancies — Django, FastAPI, data & ML",
+    description: "Fresh Python developer vacancies: backend with Django and FastAPI, data engineering and ML with salary ranges.",
+    intro: "Python jobs: backend, data and automation with salary ranges and workplace format.",
+    about: "Full-time Python engineering positions across backend services, data pipelines and machine learning teams.",
+  },
+  "vakansii-frontend": {
+    h1: "Frontend developer jobs",
+    title: "Frontend developer vacancies — React, Vue, TypeScript",
+    description: "Fresh frontend developer vacancies: React, Vue, Angular and TypeScript with salary ranges and remote options.",
+    intro: "Frontend: React, Vue, TypeScript — fresh vacancies with salary ranges.",
+    about: "Frontend and web engineering roles from product companies and international remote boards.",
+  },
+  "vakansii-devops": {
+    h1: "DevOps engineer jobs",
+    title: "DevOps & SRE vacancies — Kubernetes, CI/CD, cloud infrastructure",
+    description: "Fresh DevOps and SRE vacancies: Kubernetes, Docker, Terraform, CI/CD and cloud platforms.",
+    intro: "DevOps and SRE: Kubernetes, CI/CD, cloud — vacancies with salary ranges.",
+    about: "Infrastructure, platform engineering, SRE and DevOps vacancies with direct links to employers.",
+  },
+  "vakansii-analitik": {
+    h1: "Analyst jobs",
+    title: "Analyst vacancies — systems, business, data & product analysts",
+    description: "Fresh analyst vacancies: systems analyst, business analyst, data analyst and BI/product analyst roles.",
+    intro: "Systems, business, product and data analysts.",
+    about: "Vacancies for systems, business, product and data analysts across tech, fintech and e-commerce employers.",
+  },
+  "vakansii-testirovshchik": {
+    h1: "QA engineer jobs",
+    title: "QA & tester vacancies — manual and automation QA",
+    description: "Fresh QA engineer vacancies: manual testing, SDET and test automation in Python, Java and TypeScript.",
+    intro: "QA: manual testing and test automation — fresh vacancies.",
+    about: "Quality assurance and SDET positions for web, mobile and backend systems.",
+  },
+  "vakansii-dizaynera": {
+    h1: "Designer jobs",
+    title: "Designer vacancies — UI/UX, product and graphic design",
+    description: "Fresh designer vacancies: product design, UI/UX, graphic and motion design roles with salary ranges.",
+    intro: "UI/UX, product and graphic designers — vacancies with salary ranges.",
+    about: "Design vacancies at product companies, studios and agencies for UI/UX, product, brand and motion designers.",
+  },
+};
+
+export function localizeCatalogEntry(entry: CatalogEntry, lang?: SupportedLang): CatalogEntry {
+  if (lang !== "en") return entry;
+  const en = SEO_CATALOG_EN[entry.slug];
+  return en ? { ...entry, ...en } : entry;
+}
+
 export function findCatalogEntry(slug: string): CatalogEntry | undefined {
   return SEO_CATALOG.find((entry) => entry.slug === slug);
 }
@@ -376,7 +582,7 @@ function leadRow(lead: Lead, baseUrl: string, lang?: SupportedLang): string {
   // Rows open the lead page on the hub: it carries the details, the score and the link to the source.
   const href = `${baseUrl}/leads/${encodeURIComponent(lead.id)}`;
   const meta = [
-    lead.city,
+    translateCity(lead.city, lang),
     typeof lead.budget === 'number'
       ? `${new Intl.NumberFormat(ru ? 'ru-RU' : 'en-US', { maximumFractionDigits: 0 }).format(lead.budget)} ${!lead.currency || lead.currency === 'RUB' ? (ru ? '₽' : 'RUB') : lead.currency}`
       : undefined,
@@ -488,7 +694,8 @@ export function renderCatalogPage(options: {
   auth?: AuthDisplay;
   lang?: SupportedLang;
 }): string {
-  const { entry, leads, baseUrl, version } = options;
+  const { leads, baseUrl, version } = options;
+  const entry = localizeCatalogEntry(options.entry, options.lang);
   const ru = (options.lang ?? 'ru') !== 'en';
   const canonical = `${baseUrl}/catalog/${entry.slug}`;
   const feedHref = feedHrefOf(entry);
@@ -499,7 +706,8 @@ export function renderCatalogPage(options: {
   // Same kind first, so a page on orders links to other orders before vacancies.
   const related = SEO_CATALOG.filter((other) => other.slug !== entry.slug)
     .sort((a, b) => Number(b.type === entry.type) - Number(a.type === entry.type))
-    .slice(0, 10);
+    .slice(0, 10)
+    .map((other) => localizeCatalogEntry(other, options.lang));
 
   const body = `
 <nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/">openradar</a> / <a href="/catalog">${ru ? 'Категории' : 'Categories'}</a> / ${escapeHtml(entry.h1)}</nav>
@@ -561,8 +769,10 @@ ${ldScripts(
 export function renderCatalogIndex(options: { baseUrl: string; version: string; auth?: AuthDisplay; lang?: SupportedLang }): string {
   const { baseUrl, version } = options;
   const ru = (options.lang ?? 'ru') !== 'en';
-  const card = (entry: CatalogEntry): string =>
-    `<a class="catalog-card" href="/catalog/${escapeHtml(entry.slug)}"><b>${escapeHtml(entry.h1)}</b><span>${escapeHtml(entry.intro)}</span></a>`;
+  const card = (rawEntry: CatalogEntry): string => {
+    const entry = localizeCatalogEntry(rawEntry, options.lang);
+    return `<a class="catalog-card" href="/catalog/${escapeHtml(entry.slug)}"><b>${escapeHtml(entry.h1)}</b><span>${escapeHtml(entry.intro)}</span></a>`;
+  };
   const gigs = SEO_CATALOG.filter((entry) => entry.type !== 'job');
   const jobs = SEO_CATALOG.filter((entry) => entry.type === 'job');
   const description = ru
@@ -604,7 +814,7 @@ const ABOUT_EN = `
   <h2>Where the posts come from</h2>
   <ul>
     <li>Freelance boards: FL.ru, Kwork, Freelancehunt.</li>
-    <li>Vacancies: hh.ru, Habr Career, the state portal «Работа России», company career pages on Greenhouse, Lever and Ashby, We Work Remotely, RemoteOK and other remote boards.</li>
+    <li>Vacancies: hh.ru, Habr Career, the state portal Rabota Rossii (Work in Russia), company career pages on Greenhouse, Lever and Ashby, We Work Remotely, RemoteOK and other remote boards.</li>
     <li>Telegram channels with orders and vacancies, public and private.</li>
     <li>Participants: posts added by link, through the <a href="/extension">browser extension</a> and from their own nodes.</li>
   </ul>
@@ -621,7 +831,7 @@ const ABOUT_EN = `
   <p>The code is open under AGPL-3.0. Anyone can run a node at home or on a server with their own sources, filters and Telegram notifications. Nodes can send posts to the shared base, each one signed with the participant's key.</p>
   <ul>
     <li><a href="${REPO_URL}" target="_blank" rel="noopener">Source code on GitHub</a></li>
-    <li><a href="${REPO_URL}/blob/main/docs/GETTING_STARTED.md" target="_blank" rel="noopener">How to run your own node</a></li>
+    <li><a href="${REPO_URL}/blob/main/docs/GETTING_STARTED_EN.md" target="_blank" rel="noopener">How to run your own node</a></li>
     <li><a href="${REPO_URL}/blob/main/docs/PROTOCOL.md" target="_blank" rel="noopener">The protocol between nodes</a></li>
   </ul>
 
@@ -864,7 +1074,7 @@ export function renderSourceQualityPage(options: {
   const ru = options.lang !== 'en';
   const percent = (value: number | undefined): string => (value === undefined ? '—' : `${Math.round(value * 100)}%`);
   const rows = options.rows.map(({ id, title, enabled, quality, input, issues }) => `<tr>
-    <td><a href="/sources/${escapeHtml(encodeURIComponent(id))}">${escapeHtml(title)}</a>${enabled ? '' : ` <span class="muted small">${ru ? 'выключен' : 'off'}</span>`}</td>
+    <td><a href="/sources/${escapeHtml(encodeURIComponent(id))}">${escapeHtml(translateSourceTitle(title, options.lang))}</a>${enabled ? '' : ` <span class="muted small">${ru ? 'выключен' : 'off'}</span>`}</td>
     <td class="num"><strong>${quality.score ?? '—'}</strong></td>
     <td>${quality.grade === 'new' ? (ru ? 'мало данных' : 'too new') : quality.grade}</td>
     <td class="num">${percent(quality.parts.access)}</td>
@@ -937,9 +1147,17 @@ export function renderDecisionsPage(options: {
   notes: Array<{ leadId: string; title: string; source: string; issues: string[]; note?: string }>;
 }): string {
   const { stats, score } = options;
-  const share = (part: number, whole: number): string => (whole ? `${Math.round((part / whole) * 100)}% (${part} из ${whole})` : '—');
-  const names: Record<string, string> = { closed: 'Похоже закрыт', scam: 'Похоже на мошенничество', other: 'Не работа', resume: 'Резюме', type: 'Другой тип' };
-  const flags = ([['Закрытые', score.closed], ['Мусор', score.junk], ['Мошенничество', score.scam], ['Тип поста', score.type]] as Array<[string, FlagScore]>)
+  const ru = options.lang !== 'en';
+  const share = (part: number, whole: number): string => (whole ? `${Math.round((part / whole) * 100)}% (${part} ${ru ? 'из' : 'of'} ${whole})` : '—');
+  const names: Record<string, string> = ru
+    ? { closed: 'Похоже закрыт', scam: 'Похоже на мошенничество', other: 'Не работа', resume: 'Резюме', type: 'Другой тип' }
+    : { closed: 'Likely closed', scam: 'Likely scam', other: 'Not work', resume: 'Resume', type: 'Different type' };
+  const flags = ([
+    [ru ? 'Закрытые' : 'Closed', score.closed],
+    [ru ? 'Мусор' : 'Junk', score.junk],
+    [ru ? 'Мошенничество' : 'Scam', score.scam],
+    [ru ? 'Тип поста' : 'Post type', score.type],
+  ] as Array<[string, FlagScore]>)
     .map(([name, flag]) => `<tr><td>${name}</td><td class="num">${share(flag.right, flag.flagged)}</td><td class="num">${share(flag.caught, flag.actual)}</td></tr>`).join('\n');
   const rows = options.rows.map(({ lead, decision, reason }) => `<tr>
     <td><a href="/leads/${escapeHtml(encodeURIComponent(lead.id))}">${escapeHtml(lead.title.slice(0, 90))}</a></td>
@@ -1380,8 +1598,10 @@ export function renderEmployerPage(options: {
   const ru = options.lang !== 'en';
   const name = escapeHtml(options.name);
   const url = `${options.baseUrl}${employerPath(options.employerKey)}`;
-  const rows = options.posts.map((lead) => leadRow(lead, options.baseUrl)).join('\n');
-  const hiring = options.skills.slice(0, 3).join(', ');
+  const rows = options.posts.map((lead) => leadRow(lead, options.baseUrl, options.lang)).join('\n');
+  const displaySkills = options.skills.map((s) => translateSkill(s, options.lang));
+  const displayCities = options.cities.map((c) => translateCity(c, options.lang) ?? c);
+  const hiring = displaySkills.slice(0, 3).join(', ');
   const description = options.active
     ? (ru
         ? `Открытые вакансии ${options.name}: ${options.active} сейчас${hiring ? `, чаще всего ${hiring}` : ''}.`
@@ -1397,8 +1617,8 @@ export function renderEmployerPage(options: {
   </div>`
     : '';
   const facts = [
-    options.skills.length ? `<div><dt>${ru ? 'Чаще всего ищут' : 'Mostly hiring for'}</dt><dd>${escapeHtml(options.skills.join(', '))}</dd></div>` : '',
-    options.cities.length ? `<div><dt>${ru ? 'Города' : 'Cities'}</dt><dd>${escapeHtml(options.cities.join(', '))}</dd></div>` : '',
+    displaySkills.length ? `<div><dt>${ru ? 'Чаще всего ищут' : 'Mostly hiring for'}</dt><dd>${escapeHtml(displaySkills.join(', '))}</dd></div>` : '',
+    displayCities.length ? `<div><dt>${ru ? 'Города' : 'Cities'}</dt><dd>${escapeHtml(displayCities.join(', '))}</dd></div>` : '',
   ].filter(Boolean).join('\n');
   const later = options.later > 0
     ? `<p class="muted">${ru ? `Ещё свежих вакансий: ${options.later}.` : `${options.later} more fresh vacancies.`} ${options.signedIn ? (ru ? 'Они откроются чуть позже.' : 'They open a little later.') : `<a href="/login?returnTo=${escapeHtml(encodeURIComponent(employerPath(options.employerKey)))}">${ru ? 'Войдите, чтобы видеть их раньше' : 'Sign in to see them sooner'}</a>.`}</p>`
@@ -1458,7 +1678,8 @@ export function renderNetworkPage(options: {
   }).join('\n');
 
   const sourceRows = options.sources.map((s) => {
-    const title = s.href ? `<a href="${escapeHtml(s.href)}">${escapeHtml(s.title)}</a>` : escapeHtml(s.title);
+    const displayTitle = translateSourceTitle(s.title, options.lang);
+    const title = s.href ? `<a href="${escapeHtml(s.href)}">${escapeHtml(displayTitle)}</a>` : escapeHtml(displayTitle);
     return `<tr><td>${title}</td><td class="num">${s.leads}</td></tr>`;
   }).join('\n');
 
@@ -1659,7 +1880,14 @@ export function renderTrustPage(options: {
   });
 }
 
-export function renderLlmsTxt(baseUrl: string): string {
+export function renderLlmsTxt(baseUrl: string, lang: SupportedLang = 'ru'): string {
+  if (lang === 'en') {
+    const lineEn = (raw: CatalogEntry): string => {
+      const entry = localizeCatalogEntry(raw, 'en');
+      return `- [${entry.h1}](${baseUrl}/catalog/${entry.slug}): ${entry.description}`;
+    };
+    return `# openradar\n\n> Open-source aggregator of freelance gigs and IT vacancies. Collects listings from freelance boards (FL.ru, Kwork, Freelancehunt), job boards (hh.ru, Habr Career, Rabota Rossii, We Work Remotely, Jobicy, RemoteOK), company ATS pages and Telegram channels into one deduplicated feed. Free, no paid tiers, open source (AGPL-3.0).\n\n## Sections\n\n- [Gigs and jobs feed](${baseUrl}/?lang=en): search, filters by skills, budget, direction and remote work.\n- [Labour market research](${baseUrl}/en/research): salaries in vacancies and freelance budgets — medians and quartiles by role, seniority, language, city and skill. Open data (CC BY 4.0): [CSV](${baseUrl}/research/dataset.csv), [JSON](${baseUrl}/research/report.json), [methodology](${baseUrl}/en/research/methodology).\n- [About](${baseUrl}/about?lang=en): how openradar works and where listings come from.\n- [Sources](${baseUrl}/sources?lang=en): public list of connected boards and channels.\n- [FAQ](${baseUrl}/faq?lang=en)\n- [Browser extension](${baseUrl}/extension?lang=en): submit vacancies from any site and estimate market pay.\n- [RSS feed](${baseUrl}/feed.rss): query parameters q (search) and type (gig or job).\n- [HTTP API and MCP](${baseUrl}/openapi.json): OpenAPI 3.1 schema; API catalog — ${baseUrl}/.well-known/api-catalog; MCP server — ${baseUrl}/mcp (tools: search_leads, get_lead_details, get_market_analytics, estimate_compensation).\n\n## Freelance Gigs\n\n${SEO_CATALOG.filter((entry) => entry.type !== 'job').map(lineEn).join('\n')}\n\n## Vacancies\n\n${SEO_CATALOG.filter((entry) => entry.type === 'job').map(lineEn).join('\n')}\n\n## For Developers\n\n- [Source code](${REPO_URL})\n- [How to run your own node (EN)](${REPO_URL}/blob/main/docs/GETTING_STARTED_EN.md)\n- [Exchange protocol](${REPO_URL}/blob/main/docs/PROTOCOL.md)\n`;
+  }
   const line = (entry: CatalogEntry): string => `- [${entry.h1}](${baseUrl}/catalog/${entry.slug}): ${entry.description}`;
   return `# openradar
 
