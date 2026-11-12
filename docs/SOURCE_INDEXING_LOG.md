@@ -65,3 +65,37 @@
 | `virtual-vocations` (virtualvocations.com/rss) | RSS 2.0 | **indexed** | HTTP 200, 50 items; публичный RSS, часть описаний может быть сокращена (регистрация для полного доступа) |
 
 SwissDevJobs добавляется планом 016 (чтобы не было дубля пресета).
+
+## Расширение по подборке @selflovefeels — компании и карьерные сайты (2026-11-13)
+
+План: `plans/016-source-expansion.md`. Каждая доска прочитана вживую перед добавлением (счётчик вакансий > 0). Полные данные пробинга — в рабочем каталоге `.research/` (не коммитится).
+
+### ATS-компании (16 добавлено, 2026-11-13)
+
+| Провайдер | Компании (slug, вакансий на момент проверки) |
+| --- | --- |
+| Greenhouse | gensyn (2), innovecs (7), lokalise (6), pandadoc (10), tamara (37), zscaler (375) |
+| Ashby | buffer (2), checkly (2), cointracker (3), haus (5), nousresearch (15), productwind (3), snyk (38), wonderful (125) |
+| Lever | brevo (27), contentsquare (28) |
+
+### Карьерные сайты и фиды
+
+| Источник | Формат | Статус | Замер 2026-11-13 |
+| --- | --- | --- | --- |
+| `career-abbott` (Workday sitemap) | sitemap + JSON-LD | **indexed** | 99 job-URL, страница вакансии отдаёт JSON-LD JobPosting; robots `Allow: /abbottcareers/` |
+| `career-elevance` (Workday sitemap) | sitemap + JSON-LD | **indexed** | 278 job-URL; robots `Allow: /ANT/` |
+| `swissdevjobs` | RSS 2.0 | **indexed** | 42 items |
+| `tradingview-teamtailor` | RSS 2.0 (Teamtailor) | **indexed** | 30 items; переходный пресет до появления провайдера teamtailor (план 017) |
+
+### SmartRecruiters — конфликт robots (ждёт решения оператора)
+
+`api.smartrecruiters.com/robots.txt` (2026-11-11 и 2026-11-13): `User-agent: LinkedInBot / Allow: /v1/companies/` + `User-agent: * / Disallow: /`. Существующие 9 компаний провайдера (Wise, ServiceNow и др.) продолжают отвечать 200 (Wise 441, ServiceNow 788 на 2026-11-11), но robots запрещает чтение всем, кроме LinkedInBot. Список заморожен; новые проверенные борды (alten 1242, experian 390, joom 2) НЕ добавлены. Решение — за оператором (см. docs/SOURCES_ROBOTS.md).
+
+### Отклонённые и мёртвые адреса подборки (проверено 2026-11-11..13)
+
+- **gun.io/feed/** — robots `Disallow: /feed/`; к тому же фид блог-маркетинговый, не вакансии. locked.
+- **Устаревшие URL подборки (редиректы)**: Hasura → promptql.io/careers; Grammarly → superhuman.com/company/careers; SGNL → crowdstrike.com (продукт поглощён). Не пробовать слепо исходные адреса.
+- **404/мертвы**: salmon.ph/careers, endel.io/careers, ecwid.com/careers, indriver.com/careers, veeam.com/careers, fermah.com/careers, insightglobal.com/careers, pipercompanies.com/careers, commandcode.com (DNS), gameinsight.com (DNS), mufg.jp/english/career (DNS из RU-сети).
+- **403/бот-защита (не обходим)**: revolut.com, klarna.com (202), paypal.com, usa.visa.com, epam.com, griddynamics.com (202), transunion.com, centene.com, startup.jobs, wantapply.com.
+- **200, но публичного ATS-сигнала нет (нужен отдельный разбор или браузерный сборщик)**: Bolt, Postman, Doist (todoist.com/careers), Automattic, eToro, DataRobot, Gero, Nexters, Acronis, CGI, MixRank, Wander, Function Health, Zammad, Siemens, Medtronic, Boston Scientific, Verizon (mycareer.verizon.com), Lockheed Martin, U.S. Bank (careers.usbank.com), Cox Enterprises, BELAY, Transcom, Sargent & Lundy (iCIMS — план 017), NBCUniversal, Stride (Workday strideinc/wd1/SK — кандидат на будущую волну), Elevance (добавлен), Abbott (добавлен).
+- **Пустые/ложные борды**: SmartRecruiters-слаги большинства корпораций из подборки существуют, но totalFound=0 (PayPal, Visa, Siemens и др. читаются через Workday/собственные системы) — не добавлять.

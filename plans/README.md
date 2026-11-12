@@ -27,7 +27,7 @@ The live site `openradar.fun` may run a different build than this checkout. If a
 | 013 | Remove the hot-path performance bottlenecks | P2 | L | 008, 012 | TODO |
 | 014 | Add the verify toolchain and document the retention knob | P2 | S | — | TODO |
 | 015 | Add Firecrawl Alexandria as an opt-in international job source | P2 | M | — | TODO |
-| 016 | Expand source coverage from the @selflovefeels curation (verified adds) | P2 | M | — | TODO |
+| 016 | Expand source coverage from the @selflovefeels curation (verified adds) | P2 | M | — | DONE — 16 ATS companies re-verified live 2026-11-13 (Brevo back at 27 jobs), Abbott+Elevance Workday sitemaps (JSON-LD confirmed), SwissDevJobs+TradingView rss presets; SmartRecruiters robots conflict recorded (list frozen, operator decision); rejected/dead/redirected addresses journaled; 711 tests green |
 | 017 | New source providers (Teamtailor, iCIMS) and curation Telegram channels | P3 | M | 016 | TODO |
 | 018 | Import the MIT groundtruth ATS board catalog (hundreds of companies) | P2 | L | 016 | TODO |
 | 019 | Ingest MIT job feeds (Dreamwork ×13, Jobbie) as sources | P2 | M | 016 | TODO |

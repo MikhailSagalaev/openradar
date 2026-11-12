@@ -115,8 +115,15 @@
 | Jobindex — Вакансии Дании | rss | official | да | `https://www.jobindex.dk/jobsoegning.rss` | разрешено (проверено 2026-11-13: запрещены конкретные `/jobsoegning*q=ofir`-адреса — чистый `.rss` не покрыт) |
 | JSJobbs — JavaScript-вакансии | rss | official | да | `https://jsjobbs.com/rss` | разрешено (проверено 2026-11-13: пустой `Disallow:`) |
 | Virtual Vocations — Удалённые вакансии США | rss | official | да | `https://www.virtualvocations.com/rss` | разрешено (проверено 2026-11-13: запрещены `/jobs/*/c-*` и `/advanced_search/index/` — фид не покрыт) |
+| SwissDevJobs — IT-вакансии Швейцарии | rss | official | да | `https://swissdevjobs.ch/rss` | разрешено (проверено 2026-11-13: запрещены `/*.txt$`, `/wp-content/`, служебные пути — `/rss` не покрыт) |
+| TradingView — Вакансии (Teamtailor) | rss | official | да | `https://tradingview.teamtailor.com/jobs.rss` | разрешено (проверено 2026-11-13: запрещены `/app/`, `/messages/`, `/messenger/`, `/jobs/internal/`; `Content-Signal: search=yes`) |
+| Abbott — Вакансии (Workday) | sitemap | public | да | `https://abbott.wd5.myworkdayjobs.com/abbottcareers/siteMap.xml` | разрешено (проверено 2026-11-13: `Allow: /abbottcareers/`, sitemap объявлен в robots) |
+| Elevance Health — Вакансии (Workday) | sitemap | public | да | `https://elevancehealth.wd1.myworkdayjobs.com/ANT/siteMap.xml` | разрешено (проверено 2026-11-13: `Allow: /ANT/`, sitemap объявлен в robots) |
+| ATS — SmartRecruiters API (существующие 9 компаний) | ats | official | да | `https://api.smartrecruiters.com/v1/companies/{slug}/postings` | **запрещено для RadarBot** (проверено 2026-11-13: `User-agent: LinkedInBot / Allow: /v1/companies/`, `User-agent: * / Disallow: /`) |
 
 ## Решения
+
+- **ATS — SmartRecruiters (9 компаний, включая Wise и ServiceNow)** — robots.txt разрешает API только LinkedInBot (`User-agent: * / Disallow: /`, подтверждено 2026-11-11 и 2026-11-13). Решение: _ждёт решения оператора_ (варианты: отключить провайдер; читать публичные HTML-страницы jobs.smartrecruiters.com, если их robots позволит — проверить отдельно; запросить разрешение у SmartRecruiters). Новые компании (Alten 1242, Experian 390, Joom 2 — борды проверены, ответы 200) НЕ добавлять до решения.
 
 - **hh-семейство (hh.kz, headhunter.ge, zarplata.ru), добавлено 2026-11-13** — robots запрещает `/rss/*`, но поисковый RSS `/search/vacancy/rss` этим правилом НЕ покрыт (RFC 9309: префиксное совпадение пути), а запрета `*?*` (как на hh.ru) у этих сайтов нет. Вердикт: разрешено. Не «чинить» в запрет без свежего robots.txt.
 

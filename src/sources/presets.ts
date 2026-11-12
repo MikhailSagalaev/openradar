@@ -1014,6 +1014,25 @@ const BASE_PRESETS: SourcePreset[] = [
       url: 'https://www.virtualvocations.com/rss',
     },
   },
+  {
+    id: 'swissdevjobs',
+    kind: 'rss',
+    title: 'SwissDevJobs — IT-вакансии Швейцарии',
+    description: 'Официальный RSS-фид IT-вакансий Швейцарии: высокие зарплаты, прозрачные вилки (swissdevjobs.ch)',
+    config: {
+      url: 'https://swissdevjobs.ch/rss',
+    },
+  },
+  {
+    id: 'tradingview-teamtailor',
+    kind: 'rss',
+    title: 'TradingView — Вакансии',
+    description: 'RSS карьерной доски TradingView на Teamtailor: международная финтех-платформа, удалённые и офисные роли',
+    config: {
+      url: 'https://tradingview.teamtailor.com/jobs.rss',
+      company: 'TradingView',
+    },
+  },
   ...CAREER_SITE_PRESETS,
   ...JSON_BOARD_PRESETS,
   ...HH_EMPLOYER_PRESETS,
