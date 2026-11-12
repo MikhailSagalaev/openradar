@@ -569,6 +569,20 @@ main {
 .user-menu-link.danger:hover {
   background: rgba(239, 68, 68, 0.08);
 }
+.user-menu-logout {
+  margin: 0;
+}
+.user-menu-logout .user-menu-link {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.user-menu-logout .user-menu-link:hover {
+  background: rgba(239, 68, 68, 0.08);
+}
 .auth-signin-btn {
   display: inline-flex;
   align-items: center;
@@ -2296,7 +2310,9 @@ export function layout(input: {
           <a class="user-menu-link" href="/submit">${escapeHtml(lang === 'ru' ? 'Добавить по ссылке' : 'Submit by URL')}</a>
           <a class="user-menu-link" href="/extension">${escapeHtml(lang === 'ru' ? 'Браузерное расширение' : 'Browser Extension')}</a>
           <div class="user-menu-sep"></div>
-          <a class="user-menu-link danger" href="/logout">${escapeHtml(t.signOut)}</a>
+          <form method="post" action="/logout" class="user-menu-logout">
+            <button type="submit" class="user-menu-link danger">${escapeHtml(t.signOut)}</button>
+          </form>
         </div>
       </div>
     `
@@ -4535,6 +4551,7 @@ export function renderExtensionConnectPage(data: {
   auth?: AuthDisplay;
   handle: string;
   redirectUri: string;
+  state: string;
 }): string {
   const lang = data.lang ?? 'ru';
   const ru = lang === 'ru';
@@ -4547,6 +4564,7 @@ export function renderExtensionConnectPage(data: {
   <p class="muted small">${ru ? 'Отключить можно в самом расширении кнопкой «Выйти».' : 'Disconnect it in the extension with «Выйти».'}</p>
   <form method="post" action="/extension/connect">
     <input type="hidden" name="redirect_uri" value="${escapeHtml(data.redirectUri)}">
+    <input type="hidden" name="state" value="${escapeHtml(data.state)}">
     <button class="btn" type="submit">${ru ? 'Разрешить' : 'Allow'}</button>
   </form>
 </div>`;

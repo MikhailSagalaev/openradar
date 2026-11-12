@@ -25,13 +25,13 @@ import { ATS_PROVIDERS } from '../sources/ats.ts';
 import { remoteFromText } from '../core/extract.ts';
 import { DEFAULT_SESSION_ENV, TELEGRAM_SESSION_ENV_RE } from '../sources/telegram-account.ts';
 import { VERSION } from '../version.ts';
-import { githubOAuthConfigured, startGitHubOAuth, handleGitHubCallback } from './auth.ts';
+import { githubOAuthConfigured, startGitHubOAuth, handleGitHubCallback, secureCookie } from './auth.ts';
 import { renderAdminPage } from './admin.ts';
 import { analyticsFromEnv, contentSecurityPolicy } from './analytics.ts';
 import { filterOptions, matchesSavedFilters, parseFeedFilters, type FeedFilters } from './filters.ts';
 import { computeInsights, estimateMarket } from '../core/market.ts';
 import { COLLECTOR_MAX_ORDERS, COLLECTOR_PLATFORMS, collectedOrderToRaw, type CollectorPlatform, COLLECTOR_SITES, collectedVacancyToRaw, type CollectorSite } from './collector.ts';
-import { rateLimit } from './ratelimit.ts';
+import { configureRateLimit, rateLimit } from './ratelimit.ts';
 import { indexCsv, openradarIndex } from '../research/index.ts';
 import { qualityFlagsOf } from '../core/quality.ts';
 import { rubToUsd } from '../core/salary.ts';
@@ -418,10 +418,17 @@ async function feedFor(runtime: Runtime, viewer: Viewer, options: ListLeadsOptio
 /**
  * Absolute base URL for links in feeds, sitemaps and OAuth. RADAR_PUBLIC_URL wins:
  * the Host header is client-controlled and must not decide where links point.
+ * Without it in production the request Host is still used (self-hosted default),
+ * but the operator gets one warning — public deployments must configure the URL.
  */
+let warnedMissingPublicUrl = false;
 function publicBaseUrl(c: Context, runtime: Runtime): string {
   const configured = runtime.env.RADAR_PUBLIC_URL?.replace(/\/+$/, '');
   if (configured) return configured;
+  if (runtime.env.NODE_ENV === 'production' && !warnedMissingPublicUrl) {
+    warnedMissingPublicUrl = true;
+    runtime.logger.warn('RADAR_PUBLIC_URL is unset in production: absolute links fall back to the request Host; set RADAR_PUBLIC_URL for public deployments');
+  }
   const host = c.req.header('host') || '127.0.0.1:8787';
   const proto = c.req.header('x-forwarded-proto') === 'https' ? 'https' : 'http';
   return `${proto}://${host}`;
@@ -937,6 +944,7 @@ export async function startSubscriptionBot(runtime: Runtime, signal: AbortSignal
 export function createApp(runtime: Runtime): Hono {
   const app = new Hono();
   setPublicBaseUrl(runtime.env.RADAR_PUBLIC_URL);
+  configureRateLimit({ trustProxy: runtime.env.RADAR_TRUSTED_PROXY === true });
 
   if (runtime.env.RADAR_ADMIN_GITHUB) {
     const nonNumeric = runtime.env.RADAR_ADMIN_GITHUB
@@ -1155,14 +1163,16 @@ export function createApp(runtime: Runtime): Hono {
     setCookie(c, 'radar_session', sessionId, {
       httpOnly: true,
       sameSite: 'Lax',
-      secure: c.req.header('x-forwarded-proto') === 'https',
+      secure: secureCookie(c, runtime),
       path: '/',
       maxAge: 7 * 24 * 3600,
     });
     return c.redirect('/');
   });
 
-  app.get('/logout', async (c) => {
+  // Logout mutates session state, so it is a POST behind the same-origin guard —
+  // a GET would let any page log the visitor out with an <img> tag.
+  app.post('/logout', async (c) => {
     const sessionId = getCookie(c, 'radar_session');
     if (sessionId && runtime.store.deleteSession) {
       await runtime.store.deleteSession(sessionId);
@@ -1833,7 +1843,6 @@ export function createApp(runtime: Runtime): Hono {
     }
     const rawType = typeof body.leadType === 'string' ? body.leadType.trim() : '';
     const type: LeadType = rawType === 'job' || rawType === 'gig' ? rawType : 'gig';
-    const author = typeof body.author === 'string' ? body.author.trim() : undefined;
     const category = typeof body.category === 'string' && body.category.trim() ? body.category.trim() : undefined;
     const city = typeof body.city === 'string' ? body.city.trim() : undefined;
     const budget = asNumber(body.budget);
@@ -1864,7 +1873,8 @@ export function createApp(runtime: Runtime): Hono {
       title: title || text,
       text: text || title,
       url: url || undefined,
-      author: author || user.handle,
+      // Attribution always comes from the authenticated identity, never the form.
+      author: user.handle,
       category,
       city,
       budget,
@@ -2778,7 +2788,8 @@ export function createApp(runtime: Runtime): Hono {
       title: title ?? text ?? '',
       text: text ?? title ?? '',
       url,
-      author: asString(body.author) || user.handle,
+      // Attribution always comes from the authenticated identity, whatever the body sends.
+      author: user.handle,
       category: asString(body.category),
       city: asString(body.city),
       budget: asNumber(body.budget),
@@ -2836,16 +2847,21 @@ export function createApp(runtime: Runtime): Hono {
     c.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   };
 
+  // The flow nonce binds the token handoff to the popup that started it: without
+  // it any page could open connected.html and replace the stored account.
+  const EXTENSION_STATE_RE = /^[0-9a-f-]{36}$/i;
   app.get('/extension/connect', async (c) => {
     const redirectUri = c.req.query('redirect_uri') ?? '';
     if (!EXTENSION_REDIRECT_RE.test(redirectUri)) return c.text('Bad redirect_uri', 400);
+    const state = c.req.query('state') ?? '';
+    if (!EXTENSION_STATE_RE.test(state)) return c.text('Bad state', 400);
     if (!githubOAuthConfigured(runtime) || !runtime.store.saveExtensionToken) return c.text('GitHub sign-in is not configured on this server', 501);
     const user = await currentUser(c, runtime);
     if (!user) {
-      const back = `/extension/connect?redirect_uri=${encodeURIComponent(redirectUri)}`;
+      const back = `/extension/connect?redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
       return c.redirect(`/auth/github?returnTo=${encodeURIComponent(back)}`);
     }
-    return c.html(renderExtensionConnectPage({ version: VERSION, lang: resolveLang(c), auth: await getAuthDisplay(c, runtime), handle: user.handle, redirectUri }));
+    return c.html(renderExtensionConnectPage({ version: VERSION, lang: resolveLang(c), auth: await getAuthDisplay(c, runtime), handle: user.handle, redirectUri, state }));
   });
 
   app.post('/extension/connect', rateLimit({ windowMs: 10 * 60_000, max: 10 }), async (c) => {
@@ -2854,9 +2870,11 @@ export function createApp(runtime: Runtime): Hono {
     const form = await c.req.parseBody();
     const redirectUri = typeof form.redirect_uri === 'string' ? form.redirect_uri : '';
     if (!EXTENSION_REDIRECT_RE.test(redirectUri)) return c.text('Bad redirect_uri', 400);
+    const state = typeof form.state === 'string' ? form.state : '';
+    if (!EXTENSION_STATE_RE.test(state)) return c.text('Bad state', 400);
     const token = `ext_${randomBytes(32).toString('hex')}`;
     await runtime.store.saveExtensionToken(createHash('sha256').update(token).digest('hex'), user.id);
-    const fragment = new URLSearchParams({ token, handle: user.handle, base: publicBaseUrl(c, runtime) });
+    const fragment = new URLSearchParams({ token, handle: user.handle, base: publicBaseUrl(c, runtime), state });
     return c.redirect(`${redirectUri}#${fragment.toString()}`);
   });
 

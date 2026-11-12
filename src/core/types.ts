@@ -65,6 +65,8 @@ export interface Env {
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
   RADAR_PUBLIC_URL?: string;
+  /** Honor X-Forwarded-For / X-Real-IP for rate-limit keys only behind a proxy that appends the client IP. */
+  RADAR_TRUSTED_PROXY?: boolean;
   /** GitHub accounts with admin rights: comma-separated numeric ids or logins. */
   RADAR_ADMIN_GITHUB?: string;
   /** Optional web analytics and search console verification (see src/server/analytics.ts). */
