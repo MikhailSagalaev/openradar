@@ -129,7 +129,8 @@ export class MemoryStore implements Store {
       .filter((lead) => {
         if (lead.titleKey !== titleKey) return false;
         if (city && lead.city !== city) return false;
-        if (!city && lead.city !== null && lead.city !== undefined) return false;
+        // Without a city, match any city (Postgres parity): ingest's employer
+        // check already guards cross-company merges.
         return lead.createdAt >= sinceIso;
       })
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -1087,6 +1088,7 @@ export class MemoryStore implements Store {
       current.attempts += 1;
       current.lastError = error;
       current.nextAttemptAt = nextAttemptAt ?? now;
+      current.leasedUntil = undefined;
       current.updatedAt = now;
     } else {
       this.leadDeliveries.set(key, {
@@ -1105,9 +1107,29 @@ export class MemoryStore implements Store {
   async getPendingDeliveries(limit = 50): Promise<LeadDeliveryRecord[]> {
     const now = new Date().toISOString();
     const pending = Array.from(this.leadDeliveries.values())
-      .filter((d) => d.status !== 'sent' && d.attempts < 5 && d.nextAttemptAt <= now)
+      .filter((d) => d.status !== 'sent' && d.attempts < 5 && d.nextAttemptAt <= now && (!d.leasedUntil || d.leasedUntil <= now))
       .sort((a, b) => a.nextAttemptAt.localeCompare(b.nextAttemptAt));
-    return pending.slice(0, limit);
+    return pending.slice(0, limit).map((d) => ({ ...d }));
+  }
+
+  async claimPendingDeliveries(limit: number, leaseMs: number): Promise<LeadDeliveryRecord[]> {
+    const now = new Date().toISOString();
+    const leaseEnd = new Date(Date.now() + leaseMs).toISOString();
+    const due = Array.from(this.leadDeliveries.values())
+      .filter((d) => d.status !== 'sent' && d.attempts < 5 && d.nextAttemptAt <= now && (!d.leasedUntil || d.leasedUntil <= now))
+      .sort((a, b) => a.nextAttemptAt.localeCompare(b.nextAttemptAt))
+      .slice(0, limit);
+    for (const d of due) d.leasedUntil = leaseEnd;
+    return due.map((d) => ({ ...d }));
+  }
+
+  async claimLeadDeliveries(leadId: string, leaseMs: number): Promise<LeadDeliveryRecord[]> {
+    const now = new Date().toISOString();
+    const leaseEnd = new Date(Date.now() + leaseMs).toISOString();
+    const due = Array.from(this.leadDeliveries.values())
+      .filter((d) => d.leadId === leadId && d.status !== 'sent' && (!d.leasedUntil || d.leasedUntil <= now));
+    for (const d of due) d.leasedUntil = leaseEnd;
+    return due.map((d) => ({ ...d }));
   }
 
   async getLeadDeliveries(leadId: string): Promise<LeadDeliveryRecord[]> {

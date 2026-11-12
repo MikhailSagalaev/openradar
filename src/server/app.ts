@@ -7,6 +7,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import fs from 'node:fs';
 import path from 'node:path';
 import { escapeHtml, extractSkills, stripInvisible } from '../core/text.ts';
+import { emitLeadDeleted } from '../core/events.ts';
 import { renderRssFeed } from './feed.ts';
 import type { ParticipantRecord, UserRecord } from '../core/store.ts';
 import type { Lead, LeadStatus, LeadType, RawLead, SourceConfig, SourceKind, SourceRecord, Viewer, VoteSignal } from '../core/types.ts';
@@ -2581,6 +2582,8 @@ export function createApp(runtime: Runtime): Hono {
     const id = c.req.param('id');
     const deleted = runtime.store.deleteLead ? await runtime.store.deleteLead(id) : false;
     if (!deleted) return c.json({ error: 'not_found' }, 404);
+    // Drop the id from the in-memory similar index; retention cleanup self-heals via the 7-day prune.
+    emitLeadDeleted(id);
     return c.json({ ok: true, deleted: id });
   });
 

@@ -974,12 +974,12 @@ export class PostgresStore implements Store {
       await client.query('BEGIN');
       if (typeof scoreDelta === 'number') {
         await client.query(
-          `UPDATE leads SET status = $1, delivered_at = $2, score = score + $3 WHERE id = $4`,
+          `UPDATE leads SET status = $1, delivered_at = COALESCE($2::timestamptz, delivered_at), score = score + $3 WHERE id = $4`,
           [status, deliveredAt ? new Date(deliveredAt) : null, scoreDelta, id]
         );
       } else {
         await client.query(
-          `UPDATE leads SET status = $1, delivered_at = $2 WHERE id = $3`,
+          `UPDATE leads SET status = $1, delivered_at = COALESCE($2::timestamptz, delivered_at) WHERE id = $3`,
           [status, deliveredAt ? new Date(deliveredAt) : null, id]
         );
       }
@@ -1682,6 +1682,7 @@ export class PostgresStore implements Store {
            attempts = attempts + 1,
            last_error = $4,
            next_attempt_at = COALESCE($5::timestamptz, NOW()),
+           leased_until = NULL,
            updated_at = NOW()
        WHERE lead_id = $1 AND sink = $2`,
       [leadId, sink, status, error || null, nextAttemptAt || null]
@@ -1693,10 +1694,64 @@ export class PostgresStore implements Store {
       `SELECT lead_id, sink, status, attempts, next_attempt_at, last_error, created_at, updated_at
        FROM lead_deliveries
        WHERE status != 'sent' AND attempts < 5 AND next_attempt_at <= NOW()
+         AND (leased_until IS NULL OR leased_until < NOW())
        ORDER BY next_attempt_at ASC
-       LIMIT $1
-       FOR UPDATE SKIP LOCKED`,
+       LIMIT $1`,
       [limit]
+    );
+    return res.rows.map((r: any) => ({
+      leadId: r.lead_id,
+      sink: r.sink,
+      status: r.status,
+      attempts: parseInt(r.attempts, 10) || 0,
+      nextAttemptAt: new Date(r.next_attempt_at).toISOString(),
+      lastError: r.last_error || undefined,
+      createdAt: new Date(r.created_at).toISOString(),
+      updatedAt: new Date(r.updated_at).toISOString(),
+    }));
+  }
+
+  /**
+   * Atomic claim: the FOR UPDATE SKIP LOCKED lives inside the UPDATE's own
+   * transaction, so the lock is real (a bare pool.query SELECT released it
+   * immediately). Claimed rows stay invisible until the lease expires.
+   */
+  async claimPendingDeliveries(limit: number, leaseMs: number): Promise<LeadDeliveryRecord[]> {
+    const res = await this.pool.query(
+      `UPDATE lead_deliveries
+       SET leased_until = NOW() + ($2 || ' milliseconds')::interval
+       WHERE (lead_id, sink) IN (
+         SELECT lead_id, sink FROM lead_deliveries
+         WHERE status <> 'sent' AND attempts < 5 AND next_attempt_at <= NOW()
+           AND (leased_until IS NULL OR leased_until < NOW())
+         ORDER BY next_attempt_at ASC
+         LIMIT $1
+         FOR UPDATE SKIP LOCKED
+       )
+       RETURNING lead_id, sink, status, attempts, next_attempt_at, last_error, created_at, updated_at`,
+      [limit, String(leaseMs)]
+    );
+    return res.rows.map((r: any) => ({
+      leadId: r.lead_id,
+      sink: r.sink,
+      status: r.status,
+      attempts: parseInt(r.attempts, 10) || 0,
+      nextAttemptAt: new Date(r.next_attempt_at).toISOString(),
+      lastError: r.last_error || undefined,
+      createdAt: new Date(r.created_at).toISOString(),
+      updatedAt: new Date(r.updated_at).toISOString(),
+    }));
+  }
+
+  /** The inline ingest path claims only its own lead's rows before sending. */
+  async claimLeadDeliveries(leadId: string, leaseMs: number): Promise<LeadDeliveryRecord[]> {
+    const res = await this.pool.query(
+      `UPDATE lead_deliveries
+       SET leased_until = NOW() + ($2 || ' milliseconds')::interval
+       WHERE lead_id = $1 AND status <> 'sent'
+         AND (leased_until IS NULL OR leased_until < NOW())
+       RETURNING lead_id, sink, status, attempts, next_attempt_at, last_error, created_at, updated_at`,
+      [leadId, String(leaseMs)]
     );
     return res.rows.map((r: any) => ({
       leadId: r.lead_id,

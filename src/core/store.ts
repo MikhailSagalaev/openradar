@@ -87,6 +87,8 @@ export interface LeadDeliveryRecord {
   lastError?: string;
   createdAt: string;
   updatedAt: string;
+  /** While set and in the future, the row is claimed by a worker and skipped by others. */
+  leasedUntil?: string;
 }
 
 export interface UpsertGitHubUserInput {
@@ -600,7 +602,12 @@ export interface Store extends HubStore {
 
   initLeadDeliveries?(leadId: string, sinks: string[]): Promise<void>;
   updateLeadDelivery?(leadId: string, sink: string, status: 'sent' | 'failed', error?: string, nextAttemptAt?: string): Promise<void>;
+  /** Read-only peek at due deliveries (admin views). Does not claim rows. */
   getPendingDeliveries?(limit?: number): Promise<LeadDeliveryRecord[]>;
+  /** Atomically claims due deliveries for `leaseMs`; claimed rows are skipped by other callers until the lease expires or the row is updated. */
+  claimPendingDeliveries?(limit: number, leaseMs: number): Promise<LeadDeliveryRecord[]>;
+  /** Atomically claims one lead's pending deliveries (the inline ingest path) so the outbox worker cannot race it. */
+  claimLeadDeliveries?(leadId: string, leaseMs: number): Promise<LeadDeliveryRecord[]>;
   getLeadDeliveries?(leadId: string): Promise<LeadDeliveryRecord[]>;
 
   createSession?(sessionId: string, expiresAt: string, userId?: number): Promise<void>;

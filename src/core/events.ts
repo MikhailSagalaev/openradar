@@ -24,3 +24,12 @@ export function emitLeadClosed(lead: Lead, reason: string): void {
     // A failing listener must never break moderation.
   }
 }
+
+/** A lead was deleted outright: the in-memory similar index must forget it. */
+export function emitLeadDeleted(id: string): void {
+  try {
+    leadEvents.emit('lead.deleted', id);
+  } catch {
+    // A failing listener must never break deletion.
+  }
+}
