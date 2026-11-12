@@ -2,7 +2,7 @@
 
 Two generations live here:
 
-- **001–006** — generated 2026-11-09 against `f02a024` (v0.41.2), research/salary quality. The checkout has since moved to `origin/main` `260a650` (v0.67.0); commit `e6f7855` ("Stop treating ad spend, partner names and adapter labels as the vacancy" + fixed-role weekly pay index) appears to cover 001–003 and 006. Their rows are marked NEEDS-RECHECK: verify against the live code before executing; do not re-fix what upstream already fixed.
+- **001–006** — generated 2026-11-09 against `f02a024` (v0.41.2), research/salary quality. Rechecked against `260a650` (v0.67.0) on 2026-11-13: all six are covered upstream (chiefly `e6f7855`), in evolved form where noted in the status rows. Nothing was re-fixed. The only unadopted item is plan 006's optional `experienceYears` groundwork field (forward-looking, not a bug).
 - **007–015** — generated 2026-11-11 against `260a650` (v0.67.0) after a four-auditor review (correctness, security, performance/architecture, tests/DX) with every finding re-verified against `origin/main`. Execute in the order below unless dependencies say otherwise. Each executor reads one plan fully, honors its STOP conditions, and updates its row when done.
 - **016–021** — generated 2026-11-11 against `260a650` (v0.67.0) from the @selflovefeels curation (`Job_Search_Resources main.pdf`, 78 platforms + 122 companies) and a deep read of competitor public repos. Every added source was probed live (job count > 0 / feed items > 0) and robots-checked; evidence in `.research/`. These are the "hundreds of sources" + architecture-borrowing track. License isolation is strict: OpenPostings (no LICENSE), JobOps (Commons Clause), recruiters.rip (BSL until 2030), Simplify listings (no LICENSE) → ideas only, no code. MIT donors: JobSpy, Dreamwork MCP + 13 job feeds, groundtruth board catalog (7 479 boards), Jobbie feed, Four-Leaf client.
 
@@ -12,12 +12,12 @@ The live site `openradar.fun` may run a different build than this checkout. If a
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001 | Stop ad spend and client budgets from becoming pay | P1 | M | — | NEEDS-RECHECK (likely covered by e6f7855) |
-| 002 | Stop English prose from becoming skills | P1 | S | — | NEEDS-RECHECK (likely covered by e6f7855) |
-| 003 | Stop adapter labels from marking English posts as Russian | P1 | S | — | NEEDS-RECHECK (likely covered by e6f7855) |
-| 004 | Stop publishing mixed-period and mislabeled research claims | P1 | M | — | NEEDS-RECHECK (verify against v0.67.0 research/) |
-| 005 | Make skill counts follow the active filters, and split budget steps | P2 | M | 002 | NEEDS-RECHECK |
-| 006 | Publish a composition-stable weekly pay index and label one-sided ranges | P2 | L | 004 | NEEDS-RECHECK (fixed-role index landed in e6f7855) |
+| 001 | Stop ad spend and client budgets from becoming pay | P1 | M | — | DONE upstream — `maskNotPaySentences` in salary.ts (ad spend/budgets/turnover masked), `updateLeadMoney` + rescore `moneyOf` reparse text budgets, DAY×21/WEEK×4.33 in facts.ts, PLN/h hourly; tests feed-quality-2026-11 + salary.test |
+| 002 | Stop English prose from becoming skills | P1 | S | — | DONE upstream — Swift needs capitalized token or iOS/Xcode context, `\bps\b` removed, illustration narrowed, `bitrixIsSkill` partner rule; tests feed-quality-2026-11 |
+| 003 | Stop adapter labels from marking English posts as Russian | P1 | S | — | DONE upstream — `titleForLanguage` in text.ts used by memory store + filters, postgres strips Компания/Город labels in the language condition, `Город` in cleanTitle |
+| 004 | Stop publishing mixed-period and mislabeled research claims | P1 | M | — | DONE upstream (evolved) — research query drops channel_ad/digest/mlm in both stores; cartaCapital on gigs-only project pay; taskTransformation kept but rebuilt (word-boundary regexes, no Math.max clamp) and relabeled «разница в цене разных работ, а не надбавка за навык»; methodology rewritten honestly (CBR rate, order-statistic CIs, no OLQI/CLT claims); REPORT_VERSION 2 |
+| 005 | Make skill counts follow the active filters, and split budget steps | P2 | M | 002 | DONE upstream — `popularSkills(filters)` with per-filter cache key + matchesSavedFilters, `budgetStepsFor(type)` job/gig scales wired into ui.ts |
+| 006 | Publish a composition-stable weekly pay index and label one-sided ranges | P2 | L | 004 | DONE upstream (evolved) — `compositionIndex` Laspeyres basket (≥30/role, ≥10/week) published as `weeklyIndexed` with chart caption; one-sided ranges surfaced as `jobs.bounds` counts + range-only median instead of per-bound dists; `experienceYears` groundwork field not adopted (optional, no user-visible defect) |
 | 007 | Make the machine-readable docs tell agents the truth | P1 | S | — | TODO |
 | 008 | Close the small correctness holes (SimilarIndex, digest, title, vote race, dead code) | P1 | S | — | TODO |
 | 009 | Make outbox delivery exactly-once and align the two stores | P1 | M | 008 (same file) | TODO |
