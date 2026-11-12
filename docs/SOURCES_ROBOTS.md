@@ -28,6 +28,8 @@
 | RemoteWorker UK — Все вакансии | rss | official | да | `https://remoteworker.co.uk/feeds/all.xml` | разрешено (`Allow: /`) |
 | Карьерные страницы компаний — Ashby | ats | official | да | публичный API карьерных страниц компаний (Ashby) | не применяется |
 | Карьерные страницы компаний — Greenhouse | ats | official | да | публичный API карьерных страниц компаний (Greenhouse) | не применяется |
+| Dreamwork — MIT-фиды вакансий (GitHub raw) | json | public | opt-in | `https://raw.githubusercontent.com/dreamworkhq/<Repo>/main/data/listings.json` | разрешено — статический хост файлов, robots не ограничивает |
+| Jobbie — US Tech Internships | json | public | opt-in | `https://api.jobbie.bot/public/internships.json` | robots.txt: HTTP 401 (нет файла); фид публично приглашает к чтению (ETag, 30 req/min, описательный UA) |
 | Карьерные страницы компаний — Lever | ats | official | да | публичный API карьерных страниц компаний (Lever) | не применяется |
 | Telegram — Хабр Карьера | telegram | public | да | `https://t.me/s/habr_career` | разрешено — robots.txt: HTTP 404 |
 | Telegram — Game Development Jobs | telegram | public | да | `https://t.me/s/devjobs` | разрешено — robots.txt: HTTP 404 |
@@ -127,6 +129,8 @@
 - **ATS — SmartRecruiters (9 компаний, включая Wise и ServiceNow)** — robots.txt разрешает API только LinkedInBot (`User-agent: * / Disallow: /`, подтверждено 2026-11-11 и 2026-11-13). Решение: _ждёт решения оператора_ (варианты: отключить провайдер; читать публичные HTML-страницы jobs.smartrecruiters.com, если их robots позволит — проверить отдельно; запросить разрешение у SmartRecruiters). Новые компании (Alten 1242, Experian 390, Joom 2 — борды проверены, ответы 200) НЕ добавлять до решения.
 
 - **hh-семейство (hh.kz, headhunter.ge, zarplata.ru), добавлено 2026-11-13** — robots запрещает `/rss/*`, но поисковый RSS `/search/vacancy/rss` этим правилом НЕ покрыт (RFC 9309: префиксное совпадение пути), а запрета `*?*` (как на hh.ru) у этих сайтов нет. Вердикт: разрешено. Не «чинить» в запрет без свежего robots.txt.
+
+- **Происхождение каталога ATS-борд (импорт 2026-11-13)** — список компаний Ashby расширен данными `directory.json` проекта [groundtruthtools/ats-jobs-mcp](https://github.com/groundtruthtools/ats-jobs-mcp) (MIT, Copyright 2026 Ground Truth; снапшот 2026-08-24, 7 479 борд). Импортируются только факты «провайдер + slug», не код. Каждый импортированный борд повторно проверен живым чтением того же публичного API (`scripts/verify-ats-boards.mjs`): батч 1 — 295 live из 300. robots API-хостов перепроверен перед импортом: `boards-api.greenhouse.io` — `Disallow: /embed/` (наш путь `/v1/boards/` разрешён); `api.ashbyhq.com/robots.txt` — HTTP 401 (файла нет, ограничений нет). Колонка jobs снапшота использовалась только для приоритизации проверки, не как живые данные.
 
 - **FL.ru — Все заказы** — robots.txt запрещает `Disallow: */rss/*`. Решение: _ждёт решения оператора_.
 - **Работа России — Удалённая работа** — robots.txt запрещает `Disallow: /`. Решение: _ждёт решения оператора_.

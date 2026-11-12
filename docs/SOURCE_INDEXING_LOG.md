@@ -120,3 +120,34 @@ SwissDevJobs добавляется планом 016 (чтобы не было �
 | Источник | Формат | Статус | Примечание |
 | --- | --- | --- | --- |
 | `alexandria-jobs` (api.firecrawl.dev/v2/scrape) | JSON API, Bearer | **indexed (opt-in)** | Выключен без `FIRECRAWL_API_KEY`; кредиты за запись (пустые ответы бесплатны); maxResults ≤ 100, интервал 1800 с; одна страница за опрос без cursor-пагинации; покрытие международное (RU-досок в каталоге Jobs нет) |
+
+## Импорт каталога борд groundtruth (план 018, 2026-11-13)
+
+План: `plans/018-ats-catalog-import.md`.
+
+**Источник данных**: [groundtruthtools/ats-jobs-mcp](https://github.com/groundtruthtools/ats-jobs-mcp), файл `directory.json` — **MIT License, Copyright (c) 2026 Ground Truth**. Снапшот 2026-08-24: 7 479 борд (4 168 Greenhouse + 3 311 Ashby), каждый «confirmed against the ATS public API on the date shown». Импортируем только факты (провайдер + slug + имя), код groundtruth не используется. Атрибуция: эта запись + `docs/SOURCES_ROBOTS.md` (отдельного NOTICE-файла в репозитории нет).
+
+**Метод**: каждый кандидат повторно проверен живым последовательным чтением публичного API тем же эндпоинтом, что и адаптер (`scripts/verify-ats-boards.mjs`, задержка 1.2 с, полный body, Retry-After на 429, один повтор на сетевую ошибку). Колонка `jobs` снапшота — только приоритизация очереди, не живые данные. Slug нормализованы в нижний регистр (Ashby API регистронезависим — проверено на openai/OpenAI), дедуп против каталога регистронезависимый.
+
+**Батч 1 (Ashby, топ-300 по снапшоту)**: live **295**, empty 2 (`jobs-page-4dc2685b-…` — мусорный slug, `confluent` — 0 вакансий), dead 3 (`mach`, `beaconsoftware`, `sana-roles` — HTTP 404), blocked 0, error 0. Live-rate 98.3% — порог стопа (50%) не достигнут. Каталог Ashby: 314 → **609** компаний. Имена: брендовая карта для известных компаний, иначе title-case slug; 5 борд оставлены с title-case (`applied`, `10xteam`, `barnes`, `cowboyspace`, `amplify`).
+
+**robots перед импортом (2026-11-13)**: `boards-api.greenhouse.io/robots.txt` → 200, `Disallow: /embed/` (путь `/v1/boards/` разрешён); `api.ashbyhq.com/robots.txt` → 401 (файла нет, ограничений нет). Обходов не применялось.
+
+**Следующие батчи**: оставшиеся ~2 400 Ashby-кандидатов и ~3 800 Greenhouse (у greenhouse в снапшоте нет живых счётчиков — проверять меньшими лимитами). Хелпер: `node scripts/verify-ats-boards.mjs --provider ashby --limit 300 --out .research/verify-ashby-batch2.json`. Артефакты проверки (`.research/`) в git не коммитятся.
+
+## MIT-фиды Dreamwork и Jobbie (план 019, 2026-11-13)
+
+План: `plans/019-mit-job-feeds.md`.
+
+**Dreamwork** — [dreamworkhq](https://github.com/dreamworkhq), 13 репозиториев-фидов, все **MIT License, Copyright (c) 2026 Dreamwork (dreamworkhq.com)**, ветка `main`, файл `data/listings.json`, коммитятся ежедневно. Форма: `{generatedAt, source, list, count, listings[]}`, поля `id, title, company, companyDomain, location, remoteType, salaryMin/Max, salaryPeriod, aiRoleKind, postedAt, firstIndexedAt, url`.
+
+- **Подключены (пилот 3)**: `dreamwork-remote-tech` (Remote-Tech-Jobs, 600), `dreamwork-ai-ml` (AI-ML-Jobs, 600), `dreamwork-senior-swe` (Senior-Software-Engineer-Jobs, 923). URL проверены живым GET 2026-11-13. Остальные 10 репо той же формы (Cybersecurity-Jobs, Data-Engineering-Jobs, Data-Science-Jobs, DevOps-SRE-Cloud-Jobs, Frontend-React-Jobs, New-Grad-Software-Engineer-Jobs, Open-Tech-Internships-2027, Python-Developer-Jobs, Tech-Internships-2027) — добавлять по мере надобности; фиды сильно пересекаются, дедуп (MinHash + externalId) справляется, но включать стоит 3–4 комплементарных.
+- **Оговорка о ссылке (важно)**: все 600/600 `url` — трекинг-карточка `https://www.dreamworkhq.com/job/{id}?utm_…`, НЕ оригинал работодателя. Пресет хранит её как есть и честно говорит об этом в description; utm-параметры срезаются канонизатором при инжесте. Follow-up (отдельный план): резолвить оригинал через `companyDomain` → наш ATS-каталог.
+- **Зарплаты**: `salaryPeriod: annual`, USD (306/600 строк Remote-Tech). Адаптер `json-board` расширен: per-row поле `salaryPeriod` (annual/hour → «per year»/«per hour») и прокидывание `currency` на лид. Годовые USD нормализуются делением на 12, никогда не «в месяц». Строки без зарплаты не получают выдуманной оплаты. Фикстура: `test/fixtures/dreamwork-listings.json` (5 строк из живого фида, включая не-US строку Mainsoft LTDA — валюта заявлена фидом как USD).
+
+**Jobbie** — [jobbie-bot/Summer-2027-Tech-Internships](https://github.com/jobbie-bot/Summer-2027-Tech-Internships), **MIT License, Copyright (c) 2026 Jobbie**. Решение шага 3: у Jobbie есть **публичный машинный фид** `https://api.jobbie.bot/public/internships.json` (JSON, кэш 10 мин, ETag/If-None-Match, 30 req/min на IP, описательный UA — заявлено в README и `scripts/update_readme.py`). Markdown-парсер не нужен: подключён json-пресет `jobbie-internships`.
+
+- Живой замер 2026-11-13: 379 строк, свежий `generated_at`, **у всех 379 есть `apply_url` — прямая ссылка на ATS работодателя** (greenhouse 140, ashby 46, workday ~120, lever 18, workable 30, smartrecruiters 3). Ссылка лида = `apply_url` (оригинал, этика «keep the original link»); `url` (карточка jobbie.bot) — только fallback, если apply_url пуст. Фид смешанный (tech + не-tech): пресет сужает tech-срез через `includeKeywords` (как README Jobbie).
+- Зарплаты — строка вида `$20 – $30/hr` (145/379): новое поле `salary` json-адаптера хранит опубликованную строку дословно в `rawSalary` (почасовые ставки < $100 числовой парсер диапазонов отбрасывал бы), `currency: USD` на лиде. Нормализация: hourly USD 20–30, не monthly RUB.
+- Фикстура: `test/fixtures/jobbie-internships.json` (6 строк: ashby/greenhouse/workday, hourly, fallback без apply_url). Тесты: `test/sources.test.ts` (оба фида, zero-network), `test/source-quality.test.ts` (период зарплаты).
+- robots: `api.jobbie.bot/robots.txt` → 401 (файла нет); фид публично приглашает к чтению. `raw.githubusercontent.com` — статический хост, ограничений нет.
