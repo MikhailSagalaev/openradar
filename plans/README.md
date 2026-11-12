@@ -1,0 +1,88 @@
+# Implementation Plans
+
+Two generations live here:
+
+- **001–006** — generated 2026-11-09 against `f02a024` (v0.41.2), research/salary quality. The checkout has since moved to `origin/main` `260a650` (v0.67.0); commit `e6f7855` ("Stop treating ad spend, partner names and adapter labels as the vacancy" + fixed-role weekly pay index) appears to cover 001–003 and 006. Their rows are marked NEEDS-RECHECK: verify against the live code before executing; do not re-fix what upstream already fixed.
+- **007–015** — generated 2026-11-11 against `260a650` (v0.67.0) after a four-auditor review (correctness, security, performance/architecture, tests/DX) with every finding re-verified against `origin/main`. Execute in the order below unless dependencies say otherwise. Each executor reads one plan fully, honors its STOP conditions, and updates its row when done.
+- **016–021** — generated 2026-11-11 against `260a650` (v0.67.0) from the @selflovefeels curation (`Job_Search_Resources main.pdf`, 78 platforms + 122 companies) and a deep read of competitor public repos. Every added source was probed live (job count > 0 / feed items > 0) and robots-checked; evidence in `.research/`. These are the "hundreds of sources" + architecture-borrowing track. License isolation is strict: OpenPostings (no LICENSE), JobOps (Commons Clause), recruiters.rip (BSL until 2030), Simplify listings (no LICENSE) → ideas only, no code. MIT donors: JobSpy, Dreamwork MCP + 13 job feeds, groundtruth board catalog (7 479 boards), Jobbie feed, Four-Leaf client.
+
+The live site `openradar.fun` may run a different build than this checkout. If a drift check shows identifiers absent from this tree (e.g. `ciLow`, `ciHigh`, `adjusted` in `/research/report.json`), stop and reconcile; do not delete them to match a plan.
+
+## Execution order and status
+
+| Plan | Title | Priority | Effort | Depends on | Status |
+|------|-------|----------|--------|------------|--------|
+| 001 | Stop ad spend and client budgets from becoming pay | P1 | M | — | NEEDS-RECHECK (likely covered by e6f7855) |
+| 002 | Stop English prose from becoming skills | P1 | S | — | NEEDS-RECHECK (likely covered by e6f7855) |
+| 003 | Stop adapter labels from marking English posts as Russian | P1 | S | — | NEEDS-RECHECK (likely covered by e6f7855) |
+| 004 | Stop publishing mixed-period and mislabeled research claims | P1 | M | — | NEEDS-RECHECK (verify against v0.67.0 research/) |
+| 005 | Make skill counts follow the active filters, and split budget steps | P2 | M | 002 | NEEDS-RECHECK |
+| 006 | Publish a composition-stable weekly pay index and label one-sided ranges | P2 | L | 004 | NEEDS-RECHECK (fixed-role index landed in e6f7855) |
+| 007 | Make the machine-readable docs tell agents the truth | P1 | S | — | TODO |
+| 008 | Close the small correctness holes (SimilarIndex, digest, title, vote race, dead code) | P1 | S | — | TODO |
+| 009 | Make outbox delivery exactly-once and align the two stores | P1 | M | 008 (same file) | TODO |
+| 010 | Close the five security gaps (extension hijack, author, logout, proxy trust, cookie Secure) | P1 | M | — | TODO |
+| 011 | Ship the job-hunt skill and a complete server.json | P1 | M | 007 | TODO |
+| 012 | Make hub events durable and drain in-flight work on shutdown | P1 | M | 009 | TODO |
+| 013 | Remove the hot-path performance bottlenecks | P2 | L | 008, 012 | TODO |
+| 014 | Add the verify toolchain and document the retention knob | P2 | S | — | TODO |
+| 015 | Add Firecrawl Alexandria as an opt-in international job source | P2 | M | — | TODO |
+| 016 | Expand source coverage from the @selflovefeels curation (verified adds) | P2 | M | — | TODO |
+| 017 | New source providers (Teamtailor, iCIMS) and curation Telegram channels | P3 | M | 016 | TODO |
+| 018 | Import the MIT groundtruth ATS board catalog (hundreds of companies) | P2 | L | 016 | TODO |
+| 019 | Ingest MIT job feeds (Dreamwork ×13, Jobbie) as sources | P2 | M | 016 | TODO |
+| 020 | Add verified CIS/EU RSS boards (Djinni, DOU, hh.kz, hh.ge, Zarplata, Jobindex, JSJobbs, Virtual Vocations) | P2 | S | — | TODO |
+| 021 | Borrow competitor architecture: explainable scoring, freshness, MCP safety-ladder, visa-sponsor enrichment | P3 | L | 008, 011 | TODO |
+
+Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale) | NEEDS-RECHECK (written against an older commit; verify before executing)
+
+## Dependency notes
+
+- 007 and 008 are independent S-fixes; run them first (007 unblocks 011's truthful tool names; 008 stabilizes SimilarIndex before 009/013 touch it).
+- 009 edits `updateLeadStatus`/delivery in `postgres.ts`; 008 edits `updateLeadScore` in the same file — run 008 first or rebase carefully.
+- 010 is independent of the correctness series (different files except `app.ts`; coordinate with 009's single emit line and 015's form branch — all touch `app.ts` in disjoint regions).
+- 012 needs 009's leases so the drain has something coherent to wait for; 012 also adds the first runner tests, which 013 relies on.
+- 013 is the L-effort perf series; each of its 5 steps is independently shippable — an executor may stop after any step and mark the plan IN PROGRESS with the completed steps listed.
+- 014 and 015 are independent; 015 can run in parallel on a separate branch (it only shares `app.ts`/`ui.ts` form regions with 010 — disjoint).
+- Recommended branch per plan: `advisor/NNN-<slug>`. Commit style matches the repo: `fix(similar): reset the cached loader promise when loading fails`. Do not push and do not open a PR unless the operator asks.
+- Migration numbering: 009 creates 039, 013 creates 040 — if both run, check `ls migrations/` and renumber the later one.
+- 016–020 are the source-expansion track (independent of the 007–015 correctness/security series except where noted). 016 is the entry point (verified company adds + the SmartRecruiters robots decision); 017/018/019 build on it. 020 is independent S-effort (pure RSS presets). 021 is the architecture-borrowing track and depends on 008 (scoring/dedup stability) and 011 (MCP surface). All source plans honor AGENTS.md §4 robots discipline; none may bypass logins/CAPTCHA/bot-checks.
+
+## What the 007–015 series fixes
+
+Agents breaking on first call because OpenAPI describes `/mcp` as GET and llms.txt names a nonexistent tool (007). A single DB blip permanently poisoning similar-text dedup; a failed digest silently eating its window; the title cleaner clipping the last letter before a glued metadata label; a vote erased by a concurrent rescore (008). Duplicate Telegram/webhook deliveries because the outbox row lock is a no-op, and memory/Postgres stores disagreeing on dedup and delivered_at (009). Any website hijacking the browser extension's stored account; author spoofing on web submits; cross-site force-logout; rate-limit bypass via a spoofable header; cookies without Secure behind a misconfigured proxy (010). No packaged agent workflow and a registry manifest that hides the self-hosted stdio package (011). Hub observations and rating points lost forever when ingestion fails after the event commit; SIGTERM killing in-flight deliveries (012). BigInt MinHash on the hottest path, per-lead N+1 rating recompute, serial dedup SELECTs, per-stream SSE polling, unindexed budget sort (013). No one-command local CI reproduction and an undocumented permanent-deletion knob (014). The international corporate vacancy coverage gap versus Firecrawl, closed opt-in with the operator's own key (015).
+
+## Findings considered and rejected
+
+- **Localhost CSRF allowance (security audit S6)**: already fixed upstream — `sameOrigin` (app.ts:485–519) only accepts loopback origins when the request's own Host is loopback. Do not "harden" it again.
+- **Telegram master-secret fallback**: removed upstream ("No built-in fallback key in any mode"); the local v0.41.2 finding is obsolete.
+- **Rescore offset clamp infinite loop**: fixed upstream via `createdBefore` keyset pagination; obsolete on v0.67.0.
+- **Hardcoded test dates (3 failing tests on v0.41.2)**: fixed upstream with relative dates; CI on main is green (82 files / 690 tests verified locally 2026-11-11).
+- **Phantom GET /api/leads/:id**: implemented upstream; only the llms.txt tool name remains wrong (007).
+- **NIP-98 empty-body payload check**: the auditor verified the payload tag is enforced whenever a body is present; not a finding.
+- **SSRF, session crypto, BIP-340/NIP-98 replay, SQL parameterization, HTML/RSS escaping, token hashing**: verified sound by the security audit — do not re-audit or refactor these in any plan.
+- **undici dual-major (own ^8 + 7.30.1 via cheerio)**: posture, not a vulnerability (pnpm audit --prod: 0 advisories). Deduping requires a cheerio bump — separate dependency work, not in this series.
+- **God-module splitting (ui.ts 4909 lines, app.ts ~2700, postgres.ts ~2700)**: real debt, but a refactor of that size needs its own plan series with characterization tests first; deferred. The v2.ts route-registration pattern is the exemplar when it happens.
+- **Alexandria "supply" direction (OpenRadar as a provider)**: marketplace submission work, not code; tracked separately from 015.
+- **Human gold set / useModel=false gate** (from the 001–006 generation): still not in this repo; the existing gate compares the model to regexes (`src/research/quality.ts`).
+
+## External input: competitor report + curation + repo deep-dive (2026-11-11)
+
+Three inputs were analyzed and folded into plans 016–021 (evidence in `.research/`, all live-probed and robots-checked):
+
+1. **Competitor report** (15-page PDF, "Firecrawl Job Tools и конкуренты…"): validates 007–015. Firecrawl's Nov-10 ChatGPT/Claude launch (~986k views, 12.4k saves > 5.6k likes in ~21h) confirms plugin/MCP as the channel; the Jobs catalog has no hh.ru/SuperJob/Avito/Telegram and JobLeads excludes Russia (RU moat intact); public credit prices (ATS 2–5/call, TheirStack 10/vacancy, Apollo match 15, FullEnrich email 30 / mobile 300, PDL 50–60) make 015's credit guards mandatory; Lever is NOT in the Jobs catalog.
+2. **Original curation** (`Job_Search_Resources main.pdf`, Aleksandra Magaramova, 12.03.2026, 6 pages = 78 platforms + 122 companies; extracted to `.research/job-search-resources-pdf.txt`). Cross-matched all 122 companies against our catalogs: **48 already covered**, **16 verified-new ATS companies (678 jobs)** → plan 016; Teamtailor/iCIMS/Workday examples → 017; 8 Telegram channels probed (2 worth adding, 2 already covered, 4 bots/dead/spam) → 017.
+3. **Repo deep-dive** (`.research/repos/findings.md`, 9 repos cloned + analyzed; `sources-inventory.json` = 169 endpoint records). License verdicts confirmed: OpenPostings NO LICENSE, JobOps AGPL+Commons Clause, recruiters.rip BSL→2030, Simplify listings NO LICENSE → ideas only. MIT donors: JobSpy, Dreamwork MCP + **13 daily job feeds**, **groundtruth catalog (7 479 boards, 6 761 new, 2 767 live Ashby ≈ 47 847 jobs)**, Jobbie feed (280 direct-link rows), Four-Leaf client.
+
+**The "hundreds of sources" answer** (all legal, robots-respecting):
+- Plan 018: import the MIT groundtruth catalog → ~2 767 live Ashby boards immediately + ~3 802 Greenhouse to verify (grows ~1 100 companies → several thousand).
+- Plan 016: +16 verified companies, +2 Workday sitemaps, +2 feeds.
+- Plan 017: Teamtailor/iCIMS providers + 2 Telegram channels.
+- Plan 019: Dreamwork ×13 + Jobbie MIT feeds (caveat: Dreamwork URLs are tracking redirects, not originals — documented).
+- Plan 020: +8 verified CIS/EU RSS boards (Djinni, DOU, hh.kz, hh.ge, Zarplata, Jobindex, JSJobbs, Virtual Vocations).
+
+**Architecture borrowing** → plan 021 (six independent sub-projects, clean-room, license-isolated): MCP safety-ladder (Dreamwork MIT), explainable scoring checks/gates/verdict (SuperImpress/pathpipe ideas), freshness/ghost-job detection (OpenPostings/groundtruth ideas), visa-sponsor enrichment (JobOps idea, gov open data), source-quality feedback + idempotent enrich (Firecrawl idea), public listing feed (Simplify/Jobbie pattern, our data).
+
+**Key discovered conflict**: `api.smartrecruiters.com/robots.txt` now allows only LinkedInBot, but our existing 9 SmartRecruiters presets (Wise 441, ServiceNow 788) still poll it (answers 200). Plan 016 records this as an operator decision; no SmartRecruiters company is added until resolved.
+
+Resolved follow-ups (were deferred, now done): the 8 Telegram channels evaluated (017); Hirify = competitor aggregator with /api/* robots-blocked, no feed (catalog.md); HireHi = live RU IT board, HTML-only, /api/ blocked (catalog.md, deferred to an HTML-source plan).
