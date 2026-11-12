@@ -112,3 +112,11 @@ SwissDevJobs добавляется планом 016 (чтобы не было �
 | iCIMS (careers-sargentlundy.icims.com) | HTML-листинг `/jobs/search?ss=1&in_iframe=1` | deferred | HTTP 200, 20 ссылок `/jobs/<id>/<slug>/job` — контракт рабочий, но нужен отдельный HTML-адаптер; отложен как непроверенный провайдер без подтверждённого спроса (одна компания из подборки) |
 
 Переходный RSS-пресет `tradingview-teamtailor` (план 016) удалён в этом же коммите — доска читается провайдером `ats-teamtailor`.
+
+## Firecrawl Alexandria — opt-in источник (2026-11-13)
+
+План: `plans/015-alexandria-source.md`. Контракт подтверждён живым смоуком 2026-11-11 (blitzapi/jobs/search: total_results 33737, 2 записи, 4 кредита).
+
+| Источник | Формат | Статус | Примечание |
+| --- | --- | --- | --- |
+| `alexandria-jobs` (api.firecrawl.dev/v2/scrape) | JSON API, Bearer | **indexed (opt-in)** | Выключен без `FIRECRAWL_API_KEY`; кредиты за запись (пустые ответы бесплатны); maxResults ≤ 100, интервал 1800 с; одна страница за опрос без cursor-пагинации; покрытие международное (RU-досок в каталоге Jobs нет) |

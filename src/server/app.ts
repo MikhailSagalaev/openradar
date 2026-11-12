@@ -553,6 +553,10 @@ function formValues(body: Record<string, unknown>): SourceFormValues {
     provider: formString(body, 'provider'),
     companies: formString(body, 'companies'),
     pattern: formString(body, 'pattern'),
+    titles: formString(body, 'titles'),
+    countries: formString(body, 'countries'),
+    lastDays: formString(body, 'lastDays'),
+    maxResults: formString(body, 'maxResults'),
     intervalSec: formString(body, 'intervalSec'),
     perPoll: formString(body, 'perPoll'),
     maxAgeDays: formString(body, 'maxAgeDays'),
@@ -595,6 +599,10 @@ function formValuesFromSource(source: SourceRecord): SourceFormValues {
     provider: text(config.provider),
     companies: text(config.companies),
     pattern: text(config.pattern),
+    titles: text(config.titles),
+    countries: text(config.countries),
+    lastDays: text(config.lastDays),
+    maxResults: text(config.maxResults),
     intervalSec: text(config.intervalSec),
     perPoll: text(config.perPoll),
     maxAgeDays: text(config.maxAgeDays),
@@ -606,7 +614,7 @@ function formValuesFromSource(source: SourceRecord): SourceFormValues {
 const FORM_CONFIG_KEYS = new Set([
   'share', 'city', 'includeKeywords', 'excludeKeywords', 'minBudget', 'limit', 'url', 'channel', 'chats', 'folder',
   'sessionEnv', 'categoryId', 'token', 'host', 'user', 'passwordEnv', 'port', 'mailbox', 'sinceDays', 'subjectIncludes',
-  'query', 'text', 'tag', 'area', 'category', 'provider', 'companies', 'pattern',
+  'query', 'text', 'tag', 'area', 'category', 'provider', 'companies', 'pattern', 'titles', 'countries', 'lastDays', 'maxResults',
 ]);
 
 function buildSourceConfig(
@@ -719,6 +727,24 @@ function buildSourceConfig(
     const what = formString(body, 'query').trim();
     if (what.length > 200) return { config, error: 'Поисковый запрос — не длиннее 200 символов.' };
     if (what) config.what = what;
+  }
+
+  if (kind === 'alexandria') {
+    const titles = parseList(formString(body, 'titles'));
+    if (titles.length) config.titles = titles;
+    const countries = parseList(formString(body, 'countries')).map((c) => c.toUpperCase());
+    if (countries.some((c) => !/^[A-Z]{2}$/.test(c))) return { config, error: 'Коды стран Alexandria — две буквы, например US или DE.' };
+    if (countries.length) config.countries = countries;
+    const lastDays = asNumber(formString(body, 'lastDays'));
+    if (lastDays !== undefined) {
+      if (isNaN(lastDays) || lastDays < 1) return { config, error: 'Свежесть Alexandria — от 1 до 90 дней.' };
+      config.lastDays = Math.min(Math.round(lastDays), 90);
+    }
+    const maxResults = asNumber(formString(body, 'maxResults'));
+    if (maxResults !== undefined) {
+      if (isNaN(maxResults) || maxResults < 1) return { config, error: 'Записей за опрос Alexandria — от 1 до 100 (кредиты).' };
+      config.maxResults = Math.min(Math.round(maxResults), 100);
+    }
   }
 
   if (kind === 'hh' || kind === 'trudvsem' || kind === 'remoteok') {

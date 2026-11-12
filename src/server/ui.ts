@@ -136,6 +136,14 @@ export interface SourceFormValues {
   maxAgeDays: string;
   /** Sitemap: regex that picks vacancy pages. */
   pattern: string;
+  /** Alexandria: job titles to include, comma-separated. */
+  titles: string;
+  /** Alexandria: ISO country codes, comma-separated. */
+  countries: string;
+  /** Alexandria: only postings of the last N days (1–90). */
+  lastDays: string;
+  /** Alexandria: records per poll (1–100, credit guard). */
+  maxResults: string;
   /** Send leads of this source to the hub. */
   share?: boolean;
 }
@@ -188,6 +196,7 @@ const KIND_LABELS: Record<string, string> = {
   hn: 'Hacker News — Who is hiring',
   ats: 'Карьерные страницы компаний',
   sitemap: 'Карта сайта (JobPosting)',
+  alexandria: 'Alexandria (Firecrawl)',
 };
 
 /**
@@ -197,6 +206,7 @@ const KIND_LABELS: Record<string, string> = {
 export const KIND_ACCESS: Record<string, AccessKind> = {
   rss: 'official',
   adzuna: 'official',
+  alexandria: 'auth-required',
   telegram: 'public',
   'telegram-account': 'user-provided',
   kwork: 'public',
@@ -269,10 +279,11 @@ const KIND_HINTS: Record<string, string> = {
   hn: 'Ежемесячный тред «Who is hiring?»',
   ats: 'Компании на Greenhouse, Lever, Ashby, Workable, Recruitee или SmartRecruiters',
   sitemap: 'Страницы вакансий с разметкой JobPosting',
+  alexandria: 'Международные вакансии BlitzAPI через Firecrawl; нужен свой ключ, кредиты за запись',
 };
 const KIND_GROUPS: Array<{ title: string; kinds: string[] }> = [
   { title: 'Ленты и каналы', kinds: ['rss', 'telegram', 'telegram-account', 'imap', 'webhook'] },
-  { title: 'Биржи и сайты вакансий', kinds: ['kwork', 'hh', 'trudvsem', 'remoteok', 'remotive', 'workingnomads', 'arbeitnow', 'hn'] },
+  { title: 'Биржи и сайты вакансий', kinds: ['kwork', 'hh', 'trudvsem', 'remoteok', 'remotive', 'workingnomads', 'arbeitnow', 'hn', 'alexandria'] },
   { title: 'Сайты компаний', kinds: ['ats', 'sitemap'] },
 ];
 
@@ -3944,6 +3955,19 @@ ${error ? `<div class="error-box" style="margin-bottom:16px">${escapeHtml(error)
   <div data-kind="sitemap">
     ${textField('url', 'Адрес карты сайта', values.url, 'https://example.com/sitemap.xml', 'url', 'sitemap.xml площадки; вложенные карты читаются тоже.')}
     ${textField('pattern', 'Шаблон страниц вакансий', values.pattern, '/vacancies/(\\d+)', 'text', 'Регулярное выражение для адресов вакансий; группа в скобках — номер вакансии. Новые страницы читаются с паузой, разметка JobPosting даёт зарплату и компанию.')}
+  </div>
+
+  <div data-kind="alexandria">
+    <fieldset>
+      <legend>Alexandria (Firecrawl)</legend>
+      <p class="hint">Международные вакансии BlitzAPI через официальный API Firecrawl. Ключ FIRECRAWL_API_KEY задаётся в переменных окружения узла (не здесь); кредиты Firecrawl списываются за запись, пустые ответы бесплатны. Ключ получить на firecrawl.dev.</p>
+      ${textField('titles', 'Должности', values.titles, 'Product Manager, Data Scientist', 'text', 'Через запятую. Пусто — все должности.')}
+      ${textField('countries', 'Страны', values.countries, 'US, GB, DE', 'text', 'ISO-коды через запятую. Пусто — все страны.')}
+      <div class="grid">
+        ${textField('lastDays', 'Свежесть, дней', values.lastDays || '30', '30', 'number', 'От 1 до 90.')}
+        ${textField('maxResults', 'Записей за опрос', values.maxResults || '20', '20', 'number', 'От 1 до 100: каждая запись тратит кредиты.')}
+      </div>
+    </fieldset>
   </div>
 
   <div data-kind="webhook">

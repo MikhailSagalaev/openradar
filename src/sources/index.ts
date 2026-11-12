@@ -4,6 +4,7 @@ import { sitemapSource } from './sitemap.ts';
 import { jsonBoardSource } from './json-board.ts';
 import { hhSource } from './hh.ts';
 import { adzunaSource } from './adzuna.ts';
+import { alexandriaSource } from './alexandria.ts';
 import { hnSource } from './hn.ts';
 import { imapSource } from './imap.ts';
 import { kworkSource } from './kwork.ts';
@@ -51,6 +52,7 @@ export function createSourceRegistry(): SourceRegistry {
     .register(arbeitnowSource)
     .register(hnSource)
     .register(adzunaSource)
+    .register(alexandriaSource)
     .register(atsSource)
     .register(sitemapSource);
 }

@@ -133,6 +133,152 @@ describe('source adapters', () => {
     expect(adapter?.access).toBe('user-provided');
   });
 
+  describe('Alexandria (Firecrawl) adapter', () => {
+    const adapter = registry.get('alexandria')!;
+    // The verified live smoke shape (2026-11-11, blitzapi/jobs/search), inlined: no network.
+    const smoke = {
+      success: true,
+      data: {
+        alexandria: [{
+          provider: 'blitzapi',
+          capability: 'jobs/search',
+          creditsCost: 4,
+          data: {
+            total_results: 33737,
+            results: [
+              {
+                date_posted: '2026-11-11 11:34:25.004+01',
+                title: 'Finance Manager - Product Costing',
+                url: 'https://pl.linkedin.com/jobs/view/1234567890',
+                company_name: 'ABB',
+                ai_summary: 'Own and govern global product costing.',
+                location: { city: null, country_code: 'PL' },
+              },
+              {
+                date_posted: '2026-11-10 09:00:00.000+00',
+                title: 'Senior Product Manager (Remote)',
+                url: 'https://example.com/jobs/2',
+                company_name: 'Acme',
+                ai_summary: 'Lead the roadmap. Work from home anywhere in the EU.',
+                location: { city: 'Berlin', country_code: 'DE' },
+              },
+            ],
+            results_length: 2,
+            cursor: 'next-page',
+          },
+        }],
+        creditsCost: 4,
+      },
+    };
+
+    function alexandriaCtx(body: unknown, status = 200) {
+      const requests: Array<{ url: string; init?: RequestInit }> = [];
+      const ctx: PollContext = {
+        ...pollContext(''),
+        fetchImpl: (async (input: RequestInfo | URL, init?: RequestInit) => {
+          requests.push({ url: String(input), init });
+          return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+        }) as typeof fetch,
+      };
+      return { ctx, requests };
+    }
+
+    it('fails fast without FIRECRAWL_API_KEY', async () => {
+      const saved = process.env.FIRECRAWL_API_KEY;
+      delete process.env.FIRECRAWL_API_KEY;
+      try {
+        await expect(adapter.poll!(makeSource({ kind: 'alexandria' }), pollContext(''))).rejects.toThrow(/FIRECRAWL_API_KEY/);
+      } finally {
+        if (saved !== undefined) process.env.FIRECRAWL_API_KEY = saved;
+      }
+    });
+
+    it('maps the verified smoke response and sends the documented request', async () => {
+      process.env.FIRECRAWL_API_KEY = 'fc-test-key';
+      try {
+        const { ctx, requests } = alexandriaCtx(smoke);
+        const leads = await adapter.poll!(makeSource({ kind: 'alexandria', config: { titles: ['Product Manager'], countries: ['pl', 'de'] } }), ctx);
+        expect(requests).toHaveLength(1);
+        expect(requests[0]!.url).toBe('https://api.firecrawl.dev/v2/scrape');
+        expect((requests[0]!.init!.headers as Record<string, string>).Authorization).toBe('Bearer fc-test-key');
+        const body = JSON.parse(String(requests[0]!.init!.body));
+        expect(body.alexandria.provider).toBe('blitzapi');
+        expect(body.alexandria.capability).toBe('jobs/search');
+        expect(body.alexandria.options.job.date_posted.last_days).toBe(30);
+        expect(body.alexandria.options.job.title.include).toEqual(['Product Manager']);
+        expect(body.alexandria.options.job.location.country_code.include).toEqual(['PL', 'DE']);
+        expect(leads).toHaveLength(2);
+        const first = leads[0]!;
+        expect(first).toMatchObject({ type: 'job', title: 'Finance Manager - Product Costing', author: 'ABB', url: 'https://pl.linkedin.com/jobs/view/1234567890' });
+        expect(first.externalId).toBe('alexandria:https://pl.linkedin.com/jobs/view/1234567890');
+        expect(first.city).toBeUndefined();
+        expect(first.publishedAt).toBe('2026-11-11T10:34:25.004Z');
+        expect(first.text).toContain('Location: PL');
+        const remote = leads[1]!;
+        expect(remote.isRemote).toBe(true);
+        expect(remote.city).toBe('Онлайн');
+      } finally {
+        delete process.env.FIRECRAWL_API_KEY;
+      }
+    });
+
+    it('returns an empty list for an empty (free) page', async () => {
+      process.env.FIRECRAWL_API_KEY = 'fc-test-key';
+      try {
+        const empty = { success: true, data: { alexandria: [{ provider: 'blitzapi', capability: 'jobs/search', creditsCost: 0, data: { total_results: 0, results: [] } }] } };
+        const { ctx } = alexandriaCtx(empty);
+        expect(await adapter.poll!(makeSource({ kind: 'alexandria' }), ctx)).toEqual([]);
+      } finally {
+        delete process.env.FIRECRAWL_API_KEY;
+      }
+    });
+
+    it('surfaces an HTTP error to source health', async () => {
+      process.env.FIRECRAWL_API_KEY = 'fc-test-key';
+      try {
+        const { ctx } = alexandriaCtx({ success: false }, 402);
+        await expect(adapter.poll!(makeSource({ kind: 'alexandria' }), ctx)).rejects.toThrow('Alexandria: HTTP 402');
+      } finally {
+        delete process.env.FIRECRAWL_API_KEY;
+      }
+    });
+
+    it('clamps maxResults to 100 and lastDays to 1 (credit guard)', async () => {
+      process.env.FIRECRAWL_API_KEY = 'fc-test-key';
+      try {
+        const { ctx, requests } = alexandriaCtx(smoke);
+        await adapter.poll!(makeSource({ kind: 'alexandria', config: { maxResults: 5000, lastDays: 0 } }), ctx);
+        const body = JSON.parse(String(requests[0]!.init!.body));
+        expect(body.alexandria.options.max_results).toBe(100);
+        expect(body.alexandria.options.job.date_posted.last_days).toBe(1);
+      } finally {
+        delete process.env.FIRECRAWL_API_KEY;
+      }
+    });
+
+    it('maps malformed records defensively', async () => {
+      process.env.FIRECRAWL_API_KEY = 'fc-test-key';
+      try {
+        const odd = {
+          success: true,
+          data: { alexandria: [{ provider: 'blitzapi', capability: 'jobs/search', data: { results: [
+            { title: 'Odd job', date_posted: 'not a date', location: { city: null } },
+            { url: 'https://example.com/jobs/no-title' },
+            { title: '   ' },
+          ] } }] },
+        };
+        const { ctx } = alexandriaCtx(odd);
+        const leads = await adapter.poll!(makeSource({ kind: 'alexandria' }), ctx);
+        expect(leads).toHaveLength(2);
+        expect(leads[0]!.publishedAt).toBeUndefined();
+        expect(leads[0]!.externalId).toMatch(/^alexandria:[0-9a-f]{24}$/);
+        expect(leads[1]!.url).toBe('https://example.com/jobs/no-title');
+      } finally {
+        delete process.env.FIRECRAWL_API_KEY;
+      }
+    });
+  });
+
   it('blocks private, loopback, and metadata IPs via SSRF protection', async () => {
     const { isPrivateOrBlockedIp, assertSafeUrl } = await import('../src/core/ssrf.ts');
 

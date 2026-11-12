@@ -755,6 +755,16 @@ const BASE_PRESETS: SourcePreset[] = [
       limit: 50,
     },
   },
+  {
+    id: 'alexandria-jobs',
+    kind: 'alexandria',
+    title: 'Alexandria — Международные вакансии (BlitzAPI)',
+    description: 'Официальный API Firecrawl Alexandria: международные корпоративные вакансии BlitzAPI (~33k живых). Требует FIRECRAWL_API_KEY в переменных окружения; кредиты Firecrawl списываются за запись, пустые ответы бесплатны.',
+    config: {
+      lastDays: 30,
+      maxResults: 20,
+    },
+  },
   // --- RU-батч 1 (2026-11-04): hh по ролям через RSS (API за WAF), нишевые RSS, публичные TG-каналы ---
   {
     id: 'hh-product',
