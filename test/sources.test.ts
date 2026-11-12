@@ -314,3 +314,77 @@ describe('source adapters', () => {
     );
   });
 });
+
+describe('MIT job feeds (Dreamwork, Jobbie)', () => {
+  const registry = createSourceRegistry();
+  const json = registry.get('json')!;
+  // The fixtures were cut from the live feeds on 2026-11-12/13.
+  const now = new Date('2026-11-13T00:00:00.000Z');
+
+  it('reads the Dreamwork feed: annual USD pay, remote flag, tracking-card url kept honestly', async () => {
+    const { SOURCE_PRESETS } = await import('../src/sources/presets.ts');
+    const preset = SOURCE_PRESETS.find((p) => p.id === 'dreamwork-remote-tech')!;
+    expect(preset).toBeTruthy();
+    // The description must keep saying the link is a Dreamwork card, not the employer original.
+    expect(preset.description).toContain('карточку Dreamwork');
+    const source = makeSource({ kind: 'json', title: preset.title, config: preset.config });
+    const leads = await json.poll!(source, pollContext(fixture('dreamwork-listings.json'), now));
+    expect(leads.length).toBe(5);
+
+    const first = leads.find((l) => l.title.startsWith('Senior Data Engineer'))!;
+    expect(first.externalId).toMatch(/^json:raw\.githubusercontent\.com:[0-9a-f-]{36}$/);
+    expect(first.url).toMatch(/^https:\/\/www\.dreamworkhq\.com\/job\//);
+    expect(first.isRemote).toBe(true);
+    expect(first.city).toBe('Онлайн');
+    expect(first.rawSalary).toBe('121980–130525 USD per year');
+    expect(first.text).toContain('Firstam');
+    expect(first.publishedAt).toBeTruthy();
+
+    // Annual pay must survive normalization as yearly, never as monthly RUB.
+    const { prepareRawLead } = await import('../src/core/prepare.ts');
+    const prepared = prepareRawLead(first, source, now);
+    expect(prepared.rawSalary).toContain('per year');
+    expect(prepared.currency).toBe('USD');
+    expect(prepared.normalizedUsdMax).toBeGreaterThan(9_000);
+    expect(prepared.normalizedUsdMax).toBeLessThan(12_000);
+
+    // Rows without a stated salary carry none — no invented pay.
+    const noPay = leads.find((l) => l.title === 'Software Test Engineer')!;
+    expect(noPay.rawSalary).toBeUndefined();
+  });
+
+  it('reads the Jobbie feed: employer-original links, hourly pay, fallback to the Jobbie card', async () => {
+    const { SOURCE_PRESETS } = await import('../src/sources/presets.ts');
+    const preset = SOURCE_PRESETS.find((p) => p.id === 'jobbie-internships')!;
+    expect(preset).toBeTruthy();
+    const source = makeSource({ kind: 'json', title: preset.title, config: preset.config });
+    const leads = await json.poll!(source, pollContext(fixture('jobbie-internships.json'), now));
+    expect(leads.length).toBe(6);
+
+    const shield = leads.find((l) => l.title.startsWith('June 2027 Co-Op'))!;
+    expect(shield.url).toBe('https://jobs.ashbyhq.com/shield/a28e047a-ee12-452c-883b-ecd995d1b6b2');
+    expect(shield.externalId).toBe('json:api.jobbie.bot:dc9f3802-0a9e-79db-9aa1-5f0c11958f10');
+    expect(shield.text).toContain('Shield');
+    expect(shield.publishedAt).toBe('2026-11-12T22:16:48Z');
+
+    // A missing apply_url falls back to the Jobbie card (empty template → empty url, dropped by prepare).
+    const fallback = leads.find((l) => l.title === 'Fallback Intern')!;
+    expect(fallback.url).toBe('');
+
+    // The hourly rate stays hourly through normalization, in USD.
+    const hourly = leads.find((l) => l.title === 'Intern Electrical Engineering Designer')!;
+    expect(hourly.text).toContain('$20 – $30/hr');
+    const { prepareRawLead } = await import('../src/core/prepare.ts');
+    const prepared = prepareRawLead(hourly, source, now);
+    expect(prepared.paymentPeriod).toBe('hourly');
+    expect(prepared.currency).toBe('USD');
+    expect(prepared.normalizedUsdMin).toBe(20);
+    expect(prepared.normalizedUsdMax).toBe(30);
+
+    // The tech filter keeps engineering rows and drops a plainly non-tech title.
+    const { applyRules } = await import('../src/core/rules.ts');
+    const marketing = prepareRawLead({ ...shield, title: 'Social Media Marketing Intern', text: 'Social Media Marketing Intern\n\nBrand' }, source, now);
+    expect(applyRules(marketing, source, now).accepted).toBe(false);
+    expect(applyRules(prepareRawLead(shield, source, now), source, now).accepted).toBe(true);
+  });
+});

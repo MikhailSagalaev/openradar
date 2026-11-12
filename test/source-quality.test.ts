@@ -66,6 +66,15 @@ describe('json boards', () => {
     expect(leadFromItem(source, config, { ...item, modes: [{ title: 'Удаленно' }] }, 'x.test')).toMatchObject({ city: 'Онлайн', isRemote: true });
   });
 
+  it('names the pay period the board states instead of calling everything monthly', () => {
+    const annual = leadFromItem(source, { ...config, salaryMax: 'max', salaryPeriod: 'period', currency: 'USD' }, { ...item, min: 121980, max: 130525, period: 'annual' }, 'x.test');
+    expect(annual?.rawSalary).toBe('121980–130525 USD per year');
+    const hourly = leadFromItem(source, { ...config, salaryPeriod: 'period', currency: 'USD' }, { ...item, min: 25, period: 'hour' }, 'x.test');
+    expect(hourly?.rawSalary).toBe('от 25 USD per hour');
+    // Without a period field the board keeps the monthly wording Russian sites publish.
+    expect(leadFromItem(source, config, item, 'x.test')?.rawSalary).toContain('в месяц');
+  });
+
   it('polls the list, goes on through pages and reads no old posts', async () => {
     const asked: string[] = [];
     const ctx = {
