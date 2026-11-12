@@ -107,6 +107,7 @@
 | Telegram — @stagirovky: стажировки | telegram | public | да | `https://t.me/s/stagirovky` | разрешено — robots.txt: HTTP 404 |
 | Telegram — @startup_job_russia: стартапы | telegram | public | да | `https://t.me/s/startup_job_russia` | разрешено — robots.txt: HTTP 404 |
 | Telegram — @vacancysmm: SMM и маркетинг | telegram | public | да | `https://t.me/s/vacancysmm` | разрешено — robots.txt: HTTP 404 |
+| Telegram — @ai_machinelearning_big_data: AI/ML и Big Data | telegram | public | да | `https://t.me/s/ai_machinelearning_big_data` | разрешено — robots.txt: HTTP 404 (проверено 2026-11-13: 20 постов) |
 | Djinni — IT-вакансии Украины | rss | official | да | `https://djinni.co/jobs/rss/` | разрешено (проверено 2026-11-13: запрещены `/jobs2`, `/q`, `/developers`, `/free-jobs`, `/set_lang` — фид не покрыт) |
 | DOU Jobs — IT-вакансии Украины | rss | official | да | `https://jobs.dou.ua/vacancies/feeds/` | разрешено (проверено 2026-11-13: запрещён `/vacancies/*search=*` — фид без query не покрыт) |
 | HeadHunter Казахстан — Все вакансии | rss | official | да | `https://hh.kz/search/vacancy/rss` | разрешено (проверено 2026-11-13: `Disallow: /rss/*` не покрывает `/search/vacancy/rss`; правила `*?*` нет — в отличие от hh.ru) |
@@ -116,7 +117,7 @@
 | JSJobbs — JavaScript-вакансии | rss | official | да | `https://jsjobbs.com/rss` | разрешено (проверено 2026-11-13: пустой `Disallow:`) |
 | Virtual Vocations — Удалённые вакансии США | rss | official | да | `https://www.virtualvocations.com/rss` | разрешено (проверено 2026-11-13: запрещены `/jobs/*/c-*` и `/advanced_search/index/` — фид не покрыт) |
 | SwissDevJobs — IT-вакансии Швейцарии | rss | official | да | `https://swissdevjobs.ch/rss` | разрешено (проверено 2026-11-13: запрещены `/*.txt$`, `/wp-content/`, служебные пути — `/rss` не покрыт) |
-| TradingView — Вакансии (Teamtailor) | rss | official | да | `https://tradingview.teamtailor.com/jobs.rss` | разрешено (проверено 2026-11-13: запрещены `/app/`, `/messages/`, `/messenger/`, `/jobs/internal/`; `Content-Signal: search=yes`) |
+| TradingView — Вакансии (Teamtailor) | ats | official | да | `https://tradingview.teamtailor.com/jobs.json` | разрешено (проверено 2026-11-13: запрещены `/app/`, `/messages/`, `/messenger/`, `/jobs/internal/`; `Content-Signal: search=yes`; переходный RSS-пресет заменён провайдером ats-teamtailor) |
 | Abbott — Вакансии (Workday) | sitemap | public | да | `https://abbott.wd5.myworkdayjobs.com/abbottcareers/siteMap.xml` | разрешено (проверено 2026-11-13: `Allow: /abbottcareers/`, sitemap объявлен в robots) |
 | Elevance Health — Вакансии (Workday) | sitemap | public | да | `https://elevancehealth.wd1.myworkdayjobs.com/ANT/siteMap.xml` | разрешено (проверено 2026-11-13: `Allow: /ANT/`, sitemap объявлен в robots) |
 | ATS — SmartRecruiters API (существующие 9 компаний) | ats | official | да | `https://api.smartrecruiters.com/v1/companies/{slug}/postings` | **запрещено для RadarBot** (проверено 2026-11-13: `User-agent: LinkedInBot / Allow: /v1/companies/`, `User-agent: * / Disallow: /`) |

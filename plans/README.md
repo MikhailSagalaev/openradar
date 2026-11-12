@@ -28,7 +28,7 @@ The live site `openradar.fun` may run a different build than this checkout. If a
 | 014 | Add the verify toolchain and document the retention knob | P2 | S | — | TODO |
 | 015 | Add Firecrawl Alexandria as an opt-in international job source | P2 | M | — | TODO |
 | 016 | Expand source coverage from the @selflovefeels curation (verified adds) | P2 | M | — | DONE — 16 ATS companies re-verified live 2026-11-13 (Brevo back at 27 jobs), Abbott+Elevance Workday sitemaps (JSON-LD confirmed), SwissDevJobs+TradingView rss presets; SmartRecruiters robots conflict recorded (list frozen, operator decision); rejected/dead/redirected addresses journaled; 711 tests green |
-| 017 | New source providers (Teamtailor, iCIMS) and curation Telegram channels | P3 | M | 016 | TODO |
+| 017 | New source providers (Teamtailor, iCIMS) and curation Telegram channels | P3 | M | 016 | DONE (partial by design) — teamtailor provider live (JSON Feed + `_jobposting`, fixture+test, TradingView 29 jobs; transitional rss preset removed); tg-ai-ml-bigdata added (20 posts); @it_jobsfeed dead (retired); iCIMS contract verified (20 job links) but adapter deferred — single company, no confirmed demand; 712 tests green |
 | 018 | Import the MIT groundtruth ATS board catalog (hundreds of companies) | P2 | L | 016 | TODO |
 | 019 | Ingest MIT job feeds (Dreamwork ×13, Jobbie) as sources | P2 | M | 016 | TODO |
 | 020 | Add verified CIS/EU RSS boards (Djinni, DOU, hh.kz, hh.ge, Zarplata, Jobindex, JSJobbs, Virtual Vocations) | P2 | S | — | DONE — 8 presets live-verified 2026-11-13 (items 20–100 each), robots read for all (hh-family `/rss/*` does not cover `/search/vacancy/rss`); robots rows + indexing log; 711 tests green. SwissDevJobs left to 016 |

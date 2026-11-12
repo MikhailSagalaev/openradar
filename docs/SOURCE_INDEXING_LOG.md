@@ -85,7 +85,7 @@ SwissDevJobs добавляется планом 016 (чтобы не было �
 | `career-abbott` (Workday sitemap) | sitemap + JSON-LD | **indexed** | 99 job-URL, страница вакансии отдаёт JSON-LD JobPosting; robots `Allow: /abbottcareers/` |
 | `career-elevance` (Workday sitemap) | sitemap + JSON-LD | **indexed** | 278 job-URL; robots `Allow: /ANT/` |
 | `swissdevjobs` | RSS 2.0 | **indexed** | 42 items |
-| `tradingview-teamtailor` | RSS 2.0 (Teamtailor) | **indexed** | 30 items; переходный пресет до появления провайдера teamtailor (план 017) |
+| `ats-teamtailor` (tradingview) | JSON Feed + JobPosting | **indexed** | 29 items (2026-11-13); новый провайдер teamtailor заменил переходный RSS-пресет `tradingview-teamtailor` из плана 016, чтобы не задваивать доску |
 
 ### SmartRecruiters — конфликт robots (ждёт решения оператора)
 
@@ -99,3 +99,16 @@ SwissDevJobs добавляется планом 016 (чтобы не было �
 - **403/бот-защита (не обходим)**: revolut.com, klarna.com (202), paypal.com, usa.visa.com, epam.com, griddynamics.com (202), transunion.com, centene.com, startup.jobs, wantapply.com.
 - **200, но публичного ATS-сигнала нет (нужен отдельный разбор или браузерный сборщик)**: Bolt, Postman, Doist (todoist.com/careers), Automattic, eToro, DataRobot, Gero, Nexters, Acronis, CGI, MixRank, Wander, Function Health, Zammad, Siemens, Medtronic, Boston Scientific, Verizon (mycareer.verizon.com), Lockheed Martin, U.S. Bank (careers.usbank.com), Cox Enterprises, BELAY, Transcom, Sargent & Lundy (iCIMS — план 017), NBCUniversal, Stride (Workday strideinc/wd1/SK — кандидат на будущую волну), Elevance (добавлен), Abbott (добавлен).
 - **Пустые/ложные борды**: SmartRecruiters-слаги большинства корпораций из подборки существуют, но totalFound=0 (PayPal, Visa, Siemens и др. читаются через Workday/собственные системы) — не добавлять.
+
+## Новые провайдеры и Telegram из подборки (2026-11-13)
+
+План: `plans/017-new-providers.md`.
+
+| Источник | Формат | Статус | Замер 2026-11-13 |
+| --- | --- | --- | --- |
+| Провайдер `teamtailor` (ATS) | JSON Feed (`/jobs.json`) + `_jobposting` schema.org | **indexed** | TradingView: 29 items; фикстура `test/fixtures/ats-teamtailor.json`; тест в `test/sources/ats.test.ts` |
+| `tg-ai-ml-bigdata` (@ai_machinelearning_big_data) | Telegram web | **indexed** | HTTP 200, 20 постов; канал Machinelearning (AI/ML/Big Data) |
+| @it_jobsfeed | Telegram web | etired | HTTP 200, но 0 постов и страница «Contact @…» — канала фактически нет |
+| iCIMS (careers-sargentlundy.icims.com) | HTML-листинг `/jobs/search?ss=1&in_iframe=1` | deferred | HTTP 200, 20 ссылок `/jobs/<id>/<slug>/job` — контракт рабочий, но нужен отдельный HTML-адаптер; отложен как непроверенный провайдер без подтверждённого спроса (одна компания из подборки) |
+
+Переходный RSS-пресет `tradingview-teamtailor` (план 016) удалён в этом же коммите — доска читается провайдером `ats-teamtailor`.

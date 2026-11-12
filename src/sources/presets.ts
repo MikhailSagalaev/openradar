@@ -671,6 +671,18 @@ const BASE_PRESETS: SourcePreset[] = [
     },
   },
   {
+    id: 'ats-teamtailor',
+    kind: 'ats',
+    title: 'Карьерные страницы компаний — Teamtailor',
+    description: 'Публичный JSON-фид вакансий компаний на платформе Teamtailor (JSON Feed + schema.org JobPosting), без ключа.',
+    config: {
+      provider: 'teamtailor',
+      perPoll: 3,
+      maxAgeDays: 30,
+      companies: ['tradingview=TradingView'],
+    },
+  },
+  {
     id: 'vuejobs',
     kind: 'rss',
     title: 'VueJobs — Вакансии Vue.js и Frontend',
@@ -943,6 +955,15 @@ const BASE_PRESETS: SourcePreset[] = [
     },
   },
   {
+    id: 'tg-ai-ml-bigdata',
+    kind: 'telegram',
+    title: 'Telegram — @ai_machinelearning_big_data: AI/ML и Big Data',
+    description: 'Публичный TG-канал Machinelearning: вакансии и новости AI, ML и Big Data',
+    config: {
+      channel: 'ai_machinelearning_big_data',
+    },
+  },
+  {
     id: 'djinni',
     kind: 'rss',
     title: 'Djinni — IT-вакансии Украины',
@@ -1021,16 +1042,6 @@ const BASE_PRESETS: SourcePreset[] = [
     description: 'Официальный RSS-фид IT-вакансий Швейцарии: высокие зарплаты, прозрачные вилки (swissdevjobs.ch)',
     config: {
       url: 'https://swissdevjobs.ch/rss',
-    },
-  },
-  {
-    id: 'tradingview-teamtailor',
-    kind: 'rss',
-    title: 'TradingView — Вакансии',
-    description: 'RSS карьерной доски TradingView на Teamtailor: международная финтех-платформа, удалённые и офисные роли',
-    config: {
-      url: 'https://tradingview.teamtailor.com/jobs.rss',
-      company: 'TradingView',
     },
   },
   ...CAREER_SITE_PRESETS,

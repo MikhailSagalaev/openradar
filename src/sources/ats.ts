@@ -8,11 +8,11 @@ import { fetchText } from './http.ts';
  * to read, without a key. One source holds a list of companies of one system; each poll
  * reads a few of them in turn.
  */
-export type AtsProvider = 'greenhouse' | 'lever' | 'ashby' | 'workable' | 'recruitee' | 'smartrecruiters' | 'pinpoint' | 'bamboohr' | 'personio';
+export type AtsProvider = 'greenhouse' | 'lever' | 'ashby' | 'workable' | 'recruitee' | 'smartrecruiters' | 'pinpoint' | 'bamboohr' | 'personio' | 'teamtailor';
 
-export const ATS_PROVIDERS: AtsProvider[] = ['greenhouse', 'lever', 'ashby', 'workable', 'recruitee', 'smartrecruiters', 'pinpoint', 'bamboohr', 'personio'];
+export const ATS_PROVIDERS: AtsProvider[] = ['greenhouse', 'lever', 'ashby', 'workable', 'recruitee', 'smartrecruiters', 'pinpoint', 'bamboohr', 'personio', 'teamtailor'];
 export const ATS_LABELS: Record<AtsProvider, string> = {
-  greenhouse: 'Greenhouse', lever: 'Lever', ashby: 'Ashby', workable: 'Workable', recruitee: 'Recruitee', smartrecruiters: 'SmartRecruiters', pinpoint: 'Pinpoint', bamboohr: 'BambooHR', personio: 'Personio',
+  greenhouse: 'Greenhouse', lever: 'Lever', ashby: 'Ashby', workable: 'Workable', recruitee: 'Recruitee', smartrecruiters: 'SmartRecruiters', pinpoint: 'Pinpoint', bamboohr: 'BambooHR', personio: 'Personio', teamtailor: 'Teamtailor',
 };
 const PROVIDERS = ATS_PROVIDERS;
 const MAX_TEXT = 8000;
@@ -449,6 +449,48 @@ function fromPersonio(source: SourceRecord, slug: string, name: string | undefin
     .filter((item): item is RawLead => item !== undefined);
 }
 
+/** Teamtailor serves a JSON Feed (jsonfeed.org): items with a schema.org JobPosting inside. */
+interface TeamtailorItem {
+  id?: string;
+  title?: string;
+  url?: string;
+  date_published?: string;
+  content_html?: string;
+  _jobposting?: {
+    datePosted?: string;
+    employmentType?: string | string[];
+    hiringOrganization?: { name?: string };
+    jobLocation?: Array<{ address?: { addressLocality?: string; addressCountry?: string } }> | { address?: { addressLocality?: string; addressCountry?: string } };
+  };
+}
+
+function fromTeamtailor(source: SourceRecord, slug: string, name: string | undefined, json: string): RawLead[] {
+  const items = (JSON.parse(json) as { items?: TeamtailorItem[] }).items ?? [];
+  return items.filter((it) => it.id && it.title?.trim() && it.url).map((it) => {
+    const title = it.title!.trim();
+    const posting = it._jobposting ?? {};
+    const company = name ?? posting.hiringOrganization?.name?.trim() ?? slug;
+    const places = Array.isArray(posting.jobLocation) ? posting.jobLocation : posting.jobLocation ? [posting.jobLocation] : [];
+    const location = places.map((p) => [p.address?.addressLocality, p.address?.addressCountry].filter(Boolean).join(', ')).filter(Boolean).join('; ');
+    const remote = REMOTE.test(`${title} ${location}`);
+    const body = stripHtml(decodeHtmlEntities(it.content_html ?? '')).trim();
+    const employment = Array.isArray(posting.employmentType) ? posting.employmentType.join(', ') : posting.employmentType;
+    return {
+      sourceId: source.id,
+      type: 'job',
+      externalId: `teamtailor:${slug}:${it.id}`,
+      url: it.url,
+      title,
+      text: text(title, [`Company: ${company}`, location && `Location: ${location}`, employment && `Type: ${employment}`], body),
+      author: company,
+      city: cityFor(location, company, remote),
+      isRemote: remote,
+      publishedAt: posting.datePosted ?? it.date_published,
+      raw: { ats: 'teamtailor', board: slug },
+    } satisfies RawLead;
+  });
+}
+
 const ENDPOINTS: Record<AtsProvider, (slug: string) => string> = {
   greenhouse: (slug) => `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(slug)}/jobs?content=true`,
   lever: (slug) => `https://api.lever.co/v0/postings/${encodeURIComponent(slug)}?mode=json`,
@@ -460,6 +502,7 @@ const ENDPOINTS: Record<AtsProvider, (slug: string) => string> = {
   pinpoint: (slug) => `https://${encodeURIComponent(slug)}.pinpointhq.com/postings.json`,
   bamboohr: (slug) => `https://${encodeURIComponent(slug)}.bamboohr.com/careers/list`,
   personio: (slug) => `https://${encodeURIComponent(slug)}.jobs.personio.de/xml?language=en`,
+  teamtailor: (slug) => `https://${encodeURIComponent(slug)}.teamtailor.com/jobs.json`,
 };
 
 /**
@@ -497,6 +540,7 @@ const PARSERS: Record<AtsProvider, (source: SourceRecord, slug: string, name: st
   pinpoint: fromPinpoint,
   bamboohr: fromBambooHr,
   personio: fromPersonio,
+  teamtailor: fromTeamtailor,
 };
 
 export const atsSource: SourceAdapter = {
