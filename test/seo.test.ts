@@ -125,6 +125,15 @@ describe('SEO catalog pages', () => {
     expect(llms).not.toContain('/sources/catalog');
   });
 
+  it('names every real MCP tool in llms.txt and no phantom ones', async () => {
+    const { MCP_TOOLS } = await import('../src/mcp/server.ts');
+    const llms = renderLlmsTxt('https://openradar.fun');
+    for (const tool of MCP_TOOLS) {
+      expect(llms, `tool ${tool.name} missing from llms.txt`).toContain(tool.name);
+    }
+    expect(llms).not.toContain('get_market_stats');
+  });
+
   it('renders robots.txt and sitemap.xml for the catalog', () => {
     const robots = renderRobotsTxt('https://openradar.fun');
     expect(robots).toContain('Sitemap: https://openradar.fun/sitemap.xml');

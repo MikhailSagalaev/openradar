@@ -1674,7 +1674,7 @@ export function renderLlmsTxt(baseUrl: string): string {
 - [Вопросы и ответы](${baseUrl}/faq)
 - [Расширение для браузера](${baseUrl}/extension): отправка вакансии с любого сайта и оценка рыночной оплаты.
 - [RSS-лента](${baseUrl}/feed.rss): параметры q (поиск) и type (gig — заказы, job — вакансии).
-- [HTTP API и MCP](${baseUrl}/openapi.json): OpenAPI-схема публичного API; каталог — ${baseUrl}/.well-known/api-catalog; MCP-сервер — ${baseUrl}/mcp (tools: search_leads, get_lead_details, get_market_stats).
+- [HTTP API и MCP](${baseUrl}/openapi.json): OpenAPI-схема публичного API; каталог — ${baseUrl}/.well-known/api-catalog; MCP-сервер — ${baseUrl}/mcp (tools: search_leads, get_lead_details, estimate_compensation, submit_lead, vote_lead, get_market_analytics, save_search, list_saved_searches, xray_generate_dorks).
 
 ## Заказы
 

@@ -158,9 +158,14 @@ export function renderOpenApi(baseUrl: string): Record<string, unknown> {
         },
       },
       '/mcp': {
-        get: {
+        post: {
           summary: 'Model Context Protocol server',
           description: 'Streamable HTTP MCP with tools search_leads, get_lead_details, estimate_compensation, submit_lead, vote_lead, get_market_analytics, save_search, list_saved_searches, xray_generate_dorks. Keyless guest access; a signed participant key raises the tier.',
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: { type: 'object' } } },
+            description: 'JSON-RPC 2.0 request (initialize, tools/list, tools/call).',
+          },
           responses: { '200': { description: 'JSON-RPC over MCP; see https://modelcontextprotocol.io' } },
         },
       },
