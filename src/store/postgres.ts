@@ -938,20 +938,34 @@ export class PostgresStore implements Store {
   }
 
   async updateLeadScore(id: string, baseScore: number): Promise<number | undefined> {
-    const res = await this.pool.query(
-      `SELECT status, votes_up, votes_down, votes_scam, votes_closed FROM leads WHERE id = $1`,
-      [id],
-    );
-    const row = res.rows[0];
-    if (!row) return undefined;
-    const { score } = recalculateVoteScoreAndStatus(row.status as LeadStatus, baseScore, {
-      useful: Number(row.votes_up) || 0,
-      junk: Number(row.votes_down) || 0,
-      scam: Number(row.votes_scam) || 0,
-      closed: Number(row.votes_closed) || 0,
-    });
-    await this.pool.query(`UPDATE leads SET score = $1, quality_score = $2 WHERE id = $3`, [score, baseScore, id]);
-    return score;
+    // The row is locked: a vote committed between the read and the write must not be erased.
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const res = await client.query(
+        `SELECT status, votes_up, votes_down, votes_scam, votes_closed FROM leads WHERE id = $1 FOR UPDATE`,
+        [id],
+      );
+      const row = res.rows[0];
+      if (!row) {
+        await client.query('ROLLBACK');
+        return undefined;
+      }
+      const { score } = recalculateVoteScoreAndStatus(row.status as LeadStatus, baseScore, {
+        useful: Number(row.votes_up) || 0,
+        junk: Number(row.votes_down) || 0,
+        scam: Number(row.votes_scam) || 0,
+        closed: Number(row.votes_closed) || 0,
+      });
+      await client.query(`UPDATE leads SET score = $1, quality_score = $2 WHERE id = $3`, [score, baseScore, id]);
+      await client.query('COMMIT');
+      return score;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   async updateLeadStatus(id: string, status: LeadStatus, deliveredAt?: string, scoreDelta?: number): Promise<void> {
@@ -2077,16 +2091,6 @@ export class PostgresStore implements Store {
         status: newStatus,
         alreadyVoted: false,
         myVote: activeVote,
-      };
-
-      return {
-        votes_up,
-        votes_down,
-        votes_scam,
-        votes_closed,
-        score: newScore,
-        status: newStatus,
-        alreadyVoted: false,
       };
     } catch (err) {
       await client.query('ROLLBACK');
