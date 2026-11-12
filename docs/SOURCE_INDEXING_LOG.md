@@ -48,3 +48,20 @@
 | `djangojobs` (`djangojobs.net/jobs/feed/`) | RSS 2.0 | **indexed** | HTTP 200 (101 КБ), вакансии Python / Django |
 | `berlinstartupjobs` (`berlinstartupjobs.com/engineering/feed/`) | RSS 2.0 | **indexed** | HTTP 200 (17 КБ), инженерные вакансии стартапов ЕС |
 | `hasjob` (`hasjob.co/feed`) | Atom | **indexed** | HTTP 200 (72 КБ), вакансии и заказы HasGeek |
+
+## Расширение по подборке @selflovefeels — волна RSS (2026-11-13)
+
+Живая проверка каждого фида перед добавлением (items > 0), robots.txt каждого сайта прочитан. План: `plans/020-cis-eu-rss.md`.
+
+| Источник | Формат | Статус | Замер 2026-11-13 |
+| --- | --- | --- | --- |
+| `djinni` (djinni.co/jobs/rss/) | RSS 2.0 | **indexed** | HTTP 200, 56 items; robots: фид разрешён |
+| `dou-jobs` (jobs.dou.ua/vacancies/feeds/) | RSS 2.0 | **indexed** | HTTP 200, 46 items; robots: фид разрешён |
+| `hh-kz` (hh.kz/search/vacancy/rss) | RSS 2.0 | **indexed** | HTTP 200, 20 items; robots: `/rss/*` не покрывает поисковый RSS |
+| `hh-ge` (headhunter.ge/search/vacancy/rss) | RSS 2.0 | **indexed** | HTTP 200, 20 items; robots прочитан через http→https (прямой https таймаутит из RU-сети) |
+| `zarplata-ru` (zarplata.ru/search/vacancy/rss) | RSS 2.0 | **indexed** | HTTP 200, 20 items; robots прочитан на zarplata.ru без www |
+| `jobindex-dk` (jobindex.dk/jobsoegning.rss) | RSS 2.0 | **indexed** | HTTP 200, 20 items; robots: фид разрешён |
+| `jsjobbs` (jsjobbs.com/rss) | RSS 2.0 | **indexed** | HTTP 200, 100 items; robots: пустой Disallow |
+| `virtual-vocations` (virtualvocations.com/rss) | RSS 2.0 | **indexed** | HTTP 200, 50 items; публичный RSS, часть описаний может быть сокращена (регистрация для полного доступа) |
+
+SwissDevJobs добавляется планом 016 (чтобы не было дубля пресета).

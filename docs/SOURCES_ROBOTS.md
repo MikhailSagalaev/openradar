@@ -107,8 +107,18 @@
 | Telegram — @stagirovky: стажировки | telegram | public | да | `https://t.me/s/stagirovky` | разрешено — robots.txt: HTTP 404 |
 | Telegram — @startup_job_russia: стартапы | telegram | public | да | `https://t.me/s/startup_job_russia` | разрешено — robots.txt: HTTP 404 |
 | Telegram — @vacancysmm: SMM и маркетинг | telegram | public | да | `https://t.me/s/vacancysmm` | разрешено — robots.txt: HTTP 404 |
+| Djinni — IT-вакансии Украины | rss | official | да | `https://djinni.co/jobs/rss/` | разрешено (проверено 2026-11-13: запрещены `/jobs2`, `/q`, `/developers`, `/free-jobs`, `/set_lang` — фид не покрыт) |
+| DOU Jobs — IT-вакансии Украины | rss | official | да | `https://jobs.dou.ua/vacancies/feeds/` | разрешено (проверено 2026-11-13: запрещён `/vacancies/*search=*` — фид без query не покрыт) |
+| HeadHunter Казахстан — Все вакансии | rss | official | да | `https://hh.kz/search/vacancy/rss` | разрешено (проверено 2026-11-13: `Disallow: /rss/*` не покрывает `/search/vacancy/rss`; правила `*?*` нет — в отличие от hh.ru) |
+| HeadHunter Грузия — Все вакансии | rss | official | да | `https://headhunter.ge/search/vacancy/rss` | разрешено (проверено 2026-11-13: тот же движок, `Disallow: /rss/*` не покрывает поисковый RSS) |
+| Zarplata.ru — Вакансии России | rss | official | да | `https://www.zarplata.ru/search/vacancy/rss` | разрешено (проверено 2026-11-13 на zarplata.ru: `Disallow: /rss/*`, `/*?page=` — фид без query не покрыт) |
+| Jobindex — Вакансии Дании | rss | official | да | `https://www.jobindex.dk/jobsoegning.rss` | разрешено (проверено 2026-11-13: запрещены конкретные `/jobsoegning*q=ofir`-адреса — чистый `.rss` не покрыт) |
+| JSJobbs — JavaScript-вакансии | rss | official | да | `https://jsjobbs.com/rss` | разрешено (проверено 2026-11-13: пустой `Disallow:`) |
+| Virtual Vocations — Удалённые вакансии США | rss | official | да | `https://www.virtualvocations.com/rss` | разрешено (проверено 2026-11-13: запрещены `/jobs/*/c-*` и `/advanced_search/index/` — фид не покрыт) |
 
 ## Решения
+
+- **hh-семейство (hh.kz, headhunter.ge, zarplata.ru), добавлено 2026-11-13** — robots запрещает `/rss/*`, но поисковый RSS `/search/vacancy/rss` этим правилом НЕ покрыт (RFC 9309: префиксное совпадение пути), а запрета `*?*` (как на hh.ru) у этих сайтов нет. Вердикт: разрешено. Не «чинить» в запрет без свежего robots.txt.
 
 - **FL.ru — Все заказы** — robots.txt запрещает `Disallow: */rss/*`. Решение: _ждёт решения оператора_.
 - **Работа России — Удалённая работа** — robots.txt запрещает `Disallow: /`. Решение: _ждёт решения оператора_.

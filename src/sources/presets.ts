@@ -942,6 +942,78 @@ const BASE_PRESETS: SourcePreset[] = [
       channel: 'vacancysmm',
     },
   },
+  {
+    id: 'djinni',
+    kind: 'rss',
+    title: 'Djinni — IT-вакансии Украины',
+    description: 'Крупнейшая украинская IT-доска: анонимный поиск кандидатов, много удалённых вакансий',
+    config: {
+      url: 'https://djinni.co/jobs/rss/',
+    },
+  },
+  {
+    id: 'dou-jobs',
+    kind: 'rss',
+    title: 'DOU Jobs — IT-вакансии Украины',
+    description: 'Главная IT-доска Украины (jobs.dou.ua): вакансии украинских и международных компаний',
+    config: {
+      url: 'https://jobs.dou.ua/vacancies/feeds/',
+    },
+  },
+  {
+    id: 'hh-kz',
+    kind: 'rss',
+    title: 'HeadHunter Казахстан — Все вакансии',
+    description: 'Поисковый RSS HeadHunter Казахстан (hh.kz): вакансии Казахстана всех направлений',
+    config: {
+      url: 'https://hh.kz/search/vacancy/rss',
+    },
+  },
+  {
+    id: 'hh-ge',
+    kind: 'rss',
+    title: 'HeadHunter Грузия — Все вакансии',
+    description: 'Поисковый RSS HeadHunter Грузия (headhunter.ge): вакансии Грузии всех направлений',
+    config: {
+      url: 'https://headhunter.ge/search/vacancy/rss',
+    },
+  },
+  {
+    id: 'zarplata-ru',
+    kind: 'rss',
+    title: 'Zarplata.ru — Вакансии России',
+    description: 'Поисковый RSS российской доски Zarplata.ru: вакансии регионов России',
+    config: {
+      url: 'https://www.zarplata.ru/search/vacancy/rss',
+    },
+  },
+  {
+    id: 'jobindex-dk',
+    kind: 'rss',
+    title: 'Jobindex — Вакансии Дании',
+    description: 'Крупнейшая доска вакансий Дании (jobindex.dk): все отрасли, включая IT',
+    config: {
+      url: 'https://www.jobindex.dk/jobsoegning.rss',
+    },
+  },
+  {
+    id: 'jsjobbs',
+    kind: 'rss',
+    title: 'JSJobbs — JavaScript-вакансии',
+    description: 'Нишевая доска JavaScript/TypeScript-вакансий со всего мира (jsjobbs.com)',
+    config: {
+      url: 'https://jsjobbs.com/rss',
+    },
+  },
+  {
+    id: 'virtual-vocations',
+    kind: 'rss',
+    title: 'Virtual Vocations — Удалённые вакансии США',
+    description: 'Проверенные удалённые вакансии США (virtualvocations.com): публичный RSS, часть описаний может быть сокращена',
+    config: {
+      url: 'https://www.virtualvocations.com/rss',
+    },
+  },
   ...CAREER_SITE_PRESETS,
   ...JSON_BOARD_PRESETS,
   ...HH_EMPLOYER_PRESETS,

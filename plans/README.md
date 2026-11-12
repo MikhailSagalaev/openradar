@@ -31,7 +31,7 @@ The live site `openradar.fun` may run a different build than this checkout. If a
 | 017 | New source providers (Teamtailor, iCIMS) and curation Telegram channels | P3 | M | 016 | TODO |
 | 018 | Import the MIT groundtruth ATS board catalog (hundreds of companies) | P2 | L | 016 | TODO |
 | 019 | Ingest MIT job feeds (Dreamwork ×13, Jobbie) as sources | P2 | M | 016 | TODO |
-| 020 | Add verified CIS/EU RSS boards (Djinni, DOU, hh.kz, hh.ge, Zarplata, Jobindex, JSJobbs, Virtual Vocations) | P2 | S | — | TODO |
+| 020 | Add verified CIS/EU RSS boards (Djinni, DOU, hh.kz, hh.ge, Zarplata, Jobindex, JSJobbs, Virtual Vocations) | P2 | S | — | DONE — 8 presets live-verified 2026-11-13 (items 20–100 each), robots read for all (hh-family `/rss/*` does not cover `/search/vacancy/rss`); robots rows + indexing log; 711 tests green. SwissDevJobs left to 016 |
 | 021 | Borrow competitor architecture: explainable scoring, freshness, MCP safety-ladder, visa-sponsor enrichment | P3 | L | 008, 011 | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale) | NEEDS-RECHECK (written against an older commit; verify before executing)
