@@ -4,6 +4,7 @@ import type { SourceQualityInput } from './source-quality.ts';
 import type { PageFacts } from '../research/facts.ts';
 import type { WorkplaceType } from './text.ts';
 import type { SubscriptionRecord } from './subscriptions.ts';
+import type { VisaSponsorNote } from '../research/visa-sponsors.ts';
 import type {
   Contact,
   SourceVisibility,
@@ -510,6 +511,8 @@ export interface Store extends HubStore {
    * employer when the lead has none yet.
    */
   saveLeadFacts?(id: string, facts: PageFacts, fill: LeadFactsFill): Promise<void>;
+  /** A public-register visa sponsorship note for a vacancy (plan 021D). */
+  saveLeadVisaSponsor?(id: string, note: VisaSponsorNote): Promise<void>;
   /** Leads published in [from, to) for the market report: text cut to its head, junk and scam left out. */
   /** In id order; `afterId` continues from the last lead of the previous page. */
   listLeadsForResearch?(options: { from: string; to: string; limit: number; afterId?: string }): Promise<Lead[]>;

@@ -3372,6 +3372,13 @@ document.getElementById('share-lead')?.addEventListener('click', async (event) =
 
   const cleanUrl = safeHttpUrl(lead.url);
 
+  // Visa sponsorship: a fact from the UK public register, never a promise about the role.
+  const visaNote = (lead.metadata as Record<string, unknown> | undefined)?.visaSponsor as
+    { register?: string; name?: string; route?: string; city?: string; registerDate?: string; matched?: string } | undefined;
+  const visaRow = lead.type === 'job' && visaNote?.register === 'uk' && typeof visaNote.name === 'string'
+    ? `<div><dt>${escapeHtml(t.visaSponsorLabel)}</dt><dd><b>${escapeHtml(visaNote.name)}</b>${visaNote.route ? ` · ${escapeHtml(visaNote.route)}` : ''}${visaNote.city ? ` · ${escapeHtml(visaNote.city)}` : ''}<div class="muted small" style="margin-top:4px">${escapeHtml(t.visaSponsorHint)}${visaNote.registerDate ? ` (${escapeHtml(visaNote.registerDate)})` : ''} <a href="https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers" rel="noopener" target="_blank">gov.uk</a></div></dd></div>`
+    : '';
+
   const cautionBanner = ((lead.votes_scam ?? 0) >= 1 && lead.status !== 'rejected')
     ? `<div class="caution-banner">
         ${escapeHtml(t.cautionFlag)}
@@ -3465,6 +3472,7 @@ ${cautionBanner}
       <div><dt>${escapeHtml(t.published)}</dt><dd>${formatDate(lead.publishedAt, lang)}</dd></div>
       ${Math.abs(Date.parse(lead.createdAt) - Date.parse(lead.publishedAt ?? lead.createdAt)) > 30 * 60_000 ? `<div><dt>${escapeHtml(t.added)}</dt><dd>${formatDate(lead.createdAt, lang)}</dd></div>` : ''}
       ${lead.author ? `<div><dt>${escapeHtml(t.author)}</dt><dd>${lead.companyKey ? `<a href="/employers/${escapeHtml(encodeURIComponent(lead.companyKey))}">${escapeHtml(lead.author)}</a>` : escapeHtml(lead.author)}</dd></div>` : ''}
+      ${visaRow}
       ${alsoPublished(data.sightings, t.alsoPublished)}
       ${lead.sourceRef ? `<div><dt>${escapeHtml(t.channel)}</dt><dd>${escapeHtml(lead.sourceRef.channelTitle || lead.sourceRef.channel)}${lead.sourceRef.visibility !== 'public' ? ` (${escapeHtml(t.privateChannel)})` : ''}</dd></div>` : ''}
       ${data.contactsHidden

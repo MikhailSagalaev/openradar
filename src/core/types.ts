@@ -44,6 +44,8 @@ export interface Env {
   RADAR_DECIDE_KEY?: string;
   RADAR_DECIDE_APPLY?: boolean;
   RADAR_ENRICH_PER_HOUR?: number;
+  /** UK sponsor-register matching for vacancies (plan 021D); off stops the download. */
+  RADAR_VISA_SPONSORS?: boolean;
   SUBQ_API_KEY?: string;
   /** Site visitors may link their own Telegram account by QR (sessions stored encrypted). */
   RADAR_USER_TELEGRAM: boolean;

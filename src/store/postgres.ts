@@ -48,6 +48,7 @@ import type { PageFacts } from '../research/facts.ts';
 import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
 import { BROKEN_AFTER, countFailedInRow } from '../core/source-health.ts';
 import type { SubscriptionRecord } from '../core/subscriptions.ts';
+import type { VisaSponsorNote } from '../research/visa-sponsors.ts';
 
 import { normalizeSalary } from '../core/salary.ts';
 import { MIN_CONFIDENCE, type ModelFacts } from '../research/model.ts';
@@ -746,6 +747,13 @@ export class PostgresStore implements Store {
     await this.pool.query(
       `UPDATE leads SET text = COALESCE($2, text), metadata_json = metadata_json || jsonb_build_object('enrichedAt', now()) WHERE id = $1`,
       [id, text ?? null],
+    );
+  }
+
+  async saveLeadVisaSponsor(id: string, note: VisaSponsorNote): Promise<void> {
+    await this.pool.query(
+      `UPDATE leads SET metadata_json = COALESCE(metadata_json, '{}'::jsonb) || jsonb_build_object('visaSponsor', $2::jsonb) WHERE id = $1`,
+      [id, JSON.stringify(note)],
     );
   }
 

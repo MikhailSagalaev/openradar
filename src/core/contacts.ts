@@ -145,6 +145,17 @@ export function redactLead(lead: Lead): Lead {
     text: redactContacts(lead.text),
     author,
     contacts: [],
-    metadata: undefined,
+    // Pipeline metadata stays private; the public-register visa note is a published fact
+    // about the employer's licence, not a contact, so guests keep it (plan 021D).
+    metadata: publicLeadMetadata(lead.metadata),
   };
+}
+
+/** The metadata keys a guest may see: public facts only, never pipeline internals. */
+function publicLeadMetadata(metadata: Lead['metadata']): Lead['metadata'] {
+  const note = (metadata as Record<string, unknown> | undefined)?.visaSponsor;
+  if (!note || typeof note !== 'object') return undefined;
+  const visa = note as Record<string, unknown>;
+  if (visa.register !== 'uk' || typeof visa.name !== 'string') return undefined;
+  return { visaSponsor: note } as Lead['metadata'];
 }

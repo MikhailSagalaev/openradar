@@ -151,3 +151,17 @@ SwissDevJobs добавляется планом 016 (чтобы не было �
 - Зарплаты — строка вида `$20 – $30/hr` (145/379): новое поле `salary` json-адаптера хранит опубликованную строку дословно в `rawSalary` (почасовые ставки < $100 числовой парсер диапазонов отбрасывал бы), `currency: USD` на лиде. Нормализация: hourly USD 20–30, не monthly RUB.
 - Фикстура: `test/fixtures/jobbie-internships.json` (6 строк: ashby/greenhouse/workday, hourly, fallback без apply_url). Тесты: `test/sources.test.ts` (оба фида, zero-network), `test/source-quality.test.ts` (период зарплаты).
 - robots: `api.jobbie.bot/robots.txt` → 401 (файла нет); фид публично приглашает к чтению. `raw.githubusercontent.com` — статический хост, ограничений нет.
+
+## Визовое обогащение: UK Register of Licensed Sponsors (план 021D, 2026-11-13)
+
+План: `plans/021-competitive-parity.md` (саб-проект D). Это не источник лидов, а **обогащение**: вакансии, чей работодатель есть в публичном реестре лицензированных спонсоров Великобритании, получают заметку `metadata.visaSponsor`.
+
+**Источник**: [Register of licensed sponsors: workers](https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers) (Home Office, обновляется ежедневно). CSV-вложение на `assets.publishing.service.gov.uk`. Лицензия **Open Government Licence v3.0** — атрибуция в `docs/SOURCES_ROBOTS.md` и в UI-дисклеймере. Живой замер 2026-11-13: редакция 2026-11-12, **142 998 строк → 142 249 индексированных имён** (торговые имена «t/a» индексируются отдельно: Roofoods Ltd t/a Deliveroo находится и по «Deliveroo», и по «Roofoods»).
+
+**Дисциплина чтения** (`src/research/visa-sponsors.ts`): кэш 12 ч (реестр ежедневный), backoff 1 ч при ошибке, потоковое чтение с лимитом 60 МБ (`readTextLimited`), sanity-floor 1000 имён (обрезанный/подменённый файл не становится индексом), заголовок CSV читается по именам колонок. robots проверен фактически: `www.gov.uk` для `*` запрещает только `/*/print$` и `/search/all*`; assets-хост — 404 (файла нет).
+
+**Матчинг**: точный по `normalizeCompany` (легальные формы и пунктуация снимаются), без substring-удачи («Heaven Revolution CIC» ≠ Revolut). Работодатель берётся из `lead.company`, иначе из названия борда-владельца фида (`matched: 'board'`). Только вакансии, только последние 14 дней, только ещё не помеченные. **Отсутствие в реестре не порождает пометки** — негативных выводов нет. Заметка — факт о лицензии компании, не обещание спонсорства роли; дисклеймер в UI (ru/en) и ссылка на реестр.
+
+**Проекция**: `toPublicLead` отдаёт `visaSponsor` только с валидными полями реестра; гостевая редакция (`redactLead`) сохраняет эту публичную заметку, остальной metadata по-прежнему скрыт. UI — строка «Визовое спонсорство / Visa sponsorship» на странице вакансии. Фоновый раунд в runner (флаг `RADAR_VISA_SPONSORS`, по умолчанию включён).
+
+**Живая валидация**: `scripts/check-visa-sponsors.mjs` — 15/21 пробных работодателей сматчились (Monzo, Deliveroo/Roofoods, Revolut, Google UK, Amazon UK, Wise, Starling, Checkout, Spotify, Goldman Sachs, Jane Street, Anthropic, Cursor, ElevenLabs); OpenAI/Mistral/Cohere/Bolt в реестре под этими именами не нашлись — заметки нет, как и задумано. Тесты: `test/visa-sponsors.test.ts` (13, zero-network: парсинг CSV, t/a-варианты, кэш/backoff, матчинг, проекция, XSS-escape).

@@ -70,6 +70,9 @@ export interface Translations {
   privateChannel: string;
   skills: string;
   aiAnalysis: string;
+  /** Visa sponsorship note from a public register (plan 021D). */
+  visaSponsorLabel: string;
+  visaSponsorHint: string;
   aiMatch: string;
   urgency: string;
   stack: string;
@@ -259,6 +262,8 @@ export const RU: Translations = {
   privateChannel: 'закрытый',
   skills: 'Навыки и стек',
   aiAnalysis: 'AI Анализ заказа',
+  visaSponsorLabel: 'Визовое спонсорство',
+  visaSponsorHint: 'Работодатель есть в публичном реестре лицензированных спонсоров Великобритании (Worker / Skilled Worker). Это факт о лицензии компании, а не обещание спонсорства для этой вакансии — уточняйте у работодателя. Реестр обновляется ежедневно, Open Government Licence v3.0.',
   aiMatch: 'совпадение',
   urgency: 'Срочность',
   stack: 'Стек',
@@ -440,6 +445,8 @@ export const EN: Translations = {
   privateChannel: 'private',
   skills: 'Skills & stack',
   aiAnalysis: 'AI Analysis',
+  visaSponsorLabel: 'Visa sponsorship',
+  visaSponsorHint: 'The employer appears in the UK public register of licensed sponsors (Worker / Skilled Worker). This is a fact about the company\'s licence, not a promise that this role is sponsored — confirm with the employer. The register updates daily, Open Government Licence v3.0.',
   aiMatch: 'match',
   urgency: 'Urgency',
   stack: 'Stack',

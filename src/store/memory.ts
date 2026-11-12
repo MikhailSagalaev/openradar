@@ -35,6 +35,7 @@ import { normalizeSalary } from '../core/salary.ts';
 import { MIN_CONFIDENCE, type ModelFacts } from '../research/model.ts';
 import { countFailedInRow } from '../core/source-health.ts';
 import type { SubscriptionRecord } from '../core/subscriptions.ts';
+import type { VisaSponsorNote } from '../research/visa-sponsors.ts';
 import type {
   Contact,
   Lead,
@@ -422,6 +423,12 @@ export class MemoryStore implements Store {
     if (!lead) return;
     if (text) lead.text = text;
     lead.metadata = { ...lead.metadata, enrichedAt: new Date().toISOString() };
+  }
+
+  async saveLeadVisaSponsor(id: string, note: VisaSponsorNote): Promise<void> {
+    const lead = this.leads.get(id);
+    if (!lead) return;
+    lead.metadata = { ...(lead.metadata ?? {}), visaSponsor: note };
   }
 
   private reviews = new Map<string, Map<number, LeadReview>>();

@@ -17,6 +17,7 @@ import { ingestRawLead, type IngestDeps } from '../pipeline/ingest.ts';
 import type { UserTelegramDeps } from '../pipeline/user-telegram.ts';
 import { renderSVG } from 'uqr';
 import { fetchSafeHttp } from '../pipeline/preview.ts';
+import type { VisaSponsorNote } from '../research/visa-sponsors.ts';
 import { feedMaxAge } from '../pipeline/liveness.ts';
 import type { Runtime } from '../runtime.ts';
 import { SOURCE_PRESETS, presetSource } from '../sources/presets.ts';
@@ -452,6 +453,13 @@ const PUBLIC_LEAD_KEYS = [
   'votes_up', 'votes_down', 'votes_scam', 'votes_closed', 'contacts', 'sourceRef',
 ] as const;
 
+/** The public projection of the visa-sponsor note: only the register's own fields. */
+function publicVisaSponsor(lead: Lead): VisaSponsorNote | undefined {
+  const note = (lead.metadata as Record<string, unknown> | undefined)?.visaSponsor as VisaSponsorNote | undefined;
+  if (!note || typeof note !== 'object' || note.register !== 'uk' || typeof note.name !== 'string') return undefined;
+  return note;
+}
+
 function toPublicLead(lead: Lead): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   const record = lead as unknown as Record<string, unknown>;
@@ -475,6 +483,8 @@ function toPublicLead(lead: Lead): Record<string, unknown> {
   }
   const flags = qualityFlagsOf(lead);
   if (flags.length) out.qualityFlags = flags;
+  const visa = publicVisaSponsor(lead);
+  if (visa) out.visaSponsor = visa;
   return out;
 }
 
