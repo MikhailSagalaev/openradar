@@ -35,6 +35,7 @@ import { COLLECTOR_MAX_ORDERS, COLLECTOR_PLATFORMS, collectedOrderToRaw, type Co
 import { configureRateLimit, rateLimit } from './ratelimit.ts';
 import { indexCsv, openradarIndex } from '../research/index.ts';
 import { qualityFlagsOf } from '../core/quality.ts';
+import { explainLead } from '../core/explain.ts';
 import { rubToUsd } from '../core/salary.ts';
 import { TelegramAuthService } from './tg-auth.ts';
 import { sourceState } from '../core/source-health.ts';
@@ -486,6 +487,11 @@ function toPublicLead(lead: Lead): Record<string, unknown> {
   if (flags.length) out.qualityFlags = flags;
   const visa = publicVisaSponsor(lead);
   if (visa) out.visaSponsor = visa;
+  // Explainable scoring (plan 021A): named checks, binary gates and a verdict, additive.
+  const explanation = explainLead(lead);
+  out.checks = explanation.checks;
+  out.gates = explanation.gates;
+  out.verdict = explanation.verdict;
   return out;
 }
 

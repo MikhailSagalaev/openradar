@@ -204,3 +204,18 @@ SwissDevJobs добавляется планом 016 (чтобы не было �
 **Source-quality рейтинг** (`src/hub/source-quality.ts`): расширение participant-ledger на **источники**. Качество = взвешенный баланс сигналов сообщества на постах источника за окно (30 дней): `(useful − junk − 2·scam) / volume`, volume = useful+junk+scam; `closed` нейтрален (закрытие вакансии — не суждение о качестве). Веса те же, что в participant-ledger (`WeightResolver`): модератор 1, зрелый GitHub 0.2+rating, свежий ключ 0 — кольцо новых ключей не накрутит источник. `confident=false` пока volume < 1. **Аддитивно и read-only**: агрегирует уже хранимые сигналы, новой таблицы нет. Store: опциональный `listSignalsSince` (memory + postgres, без миграции). Admin-роут `GET /admin/source-quality` (JSON, admin-only) отдаёт рейтинг с названиями источников.
 
 **Тесты**: `test/source-quality.test.ts` (10, zero-network): replay-окно/повтор, in-flight дедупликация, ошибки не кэшируются + bounded, ключ по actor+payload; общий кэш платит один раз на пересекающихся раундах, свежий кэш платит снова (нет утечки); агрегация весов/уверенности, нейтральный closed + двойной scam, расчёт из store с moderator/mature-GitHub весами и out-of-window сигналом, admin-only доступ.
+
+## Объяснимый скоринг: checks + gates + verdict (план 021A, 2026-11-13)
+
+План: `plans/021-competitor-architecture.md` (саб-проект A). Доноры — только идеи (SuperImpress именованные проверки, pathpipe essential-criteria gate, JobOps letter verdict); код не использовался.
+
+**Механика** (`src/core/explain.ts`, чистая функция): числовая оценка 0–100 **не тронута** (downstream/UI зависят), объяснение аддитивно и вычисляется из того, что лид уже несёт (score, qualityFlags, state, оплата, навыки, направление, длина текста) — без LLM-вызова и без новой колонки store, работает для каждого лида.
+- **gates** (бинарные, ДО вердикта): `live` (state==='active') и `real-offer` (нет channel_ad/mlm/digest/mystery_shopper). Провал любого гейта ⇒ вердикт всегда `skip`, независимо от баллов (pathpipe essential-criteria).
+- **checks** (именованные, мягкие): score, pay, requirements, direction, detail — каждый `{name, pass, note}` с пояснением.
+- **verdict**: `strong` (score≥70, гейты пройдены) / `stretch` (45–69) / `skip` (<45 или гейт провален).
+
+**Проекция**: `toPublicLead` добавляет `checks`/`gates`/`verdict` (по прецеденту qualityFlags/visaSponsor). `publicLeadMetadata` теперь сохраняет и `qualityFlags` для гостей (публичные ярлыки, не контакты) — объяснение и видимые флаги согласованы; ранее гости флаги не видели. OpenAPI Lead-схема описывает три новых поля (тест `openapi.test.ts` требует описания каждого публичного поля). UI: страница лида показывает verdict-бейдж (ok/warn/bad) и именованные checks/gates с пояснением по наведению; i18n ru/en.
+
+**MCP-проекция `get_lead_details` отложена** вместе с 021C (тот же файл `src/mcp/server.ts`, зона плана 011 другой сессии) — чтобы не конфликтовать.
+
+**Тесты**: `test/explain.test.ts` (8, zero-network): strong для активного лида с оплатой/навыками, гейт никогда не strong (closed/hidden/mlm/digest/channel_ad/mystery_shopper), outstaff не гейт, полосы вердикта, checks при отсутствии оплаты/навыков/направления, clamp оценки, API-проекция (score цел, verdict аддитивен), UI-рендер verdict+checks.

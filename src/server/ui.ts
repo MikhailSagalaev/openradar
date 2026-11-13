@@ -8,6 +8,7 @@ import { formatLeadText } from './format.ts';
 import { activeFilterCount, budgetStepsFor, type FeedFilters, hasActiveFilters, rankedWindowApplies } from './filters.ts';
 import { SEO_CATALOG } from './seo.ts';
 import { qualityFlagsOf } from '../core/quality.ts';
+import { explainLead } from '../core/explain.ts';
 import { BROKEN_AFTER, sourceState, type SourceState } from '../core/source-health.ts';
 import { feedQuery, type SubscriptionRecord } from '../core/subscriptions.ts';
 import type { SourceRobots } from '../pipeline/robots-audit.ts';
@@ -1458,6 +1459,20 @@ a:focus-visible, button:focus-visible, summary:focus-visible, input[type=checkbo
   align-items: center;
   gap: 8px;
 }
+.verdict {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.verdict-ok { background: var(--green-soft, rgba(34,197,94,.14)); color: var(--green, #16a34a); }
+.verdict-warn { background: rgba(234,179,8,.14); color: var(--amber, #b45309); }
+.verdict-bad { background: rgba(244,63,94,.12); color: var(--rose); }
+.explain-line { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 6px; }
+.explain-item { font-size: 12px; cursor: help; white-space: nowrap; }
+.explain-item.pass { color: var(--green, #16a34a); }
+.explain-item.fail { color: var(--rose); }
 .btn {
   display: inline-flex;
   align-items: center;
@@ -3379,6 +3394,19 @@ document.getElementById('share-lead')?.addEventListener('click', async (event) =
     ? `<div><dt>${escapeHtml(t.visaSponsorLabel)}</dt><dd><b>${escapeHtml(visaNote.name)}</b>${visaNote.route ? ` · ${escapeHtml(visaNote.route)}` : ''}${visaNote.city ? ` · ${escapeHtml(visaNote.city)}` : ''}<div class="muted small" style="margin-top:4px">${escapeHtml(t.visaSponsorHint)}${visaNote.registerDate ? ` (${escapeHtml(visaNote.registerDate)})` : ''} <a href="https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers" rel="noopener" target="_blank">gov.uk</a></div></dd></div>`
     : '';
 
+  // Explainable scoring (plan 021A): named checks, binary gates and the verdict they imply.
+  const explanation = explainLead(lead);
+  const verdictLabel = t.verdict[explanation.verdict];
+  const verdictClass = explanation.verdict === 'strong' ? 'ok' : explanation.verdict === 'stretch' ? 'warn' : 'bad';
+  const gateRows = explanation.gates.map((g) => `<span class="explain-item ${g.pass ? 'pass' : 'fail'}" title="${escapeHtml(g.note)}">${g.pass ? '✓' : '✗'} ${escapeHtml(t.gateName[g.name] ?? g.name)}</span>`).join('');
+  const checkRows = explanation.checks.map((ch) => `<span class="explain-item ${ch.pass ? 'pass' : 'fail'}" title="${escapeHtml(ch.note)}">${ch.pass ? '✓' : '✗'} ${escapeHtml(t.checkName[ch.name] ?? ch.name)}</span>`).join('');
+  const explainRow = `<div><dt>${escapeHtml(t.explainLabel)}</dt><dd>
+    <span class="verdict verdict-${verdictClass}">${escapeHtml(verdictLabel)}</span>
+    <div class="explain-line">${gateRows}</div>
+    <div class="explain-line muted small">${checkRows}</div>
+    <div class="muted small" style="margin-top:4px">${escapeHtml(t.explainHint)}</div>
+  </dd></div>`;
+
   const cautionBanner = ((lead.votes_scam ?? 0) >= 1 && lead.status !== 'rejected')
     ? `<div class="caution-banner">
         ${escapeHtml(t.cautionFlag)}
@@ -3473,6 +3501,7 @@ ${cautionBanner}
       ${Math.abs(Date.parse(lead.createdAt) - Date.parse(lead.publishedAt ?? lead.createdAt)) > 30 * 60_000 ? `<div><dt>${escapeHtml(t.added)}</dt><dd>${formatDate(lead.createdAt, lang)}</dd></div>` : ''}
       ${lead.author ? `<div><dt>${escapeHtml(t.author)}</dt><dd>${lead.companyKey ? `<a href="/employers/${escapeHtml(encodeURIComponent(lead.companyKey))}">${escapeHtml(lead.author)}</a>` : escapeHtml(lead.author)}</dd></div>` : ''}
       ${visaRow}
+      ${explainRow}
       ${alsoPublished(data.sightings, t.alsoPublished)}
       ${lead.sourceRef ? `<div><dt>${escapeHtml(t.channel)}</dt><dd>${escapeHtml(lead.sourceRef.channelTitle || lead.sourceRef.channel)}${lead.sourceRef.visibility !== 'public' ? ` (${escapeHtml(t.privateChannel)})` : ''}</dd></div>` : ''}
       ${data.contactsHidden

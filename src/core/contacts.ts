@@ -153,9 +153,19 @@ export function redactLead(lead: Lead): Lead {
 
 /** The metadata keys a guest may see: public facts only, never pipeline internals. */
 function publicLeadMetadata(metadata: Lead['metadata']): Lead['metadata'] {
-  const note = (metadata as Record<string, unknown> | undefined)?.visaSponsor;
-  if (!note || typeof note !== 'object') return undefined;
-  const visa = note as Record<string, unknown>;
-  if (visa.register !== 'uk' || typeof visa.name !== 'string') return undefined;
-  return { visaSponsor: note } as Lead['metadata'];
+  const record = (metadata ?? {}) as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  // The visa-sponsor note is a public fact about the company's licence.
+  const note = record.visaSponsor;
+  if (note && typeof note === 'object') {
+    const visa = note as Record<string, unknown>;
+    if (visa.register === 'uk' && typeof visa.name === 'string') out.visaSponsor = note;
+  }
+  // Quality flags are public labels (channel ad, mlm, digest, …), not contacts: guests see
+  // them too, so the explainable-score gates stay consistent with the flags shown.
+  if (Array.isArray(record.qualityFlags)) {
+    const flags = record.qualityFlags.filter((f): f is string => typeof f === 'string');
+    if (flags.length) out.qualityFlags = flags;
+  }
+  return Object.keys(out).length ? (out as Lead['metadata']) : undefined;
 }
