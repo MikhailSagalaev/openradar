@@ -1,0 +1,45 @@
+name: Listing feed
+
+# Plan 021F: OpenRadar becomes the feed others ingest. Once a day this regenerates a public
+# JSON + Markdown listing of fresh vacancies and orders (original employer links, no contacts)
+# and commits it to docs/listing-feed. Opt-in: it runs only when the operator sets the
+# RADAR_FEED_URL repository variable to a node with RADAR_PUBLIC_READ=true. Without it the
+# job is skipped, so nothing is published by accident.
+
+on:
+  schedule:
+    - cron: '30 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: listing-feed
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: ${{ vars.RADAR_FEED_URL != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Generate the listing feed
+        run: node --experimental-transform-types scripts/publish-listing-feed.mjs
+        env:
+          RADAR_FEED_URL: ${{ vars.RADAR_FEED_URL }}
+          RADAR_FEED_OUT: docs/listing-feed
+      - name: Commit the regenerated feed
+        run: |
+          git config user.name "openradar-bot"
+          git config user.email "bot@openradar.fun"
+          git add docs/listing-feed
+          if git diff --cached --quiet; then
+            echo "Nothing changed"
+          else
+            git commit -m "docs: listing feed rebuilt"
+            git push
+          fi

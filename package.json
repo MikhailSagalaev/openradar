@@ -29,6 +29,7 @@
     "pack:extension": "node scripts/pack-extension.js",
     "new:connector": "tsx src/cli/index.ts new-connector",
     "init:env": "node scripts/init-env.mjs",
+    "publish:feed": "node --experimental-transform-types scripts/publish-listing-feed.mjs",
     "start": "node bin/radar.js",
     "rebuild": "pnpm rebuild"
   },

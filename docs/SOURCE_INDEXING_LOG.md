@@ -182,3 +182,15 @@ SwissDevJobs добавляется планом 016 (чтобы не было �
 **Store**: новый опциональный метод `listBoardLeads({sourceId, externalIdPrefix, createdAfter, limit})` (memory + postgres, без миграции — читает существующие колонки). `PollContext` получил опциональные `store` и `ghostCheck` (прокидываются из `poll.ts`).
 
 **Тесты**: `test/ats-ghost.test.ts` (6, zero-network): soft-close + сохранение для дедупа + reopen, защита moderator/model решений, возрастное окно и чужой борд, отказ diff при cap, env/per-source гейты, полный путь через `pollSource`.
+
+## Public listing feed (план 021F, 2026-11-13)
+
+План: `plans/021-competitor-architecture.md` (саб-проект F). Это не источник, а **publishing tool**: OpenRadar сам становится фидом, который ингестят другие (обратная сторона плана 019). Доноры — только идеи (Simplify age-based inactive thresholds, Jobbie/Dreamwork daily JSON+MD); код не использовался.
+
+**Механика**: `scripts/publish-listing-feed.mjs` читает **публичный guest-API узла** (`/v2/feed`, курсорная пагинация) — сервер уже применяет `toPublicLead(projectContacts(...))`, поэтому контакты скрыты до того, как скрипт их увидит. Чистый модуль `src/publish/listing-feed.ts` (zero-network, тестируемый) строит JSON + Markdown: каждая строка ссылается на **оригинальный пост работодателя** (`canonicalUrl || url`, без tracking-редиректов), age-based stale-флаг (`maxAgeDays=30`) и hard-drop (`dropAfterDays=60`).
+
+**STOP-условие (не публиковать guest-redacted контакты)** выполнено в два слоя: (1) источник — guest-проекция без контактов; (2) `hasContactLeak` дополнительно дропает строку с любым contact-полем, email/телефоном/личным TG-handle в title или URL. Личный handle (`t.me/user`) = контакт → дроп; пост канала (`t.me/channel/123`) = оригинальная ссылка → сохраняется (этика keep-the-original-link).
+
+**Гейты**: workflow `.github/workflows/listing-feed.yml` — ежедневный cron, **opt-in**: запускается только если оператор задал repo variable `RADAR_FEED_URL` (узел с `RADAR_PUBLIC_READ=true`); без неё job skipped, ничего не публикуется случайно. Коммитит `docs/listing-feed/{listings.json,README.md}`.
+
+**Живая валидация**: smoke против openradar.fun — 200 листингов (170 jobs, 30 gigs), 0 реальных утечек контактов, оригинальные хосты (himalayas, greenhouse, hh.ru, careers.hellofresh, …), TG-пост канала сохранён как ссылка. Тесты: `test/listing-feed.test.ts` (8, zero-network: оригинальные ссылки, STOP-дроп контактов, stale/drop по возрасту, типы/сортировка/cap, remote-детект, JSON+MD, контакт-vs-оригинал TG, полный guest-прогон через `createApp`).
