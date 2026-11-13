@@ -2275,14 +2275,12 @@ export class PostgresStore implements Store {
 
   async listSignals(leadId: string): Promise<SignalRecord[]> {
     const res = await this.pool.query(`SELECT * FROM signals WHERE lead_id = $1 ORDER BY created_at ASC`, [leadId]);
-    return res.rows.map((r) => ({
-      leadId: r.lead_id,
-      pubkey: r.pubkey,
-      signal: r.signal,
-      comment: r.comment ?? '',
-      eventId: r.event_id || undefined,
-      createdAt: new Date(r.created_at).toISOString(),
-    }));
+    return res.rows.map(rowToSignal);
+  }
+
+  async listSignalsSince(sinceIso: string): Promise<SignalRecord[]> {
+    const res = await this.pool.query(`SELECT * FROM signals WHERE created_at >= $1 ORDER BY created_at ASC`, [new Date(sinceIso)]);
+    return res.rows.map(rowToSignal);
   }
 
   async rememberAuth(id: string, expiresAt: string): Promise<boolean> {
@@ -2853,6 +2851,17 @@ function rowToUser(r: any): UserRecord {
     createdAt: new Date(r.created_at).toISOString(),
     githubCreatedAt: r.github_created_at ? new Date(r.github_created_at).toISOString() : undefined,
     publicProfile: r.public_profile !== false,
+  };
+}
+
+function rowToSignal(r: any): SignalRecord {
+  return {
+    leadId: r.lead_id,
+    pubkey: r.pubkey,
+    signal: r.signal,
+    comment: r.comment ?? '',
+    eventId: r.event_id || undefined,
+    createdAt: new Date(r.created_at).toISOString(),
   };
 }
 

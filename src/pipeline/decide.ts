@@ -1,4 +1,5 @@
 import { DECISION_QUESTIONS, decisionAction, parseDecision, scoreShift, type ModelDecision } from '../core/decisions.ts';
+import { ReplayCache, idempotencyKey } from '../core/replay.ts';
 import type { Store } from '../core/store.ts';
 import type { Env, Logger } from '../core/types.ts';
 import { scrubContacts } from '../server/collector.ts';
@@ -30,6 +31,8 @@ export interface DecideDeps {
   logger: Logger;
   fetchImpl: typeof fetch;
   now?: () => Date;
+  /** Idempotency cache for the paid call (plan 021E); the runner shares one across rounds. */
+  replay?: ReplayCache<ModelDecision | number | undefined>;
 }
 
 export interface DecideSummary {
@@ -37,11 +40,23 @@ export interface DecideSummary {
   saved: number;
   failed: number;
   tokens: number;
+  /** Replays served from the idempotency cache instead of paying the model again (plan 021E). */
+  replayed: number;
   /** The service said to stop: no credits, a bad key or too many requests. */
   stopped?: number;
 }
 
 const STOP = new Set([401, 402, 403, 429]);
+
+/**
+ * Idempotency for the paid model call (plan 021E): keyed by model + the scrubbed payload, so
+ * a retry or an overlapping round replays the cached answer instead of double-charging. The
+ * durable answer lives in the store; this guards the in-flight window before it is saved.
+ * The runner shares one cache across rounds; a caller without one gets a fresh cache.
+ */
+export function newDecisionReplay(): ReplayCache<ModelDecision | number | undefined> {
+  return new ReplayCache<ModelDecision | number | undefined>({ windowMs: 10 * 60_000, maxEntries: 5000 });
+}
 
 async function askOne(lead: { id: string; title: string; text: string }, deps: DecideDeps): Promise<ModelDecision | number | undefined> {
   const { env } = deps;
@@ -119,16 +134,21 @@ export async function applyDecisions(deps: DecideDeps, limit: number): Promise<{
 }
 
 export async function runDecisions(deps: DecideDeps, limit: number): Promise<DecideSummary> {
-  const summary: DecideSummary = { asked: 0, saved: 0, failed: 0, tokens: 0 };
+  const summary: DecideSummary = { asked: 0, saved: 0, failed: 0, tokens: 0, replayed: 0 };
   if (!decisionsEnabled(deps.env) || !deps.store.listLeadsToDecide || !deps.store.saveModelDecision) return summary;
   const leads = await deps.store.listLeadsToDecide(limit);
+  const replay = deps.replay ?? newDecisionReplay();
   let next = 0;
   await Promise.all(Array.from({ length: PARALLEL }, async () => {
     while (next < leads.length && summary.stopped === undefined) {
       const lead = leads[next++]!;
       summary.asked++;
       try {
-        const answer = await withRetry(() => askOne(lead, deps));
+        // The paid call is idempotent: same model + scrubbed payload replays, never re-bills.
+        const payload = scrubContacts(`${lead.title}\n\n${lead.text.slice(0, MAX_TEXT)}`);
+        const key = idempotencyKey(deps.env.RADAR_DECIDE_MODEL ?? 'model', payload);
+        const { value: answer, replayed } = await replay.run(key, () => withRetry(() => askOne(lead, deps)));
+        if (replayed) summary.replayed++;
         if (typeof answer === 'number') {
           summary.failed++;
           if (STOP.has(answer)) summary.stopped = answer;

@@ -1,4 +1,4 @@
-import { applyDecisions, decisionsEnabled, runDecisions } from './decide.ts';
+import { applyDecisions, decisionsEnabled, newDecisionReplay, runDecisions } from './decide.ts';
 import { runEnrichment } from './enrich.ts';
 import { runVisaSponsors } from '../research/visa-sponsors.ts';
 import { webPubkey } from '../hub/web-key.ts';
@@ -38,6 +38,8 @@ export class PollRunner {
   private extractionRunning = false;
   private decisionsRunning = false;
   private nextDecisionsAt = 0;
+  /** Shared idempotency cache for the paid model call across rounds (plan 021E). */
+  private decisionReplay = newDecisionReplay();
   private enrichmentRunning = false;
   private nextEnrichmentAt = 0;
   private visaSponsorsRunning = false;
@@ -240,7 +242,7 @@ export class PollRunner {
     if (Date.now() < this.nextDecisionsAt) return;
     this.nextDecisionsAt = Date.now() + EXTRACTION_INTERVAL_MS;
     this.decisionsRunning = true;
-    void runDecisions({ store: this.deps.store, env, logger: this.deps.logger.child('decide'), fetchImpl: fetch }, Math.max(1, Math.round(perHour / BATCHES_PER_HOUR)))
+    void runDecisions({ store: this.deps.store, env, logger: this.deps.logger.child('decide'), fetchImpl: fetch, replay: this.decisionReplay }, Math.max(1, Math.round(perHour / BATCHES_PER_HOUR)))
       .then((summary) => {
         if (summary.asked) this.logger.info('decisions finished', { ...summary });
         if (this.deps.services) {
