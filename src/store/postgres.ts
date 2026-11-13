@@ -2278,11 +2278,6 @@ export class PostgresStore implements Store {
     return res.rows.map(rowToSignal);
   }
 
-  async listSignalsSince(sinceIso: string): Promise<SignalRecord[]> {
-    const res = await this.pool.query(`SELECT * FROM signals WHERE created_at >= $1 ORDER BY created_at ASC`, [new Date(sinceIso)]);
-    return res.rows.map(rowToSignal);
-  }
-
   async rememberAuth(id: string, expiresAt: string): Promise<boolean> {
     await this.pool.query(`DELETE FROM auth_replay WHERE expires_at < NOW()`);
     const res = await this.pool.query(

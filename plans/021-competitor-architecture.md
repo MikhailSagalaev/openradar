@@ -13,7 +13,7 @@
 - **Depends on**: 008 (scoring/dedup stability) for A/B; 011 (MCP surface truthfulness) for C
 - **Category**: direction
 - **Planned at**: commit `260a650`, 2026-11-11
-- **Progress**: **D shipped 2026-11-13** (UK Register of Licensed Sponsors; 13 tests, live 15/21). **B shipped 2026-11-13** (ATS board-diff ghost-jobs; 6 tests). **F shipped 2026-11-13** (public listing feed JSON+MD, guest-projection source, opt-in workflow; 8 tests, live 200 listings / 0 leaks). **E shipped 2026-11-13** (idempotent paid model call via replay cache; source-quality rating from weighted signals, admin route; 10 tests). **A shipped 2026-11-13** (explainable scoring: checks + gates + verdict, additive to the 0–100 score, API/UI/OpenAPI; 8 tests; MCP details projection deferred with C). C deferred until 011 lands (same files).
+- **Progress**: **D shipped 2026-11-13** (UK Register of Licensed Sponsors; 13 tests, live 15/21). **B shipped 2026-11-13** (ATS board-diff ghost-jobs; 6 tests). **F shipped 2026-11-13** (public listing feed JSON+MD, guest-projection source, opt-in workflow; 8 tests, live 200 listings / 0 leaks). **E shipped 2026-11-13** (idempotent paid model call via replay cache, 6 tests; source-quality already covered by the existing `scoreSource` system since 0.55.0 — no duplicate added). **A shipped 2026-11-13** (explainable scoring: checks + gates + verdict, additive to the 0–100 score, API/UI/OpenAPI; 8 tests; MCP details projection deferred with C). C deferred until 011 lands (same files).
 
 ## Why this matters
 

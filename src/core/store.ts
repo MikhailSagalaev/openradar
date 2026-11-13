@@ -296,8 +296,6 @@ export interface HubStore {
   /** One signal per participant and lead; a new one replaces the old. */
   upsertSignal(record: SignalRecord): Promise<void>;
   listSignals(leadId: string): Promise<SignalRecord[]>;
-  /** Every signal created since the instant (source-quality window, plan 021E). */
-  listSignalsSince?(sinceIso: string): Promise<SignalRecord[]>;
   deleteSignal(leadId: string, pubkey: string): Promise<void>;
   /** Replay cache for HTTP auth: false when `id` was already used and has not expired. */
   rememberAuth(id: string, expiresAt: string): Promise<boolean>;

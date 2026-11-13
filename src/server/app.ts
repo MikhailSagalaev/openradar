@@ -79,7 +79,6 @@ import { observationToRawLead, parseObservation } from '../core/observation.ts';
 import { isNostrAuthHeader, verifyHttpAuth } from '../net/protocol.ts';
 import { parseModerators } from '../hub/service.ts';
 import { evaluateLeadState, RATING_WINDOW_MS, tierFor, WeightResolver, WEB_SIGNAL_PREFIX } from '../hub/rating.ts';
-import { computeSourceQuality, SOURCE_QUALITY_WINDOW_MS } from '../hub/source-quality.ts';
 import { recordWebObservation, webPubkey } from '../hub/web-key.ts';
 import { registerV2Routes } from './v2.ts';
 import {
@@ -1449,18 +1448,6 @@ export function createApp(runtime: Runtime): Hono {
     if (typeof form.id !== 'string' || !form.id) return c.text('Bad request', 400);
     await runtime.store.overruleDecision?.(form.id, (await currentUser(c, runtime))?.id);
     return c.redirect('/admin/decisions');
-  });
-
-  // Source-quality feedback (plan 021E): the weighted community signal balance per source.
-  app.get('/admin/source-quality', async (c) => {
-    if (!await isAdmin(c, runtime)) return c.json({ error: 'forbidden' }, 403);
-    const quality = await computeSourceQuality(runtime.store, parseModerators(runtime.env.RADAR_MODERATORS));
-    const sources = await runtime.store.listSources();
-    const titleOf = new Map(sources.map((s) => [s.id, s.title]));
-    return c.json({
-      windowDays: SOURCE_QUALITY_WINDOW_MS / 86_400_000,
-      sources: quality.map((q) => ({ ...q, title: titleOf.get(q.sourceId) ?? q.sourceId })),
-    });
   });
 
   // Readers go through posts of a direction. Answers are data: they never hide a post.

@@ -1531,10 +1531,6 @@ export class MemoryStore implements Store {
     return [...this.signals.values()].filter((s) => s.leadId === leadId && this.leads.has(s.leadId)).map((s) => ({ ...s }));
   }
 
-  async listSignalsSince(sinceIso: string): Promise<SignalRecord[]> {
-    return [...this.signals.values()].filter((s) => s.createdAt >= sinceIso && this.leads.has(s.leadId)).map((s) => ({ ...s }));
-  }
-
   async rememberAuth(id: string, expiresAt: string): Promise<boolean> {
     const now = new Date().toISOString();
     for (const [key, exp] of this.authReplay) if (exp < now) this.authReplay.delete(key);
