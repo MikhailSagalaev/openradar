@@ -2555,6 +2555,16 @@ export class PostgresStore implements Store {
     await this.pool.query(`UPDATE leads SET state = $1 WHERE id = $2`, [state, id]);
   }
 
+  async listBoardLeads(options: { sourceId: string; externalIdPrefix: string; createdAfter: string; limit: number }): Promise<Array<Pick<Lead, 'id' | 'externalId' | 'state'>>> {
+    const result = await this.pool.query(
+      `SELECT id, external_id, state FROM leads
+        WHERE source_id = $1 AND external_id LIKE $2 || '%' AND created_at >= $3::timestamptz
+        ORDER BY created_at DESC LIMIT $4`,
+      [options.sourceId, options.externalIdPrefix, options.createdAfter, options.limit],
+    );
+    return result.rows.map((r) => ({ id: r.id, externalId: r.external_id || undefined, state: (r.state as LeadState) || 'active' }));
+  }
+
   async saveLeadFacts(id: string, facts: PageFacts, fill: LeadFactsFill): Promise<void> {
     const hasPay = fill.normalizedUsdMin !== undefined || fill.normalizedUsdMax !== undefined;
     // Pay from the page fills only a lead with no pay of its own.

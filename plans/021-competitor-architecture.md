@@ -13,7 +13,7 @@
 - **Depends on**: 008 (scoring/dedup stability) for A/B; 011 (MCP surface truthfulness) for C
 - **Category**: direction
 - **Planned at**: commit `260a650`, 2026-11-11
-- **Progress**: **D shipped 2026-11-13** (UK Register of Licensed Sponsors; `src/research/visa-sponsors.ts`, runner round, store note, UI/API projection, 13 zero-network tests, live check 15/21 probes; US/CA/NL registers deferred to a follow-up). C deferred until 011 lands (same files). A/B/E/F open.
+- **Progress**: **D shipped 2026-11-13** (UK Register of Licensed Sponsors; `src/research/visa-sponsors.ts`, runner round, store note, UI/API projection, 13 zero-network tests, live check 15/21 probes; US/CA/NL registers deferred to a follow-up). **B shipped 2026-11-13** (ATS board-diff ghost-job detection; store-as-snapshot, soft-close + guarded reopen, `RADAR_ATS_GHOST_CHECK`, 6 zero-network tests). C deferred until 011 lands (same files). A/E/F open.
 
 ## Why this matters
 

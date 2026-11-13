@@ -502,6 +502,11 @@ export interface Store extends HubStore {
   /** How many posts a source brought; with byChannel, one row per Telegram channel. */
   sourceActivity?(options: { sourceId: string; byChannel?: boolean }): Promise<SourceActivity[]>;
   updateLeadState?(id: string, state: LeadState): Promise<void>;
+  /**
+   * Leads of one ATS board (plan 021B): every state, so the poll can diff the board's live
+   * job set against what is stored — soft-close removed jobs, reopen returned ones. Bounded.
+   */
+  listBoardLeads?(options: { sourceId: string; externalIdPrefix: string; createdAfter: string; limit: number }): Promise<Array<Pick<Lead, 'id' | 'externalId' | 'state'>>>;
   /** Active leads on these hosts whose page is due for a closed-post check, oldest check first. */
   listLeadsToCheck?(options: { hosts: string[]; limit: number; createdAfter: string; now?: Date }): Promise<Array<Pick<Lead, 'id' | 'url' | 'createdAt' | 'type'>>>;
   /** Remembers that the lead's page was checked just now. */

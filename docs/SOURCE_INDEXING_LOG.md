@@ -165,3 +165,20 @@ SwissDevJobs добавляется планом 016 (чтобы не было �
 **Проекция**: `toPublicLead` отдаёт `visaSponsor` только с валидными полями реестра; гостевая редакция (`redactLead`) сохраняет эту публичную заметку, остальной metadata по-прежнему скрыт. UI — строка «Визовое спонсорство / Visa sponsorship» на странице вакансии. Фоновый раунд в runner (флаг `RADAR_VISA_SPONSORS`, по умолчанию включён).
 
 **Живая валидация**: `scripts/check-visa-sponsors.mjs` — 15/21 пробных работодателей сматчились (Monzo, Deliveroo/Roofoods, Revolut, Google UK, Amazon UK, Wise, Starling, Checkout, Spotify, Goldman Sachs, Jane Street, Anthropic, Cursor, ElevenLabs); OpenAI/Mistral/Cohere/Bolt в реестре под этими именами не нашлись — заметки нет, как и задумано. Тесты: `test/visa-sponsors.test.ts` (13, zero-network: парсинг CSV, t/a-варианты, кэш/backoff, матчинг, проекция, XSS-escape).
+
+## ATS board-diff: ghost-jobs и soft-close (план 021B, 2026-11-13)
+
+План: `plans/021-competitor-architecture.md` (саб-проект B). Это не источник, а **дисциплина свежести** для существующего ATS-адаптера (`src/sources/ats.ts`): борд сам сообщает, какие вакансии ещё открыты, и узел сверяет это с тем, что уже хранит.
+
+**Идея (clean-room, доноры — только идеи)**: OpenPostings `pruneExpiredPostings` (soft-hide вместо удаления), groundtruth `job_changes` (posted/removed/reopened), Four-Leaf `active:false`. Код доноров не использовался (OpenPostings — без лицензии, groundtruth — MIT данные, Four-Leaf — MIT клиент).
+
+**Механика**: снапшот борда — это **сам store** (лиды с `externalId` вида `ashby:acme:{id}`), отдельной истории нет → рост ограничен тривиально (STOP-условие плана выполнено), состояние переживает рестарт. При каждом полном чтении борда (`parsed.length < perCompany`, т.е. список не обрезан cap'ом) `diffBoard` сравнивает живой набор id с хранимым:
+- вакансия исчезла с борда и была `active` → `state='closed'` + decision `{decidedBy:'source', reason:'removed from the board'}`. Лид **не удаляется**: дедуп-история (fingerprint/externalId) сохраняется, из публичной ленты исключается (оба стора фильтруют `state='active'`).
+- вакансия вернулась и была `closed` **именно бордом** (`decidedBy==='source'`) → reopen (`state='active'`, decision снят). Решения модератора/модели никогда не отменяются.
+- окно diff — `2×maxAgeDays` (шире ленты): вакансия, состарившаяся из потока, закрывается здесь, а не висит active.
+
+**Гейты**: env `RADAR_ATS_GHOST_CHECK` (по умолчанию включён) + per-source `config.ghostCheck=false`. Обрезанный cap'ом борд не диффится (ложные «удаления»). Сетевая ошибка борда не трогает состояния (diff только после успешного чтения).
+
+**Store**: новый опциональный метод `listBoardLeads({sourceId, externalIdPrefix, createdAfter, limit})` (memory + postgres, без миграции — читает существующие колонки). `PollContext` получил опциональные `store` и `ghostCheck` (прокидываются из `poll.ts`).
+
+**Тесты**: `test/ats-ghost.test.ts` (6, zero-network): soft-close + сохранение для дедупа + reopen, защита moderator/model решений, возрастное окно и чужой борд, отказ diff при cap, env/per-source гейты, полный путь через `pollSource`.

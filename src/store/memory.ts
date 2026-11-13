@@ -659,6 +659,17 @@ export class MemoryStore implements Store {
     }
   }
 
+  async listBoardLeads(options: { sourceId: string; externalIdPrefix: string; createdAfter: string; limit: number }): Promise<Array<Pick<Lead, 'id' | 'externalId' | 'state'>>> {
+    const out: Array<Pick<Lead, 'id' | 'externalId' | 'state'>> = [];
+    for (const lead of this.leads.values()) {
+      if (lead.sourceId !== options.sourceId || !lead.externalId?.startsWith(options.externalIdPrefix)) continue;
+      if (lead.createdAt < options.createdAfter) continue;
+      out.push({ id: lead.id, externalId: lead.externalId, state: lead.state ?? 'active' });
+      if (out.length >= options.limit) break;
+    }
+    return out;
+  }
+
   async saveLeadFacts(id: string, facts: PageFacts, fill: LeadFactsFill): Promise<void> {
     const lead = this.leads.get(id);
     if (!lead) return;

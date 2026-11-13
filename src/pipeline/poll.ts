@@ -82,6 +82,8 @@ export async function pollSource(
     logger,
     now: deps.now ?? (() => new Date()),
     proxyUrl: sourceProxyUrl(source.config),
+    store: deps.store,
+    ghostCheck: deps.env.RADAR_ATS_GHOST_CHECK !== false,
   };
 
   try {

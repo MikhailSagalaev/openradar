@@ -57,6 +57,8 @@ const envSchema = z.object({
   RADAR_ENRICH_PER_HOUR: z.coerce.number().int().nonnegative().default(120),
   // Visa sponsorship notes from the UK public register (src/research/visa-sponsors.ts).
   RADAR_VISA_SPONSORS: booleanFromEnv(true),
+  // ATS board-diff: a job removed from its board is soft-closed, a returned one reopened.
+  RADAR_ATS_GHOST_CHECK: booleanFromEnv(true),
   SUBQ_API_KEY: optionalString,
   RADAR_EXTRACT_PROVIDER: z.enum(['openai', 'gigachat']).default('openai'),
   GIGACHAT_AUTH_KEY: optionalString,
