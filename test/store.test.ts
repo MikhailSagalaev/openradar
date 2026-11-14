@@ -376,4 +376,34 @@ describe('store', () => {
 
     await store.close();
   });
+
+  it('countLeads counts exactly what the listings return (memory/postgres parity)', async () => {
+    const store = createTestStore();
+    const source = await store.createSource({ kind: 'rss', title: 'Feed' });
+    const now = new Date();
+    const iso = (msAgo: number): string => new Date(now.getTime() - msAgo).toISOString();
+    await store.insertLead(makeLead({ sourceId: source.id, id: 'count-a', createdAt: iso(3600_000), publishedAt: iso(3600_000) }));
+    await store.insertLead(makeLead({
+      sourceId: source.id, id: 'count-b', externalId: 'external-b', fingerprint: 'fingerprint-b',
+      titleKey: 'второй пост', createdAt: iso(7200_000), publishedAt: iso(7200_000), type: 'job',
+    }));
+    await store.insertLead(makeLead({
+      sourceId: source.id, id: 'count-rejected', externalId: 'external-r', fingerprint: 'fingerprint-r',
+      titleKey: 'отклонённый пост', createdAt: iso(1800_000), publishedAt: iso(1800_000), status: 'rejected',
+    }));
+
+    const since = iso(24 * 3600_000);
+    // The whole store, with and without the listing's cap.
+    expect(await store.countLeads!({ limit: 5000 })).toBe(3);
+    expect(await store.countLeads!({ limit: 2 })).toBe(2);
+    expect(await store.countLeads!({ limit: 5000, status: 'rejected' })).toBe(1);
+    expect(await store.countLeads!({ limit: 5000, type: 'job' })).toBe(1);
+    expect(await store.countLeads!({ limit: 5000, createdAfter: since })).toBe(3);
+    // The feed view: rejected posts stay out, exactly as getLeadsForFeed lists them.
+    const feedOptions = { limit: 5000, createdAfter: since, feedOnly: true };
+    expect(await store.countLeads!(feedOptions)).toBe((await store.getLeadsForFeed({ limit: 5000, createdAfter: since })).length);
+    expect(await store.countLeads!(feedOptions)).toBe(2);
+
+    await store.close();
+  });
 });

@@ -2,6 +2,7 @@ import { classifyIsco08 } from "../core/isco.ts";
 import { Hono } from 'hono';
 import type { Context, Next } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
+import { compress } from 'hono/compress';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
@@ -10,7 +11,7 @@ import { escapeHtml, extractSkills, stripInvisible } from '../core/text.ts';
 import { emitLeadDeleted } from '../core/events.ts';
 import { renderRssFeed } from './feed.ts';
 import type { ParticipantRecord, UserRecord } from '../core/store.ts';
-import type { Lead, LeadStatus, LeadType, RawLead, SourceConfig, SourceKind, SourceRecord, Viewer, VoteSignal } from '../core/types.ts';
+import type { Lead, LeadStatus, LeadType, RawLead, SourceConfig, SourceKind, SourceRecord, Stats, Viewer, VoteSignal } from '../core/types.ts';
 import type { EmployerSummary, ListLeadsOptions } from '../core/store.ts';
 import { pollAll, pollSource } from '../pipeline/poll.ts';
 import { ingestRawLead, type IngestDeps } from '../pipeline/ingest.ts';
@@ -1018,6 +1019,11 @@ export function createApp(runtime: Runtime): Hono {
     return (batch ? largeBodyLimit : smallBodyLimit)(c, next);
   });
 
+  // Gzip/deflate for compressible responses: HTML pages, JSON APIs and the CSV datasets
+  // shrink 70–85% on the wire. Hono skips text/event-stream (the SSE feeds), already-encoded
+  // bodies and clients without Accept-Encoding, so nothing else changes.
+  app.use('*', compress());
+
   app.use('*', async (c, next) => {
     // frame-ancestors governs framing; X-Frame-Options only when nothing may frame us.
     if (!analytics.yandexMetrikaId) c.header('X-Frame-Options', 'DENY');
@@ -1072,7 +1078,7 @@ export function createApp(runtime: Runtime): Hono {
   });
 
   app.get('/health', async (c) => {
-    const stats = await runtime.store.getStats();
+    const stats = await cachedStats();
     const services = runtime.services?.all() ?? [];
     const hasServiceErrors = runtime.services?.hasErrors() ?? false;
     const admin = await isAdmin(c, runtime);
@@ -1307,6 +1313,20 @@ export function createApp(runtime: Runtime): Hono {
   const deltaLimit = rateLimit({ windowMs: 60_000, max: runtime.env.RADAR_DELTA_RATE_PER_MIN });
   const sitemapLimit = rateLimit({ windowMs: 60_000, max: runtime.env.RADAR_SITEMAP_RATE_PER_MIN });
 
+  // Store-wide counters change slowly; /health (Docker probes every 30 s), the feed header
+  // and /api/stats all read the same numbers. One shared 30-second cache with a single
+  // in-flight query keeps the counts identical everywhere and the database off the hot path.
+  let statsCache: { at: number; value: Promise<Stats> } | undefined;
+  const cachedStats = (): Promise<Stats> => {
+    if (statsCache && Date.now() - statsCache.at < 30_000) return statsCache.value;
+    const value = runtime.store.getStats().catch((error) => {
+      statsCache = undefined;
+      throw error;
+    });
+    statsCache = { at: Date.now(), value };
+    return value;
+  };
+
   // «За сутки найдено N»: leads of the last 24 h this viewer can see, refreshed every 10 minutes per tier.
   // A full day of what this tier can see: the 24 hours before its delay ends, so a guest's
   // number is not half a day long. Up to 5000; one count per tier runs at a time.
@@ -1315,10 +1335,19 @@ export function createApp(runtime: Runtime): Hono {
     const cached = foundTodayCache.get(viewer.tier);
     if (cached && Date.now() - cached.at < 10 * 60_000) return cached.count;
     const until = Date.parse(visibleBefore(viewer, runtime.access) ?? new Date().toISOString());
-    const count = leadsFor(runtime, viewer, { limit: FOUND_TODAY_CAP, createdAfter: new Date(until - 24 * 3600_000).toISOString() })
-      .then((recent) => recent.length);
+    const options = { limit: FOUND_TODAY_CAP, createdAfter: new Date(until - 24 * 3600_000).toISOString() };
+    // The same rows leadsFor would list, counted by the store: no 5000 full lead objects
+    // pulled into memory just to read their number. Stores without countLeads keep the old path.
+    const count = (runtime.store.countLeads
+      ? runtime.store.countLeads(viewer.tier === 'admin'
+          ? options
+          : { maxAgeDays: feedMaxAge(runtime.env), ...options, createdBefore: visibleBefore(viewer, runtime.access), feedOnly: true })
+      : leadsFor(runtime, viewer, options).then((recent) => recent.length)
+    ).catch((error) => {
+      foundTodayCache.delete(viewer.tier);
+      throw error;
+    });
     foundTodayCache.set(viewer.tier, { at: Date.now(), count });
-    count.catch(() => foundTodayCache.delete(viewer.tier));
     return count;
   };
   // Median vacancy pay by role over 30 days: a salary far below it is shown as «проверить».
@@ -1365,7 +1394,7 @@ export function createApp(runtime: Runtime): Hono {
 
     const viewer = await viewerFromRequest(c, runtime);
     const [stats, health, fetched] = await Promise.all([
-      runtime.store.getStats(),
+      cachedStats(),
       runtime.store.getSourceHealth(),
       // One extra lead tells whether a next page exists.
       leadsFor(runtime, viewer, {
@@ -1546,7 +1575,7 @@ export function createApp(runtime: Runtime): Hono {
   app.get('/admin', async (c) => {
     if (!await isAdmin(c, runtime)) return c.redirect('/login?returnTo=/admin');
     const [stats, health, admin] = await Promise.all([
-      runtime.store.getStats(),
+      cachedStats(),
       runtime.store.getSourceHealth(),
       runtime.store.getAdminStats ? runtime.store.getAdminStats(14) : undefined,
     ]);
@@ -2403,7 +2432,7 @@ export function createApp(runtime: Runtime): Hono {
 
   app.get('/api/stats', async (c) => {
     if (!await canRead(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
-    return c.json(await runtime.store.getStats());
+    return c.json(await cachedStats());
   });
 
   app.get('/api/sources', async (c) => {
@@ -3271,6 +3300,8 @@ export function createApp(runtime: Runtime): Hono {
     const employerPaths = runtime.env.RADAR_PUBLIC_READ ? ['/employers', ...employers.map((e) => employerPath(e.key))] : [];
     return c.text(renderSitemapXml(seoBaseUrl(c), leads, new Date(), [...roles, ...employerPaths]), 200, {
       'content-type': 'application/xml; charset=utf-8',
+      // Crawlers re-fetch sitemaps often; the contents move on the feed's own cadence.
+      'cache-control': 'public, max-age=600',
     });
   });
 
@@ -3314,7 +3345,8 @@ export function createApp(runtime: Runtime): Hono {
   });
   app.get('/research/index.json', async (c) => {
     const index = await openradarIndex(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
-    return c.json(index, 200, { 'access-control-allow-origin': '*' });
+    // The index is cached for an hour server-side; clients may hold it for 10 minutes.
+    return c.json(index, 200, { 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=600' });
   });
   app.get('/research/index.csv', async (c) => {
     const index = await openradarIndex(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
@@ -3322,6 +3354,7 @@ export function createApp(runtime: Runtime): Hono {
       'content-type': 'text/csv; charset=utf-8',
       'content-disposition': 'attachment; filename="openradar-index.csv"',
       'access-control-allow-origin': '*',
+      'cache-control': 'public, max-age=600',
     });
   });
   app.get('/en/research', async (c) => {
@@ -3348,7 +3381,8 @@ export function createApp(runtime: Runtime): Hono {
   app.get('/research/methodology', async (c) => toEnglish(c, '/research/methodology') ?? c.html(renderMethodologyPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime) })));
   app.get('/research/report.json', async (c) => {
     const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
-    return c.json(report, 200, { 'access-control-allow-origin': '*' });
+    // The report itself is rebuilt at most every 15 minutes; let clients hold it for 5.
+    return c.json(report, 200, { 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=300' });
   });
   app.get('/research/dataset.csv', async (c) => {
     const { records } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
@@ -3356,6 +3390,7 @@ export function createApp(runtime: Runtime): Hono {
       'content-type': 'text/csv; charset=utf-8',
       'content-disposition': 'attachment; filename="openradar-dataset.csv"',
       'access-control-allow-origin': '*',
+      'cache-control': 'public, max-age=300',
     });
   });
   app.get('/research/roles/:slug', async (c) => {

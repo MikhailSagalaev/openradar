@@ -45,6 +45,13 @@ for (let i = 0; i < MINHASH_K; i++) {
   MINHASH_B.push(nextLcg() >>> 0);
 }
 
+// The seeds and the modulus never change, so their BigInt forms are built once here rather
+// than on every (shingle × seed) pair inside the hot loop. Same exact arithmetic, far fewer
+// allocations during ingestion (plan 013, step 1).
+const MINHASH_A_BIG: bigint[] = MINHASH_A.map((a) => BigInt(a));
+const MINHASH_B_BIG: bigint[] = MINHASH_B.map((b) => BigInt(b));
+const P32_BIG = BigInt(4294967291); // Largest 32-bit prime
+
 function fnv1a32(str: string): number {
   let hash = 0x811c9dc5;
   for (let i = 0; i < str.length; i++) {
@@ -80,15 +87,11 @@ export function computeMinHashSketch(normalizedText: string): string {
   const minHashes = new Uint16Array(MINHASH_K);
   minHashes.fill(0xffff);
 
-  const P32 = 4294967291; // Largest 32-bit prime
-
   for (const shingle of shingles) {
-    const rawH = fnv1a32(shingle);
+    const bigH = BigInt(fnv1a32(shingle));
     for (let i = 0; i < MINHASH_K; i++) {
-      const a = MINHASH_A[i] ?? 1;
-      const b = MINHASH_B[i] ?? 0;
-      // (a * rawH + b) % P32, mapped to 16-bit
-      const combined = (Number((BigInt(a) * BigInt(rawH) + BigInt(b)) % BigInt(P32))) & 0xffff;
+      // (a * rawH + b) % P32, mapped to 16-bit — identical to the pre-hoisted expression.
+      const combined = Number((MINHASH_A_BIG[i]! * bigH + MINHASH_B_BIG[i]!) % P32_BIG) & 0xffff;
       if (combined < (minHashes[i] ?? 0xffff)) {
         minHashes[i] = combined;
       }

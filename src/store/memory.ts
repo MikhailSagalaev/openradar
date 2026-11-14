@@ -889,7 +889,7 @@ export class MemoryStore implements Store {
     return this.queryLeads(options);
   }
 
-  private queryLeads(options: FeedOptions, feedOnly = false): Lead[] {
+  private queryLeads(options: FeedOptions, feedOnly = false, countOnly = false): Lead[] {
     let result = Array.from(this.leads.values());
     if (options.createdBefore) {
       const cutoff = options.createdBefore;
@@ -961,6 +961,10 @@ export class MemoryStore implements Store {
       });
     }
 
+    const limit = Math.max(1, Math.min(options.limit ?? 50, 5000));
+    const offset = Math.max(0, Math.min(Math.floor(options.offset ?? 0), 10_000));
+    // A count needs no ordering and no per-lead copies: the same filters, less work.
+    if (countOnly) return result.slice(offset, offset + limit);
     const ascending = feedOnly && Boolean(options.after);
     const usd = (l: Lead): number => l.normalizedUsdMax ?? l.normalizedUsdMin ?? -1;
     const now = Date.now();
@@ -974,8 +978,6 @@ export class MemoryStore implements Store {
       if (options.sort === 'budget' && usd(a) !== usd(b)) return usd(b) - usd(a);
       return -order;
     });
-    const limit = Math.max(1, Math.min(options.limit ?? 50, 5000));
-    const offset = Math.max(0, Math.min(Math.floor(options.offset ?? 0), 10_000));
     return result.slice(offset, offset + limit).map((l) => ({
       ...l,
       votes_up: l.votes_up ?? 0,
@@ -1470,6 +1472,10 @@ export class MemoryStore implements Store {
 
   async getLeadsForFeed(options: FeedOptions = {}): Promise<Lead[]> {
     return this.queryLeads(options, true);
+  }
+
+  async countLeads(options: FeedOptions & { feedOnly?: boolean } = {}): Promise<number> {
+    return this.queryLeads(options, options.feedOnly === true, true).length;
   }
 
   // --- radar/2 hub ---

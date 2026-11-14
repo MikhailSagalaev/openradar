@@ -25,6 +25,14 @@ const EXTRACTION_INTERVAL_MS = 2 * 60 * 1000;
 /** Batches per hour at EXTRACTION_INTERVAL_MS: keep decide/enrich/extract caps honest. */
 const BATCHES_PER_HOUR = 30;
 const USER_TELEGRAM_CHECK_MS = 5 * 60 * 1000;
+/**
+ * The UK register refreshes at most twice a day and a lead unmatched today is retried
+ * tomorrow, so re-scanning the last 500 vacancies every minute is pure cost: a round
+ * every 15 minutes sees every new lead long before the register could change.
+ */
+const VISA_SPONSORS_INTERVAL_MS = 15 * 60 * 1000;
+/** The Bank of Russia publishes once a day; the rates of a month never change after it. */
+const FX_RATES_CHECK_MS = 60 * 60 * 1000;
 
 export class PollRunner {
   private timer: NodeJS.Timeout | undefined;
@@ -43,6 +51,8 @@ export class PollRunner {
   private enrichmentRunning = false;
   private nextEnrichmentAt = 0;
   private visaSponsorsRunning = false;
+  private lastVisaSponsorsAt = 0;
+  private lastFxCheckAt = 0;
   private lastUserTelegramAt = 0;
   private userTelegramRunning = false;
 
@@ -115,12 +125,17 @@ export class PollRunner {
       this.runVisaSponsorsIfDue();
       this.runUserTelegramIfDue();
       // Keeps the live research report built, so no visitor waits the seconds it takes.
+      // The rates check is hourly: the Bank of Russia answers once a day, and a missing
+      // month is retried on the next check, not on every background minute.
       const useModel = this.deps.env.RADAR_EXTRACT_APPLY;
-      void ensureFxRates(this.deps.store)
-        .catch((error: unknown) => {
-          // The reference rates stand in until the Bank of Russia answers.
-          this.logger.warn('Bank of Russia rates not saved', { error: error instanceof Error ? error.message : String(error) });
-        })
+      const fxCheckDue = Date.now() - this.lastFxCheckAt >= FX_RATES_CHECK_MS;
+      if (fxCheckDue) this.lastFxCheckAt = Date.now();
+      void (fxCheckDue
+        ? ensureFxRates(this.deps.store).catch((error: unknown) => {
+            // The reference rates stand in until the Bank of Russia answers.
+            this.logger.warn('Bank of Russia rates not saved', { error: error instanceof Error ? error.message : String(error) });
+          })
+        : Promise.resolve())
         .then(() => liveReport(this.deps.store, new Date(), { useModel }))
         .then(() => openradarIndex(this.deps.store, new Date(), { useModel }))
         .catch((error: unknown) => {
@@ -216,11 +231,14 @@ export class PollRunner {
 
   /**
    * UK sponsor-register matching (plan 021D). The round itself decides when the register
-   * needs a re-read (twice a day); this guard only keeps one round at a time.
+   * needs a re-read (twice a day); this guard keeps one round at a time and paces rounds
+   * to every 15 minutes — the register and the retry window move far slower than a minute.
    */
   private runVisaSponsorsIfDue(): void {
     const env = this.deps.env;
     if (env.RADAR_VISA_SPONSORS === false || this.visaSponsorsRunning || !this.deps.store.saveLeadVisaSponsor) return;
+    if (Date.now() - this.lastVisaSponsorsAt < VISA_SPONSORS_INTERVAL_MS) return;
+    this.lastVisaSponsorsAt = Date.now();
     this.visaSponsorsRunning = true;
     void runVisaSponsors({ store: this.deps.store, env, logger: this.deps.logger.child('visa'), fetchImpl: this.deps.fetchImpl ?? fetch })
       .then((summary) => {

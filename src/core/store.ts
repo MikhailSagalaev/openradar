@@ -634,6 +634,13 @@ export interface Store extends HubStore {
   /** Leads visible in the public feed: state `active`, optionally first seen before a cutoff. */
   getLeadsForFeed(options?: FeedOptions): Promise<Lead[]>;
 
+  /**
+   * How many leads match these options, without loading them: the same filters as
+   * `listLeads`/`getLeadsForFeed`, counted by the store (SELECT count(*) in PostgreSQL).
+   * `limit` caps the count like the listing's LIMIT would; sorting is irrelevant.
+   */
+  countLeads?(options: FeedOptions & { feedOnly?: boolean }): Promise<number>;
+
   deleteLead?(id: string): Promise<boolean>;
   cleanupOldLeads?(retentionDays: number): Promise<number>;
   cleanupRuns?(retentionDays: number): Promise<number>;

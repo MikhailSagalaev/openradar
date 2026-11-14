@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { createApp } from '../src/server/app.ts';
 import { webPubkey } from '../src/hub/web-key.ts';
 import type { Runtime } from '../src/runtime.ts';
@@ -109,6 +110,49 @@ describe('http server', () => {
     const adminSvc = adminBody.services.find((s: any) => s.name === 'test_svc');
     expect(adminSvc.error).toBe('Secret internal API failed');
     expect(adminSvc.httpStatus).toBe(500);
+
+    await runtime.store.close();
+  });
+
+  it('compresses large JSON responses for clients that accept gzip, leaving small ones plain', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true });
+    const app = createApp(runtime);
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed' });
+    const createdAt = new Date(Date.now() - 48 * 3600_000).toISOString();
+    for (let i = 0; i < 5; i += 1) {
+      await runtime.store.insertLead({
+        id: `gz-${i}`,
+        sourceId: source.id,
+        externalId: `gz-ext-${i}`,
+        title: `Нужен разработчик номер ${i}`,
+        titleKey: `нужен разработчик номер ${i}`,
+        text: 'Подробное описание заказа. '.repeat(60),
+        fingerprint: `gz-fp-${i}`,
+        status: 'new',
+        score: 50,
+        reasons: [],
+        createdAt,
+        publishedAt: createdAt,
+      });
+    }
+
+    const gz = await app.request('/api/leads?limit=50', { headers: { 'accept-encoding': 'gzip' } });
+    expect(gz.status).toBe(200);
+    expect(gz.headers.get('content-encoding')).toBe('gzip');
+    expect(gz.headers.get('vary')).toContain('Accept-Encoding');
+    // app.request hands back the raw response: decode the gzip the way a browser would.
+    const decoded = JSON.parse(gunzipSync(Buffer.from(await gz.arrayBuffer())).toString('utf8')) as Array<{ id: string }>;
+    expect(decoded).toHaveLength(5);
+
+    const plain = await app.request('/api/leads?limit=50');
+    expect(plain.headers.get('content-encoding')).toBeNull();
+    expect((await plain.json()) as unknown[]).toHaveLength(5);
+
+    // A tiny body still round-trips correctly whether or not it gets encoded.
+    const small = await app.request('/api/leads?limit=1&status=rejected', { headers: { 'accept-encoding': 'gzip' } });
+    const smallBuf = Buffer.from(await small.arrayBuffer());
+    const smallText = small.headers.get('content-encoding') === 'gzip' ? gunzipSync(smallBuf).toString('utf8') : smallBuf.toString('utf8');
+    expect(smallText).toBe('[]');
 
     await runtime.store.close();
   });

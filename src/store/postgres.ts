@@ -1111,6 +1111,44 @@ export class PostgresStore implements Store {
 
   private async queryLeads(options: FeedOptions, feedOnly: boolean): Promise<Lead[]> {
     const limit = Math.max(1, Math.min(options.limit ?? 50, 5000));
+    const { whereClause, params, idx, queryTsIdx } = this.buildLeadFilters(options, feedOnly);
+    params.push(limit);
+    const order =
+      feedOnly && options.after
+        ? 'created_at ASC, id ASC'
+        : options.sort === 'score'
+          ? `score - EXTRACT(EPOCH FROM (now() - created_at)) / 3600 * ${SCORE_DECAY_PER_HOUR} DESC, created_at DESC, id DESC`
+          : options.sort === 'budget'
+            ? 'COALESCE(normalized_usd_max, normalized_usd_min) DESC NULLS LAST, created_at DESC, id DESC'
+            : options.sort === 'relevance' && queryTsIdx !== undefined
+              ? (this.hasPgSearch
+                  ? `paradedb.score(id) DESC`
+                  : `ts_rank_cd('{0.1, 0.2, 0.4, 1.0}', search_vector, websearch_to_tsquery('russian', $${queryTsIdx}) || websearch_to_tsquery('english', $${queryTsIdx})) DESC, created_at DESC, id DESC`)
+              : 'created_at DESC, id DESC';
+    const offset = Math.max(0, Math.min(Math.floor(options.offset ?? 0), 10_000));
+    const query = `SELECT * FROM leads ${whereClause} ORDER BY ${order} LIMIT $${idx}${offset ? ` OFFSET ${offset}` : ''}`;
+
+    const res = await this.pool.query(query, params);
+    return res.rows.map((r) => this.rowToLead(r));
+  }
+
+  /**
+   * Count of matching leads without loading rows: the same filters as the listing above,
+   * `SELECT count(*)` in the database. `limit` caps the count like the listing's LIMIT would
+   * (foundToday shows «5000+» past the cap); sorting does not change a count, so it is skipped.
+   */
+  async countLeads(options: FeedOptions & { feedOnly?: boolean } = {}): Promise<number> {
+    const limit = Math.max(1, Math.min(options.limit ?? 50, 5000));
+    const { whereClause, params, idx } = this.buildLeadFilters(options, options.feedOnly === true);
+    const offset = Math.max(0, Math.min(Math.floor(options.offset ?? 0), 10_000));
+    const query = `SELECT count(*) AS count FROM (SELECT 1 FROM leads ${whereClause} LIMIT $${idx}${offset ? ` OFFSET ${offset}` : ''}) AS counted`;
+    params.push(limit);
+    const res = await this.pool.query(query, params);
+    return parseInt(res.rows[0]?.count, 10) || 0;
+  }
+
+  /** WHERE clause shared by queryLeads and countLeads: one filter implementation, no drift. */
+  private buildLeadFilters(options: FeedOptions, feedOnly: boolean): { whereClause: string; params: unknown[]; idx: number; queryTsIdx?: number } {
     const conditions: string[] = [];
     const params: unknown[] = [];
     let idx = 1;
@@ -1225,24 +1263,7 @@ export class PostgresStore implements Store {
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    params.push(limit);
-    const order =
-      feedOnly && options.after
-        ? 'created_at ASC, id ASC'
-        : options.sort === 'score'
-          ? `score - EXTRACT(EPOCH FROM (now() - created_at)) / 3600 * ${SCORE_DECAY_PER_HOUR} DESC, created_at DESC, id DESC`
-          : options.sort === 'budget'
-            ? 'COALESCE(normalized_usd_max, normalized_usd_min) DESC NULLS LAST, created_at DESC, id DESC'
-            : options.sort === 'relevance' && queryTsIdx !== undefined
-              ? (this.hasPgSearch
-                  ? `paradedb.score(id) DESC`
-                  : `ts_rank_cd('{0.1, 0.2, 0.4, 1.0}', search_vector, websearch_to_tsquery('russian', $${queryTsIdx}) || websearch_to_tsquery('english', $${queryTsIdx})) DESC, created_at DESC, id DESC`)
-              : 'created_at DESC, id DESC';
-    const offset = Math.max(0, Math.min(Math.floor(options.offset ?? 0), 10_000));
-    const query = `SELECT * FROM leads ${whereClause} ORDER BY ${order} LIMIT $${idx}${offset ? ` OFFSET ${offset}` : ''}`;
-
-    const res = await this.pool.query(query, params);
-    return res.rows.map((r) => this.rowToLead(r));
+    return { whereClause, params, idx, queryTsIdx };
   }
 
   async getAdminStats(days = 14): Promise<AdminStats> {
@@ -1295,31 +1316,38 @@ export class PostgresStore implements Store {
   }
 
   async getStats(): Promise<Stats> {
-    const one = async (sql: string, params: any[] = []): Promise<number> => {
-      const res = await this.pool.query(sql, params);
-      return parseInt(res.rows[0]?.count, 10) || 0;
-    };
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
 
-    const [sources, enabledSources, leads, newLeads, deliveredLeads, rejectedLeads, last24h] =
-      await Promise.all([
-        one('SELECT COUNT(*) AS count FROM sources'),
-        one('SELECT COUNT(*) AS count FROM sources WHERE enabled = TRUE'),
-        one('SELECT COUNT(*) AS count FROM leads'),
-        one("SELECT COUNT(*) AS count FROM leads WHERE status = 'new'"),
-        one("SELECT COUNT(*) AS count FROM leads WHERE status = 'delivered'"),
-        one("SELECT COUNT(*) AS count FROM leads WHERE status = 'rejected'"),
-        one('SELECT COUNT(*) AS count FROM leads WHERE created_at >= $1::timestamptz', [since]),
-      ]);
-
+    // Two queries instead of seven: one pass over each table with FILTER aggregates gives
+    // exactly the same numbers the seven separate COUNT(*) queries did, at a fraction of the
+    // I/O — /health calls this on every Docker probe.
+    const [sourcesRes, leadsRes] = await Promise.all([
+      this.pool.query(
+        `SELECT COUNT(*) AS sources,
+                COUNT(*) FILTER (WHERE enabled = TRUE) AS enabled_sources
+         FROM sources`,
+      ),
+      this.pool.query(
+        `SELECT COUNT(*) AS leads,
+                COUNT(*) FILTER (WHERE status = 'new') AS new_leads,
+                COUNT(*) FILTER (WHERE status = 'delivered') AS delivered_leads,
+                COUNT(*) FILTER (WHERE status = 'rejected') AS rejected_leads,
+                COUNT(*) FILTER (WHERE created_at >= $1::timestamptz) AS last24h
+         FROM leads`,
+        [since],
+      ),
+    ]);
+    const num = (v: unknown): number => parseInt(String(v ?? '0'), 10) || 0;
+    const s = sourcesRes.rows[0] ?? {};
+    const l = leadsRes.rows[0] ?? {};
     return {
-      sources,
-      enabledSources,
-      leads,
-      newLeads,
-      deliveredLeads,
-      rejectedLeads,
-      last24h,
+      sources: num(s.sources),
+      enabledSources: num(s.enabled_sources),
+      leads: num(l.leads),
+      newLeads: num(l.new_leads),
+      deliveredLeads: num(l.delivered_leads),
+      rejectedLeads: num(l.rejected_leads),
+      last24h: num(l.last24h),
     };
   }
 
