@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.67.4 — 2026-11-11
+
+- **Foreign salary & currency normalization**: `sitemap` (`leadFromPosting`), `prepareRawLead`, and `normalizeSalary` now preserve and prioritize explicit foreign currencies (`PLN`, `EUR`, `USD`, `BYN`/`Br`) in `rawSalary` and anchored text over the default `RUB` fallback, eliminating false `RUB` division on `justjoin.it` and Belarusian `hh.ru` vacancies; Russian rouble salaries are never divided by 12 as yearly figures, and per-visit/per-consultation rates are classified as `hourly`.
+- **LLM & page-facts salary period enrichment**: `applyLeadModelEnrichment`, `factsFill`, and `rescoreLeads` now preserve `hour` / `year` / `project` payment periods and foreign currencies when enriching or re-pricing leads.
+- **Role, InfoSec & employer precision + startup auto-heal**: Removed physical security role `professional_role=120` from `hh-infosec`, tightened `classifyRole` for `security`, `mobile`, `support`, `sales`, and `1c`, expanded `employerOf` / `detectCompany` for GeekJob and bank branch suffixes, and added a non-blocking startup data-hygiene pass in `radar serve` (`rescoreLeads`, `fillDirections`, `fillEmployers`).
+
+## 0.67.3 (2026-11-11)
+
+- **566-Lead Parsing & Formatting Audit Fixes**:
+  - Moved trade tags (`Продажи`, `Поддержка`, `Бухгалтерия`, `Юриспруденция`, `Обучение`) from `TECH_SKILL_PATTERNS` to `ROLE_SKILL_PATTERNS` so company blurbs no longer false-tag engineering roles.
+  - Expanded `extractCity` to 50+ Russian/CIS cities and explicit `Регион:` / `Город:` / `Location:` headers (raising `hh.ru` city coverage from 41.2% to 100%).
+  - Added `INR` (`₹`) and international currency rates (`SGD`, `HKD`, `BRL`, `AED`, `TRY`) and lifted Freelancer.com `(Budget: ..., Jobs: ...)` trailers into clean skill tags.
+  - Fixed `cleanTitle` / `augmentShortTitle` and `leadTitle` so single-word titles no longer glue multiline `hh.ru` RSS headers (`Вакансия компании: ...`).
+  - Updated `formatLeadText` to strip redundant leading adapter metadata headers and render Markdown headings (`###`) and inline bold (`**text**`).
+  - Fixed `hh-1c` RSS query (`search_field=name`) and deduplicated multi-city clones per employer in `rssSource.poll`.
+
+## [0.67.2] - 2026-11-11
+
+### Fixed
+- **Network Page (`/network`)**: Cache only leaderboard and source data in `networkCache` instead of pre-rendered HTML, and render `renderNetworkPage` per request with the visitor's `auth` session and `lang` cookie (`Cache-Control: private, no-cache`, `Vary: Cookie`). Fixes `/network` getting stuck in English or hiding the signed-in user menu.
+- **English Source & Employer Names**: Fix `translateSourceTitle` fragment splitting and add translations for standalone source titles and major Russian employers on `/sources?lang=en`, `/sources/quality?lang=en`, and `/en/research`.
+- **SEO Catalog & `/api/insights` Filtering Quality**:
+  - Exclude physical construction, furniture, and HVAC blueprint posts (`isPhysicalNonItWork`, `isCatalogLeadRelevant`) from `classifyRole`, `/catalog/:slug`, and `/api/insights`.
+  - Add `directions` to all remaining `SEO_CATALOG` entries.
+  - Exclude broad umbrella role labels (`Продажи`, `Разработка`, etc.) from `trending_skills` in `/api/insights` so concrete technologies/skills surface at the top; add `it_leads`, `it_share_pct`, and `?it=1` / `?direction=...` query parameters.
+
+### Added
+- **Automatic Source Hygiene**: Adaptive polling backoff (`pollBackoffFactor`: 2x/3x/4x/8x) for unstable/blocked sources, automatic quarantine (`shouldQuarantineSource`) for dead endpoints (HTTP 404/410/DNS) and chronic 24h failures, and `POST /api/sources/hygiene`.
+
+## [0.67.1] - 2026-11-11
+
+### Fixed
+- **Docker**: Copy `docs/stories.json` into runtime image so `GET /api/stories` returns public stories in production.
+- **English Localization (100% Parity)**:
+  - Translate footer SEO catalog links, RSS link title, add-source modal placeholder, and polling toast messages on all English pages (`?lang=en` / `openradar_lang=en`).
+  - Localize `/login`, `/admin`, and all `404` pages into English when `lang === 'en'`.
+  - Translate all 28 `/catalog` and `/catalog/:slug` SEO landing pages, `/employers/:slug`, `/network`, `/sources/quality`, `/decisions`, `/about`, and `/llms.txt` (`/en/llms.txt`).
+  - Translate Russian skill tags, city names, and source preset titles across the feed (`/?lang=en`), lead detail pages, source catalog, employer pages, research reports, and `/api/insights?lang=en`.
+  - Fix Russian month names, quote copy buttons, range chart tooltips/legends, and clickable role links on `/en/research` and `/en/research/roles/:slug`.
+
 ## 0.67.0 — 2026-11-11
 
 - **Extract via Coarena (GLM + MiniMax)**: OpenAI-compatible path gains `json_schema` constrained decoding, `RADAR_EXTRACT_FALLBACK_MODEL`, contact scrubbing before the call, STOP on 401/402/403, tombstones for failed posts, and a queue that only asks for posts still without pay that mention money in the text. Hub defaults documented in `.env.example`: `glm-5-3-flash` with `minimax-m3-1-flash` fallback.

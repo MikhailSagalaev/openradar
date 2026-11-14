@@ -19,6 +19,12 @@ export const RUB_PER: Record<string, number> = {
   CHF: 91.55,
   AUD: 53,
   CAD: 59.24,
+  INR: 0.92,
+  SGD: 60.5,
+  HKD: 10.4,
+  BRL: 14.2,
+  AED: 22.1,
+  TRY: 2.35,
 };
 
 /** How many USD one unit is worth. */

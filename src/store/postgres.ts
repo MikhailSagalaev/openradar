@@ -2538,9 +2538,10 @@ export class PostgresStore implements Store {
   async updateLeadMoney(id: string, money: LeadMoney): Promise<void> {
     await this.pool.query(
       `UPDATE leads SET budget = $2, currency = COALESCE($3, currency), payment_period = COALESCE($4, payment_period),
-         raw_salary = $5, normalized_usd_min = $6, normalized_usd_max = $7, skills_json = $8::jsonb
+         raw_salary = $5, normalized_usd_min = $6, normalized_usd_max = $7, skills_json = $8::jsonb,
+         city = COALESCE($9, city)
        WHERE id = $1`,
-      [id, money.budget ?? null, money.currency ?? null, money.paymentPeriod ?? null, money.rawSalary ?? null, money.normalizedUsdMin ?? null, money.normalizedUsdMax ?? null, JSON.stringify(money.skills)],
+      [id, money.budget ?? null, money.currency ?? null, money.paymentPeriod ?? null, money.rawSalary ?? null, money.normalizedUsdMin ?? null, money.normalizedUsdMax ?? null, JSON.stringify(money.skills), money.city ?? null],
     );
   }
 
@@ -2681,7 +2682,15 @@ export class PostgresStore implements Store {
 
       // 2. Normalise and apply salary if lead has no normalized USD pay
       if (facts.currency && (facts.payMin || facts.payMax)) {
-        const rawSalaryStr = `${facts.payMin ?? ''}${facts.payMax && facts.payMax !== facts.payMin ? `–${facts.payMax}` : ''} ${facts.currency}`.trim();
+        const periodSuffix =
+          facts.period === 'hour'
+            ? ' per hour'
+            : facts.period === 'year'
+              ? ' per year'
+              : facts.period === 'project'
+                ? ' fixed'
+                : '';
+        const rawSalaryStr = `${facts.payMin ?? ''}${facts.payMax && facts.payMax !== facts.payMin ? `–${facts.payMax}` : ''} ${facts.currency}${periodSuffix}`.trim();
         const salaryInfo = normalizeSalary({
           text: '',
           rawSalary: rawSalaryStr,
@@ -2693,8 +2702,8 @@ export class PostgresStore implements Store {
           await client.query(
             `UPDATE leads SET
                budget = CASE WHEN budget IS NULL THEN $2 ELSE budget END,
-               currency = CASE WHEN currency IS NULL THEN $3 ELSE currency END,
-               payment_period = CASE WHEN payment_period IS NULL THEN $4 ELSE payment_period END,
+               currency = $3,
+               payment_period = $4,
                raw_salary = CASE WHEN raw_salary IS NULL THEN $5 ELSE raw_salary END,
                normalized_usd_min = CASE WHEN normalized_usd_min IS NULL THEN $6 ELSE normalized_usd_min END,
                normalized_usd_max = CASE WHEN normalized_usd_max IS NULL THEN $7 ELSE normalized_usd_max END

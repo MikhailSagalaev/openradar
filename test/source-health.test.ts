@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countFailedInRow, sourceState } from '../src/core/source-health.ts';
+import { countFailedInRow, pollBackoffFactor, runSourceHygiene, shouldQuarantineSource, sourceState } from '../src/core/source-health.ts';
 import type { RunRecord, SourceRecord } from '../src/core/types.ts';
 import { createTestStore } from './helpers.ts';
 
@@ -34,6 +34,50 @@ describe('source state', () => {
     const health = (await store.getSourceHealth()).find((item) => item.source.id === created.id)!;
     expect(health.failedInRow).toBe(2);
     expect(sourceState(health)).toBe('unstable');
+    await store.close();
+  });
+
+  it('computes adaptive backoff multipliers and auto-quarantines chronically dead sources', async () => {
+    expect(pollBackoffFactor({ failedInRow: 0, last24h: day(10, 20) })).toBe(1);
+    expect(pollBackoffFactor({ failedInRow: 1, lastRun: run('timeout'), last24h: day(10, 20) })).toBe(2);
+    expect(pollBackoffFactor({ failedInRow: 2, lastRun: run('timeout'), last24h: day(10, 20) })).toBe(3);
+    expect(pollBackoffFactor({ failedInRow: 3, lastRun: run('timeout'), last24h: day(4, 5) })).toBe(4);
+    expect(pollBackoffFactor({ failedInRow: 3, lastRun: run('HTTP 404'), last24h: { ...day(8, 0), errors: 8 } })).toBe(8);
+
+    // Dead 404 endpoint with 6+ failed runs in 24h and 0 found is quarantined
+    expect(
+      shouldQuarantineSource({
+        source,
+        failedInRow: 3,
+        lastRun: run('HTTP 404 for https://example.com/jobs.xml'),
+        last24h: { ...day(6, 0), errors: 6 },
+      }),
+    ).toMatchObject({ quarantine: true, reason: expect.stringContaining('dead_endpoint') });
+
+    // Chronic failure (12+ failed runs in 24h, 0 found) is quarantined
+    expect(
+      shouldQuarantineSource({
+        source,
+        failedInRow: 3,
+        lastRun: run('HTTP 503 Service Unavailable'),
+        last24h: { ...day(12, 0), errors: 12 },
+      }),
+    ).toMatchObject({ quarantine: true, reason: expect.stringContaining('chronic_failure_24h') });
+
+    // runSourceHygiene disables dead sources in the store
+    const store = createTestStore();
+    const dead = await store.createSource({ kind: 'rss', title: 'Dead Feed' });
+    const now = Date.now();
+    for (let i = 6; i >= 1; i--) {
+      const ts = new Date(now - i * 60_000).toISOString();
+      await store.recordRun({ id: 'dead-' + i, sourceId: dead.id, startedAt: ts, finishedAt: ts, found: 0, inserted: 0, duplicates: 0, rejected: 0, delivered: 0, error: 'HTTP 404 Not Found' });
+    }
+    const summary = await runSourceHygiene(store);
+    expect(summary.autoDisabled).toHaveLength(1);
+    expect(summary.autoDisabled[0]!.sourceId).toBe(dead.id);
+    const updated = await store.getSource(dead.id);
+    expect(updated?.enabled).toBe(false);
+    expect(updated?.config.autoDisableReason).toContain('dead_endpoint');
     await store.close();
   });
 });

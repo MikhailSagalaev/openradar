@@ -6,6 +6,7 @@ import { scoreLead } from '../core/rules.ts';
 import { normalizeSalary } from '../core/salary.ts';
 import type { LeadMoney, Store } from '../core/store.ts';
 import { decodeHtmlEntities, extractSkills } from '../core/text.ts';
+import { modelFactsOf } from '../research/derive.ts';
 import type { Lead, LeadType, SourceRecord } from '../core/types.ts';
 
 /** Leads read per store call: the stores cap a listing at 5000. */
@@ -21,10 +22,13 @@ export interface RescoreSummary {
 }
 
 /** Skills the dictionary used to read off a mere mention: kept only if it still finds them. */
-const MENTION_SKILLS = new Set(['Авито', 'Маркетплейсы', 'GPT']);
+const MENTION_SKILLS = new Set([
+  'Авито', 'Маркетплейсы', 'GPT',
+  'Продажи', 'Поддержка', 'Бухгалтерия', 'Юриспруденция', 'Обучение', 'Cursor',
+]);
 
 /** The rawSalary normalizeSalary writes itself, as opposed to what a board published. */
-const GENERATED_SALARY = /^\d+(?:–\d+)? [A-Z]{3,4}(?: per year)?$/;
+const GENERATED_SALARY = /^\d+(?:–\d+)? [A-Z]{3,4}(?: (?:per year|per hour|fixed))?$/;
 
 /**
  * Pay and skills of a stored lead by today's rules. A budget taken from the text is read
@@ -43,9 +47,37 @@ function moneyOf(lead: Lead, type: LeadType, flags: QualityFlag[], source: Sourc
   const fromText = lead.budget !== undefined && (source.kind.startsWith('telegram') || extractBudgetAndCurrency(post, { keepNotPay: true }).budget === lead.budget);
   const read = fromText ? extractBudgetAndCurrency(post) : undefined;
   const budget = fromText ? read!.budget : lead.budget;
-  const currency = (fromText ? read!.currency : undefined) ?? lead.currency;
+  const model = modelFactsOf(lead);
+  const currency =
+    (fromText ? read!.currency : undefined) ??
+    (lead.currency === 'RUB' && model?.currency && model.currency !== 'RUB' ? model.currency : lead.currency);
   const generated = GENERATED_SALARY.test(lead.rawSalary ?? '');
-  const rawSalary = generated && (fromText || / per year$/.test(lead.rawSalary!)) ? undefined : lead.rawSalary;
+  let rawSalary = generated && (fromText || / per year$/.test(lead.rawSalary!)) ? undefined : lead.rawSalary;
+  if (
+    (!rawSalary || /^\d+(?:–\d+)? [A-Z]{3,4}$/.test(rawSalary)) &&
+    model &&
+    (model.payMax === budget || model.payMin === budget) &&
+    model.currency &&
+    model.period
+  ) {
+    const suffix =
+      model.period === 'hour'
+        ? ' per hour'
+        : model.period === 'year'
+          ? ' per year'
+          : model.period === 'project'
+            ? ' fixed'
+            : '';
+    if (suffix) {
+      rawSalary = `${model.payMin ?? ''}${model.payMax && model.payMax !== model.payMin ? `–${model.payMax}` : ''} ${model.currency}${suffix}`.trim();
+    }
+  } else if (lead.paymentPeriod === 'hourly') {
+    if (rawSalary && /^\d+(?:–\d+)? [A-Z]{3,4}$/.test(rawSalary)) {
+      rawSalary = `${rawSalary} per hour`;
+    } else if (!rawSalary && budget && currency) {
+      rawSalary = `${budget} ${currency} per hour`;
+    }
+  }
   const info = normalizeSalary({ text: post, rawSalary, budget, currency, type });
   if (info.implausible || payNotOffered(lead, info.normalizedUsdMax ?? info.normalizedUsdMin)) return { skills };
   return { budget, currency: info.currency, paymentPeriod: info.paymentPeriod, rawSalary: info.rawSalary, normalizedUsdMin: info.normalizedUsdMin, normalizedUsdMax: info.normalizedUsdMax, skills };
@@ -121,14 +153,23 @@ export async function rescoreLeads(
       await store.updateLeadQuality(lead.id, quality.type, quality.flags);
       requalified += 1;
     }
-    if (options.money && store.updateLeadTitle && /&[a-z]+;/i.test(lead.title)) {
-      const title = decodeHtmlEntities(lead.title);
+    if (options.money && store.updateLeadTitle && (/&[a-z]+;/i.test(lead.title) || /\s+(?:Вакансия компании|Создана|Регион|Company|Location):/i.test(lead.title))) {
+      const cleaned = decodeHtmlEntities(lead.title).replace(/\s+(?:Вакансия компании|Создана|Регион|Company|Location):[\s\S]*$/i, '').trim();
+      const title = cleaned || decodeHtmlEntities(lead.title);
       if (title !== lead.title) await store.updateLeadTitle(lead.id, title, titleKeyOf(title), lead.title);
     }
     if (options.money && store.updateLeadMoney) {
       const money = moneyOf(lead, quality.type, quality.flags, source);
-      const same = money.budget === lead.budget && money.normalizedUsdMax === lead.normalizedUsdMax && money.normalizedUsdMin === lead.normalizedUsdMin
-        && money.rawSalary === lead.rawSalary && money.skills.join() === (lead.skills ?? []).join();
+      if (!lead.city && prepared.city) money.city = prepared.city;
+      const same =
+        money.budget === lead.budget &&
+        money.normalizedUsdMax === lead.normalizedUsdMax &&
+        money.normalizedUsdMin === lead.normalizedUsdMin &&
+        money.rawSalary === lead.rawSalary &&
+        (money.currency ?? lead.currency) === lead.currency &&
+        (money.paymentPeriod ?? lead.paymentPeriod) === lead.paymentPeriod &&
+        (money.city ?? lead.city) === lead.city &&
+        money.skills.join() === (lead.skills ?? []).join();
       if (!same) {
         await store.updateLeadMoney(lead.id, money);
         repriced += 1;

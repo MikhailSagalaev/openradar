@@ -4,7 +4,8 @@
  */
 import { escapeHtml, jsonForScript } from '../core/text.ts';
 import { layout, type AuthDisplay } from '../server/ui.ts';
-import type { SupportedLang } from '../server/i18n.ts';
+import { translateCity, translateSkill, translateSourceTitle, type SupportedLang } from '../server/i18n.ts';
+import { periodEn } from './pages-en.ts';
 import { GRADE_LABELS, MIN_CONFIDENCE, ROLES, roleLabel } from './derive.ts';
 
 const MIN_CONFIDENCE_PCT = Math.round(MIN_CONFIDENCE * 100);
@@ -45,9 +46,10 @@ const num = (value: number): string => new Intl.NumberFormat('ru-RU').format(val
 const short = (rub: number): string => (rub >= 1000 ? `${num(Math.round(rub / 1000))} тыс.` : num(rub));
 
 /** Median with its 95% interval on the middle half of pay. Rows below the threshold are left out. */
-function rangeChart(rows: BarRow[], options: { unit?: (v: number) => string; caption?: string } = {}): string {
+function rangeChart(rows: BarRow[], options: { unit?: (v: number) => string; caption?: string; lang?: SupportedLang } = {}): string {
+  const en = options.lang === 'en';
   const shown = rows.filter((row) => row.pay.median !== undefined);
-  if (!shown.length) return `<p class="muted small">Пока мало данных: нужна хотя бы ${MIN_MEDIAN} публикаций с оплатой в группе.</p>`;
+  if (!shown.length) return `<p class="muted small">${en ? `Not enough data yet: at least ${MIN_MEDIAN} posts with stated pay are needed in a group.` : `Пока мало данных: нужна хотя бы ${MIN_MEDIAN} публикаций с оплатой в группе.`}</p>`;
   const unit = options.unit ?? formatRub;
   const top = Math.max(...shown.map((row) => Math.max(row.pay.p75 ?? 0, row.pay.ciHigh ?? 0, row.pay.median!))) * 1.08;
   const pct = (v: number): string => `${Math.min(100, (v / top) * 100).toFixed(2)}%`;
@@ -60,20 +62,26 @@ function rangeChart(rows: BarRow[], options: { unit?: (v: number) => string; cap
       const ci = row.pay.ciLow !== undefined && row.pay.ciHigh !== undefined
         ? `<span class="rs-ci" style="left:${pct(row.pay.ciLow)};width:calc(${pct(row.pay.ciHigh)} - ${pct(row.pay.ciLow)})"></span>`
         : '';
-      const hint = [
-        `Медиана ${unit(row.pay.median!)}`,
-        row.pay.ciLow !== undefined ? `95% интервал: ${unit(row.pay.ciLow)} — ${unit(row.pay.ciHigh!)}` : '',
-        row.pay.p25 !== undefined ? `половина публикаций: ${unit(row.pay.p25)} — ${unit(row.pay.p75!)}` : '',
-      ].filter(Boolean).join('; ');
+      const hint = en
+        ? [
+            `Median ${unit(row.pay.median!)}`,
+            row.pay.ciLow !== undefined ? `95% CI: ${unit(row.pay.ciLow)} — ${unit(row.pay.ciHigh!)}` : '',
+            row.pay.p25 !== undefined ? `middle half: ${unit(row.pay.p25)} — ${unit(row.pay.p75!)}` : '',
+          ].filter(Boolean).join('; ')
+        : [
+            `Медиана ${unit(row.pay.median!)}`,
+            row.pay.ciLow !== undefined ? `95% интервал: ${unit(row.pay.ciLow)} — ${unit(row.pay.ciHigh!)}` : '',
+            row.pay.p25 !== undefined ? `половина публикаций: ${unit(row.pay.p25)} — ${unit(row.pay.p75!)}` : '',
+          ].filter(Boolean).join('; ');
       return `<div class="rs-row" title="${escapeHtml(hint)}">
   <div class="rs-label">${label}</div>
   <div class="rs-track">${band}${ci}<span class="rs-dot" style="left:${pct(row.pay.median!)}"></span></div>
-  <div class="rs-val"><b>${escapeHtml(unit(row.pay.median!))}</b><span class="rs-n">n = ${row.pay.n}${row.pay.n < RELIABLE ? ' · мало' : ''}</span></div>
+  <div class="rs-val"><b>${escapeHtml(unit(row.pay.median!))}</b><span class="rs-n">n = ${row.pay.n}${row.pay.n < RELIABLE ? (en ? ' · low n' : ' · мало') : ''}</span></div>
 </div>`;
     })
     .join('');
   return `<div class="rs-chart" role="table">${body}</div>
-<p class="rs-legend"><span class="rs-dot-key"></span> медиана <span class="rs-ci-key"></span> 95% интервал медианы <span class="rs-band-key"></span> половина публикаций (от 25-го до 75-го процентиля)${options.caption ? ` · ${escapeHtml(options.caption)}` : ''}</p>`;
+<p class="rs-legend"><span class="rs-dot-key"></span> ${en ? 'median' : 'медиана'} <span class="rs-ci-key"></span> ${en ? '95% CI of median' : '95% интервал медианы'} <span class="rs-band-key"></span> ${en ? 'middle half (25th to 75th percentile)' : 'половина публикаций (от 25-го до 75-го процентиля)'}${options.caption ? ` · ${escapeHtml(options.caption)}` : ''}</p>`;
 }
 
 function countBars(rows: Array<{ label: string; n: number; note?: string }>): string {
@@ -125,8 +133,8 @@ function sliceRows(slices: Slice[], href?: (key: string) => string | undefined):
   return slices.map((s) => ({ label: s.label, href: href?.(s.key), n: s.n, pay: s.pay }));
 }
 
-function quoteButton(quote: string): string {
-  return `<button type="button" class="rs-quote" data-quote="${escapeHtml(quote)}">Скопировать цитату</button>`;
+function quoteButton(quote: string, lang: SupportedLang = 'ru'): string {
+  return `<button type="button" class="rs-quote" data-quote="${escapeHtml(quote)}">${lang === 'en' ? 'Copy quote' : 'Скопировать цитату'}</button>`;
 }
 
 function renderEditorialInsight(insight?: Report['editorialInsight']): string {
@@ -339,7 +347,7 @@ document.addEventListener('click', (event) => {
   if (quoteBtn) {
     navigator.clipboard.writeText(quoteBtn.dataset.quote).then(() => {
       const label = quoteBtn.textContent;
-      quoteBtn.textContent = '✓ Скопировано';
+      quoteBtn.textContent = document.documentElement.lang === 'en' ? '✓ Copied' : '✓ Скопировано';
       setTimeout(() => { quoteBtn.textContent = label; }, 1800);
     });
     return;
@@ -360,7 +368,7 @@ function copyEmbedCode(button) {
   if (!textarea) return;
   navigator.clipboard.writeText(textarea.value).then(() => {
     const label = button.textContent;
-    button.textContent = '✓ Скопировано';
+    button.textContent = document.documentElement.lang === 'en' ? '✓ Copied' : '✓ Скопировано';
     setTimeout(() => { button.textContent = label; }, 1800);
   });
 }
@@ -720,20 +728,35 @@ export function renderRolePage(options: { detail: RoleDetail; report: Report; ba
   const { detail, report, baseUrl, version } = options;
   const ru = (options.lang ?? 'ru') !== 'en';
   const roleName = roleLabel(detail.slug, options.lang);
+  const periodLabel = ru ? report.period.label : periodEn(report).label;
   const title = ru ? `Зарплаты: ${roleName}` : `Salaries: ${roleName}`;
   const path = ru ? `/research/roles/${detail.slug}` : `/en/research/roles/${detail.slug}`;
   const quote = detail.pay.median
     ? (ru
         ? `По данным openradar, медианная зарплата в вакансиях направления «${roleName}» ${report.period.phrase} составила ${formatRub(detail.pay.median)} в месяц (выборка: ${detail.pay.n} вакансий).`
-        : `According to openradar, the median salary in "${roleName}" vacancies for ${report.period.label} was ${formatRub(detail.pay.median)} per month (sample: ${detail.pay.n} vacancies).`)
+        : `According to openradar, the median salary in "${roleName}" vacancies for ${periodLabel} was ${formatRub(detail.pay.median)} per month (sample: ${detail.pay.n} vacancies).`)
     : '';
+  const gradeLabelEn: Record<string, string> = { intern: 'Intern', junior: 'Junior', middle: 'Middle', senior: 'Senior', lead: 'Lead' };
+  const gradeRows = sliceRows(detail.byGrade).map((r, i) => ({
+    ...r,
+    label: ru ? r.label : (gradeLabelEn[detail.byGrade[i]?.key ?? ''] ?? r.label),
+  }));
+  const regionRows = sliceRows(detail.byRegion).map((r) => ({
+    ...r,
+    label: ru ? r.label : (translateCity(r.label, 'en') ?? r.label),
+  }));
+  const skillRows = detail.skills.map((s) => ({
+    label: ru ? s.skill : translateSkill(s.skill, 'en'),
+    n: s.n,
+    pay: s.pay,
+  }));
   const body = `
 <nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/">openradar</a> / <a href="${ru ? '/research' : '/en/research'}">${ru ? 'Исследования' : 'Research'}</a> / ${escapeHtml(roleName)}</nav>
 <div class="page-head"><div>
   <h1>${escapeHtml(title)}</h1>
   <p class="muted small">${ru
-    ? `${num(detail.n)} вакансий за ${escapeHtml(report.period.label)}, зарплата указана в ${num(detail.withPay)}. Удалённую работу допускают ${formatShare(detail.remoteShare)}.`
-    : `${num(detail.n)} vacancies in ${escapeHtml(report.period.label)}, pay specified in ${num(detail.withPay)}. Remote allowed in ${formatShare(detail.remoteShare)}.`}</p>
+    ? `${num(detail.n)} вакансий за ${escapeHtml(periodLabel)}, зарплата указана в ${num(detail.withPay)}. Удалённую работу допускают ${formatShare(detail.remoteShare)}.`
+    : `${num(detail.n)} vacancies in ${escapeHtml(periodLabel)}, pay specified in ${num(detail.withPay)}. Remote allowed in ${formatShare(detail.remoteShare)}.`}</p>
 </div></div>
 <div class="rs-kpis">
   ${kpi(detail.pay.median ? formatRub(detail.pay.median) : '—', ru ? 'медиана в месяц' : 'monthly median')}
@@ -741,12 +764,12 @@ export function renderRolePage(options: { detail: RoleDetail; report: Report; ba
   ${kpi(detail.pay.p75 ? formatRub(detail.pay.p75) : '—', ru ? '75-й процентиль' : '75th percentile')}
   ${kpi(num(detail.n), ru ? 'вакансий' : 'vacancies')}
 </div>
-${quote ? `<p class="small">${escapeHtml(quote)} ${quoteButton(quote)}</p>` : ''}
-<section class="rs-section"><h2>${ru ? 'По уровню' : 'By level'}</h2>${rangeChart(sliceRows(detail.byGrade))}</section>
-${detail.byLanguage.some((s) => s.pay.median) ? `<section class="rs-section"><h2>${ru ? 'По языку' : 'By language'}</h2>${rangeChart(sliceRows(detail.byLanguage))}</section>` : ''}
-<section class="rs-section"><h2>${ru ? 'По городам' : 'By city'}</h2>${rangeChart(sliceRows(detail.byRegion))}</section>
-${detail.skills.length ? `<section class="rs-section"><h2>${ru ? 'Навыки' : 'Skills'}</h2>${rangeChart(detail.skills.map((s) => ({ label: s.skill, n: s.n, pay: s.pay })))}</section>` : ''}
-${detail.companies.length ? `<section class="rs-section"><h2>Кто нанимает</h2>${countBars(detail.companies.map((c) => ({ label: c.name, n: c.n })))}</section>` : ''}
+${quote ? `<p class="small">${escapeHtml(quote)} ${quoteButton(quote, options.lang)}</p>` : ''}
+<section class="rs-section"><h2>${ru ? 'По уровню' : 'By level'}</h2>${rangeChart(gradeRows, { lang: options.lang })}</section>
+${detail.byLanguage.some((s) => s.pay.median) ? `<section class="rs-section"><h2>${ru ? 'По языку' : 'By language'}</h2>${rangeChart(sliceRows(detail.byLanguage), { lang: options.lang })}</section>` : ''}
+<section class="rs-section"><h2>${ru ? 'По городам' : 'By city'}</h2>${rangeChart(regionRows, { lang: options.lang })}</section>
+${skillRows.length ? `<section class="rs-section"><h2>${ru ? 'Навыки' : 'Skills'}</h2>${rangeChart(skillRows, { lang: options.lang })}</section>` : ''}
+${detail.companies.length ? `<section class="rs-section"><h2>${ru ? 'Кто нанимает' : 'Who is hiring'}</h2>${countBars(detail.companies.map((c) => ({ label: translateSourceTitle(c.name, options.lang), n: c.n })))}` + '</section>' : ''}
 <section class="rs-section prose" style="margin-top:36px">
   <p>${ru
     ? 'Свежие вакансии этого направления — в <a href="/?type=job">ленте вакансий</a>. Как считаются цифры — в <a href="/research/methodology">методике</a>. Все направления — в <a href="/research">общем отчёте</a>.'
@@ -755,8 +778,8 @@ ${detail.companies.length ? `<section class="rs-section"><h2>Кто нанима
 </section>`;
   const description = detail.pay.median
     ? (ru
-        ? `${roleName}: медианная зарплата в вакансиях ${formatRub(detail.pay.median)} в месяц. Зарплаты по уровням, городам и навыкам, ${report.period.label}.`
-        : `${roleName}: median salary in vacancies ${formatRub(detail.pay.median)} per month. Pay by level, city and skills, ${report.period.label}.`)
+        ? `${roleName}: медианная зарплата в вакансиях ${formatRub(detail.pay.median)} в месяц. Зарплаты по уровням, городам и навыкам, ${periodLabel}.`
+        : `${roleName}: median salary in vacancies ${formatRub(detail.pay.median)} per month. Pay by level, city and skills, ${periodLabel}.`)
     : (ru
         ? `${roleName}: зарплаты в вакансиях по данным openradar.`
         : `${roleName}: salaries in vacancies according to openradar.`);

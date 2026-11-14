@@ -6,6 +6,7 @@
  */
 import { escapeHtml, jsonForScript } from '../core/text.ts';
 import { layout, type AuthDisplay } from '../server/ui.ts';
+import { translateSkill, translateSourceTitle } from '../server/i18n.ts';
 import type { IndexSeries, OpenradarIndex } from './index.ts';
 import { lineChart } from './index-page.ts';
 import { MIN_MEDIAN, RELIABLE, REPORT_VERSION, rubMonthToUsdYear, type Dist, type Report, type Slice } from './report.ts';
@@ -78,8 +79,8 @@ export function periodEn(report: Report): { label: string; phrase: string } {
   return { label: `${dateEn(from)} – ${dateEn(last)}`, phrase: 'over the last 30 days' };
 }
 
-function translate(slices: Slice[], names: Record<string, string>): Slice[] {
-  return slices.map((s) => ({ ...s, label: names[s.key] ?? s.label }));
+function translate(slices: Slice[], names: Record<string, string>, hrefOf?: (key: string) => string): Array<Slice & { href?: string }> {
+  return slices.map((s) => ({ ...s, label: names[s.key] ?? s.label, href: hrefOf ? hrefOf(s.key) : undefined }));
 }
 
 function rangeChart(rows: Array<{ label: string; href?: string; pay: Dist }>, unit: (v: number) => string = rub): string {
@@ -205,7 +206,7 @@ export function renderReportPageEn(options: { report: Report; baseUrl: string; v
 <div class="page-head"><div>
   <h1>${escapeHtml(title)}</h1>
   <p class="muted small">${isLive ? `A live report on ${num(totals.posts)} posts, ${escapeHtml(label)}, recalculated every 15 minutes.` : `The report for ${escapeHtml(label)}: ${num(totals.posts)} posts. The figures are frozen.`}
-  Pay offered in published Russian-language vacancies and freelance orders: hh.ru, Habr Career, the state portal «Работа России», freelance boards and Telegram channels.</p>
+  Pay offered in published Russian-language vacancies and freelance orders: hh.ru, Habr Career, the state portal Rabota Rossii, freelance boards and Telegram channels.</p>
 </div><div class="actions"><a class="btn ghost" href="/en/research/index">Index</a><a class="btn ghost" href="/en/research/methodology">Methodology</a><a class="btn ghost" href="/research/dataset.csv">CSV data</a></div></div>
 
 <div class="rs-kpis">
@@ -228,16 +229,16 @@ ${findings.length ? `<section class="rs-section">
 
 <section class="rs-section"><h2>Pay by role</h2>
   <p class="muted small">Vacancies in roubles that state the pay, a month. The role comes from the vacancy title.</p>
-  ${rangeChart(translate(jobs.byRole.filter((s) => s.key !== 'other'), ROLE_EN))}</section>
+  ${rangeChart(translate(jobs.byRole.filter((s) => s.key !== 'other'), ROLE_EN, (key) => `/en/research/roles/${key}`))}</section>
 <section class="rs-section"><h2>By seniority</h2>${rangeChart(translate(jobs.byGrade, GRADE_EN))}</section>
 <section class="rs-section"><h2>By programming language</h2>${rangeChart(jobs.byLanguage)}</section>
 <section class="rs-section"><h2>Location and remote work</h2>${rangeChart(translate(jobs.byRegion, REGION_EN))}
   <p class="small"><b>${pct(jobs.remote.share)}</b> of vacancies allow remote work.${jobs.remote.remote.median && jobs.remote.office.median ? ` Median: ${rub(jobs.remote.remote.median)} remote, ${rub(jobs.remote.office.median)} on site.` : ''}${jobs.remote.adjusted ? ` At the same role and seniority the difference is ${jobs.remote.adjusted.pct > 0 ? '+' : ''}${jobs.remote.adjusted.pct}% (${num(jobs.remote.adjusted.n)} vacancies compared).` : ''}</p></section>
-<section class="rs-section"><h2>Skills</h2>${rangeChart(jobs.skills.map((s) => ({ label: s.skill, pay: s.pay })))}</section>
+<section class="rs-section"><h2>Skills</h2>${rangeChart(jobs.skills.map((s) => ({ label: translateSkill(s.skill, 'en'), pay: s.pay })))}</section>
 <section class="rs-section"><h2>AI in vacancies</h2>
   <p class="small">Neural networks, LLMs, GPT, Cursor, Copilot or machine learning appear in <b>${pct(jobs.ai.share)}</b> of vacancies.</p>
   ${rangeChart([{ label: 'Mention AI', pay: jobs.ai.with }, { label: 'Do not', pay: jobs.ai.without }])}</section>
-${jobs.companies.length ? `<section class="rs-section"><h2>Who hires most</h2>${countBars(jobs.companies.slice(0, 12).map((c) => ({ label: c.name, n: c.n })))}</section>` : ''}
+${jobs.companies.length ? `<section class="rs-section"><h2>Who hires most</h2>${countBars(jobs.companies.slice(0, 12).map((c) => ({ label: translateSourceTitle(c.name, 'en'), n: c.n })))}</section>` : ''}
 <section class="rs-section"><h2>Freelance order budgets</h2>
   <p class="small">Russian-language orders. <b>${pct(gigs.budgetShare)}</b> of them state a budget, for the whole project.${totals.intlGigs ? ` English-language orders (${num(totals.intlGigs)}) stay out.` : ''}</p>
   ${rangeChart(translate(gigs.byCategory.filter((s) => s.key !== 'other'), ROLE_EN))}</section>
@@ -337,13 +338,13 @@ export function renderMethodologyPageEn(options: { baseUrl: string; version: str
   <h2>What is measured</h2>
   <p>openradar research shows what employers and clients offer: the pay stated in published vacancies and orders. It is neither what people take home nor a survey. Such data shows the hiring market as it is now and how it changes month to month.</p>
   <h2>Sources</h2>
-  <p>Vacancies and orders published in the period on hh.ru, Habr Career, the state portal «Работа России», getmatch, FL.ru, Kwork, Freelancehunt, Telegram channels, international boards and company career pages (the public job-board APIs of Greenhouse, Lever and Ashby), and posts added by participants. A post on several boards counts once: openradar merges duplicates by link, by title with the employer, and by text similarity. Posts flagged as junk or scam are left out.</p>
+  <p>Vacancies and orders published in the period on hh.ru, Habr Career, the state portal Rabota Rossii, getmatch, FL.ru, Kwork, Freelancehunt, Telegram channels, international boards and company career pages (the public job-board APIs of Greenhouse, Lever and Ashby), and posts added by participants. A post on several boards counts once: openradar merges duplicates by link, by title with the employer, and by text similarity. Posts flagged as junk or scam are left out.</p>
   <h2>Russian-language and international market</h2>
   <p>The main figures describe the Russian-language market: posts written mostly in Cyrillic. The rule is the same for vacancies and orders. English-language posts are shown apart and do not enter the shares, medians or employer lists of the main part.</p>
   <h2>How pay is read</h2>
   <ul>
     <li>First the vacancy page markup (schema.org JobPosting), then the post text, then the budget the board states.</li>
-    <li>Only sums next to a currency or words like «оклад», «зарплата» count: «3–5 years of experience» never becomes pay.</li>
+    <li>Only sums next to a currency or salary keywords (base pay, wage) count: «3–5 years of experience» never becomes pay.</li>
     <li>A range gives its middle; a single bound («from ₽150,000») gives itself, which is not an exact sum, so reports show how sums were written and the median of full ranges alone. Yearly sums are divided by 12; hourly rates stay out of the monthly figures.</li>
     <li>Currencies are converted to roubles at the Bank of Russia rate on the first day of the month of publication.</li>
     <li>Values below ₽12,000 or above ₽3,000,000 a month are parsing errors and dropped. For a monthly or order sum read from free text the upper limit is ₽1,000,000: above it stood commissions and stray numbers. A range whose top is over the limit gives its lower sum. Ad budgets, profit, bonuses, subscription prices and market statistics are not pay.</li>
@@ -351,7 +352,7 @@ export function renderMethodologyPageEn(options: { baseUrl: string; version: str
     <li>Ads, channel articles and vacancy roundups count in no figure: they hold no single offer of work.</li>
   </ul>
   <h2 id="index">The openradar index</h2>
-  <p>The index shows how many new vacancies and orders appear each day against a base of 100. Only Russian-language posts seen by a fixed panel of feeds count: two hh.ru feeds, the main Habr Career feed, getmatch, «Работа России», Kwork, FL.ru and Freelancehunt. Vacancies raised in search are not new: on hh.ru and Habr Career a vacancy counts when its number is within about a week of the newest one. A day's value is the seven-day mean. The base is the mean daily count from 9 November to 6 December 2026; until 7 December it is provisional and covers every day since 30 October. The index is not seasonally adjusted and shows the panel, not the whole market. The last two days are recalculated as late posts arrive.</p>
+  <p>The index shows how many new vacancies and orders appear each day against a base of 100. Only Russian-language posts seen by a fixed panel of feeds count: two hh.ru feeds, the main Habr Career feed, getmatch, Rabota Rossii, Kwork, FL.ru and Freelancehunt. Vacancies raised in search are not new: on hh.ru and Habr Career a vacancy counts when its number is within about a week of the newest one. A day's value is the seven-day mean. The base is the mean daily count from 9 November to 6 December 2026; until 7 December it is provisional and covers every day since 30 October. The index is not seasonally adjusted and shows the panel, not the whole market. The last two days are recalculated as late posts arrive.</p>
   <h2>Language model</h2>
   <p>Some posts are free text («pay 50k», «need a mid-level Python dev»). A language model reads them and returns a strict set of fields. It only fills gaps: page markup, rules and the board's budget always win. Answers below 70% confidence are dropped. The model's answers are not in the figures yet: they enter only after a check against hand-labelled posts, with at least 85% agreement on role and pay.</p>
   <h2>Statistics</h2>

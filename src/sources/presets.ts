@@ -851,9 +851,9 @@ const BASE_PRESETS: SourcePreset[] = [
     id: 'hh-infosec',
     kind: 'rss',
     title: 'HeadHunter — Информационная безопасность',
-    description: 'RSS поиска hh.ru по ролям ИБ: специалист по информационной безопасности и службы безопасности',
+    description: 'RSS поиска hh.ru по ролям ИБ: специалист по информационной безопасности, AppSec, SOC, пентест',
     config: {
-      url: 'https://hh.ru/search/vacancy/rss?professional_role=116&professional_role=120&order_by=publication_time',
+      url: 'https://hh.ru/search/vacancy/rss?professional_role=116&order_by=publication_time',
     },
   },
   {
@@ -862,7 +862,7 @@ const BASE_PRESETS: SourcePreset[] = [
     title: 'HeadHunter — 1С',
     description: 'RSS поиска hh.ru по запросу «1С»: программисты, консультанты и аналитики 1С',
     config: {
-      url: 'https://hh.ru/search/vacancy/rss?text=1%D0%A1&order_by=publication_time',
+      url: 'https://hh.ru/search/vacancy/rss?text=1%D0%A1&search_field=name&order_by=publication_time',
     },
   },
   {

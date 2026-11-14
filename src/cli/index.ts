@@ -736,6 +736,28 @@ function buildProgram(): Command {
             userTelegram ? () => pollUserTelegramSources(userTelegram) : undefined,
           );
       runner?.start();
+      if (!options.noScheduler) {
+        const healTimer = setTimeout(() => {
+          void (async () => {
+            try {
+              const { fillDirections } = await import('../pipeline/redirections.ts');
+              const rescoreSummary = await rescoreLeads(runtime.store, { limit: 3000, days: 14, money: true });
+              const dirSummary = await fillDirections(runtime.store);
+              const empSummary = await fillEmployers(runtime.store);
+              runtime.logger.info('startup data hygiene completed', {
+                rescore: rescoreSummary,
+                directions: dirSummary,
+                employers: empSummary,
+              });
+            } catch (err) {
+              runtime.logger.warn('startup data hygiene failed', {
+                error: err instanceof Error ? err.message : String(err),
+              });
+            }
+          })();
+        }, 15_000);
+        healTimer.unref?.();
+      }
       // Closure events: a lead leaving the active feed (closed, hidden as junk or scam)
       // is pushed to matching subscriptions the moment it happens, never replayed.
       leadEvents.on('lead.closed', (lead, reason) => {

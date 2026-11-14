@@ -82,6 +82,11 @@ describe('role, grade, language and employer', () => {
     expect(classifyRole('job', 'Бухгалтер')).toBe('other');
     // A vague title falls back to the board's specialization.
     expect(classifyRole('job', 'Специалист', 'Бэкенд разработчик')).toBe('backend');
+    expect(classifyRole('job', 'Мобильный сборщик заказов', 'Сборка заказов в дарксторе')).toBe('other');
+    expect(classifyRole('job', 'Специалист по безопасности (ТЦ Галактика)', 'Охрана ТЦ')).toBe('other');
+    expect(classifyRole('job', 'Менеджер по продажам B2B (кассы, маркировка, 1С)')).toBe('sales');
+    expect(classifyRole('job', 'Продавец-консультант в Салон оптики', 'Работа в 1С')).toBe('sales');
+    expect(classifyRole('job', 'Оператор 1С на склад')).toBe('other');
   });
 
   it('classifies orders by title, then by text', () => {
@@ -103,6 +108,7 @@ describe('role, grade, language and employer', () => {
     expect(detectLanguage('Backend-разработчик', ['PostgreSQL', 'Python'])).toBe('Python');
     expect(detectCompany(lead('a', { text: 'Компания «ИТ-компания «Лоция»» ищет хорошего специалиста' }))).toBe('ИТ-компания «Лоция»');
     expect(detectCompany(lead('b', { text: 'Вакансия компании: Techno Diasoft\nСоздана: 27.10.2026' }))).toBe('Techno Diasoft');
+    expect(detectCompany(lead('c', { text: 'Компания Serenity ищет специалиста на вакансию «Technical Lead (Go)».' }))).toBe('Serenity');
   });
 
   it('derives a record from an hh.ru post', () => {

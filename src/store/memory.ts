@@ -649,7 +649,16 @@ export class MemoryStore implements Store {
     const lead = this.leads.get(id);
     if (!lead) return;
     const { budget, rawSalary, normalizedUsdMin, normalizedUsdMax, skills } = money;
-    Object.assign(lead, { budget, rawSalary, normalizedUsdMin, normalizedUsdMax, skills, currency: money.currency ?? lead.currency, paymentPeriod: money.paymentPeriod ?? lead.paymentPeriod });
+    Object.assign(lead, {
+      budget,
+      rawSalary,
+      normalizedUsdMin,
+      normalizedUsdMax,
+      skills,
+      currency: money.currency ?? lead.currency,
+      paymentPeriod: money.paymentPeriod ?? lead.paymentPeriod,
+      city: money.city ?? lead.city,
+    });
   }
 
   async updateLeadState(id: string, state: LeadState): Promise<void> {
@@ -752,18 +761,27 @@ export class MemoryStore implements Store {
         lead.skills = merged.slice(0, 15);
       }
       if (facts.currency && (facts.payMin || facts.payMax) && lead.normalizedUsdMin === undefined && lead.normalizedUsdMax === undefined) {
+        const periodSuffix =
+          facts.period === 'hour'
+            ? ' per hour'
+            : facts.period === 'year'
+              ? ' per year'
+              : facts.period === 'project'
+                ? ' fixed'
+                : '';
+        const rawSalaryStr = `${facts.payMin ?? ''}${facts.payMax && facts.payMax !== facts.payMin ? `–${facts.payMax}` : ''} ${facts.currency}${periodSuffix}`.trim();
         const salaryInfo = normalizeSalary({
           text: '',
-          rawSalary: `${facts.payMin ?? ''}${facts.payMax && facts.payMax !== facts.payMin ? `–${facts.payMax}` : ''} ${facts.currency}`.trim(),
+          rawSalary: rawSalaryStr,
           budget: facts.payMax ?? facts.payMin,
           currency: facts.currency,
           type: facts.postType ?? lead.type,
         });
         if (!salaryInfo.implausible && (salaryInfo.normalizedUsdMin !== undefined || salaryInfo.normalizedUsdMax !== undefined)) {
           if (lead.budget === undefined) lead.budget = facts.payMax ?? facts.payMin;
-          if (!lead.currency) lead.currency = salaryInfo.currency ?? facts.currency;
-          if (!lead.paymentPeriod) lead.paymentPeriod = salaryInfo.paymentPeriod ?? 'monthly';
-          if (!lead.rawSalary) lead.rawSalary = salaryInfo.rawSalary;
+          lead.currency = salaryInfo.currency ?? facts.currency;
+          lead.paymentPeriod = salaryInfo.paymentPeriod ?? 'monthly';
+          if (!lead.rawSalary) lead.rawSalary = salaryInfo.rawSalary ?? rawSalaryStr;
           lead.normalizedUsdMin = salaryInfo.normalizedUsdMin;
           lead.normalizedUsdMax = salaryInfo.normalizedUsdMax;
         }

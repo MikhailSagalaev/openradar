@@ -97,6 +97,23 @@ const AI_ENGINEER = rx(`вайб|vibe|${W}llm${E}|prompt[- ]?engineer|промп
 const ANY_ENGINEER = rx(`developer|engineer`);
 const NOT_SOFTWARE = rx(`process|civil|mechanical|electrical|hardware|manufactur|chemical|field|curriculum|relations|facilit|environment`);
 
+/**
+ * Physical construction, HVAC, civil engineering, furniture, and interior design work where
+ * words like «разработка» («разработка раздела ОВ», «разработка мебели») or «инженер-проектировщик»
+ * mean blueprints and physical goods rather than software.
+ */
+export const NON_IT_PHYSICAL_WORK = rx(
+  `проектировщик|инженер[- ]?проектировщик|инженер\\s*пто|раздел\\p{L}*\\s+(?:ов|вк|кж|км|эом|ар|ппр|гп|тх|сс|овик|аов)(?![\\p{L}])|отоплени|вентиляц|водоснабжен|канализац|газоснабжен|электроснабжен|сметчик|сметн\\p{L}*\\s+документац|мебел[ьи]|коттедж|планировочн\\p{L}*\\s+решен|дизайн[- ]?проект\\s+(?:интерьер|квартир|дом|коттедж)|ландшафтн\\p{L}*|градостроит|геодез|кадастр|сантехник|сварщик|токарь|фрезеровщик|чертеж\\p{L}*\\s+(?:км|кж|мебел|детал)|конструктор\\s+мебели|швея|закройщик|флорист|мозаичист|копицентр|судебн\\p{L}*\\s+пристав|транспортн\\p{L}*\\s+безопасн`
+);
+const EXPLICIT_SOFTWARE_IN_TITLE = rx(`\\b(?:1[сc]|python|java|javascript|typescript|react|vue|angular|node\\.?js|php|golang|rust|kotlin|swift|flutter|django|fastapi|laravel|wordpress|tilda|тильд|битрикс|bitrix|sql|postgres|docker|kubernetes|devops|qa|тестировщик|сайт|лендинг|интернет-магазин|telegram[- ]?бот|чат[- ]?бот|парсер|парсинг|фронтенд|бэкенд|frontend|backend|fullstack|ios|android)\\b`);
+
+export function isPhysicalNonItWork(title: string, text = ''): boolean {
+  if (EXPLICIT_SOFTWARE_IN_TITLE.test(title)) return false;
+  if (NON_IT_PHYSICAL_WORK.test(title)) return true;
+  if (text && NON_IT_PHYSICAL_WORK.test(text) && !EXPLICIT_SOFTWARE_IN_TITLE.test(text)) return true;
+  return false;
+}
+
 /** Ordered: the first match wins, so narrow roles go before broad ones. */
 export const ROLES: RoleDef[] = [
   { slug: 'ai', label: 'AI-инженер и вайб-кодинг', plural: 'AI-инженеры', types: ['job', 'gig'],
@@ -104,7 +121,7 @@ export const ROLES: RoleDef[] = [
   { slug: '1c', label: 'Программист 1С', plural: 'программисты 1С', types: ['job', 'gig'],
     pattern: rx(`${W}1\\s?[сc]${E}`) },
   { slug: 'security', label: 'Информационная безопасность', plural: 'специалисты по ИБ', types: ['job'],
-    pattern: rx(`(?<!техник\\p{L}*\\s)(?<!пожарн\\p{L}*\\s)(?<!промышленн\\p{L}*\\s)(?<!экономическ\\p{L}*\\s)безопасн|защит\\p{L}*\\s+информац|security|pentest|пентест|appsec|devsecops|${W}soc${E}|${W}иб${E}|siem`) },
+    pattern: rx(`информационн\\p{L}*\\s+безопасн|кибербезопасн|компьютерн\\p{L}*\\s+безопасн|безопасн\\p{L}*\\s+(?:информац|приложен|данн|сет|код|ит|it|разработк)|защит\\p{L}*\\s+информац|(?<!physical\\s)(?<!building\\s)(?<!campus\\s)(?<!store\\s)(?<!mall\\s)security|pentest|пентест|appsec|devsecops|${W}soc${E}|${W}иб${E}|siem|антифрод|antifraud`) },
   { slug: 'qa', label: 'Тестировщик (QA)', plural: 'тестировщики', types: ['job', 'gig'],
     pattern: rx(`тестиров|${W}qa${E}|sdet|автотест|test engineer|quality assurance`) },
   { slug: 'devops', label: 'DevOps и SRE', plural: 'DevOps-инженеры', types: ['job'],
@@ -132,7 +149,7 @@ export const ROLES: RoleDef[] = [
   { slug: 'gamedev', label: 'Разработчик игр', plural: 'разработчики игр', types: ['job', 'gig'],
     pattern: rx(`${W}unity${E}|${W}unreal${E}|gamedev|геймдев|game developer|game designer|игров\\p{L}*`) },
   { slug: 'mobile', label: 'Мобильный разработчик', plural: 'мобильные разработчики', types: ['job', 'gig'],
-    pattern: rx(`${W}ios${E}|android|flutter|react native|мобильн|swift|kotlin multiplatform`) },
+    pattern: rx(`${W}ios${E}|android|flutter|react native|мобильн\\p{L}*\\s+(?:разработ\\p{L}*|приложен\\p{L}*|игр\\p{L}*|платформ\\p{L}*)|разработ\\p{L}*\\s+мобильн\\p{L}*|swift|kotlin multiplatform`) },
   { slug: 'fullstack', label: 'Fullstack-разработчик', plural: 'fullstack-разработчики', types: ['job'],
     pattern: rx(`full[- ]?stack|фулстек|фуллстек`) },
   { slug: 'frontend', label: 'Frontend-разработчик', plural: 'frontend-разработчики', types: ['job'],
@@ -144,13 +161,13 @@ export const ROLES: RoleDef[] = [
   { slug: 'education', label: 'Преподавание и менторство', plural: 'преподаватели', types: ['job'],
     pattern: rx(`преподавател|учител|ментор|наставник|автор (?:курс|дисциплин)|методист|tutor|teacher`) },
   { slug: 'support', label: 'Техподдержка', plural: 'специалисты техподдержки', types: ['job'],
-    pattern: rx(`поддержк|support|helpdesk|service desk|оператор|customer success|customer care|customer reliability|kundenbetreuer`) },
+    pattern: rx(`поддержк|support|helpdesk|service desk|оператор\\p{L}*\\s+(?:поддержк|техподдержк|колл[- ]?центр|call[- ]?center|контакт[- ]?центр|горяч\\p{L}*\\s+лини|чат)|customer success|customer care|customer reliability|kundenbetreuer`) },
   { slug: 'marketing', label: 'Маркетинг и реклама', plural: 'маркетологи', types: ['job', 'gig'],
     pattern: rx(`маркетолог|бренд[- ]?менеджер|brand[- ]?manager|marketing|marketer|маркетинг|${W}smm|${W}seo${E}|${W}aso${E}|таргет|директолог|яндекс[. ]директ|реклам|продвижен|авито|инфлюенс|influenc|affiliate|communications manager|${W}pr[- ]менеджер`) },
   { slug: 'content', label: 'Тексты и контент', plural: 'авторы и контент-менеджеры', types: ['job', 'gig'],
     pattern: rx(`копирайт|рерайт|текст|стать|контент|редактор|писател|copywriter|writer|editor`) },
   { slug: 'sales', label: 'Продажи', plural: 'менеджеры по продажам', types: ['job'],
-    pattern: rx(`продаж|sales|account manager|account executive|account development|менеджер по работе с клиентами|развити\\p{L}* бизнеса|business development|${W}kam${E}|${W}sdr${E}|${W}bdr${E}|solutions? consult|partnerships?${E}|пресейл|presale|аккаунт`) },
+    pattern: rx(`продаж|продавец|продавц|торгов\\p{L}*\\s+представител|sales|account manager|account executive|account development|менеджер по работе с клиентами|развити\\p{L}* бизнеса|business development|${W}kam${E}|${W}sdr${E}|${W}bdr${E}|solutions? consult|partnerships?${E}|пресейл|presale|аккаунт`) },
   { slug: 'hr', label: 'HR и рекрутинг', plural: 'HR-специалисты', types: ['job'],
     pattern: rx(`${W}hr${E}|${W}hrbp${E}|рекрутер|рекрутмент|${W}(?:recruiter|recruitment|recruiting|sourcer)${E}|сорсер|${W}talent\\s+(?:acquisition|partner|manager|lead|specialist)|people (?:partner|relations|business)|employer brand|organization development|training & development|подбор\\p{L}*(?:\\s+и\\s+\\p{L}+)?\\s+персонала|специалист\\s+по\\s+персоналу|менеджер\\s+по\\s+персоналу|кадр`) },
   // Orders only: the kinds of work that rarely come as vacancies.
@@ -227,18 +244,28 @@ export function roleLabel(slug: string, lang: 'ru' | 'en' = 'ru'): string {
   return roleDef(slug)?.label ?? OTHER_ROLE.label;
 }
 
+const NON_IT_1C_USER_TITLE = /(?:менеджер\s+по\s+продаж|продавец|торгов\p{L}*\s+представител|бухгалтер|кассир|кладовщик|товаровед|оператор\s+(?:1\s*[-–—]?\s*[сc]|пк|склад|баз)|секретарь|делопроизводител)/iu;
+
 export function classifyRole(type: LeadType, title: string, extra = ''): string {
+  if (isPhysicalNonItWork(title, extra)) return OTHER_ROLE.slug;
   if (type === 'gig') {
     // The title decides; the text helps when the title is «Нужна помощь».
     for (const slug of GIG_ORDER) if (roleDef(slug)!.pattern.test(title)) return slug;
     for (const slug of GIG_ORDER) if (slug !== 'ai' && roleDef(slug)!.pattern.test(extra)) return slug;
     return OTHER_ROLE.slug;
   }
+  const skip1c = NON_IT_1C_USER_TITLE.test(title);
   // A vacancy is named by its title; the board's specialization helps when the title is vague.
-  const jobRole = (source: string): string | undefined => ROLES.find((role) => role.types.includes('job') && (role.slug === 'ai' ? AI_ENGINEER : role.pattern).test(source))?.slug;
+  const jobRole = (source: string, isExtra = false): string | undefined =>
+    ROLES.find(
+      (role) =>
+        role.types.includes('job') &&
+        !(role.slug === '1c' && (skip1c || isExtra)) &&
+        (role.slug === 'ai' ? AI_ENGINEER : role.pattern).test(source),
+    )?.slug;
   const ai = roleDef('ai')!.pattern;
   const engineer = ANY_ENGINEER.test(title) && !NOT_SOFTWARE.test(title) ? 'backend' : undefined;
-  return jobRole(title) ?? (ai.test(title) ? 'ai' : undefined) ?? engineer ?? (extra ? jobRole(extra) : undefined) ?? OTHER_ROLE.slug;
+  return jobRole(title, false) ?? (ai.test(title) ? 'ai' : undefined) ?? engineer ?? (extra ? jobRole(extra, true) : undefined) ?? OTHER_ROLE.slug;
 }
 
 // ---------- Languages ----------
@@ -293,6 +320,7 @@ export function detectCompany(lead: Pick<Lead, 'author' | 'text' | 'type' | 'sou
     lead.text.match(/Вакансия компании:\s*([^\n]{2,80})/u)?.[1] ??
     lead.text.match(/Компания «(.{2,80}?)» ищет/u)?.[1] ??
     lead.text.match(/Компания «([^»]{2,80})»/u)?.[1] ??
+    lead.text.match(/Компания\s+([^\n«»]{2,60}?)\s+ищет\s+(?:хорошего\s+)?специалиста\s+на\s+вакансию/u)?.[1] ??
     lead.text.match(/^(?:Компания|Company):\s*([^\n]{2,80})/mu)?.[1];
   const named = [facts?.company, fromText, lead.type === 'job' ? lead.author : undefined];
   return named.map((name) => name?.replace(/\s+/g, ' ').trim()).find((name) => name && !isOutletName(name, lead.sourceRef?.channelTitle));

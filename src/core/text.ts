@@ -332,13 +332,7 @@ const TECH_SKILL_PATTERNS: Array<[RegExp, string]> = [
   // Brands name an employer or a link as often as a trade: «Аналитик (Авито Путешествия)», «отзывы с Ozon».
   [/авитолог|(?:авито|avito)[- ](?:объявлен|продвижен|магазин|реклам)|(?:продвиж\S*|размещ\S*|объявлени\S*|постинг\S*|реклам\S*|магазин\S*|продаж\S*|ведени\S*)\s+(?:\S+\s+){0,2}(?:на|в|для|через)\s+(?:авито|avito)/i, 'Авито'],
   [/маркетплейс|селлер|(?:карточ\S*|продаж\S*|магазин\S*|кабинет\S*|инфографик\S*|реклам\S*|продвиж\S*|ведени\S*)\s+(?:\S+\s+){0,2}(?:на\s+|для\s+)?(?:wildberries|wb|ozon|озон)|(?:^|[^а-яёa-z])(?:на|для)\s+(?:wildberries|wb|ozon|озон)|(?:wildberries|wb|ozon|озон)\s*(?:[/,+и]|\sи\s)\s*(?:wildberries|wb|ozon|озон|яндекс)/i, 'Маркетплейсы'],
-  [/бухгалт|accountant/i, 'Бухгалтерия'],
-  // «юридическое лицо» and «ЭТрН» in a developer's order are no legal work.
-  [/юрист|юрисконсульт|юридическ\S*\s+(?:консультац|услуг|сопровожден|помощ|заключени)|lawyer/i, 'Юриспруденция'],
-  [/репетитор|преподава|tutor|teacher/i, 'Обучение'],
   [/фотограф|ретуш|фотосесси/i, 'Фото'],
-  [/менеджер\S*\s+(?:по\s+)?(?:активн\S*\s+)?продаж|отдел\S*\s+продаж|холодн\S*\s+звон|\bsales\b|account\s+(?:executive|manager)|business\s+development/i, 'Продажи'],
-  [/поддержк\S*\s+(?:клиент|пользоват)|техподдержк|техническ\S*\s+поддержк|customer\s+(?:support|success)|support\s+(?:engineer|specialist)|оператор\S*\s+(?:чата|колл)/i, 'Поддержка'],
   [/\bangular\b/i, 'Angular'],
   [/\bnext\.?js\b/i, 'Next.js'],
   [/\bfastapi\b/i, 'FastAPI'],
@@ -358,7 +352,7 @@ const TECH_SKILL_PATTERNS: Array<[RegExp, string]> = [
   [/\bhubspot\b/i, 'HubSpot'],
   [/\bamo\s?crm\b|амо\s?црм/i, 'amoCRM'],
   [/\bn8n\b/i, 'n8n'],
-  [/\bCursor\b|\bcursor\s+ai\b/, 'Cursor'],
+  [/\b[Cc]ursor\s+(?:AI|ai|IDE|ide)\b|(?<!(?:like|such as|including|companies like)\s+)\bCursor\b(?!\s*,\s*(?:Notion|Clay|Linear|Stripe))/, 'Cursor'],
   [/\blovable\b/i, 'Lovable'],
   [/вайб[- ]?код|\bvibe[- ]?cod/i, 'Вайб-кодинг'],
   [/\bcomfy\s?ui\b/i, 'ComfyUI'],
@@ -384,6 +378,12 @@ const ROLE_SKILL_PATTERNS: Array<[RegExp, string]> = [
   [/project\s+manager|проджект|руководител\S*\s+проект|менеджер\S*\s+проект/i, 'Управление проектами'],
   [/product\s+(?:manager|owner)|продакт|менеджер\S*\s+продукт/i, 'Продакт-менеджмент'],
   [/маркетолог|marketing|маркетинг/i, 'Маркетинг'],
+  [/менеджер\S*\s+(?:по\s+)?(?:активн\S*\s+)?продаж|отдел\S*\s+продаж|холодн\S*\s+звон|\bsales\b|account\s+(?:executive|manager)|business\s+development/i, 'Продажи'],
+  [/поддержк\S*\s+(?:клиент|пользоват)|техподдержк|техническ\S*\s+поддержк|customer\s+(?:support|success)|support\s+(?:engineer|specialist)|оператор\S*\s+(?:чата|колл)/i, 'Поддержка'],
+  [/бухгалт|accountant/i, 'Бухгалтерия'],
+  // «юридическое лицо» and «ЭТрН» in a developer's order are no legal work.
+  [/юрист|юрисконсульт|юридическ\S*\s+(?:консультац|услуг|сопровожден|помощ|заключени)|lawyer/i, 'Юриспруденция'],
+  [/репетитор|преподава|tutor|teacher/i, 'Обучение'],
   [/разработчик|программист|\bdeveloper\b|software\s+engineer|full[- ]?stack|back[- ]?end|front[- ]?end/i, 'Разработка'],
 ];
 

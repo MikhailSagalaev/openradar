@@ -29,7 +29,7 @@ import { VERSION } from '../version.ts';
 import { githubOAuthConfigured, startGitHubOAuth, handleGitHubCallback, secureCookie } from './auth.ts';
 import { renderAdminPage } from './admin.ts';
 import { analyticsFromEnv, contentSecurityPolicy } from './analytics.ts';
-import { filterOptions, matchesSavedFilters, parseFeedFilters, type FeedFilters } from './filters.ts';
+import { filterOptions, IT_SKILLS, matchesSavedFilters, parseFeedFilters, type FeedFilters } from './filters.ts';
 import { computeInsights, estimateMarket } from '../core/market.ts';
 import { COLLECTOR_MAX_ORDERS, COLLECTOR_PLATFORMS, collectedOrderToRaw, type CollectorPlatform, COLLECTOR_SITES, collectedVacancyToRaw, type CollectorSite } from './collector.ts';
 import { configureRateLimit, rateLimit } from './ratelimit.ts';
@@ -38,7 +38,7 @@ import { qualityFlagsOf } from '../core/quality.ts';
 import { explainLead } from '../core/explain.ts';
 import { rubToUsd } from '../core/salary.ts';
 import { TelegramAuthService } from './tg-auth.ts';
-import { sourceState } from '../core/source-health.ts';
+import { runSourceHygiene, sourceState } from '../core/source-health.ts';
 import { LABEL_VERDICTS, scoreSource } from '../core/source-quality.ts';
 import { REVIEW_ISSUES, isReviewVerdict, pickBucket, reviewConsensus, type ReviewIssue } from '../core/reviews.ts';
 import { roleDef, roleLabel, ROLES } from '../research/derive.ts';
@@ -72,7 +72,7 @@ import {
   STYLE_PATH,
   type SourceFormValues,
 } from './ui.ts';
-import { resolveLang, type SupportedLang } from './i18n.ts';
+import { resolveLang, translateSkill, type SupportedLang } from './i18n.ts';
 import { canSeeContacts, delayMinutes, viewerCanSeeLead, visibleBefore } from '../core/access.ts';
 import { redactLead } from '../core/contacts.ts';
 import { observationToRawLead, parseObservation } from '../core/observation.ts';
@@ -84,6 +84,7 @@ import { registerV2Routes } from './v2.ts';
 import {
   SEO_CATALOG,
   findCatalogEntry,
+  isCatalogLeadRelevant,
   renderAboutPage,
   renderNetworkPage,
   renderParticipantPage,
@@ -186,13 +187,14 @@ async function getAuthDisplay(c: Context, runtime: Runtime): Promise<AuthDisplay
   return undefined;
 }
 
-function loginPage(error?: string, githubEnabled = false, returnTo?: string): string {
+function loginPage(error?: string, githubEnabled = false, returnTo?: string, lang: SupportedLang = 'ru'): string {
+  const isEn = lang === 'en';
   const ghHref = returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')
     ? `/auth/github?returnTo=${encodeURIComponent(returnTo)}`
     : '/auth/github';
   const githubButton = githubEnabled
-    ? `<a class="github-btn" href="${escapeHtml(ghHref)}">Войти через GitHub</a>
-<div class="divider"><span>или</span></div>`
+    ? `<a class="github-btn" href="${escapeHtml(ghHref)}">${isEn ? 'Sign in with GitHub' : 'Войти через GitHub'}</a>
+<div class="divider"><span>${isEn ? 'or' : 'или'}</span></div>`
     : '';
   const githubStyle = githubEnabled
     ? `.github-btn{display:block;width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font:inherit;font-size:13px;font-weight:500;text-align:center;text-decoration:none;transition:border-color .15s ease}
@@ -200,8 +202,8 @@ function loginPage(error?: string, githubEnabled = false, returnTo?: string): st
 .divider{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:11px;margin:14px 0}
 .divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--line)}`
     : '';
-  return `<!doctype html><html lang="ru"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>openradar — вход</title>
+  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>${isEn ? 'openradar — sign in' : 'openradar — вход'}</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <style>
 :root{--bg:#ffffff;--surface:#ffffff;--ink:#09090b;--muted:#71717a;--line:#e4e4e7;--btn:#09090b;--btn-text:#ffffff;--error:#ef4444}
@@ -220,11 +222,11 @@ ${githubStyle}
 <body>
 <form method="post" action="/login">
 <div class="login-logo">${renderLogo({ height: 32 })}</div>
-<p>Голосование и добавление заказов — после входа. Токен администратора — для управления источниками.</p>
+<p>${isEn ? 'Voting and adding leads requires signing in. Admin token is for managing sources.' : 'Голосование и добавление заказов — после входа. Токен администратора — для управления источниками.'}</p>
 ${error ? `<div class="error">${escapeHtml(error)}</div>` : ''}
 ${githubButton}
-<label style="display:contents"><input name="token" type="password" autofocus autocomplete="current-password" placeholder="Токен администратора"></label>
-<button type="submit">Войти по токену</button>
+<label style="display:contents"><input name="token" type="password" autofocus autocomplete="current-password" placeholder="${isEn ? 'Admin token' : 'Токен администратора'}"></label>
+<button type="submit">${isEn ? 'Sign in with token' : 'Войти по токену'}</button>
 </form></body></html>`;
 }
 
@@ -1176,25 +1178,27 @@ export function createApp(runtime: Runtime): Hono {
   });
 
   app.get('/login', async (c) => {
+    const lang = resolveLang(c);
     if (!runtime.env.RADAR_ADMIN_TOKEN && !githubOAuthConfigured(runtime)) {
       // Redirecting to / would loop back here when the feed is not public.
       if (await canRead(c, runtime)) return c.redirect('/');
-      return c.text('Вход не настроен: задайте RADAR_ADMIN_TOKEN или GitHub OAuth в .env', 503);
+      return c.text(lang === 'en' ? 'Sign-in is not configured: set RADAR_ADMIN_TOKEN or GitHub OAuth in .env' : 'Вход не настроен: задайте RADAR_ADMIN_TOKEN или GitHub OAuth в .env', 503);
     }
     if (await isAdmin(c, runtime)) return c.redirect('/');
     if (await currentUser(c, runtime)) return c.redirect('/');
-    return c.html(loginPage(c.req.query('error'), githubOAuthConfigured(runtime), c.req.query('returnTo')));
+    return c.html(loginPage(c.req.query('error'), githubOAuthConfigured(runtime), c.req.query('returnTo'), lang));
   });
 
   app.get('/auth/github', (c) => startGitHubOAuth(c, runtime));
   app.get('/auth/github/callback', (c) => handleGitHubCallback(c, runtime));
 
   app.post('/login', rateLimit({ windowMs: 15 * 60_000, max: 10 }), async (c) => {
+    const lang = resolveLang(c);
     const expected = runtime.env.RADAR_ADMIN_TOKEN;
     if (!expected) return c.redirect('/');
     const body = await c.req.parseBody();
     const token = typeof body.token === 'string' ? body.token : '';
-    if (!safeEqual(token, expected)) return c.html(loginPage('Неверный токен'), 401);
+    if (!safeEqual(token, expected)) return c.html(loginPage(lang === 'en' ? 'Invalid token' : 'Неверный токен', githubOAuthConfigured(runtime), undefined, lang), 401);
 
     const sessionId = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
@@ -1241,7 +1245,7 @@ export function createApp(runtime: Runtime): Hono {
     if (safeReturn.startsWith('//')) safeReturn = '/';
     // English research pages live under /en; Russian ones under the bare path.
     if (target === 'ru' && /^\/en\/research(\/|$|\?)/.test(safeReturn)) safeReturn = safeReturn.slice(3);
-    if (target === 'en' && /^\/research(\/index|\/methodology|\/\d{4}-\d{2})?(\?|$)/.test(safeReturn)) safeReturn = `/en${safeReturn}`;
+    if (target === 'en' && /^\/research(\/index|\/methodology|\/roles\/[a-z0-9-]+|\/\d{4}-\d{2})?(\?|$)/.test(safeReturn)) safeReturn = `/en${safeReturn}`;
     return c.redirect(safeReturn);
   });
 
@@ -1782,11 +1786,12 @@ export function createApp(runtime: Runtime): Hono {
 
   // The version of the extension this server hands out, shown on /extension.
   const extensionVersion = (() => {
-    try {
-      return String(JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'extension/manifest.json'), 'utf8')).version ?? '');
-    } catch {
-      return '';
+    for (const candidate of [path.resolve(process.cwd(), 'extension/manifest.json'), new URL('../../extension/manifest.json', import.meta.url)]) {
+      try {
+        return String(JSON.parse(fs.readFileSync(candidate, 'utf8')).version ?? '');
+      } catch {}
     }
+    return '';
   })();
 
   app.get('/extension', async (c) => {
@@ -1811,9 +1816,10 @@ export function createApp(runtime: Runtime): Hono {
   });
 
   app.get('/extension/download', async (c) => {
-    const zipPath = path.resolve(process.cwd(), 'extension.zip');
+    const candidates = [path.resolve(process.cwd(), 'extension.zip'), new URL('../../extension.zip', import.meta.url)];
+    const zipPath = candidates.find((p) => fs.existsSync(p));
     try {
-      if (fs.existsSync(zipPath)) {
+      if (zipPath) {
         const data = await fs.promises.readFile(zipPath);
         return new Response(data, {
           headers: {
@@ -2110,7 +2116,7 @@ export function createApp(runtime: Runtime): Hono {
     if (!await isAdmin(c, runtime)) return c.redirect('/login');
     if (!sameOrigin(c)) return c.text('Forbidden', 403);
     const source = await runtime.store.getSource(c.req.param('id'));
-    if (!source) return c.html(renderNotFound(VERSION), 404);
+    if (!source) return c.html(renderNotFound(VERSION, resolveLang(c), await getAuthDisplay(c, runtime)), 404);
 
     const body = (await c.req.parseBody()) as Record<string, unknown>;
     const values = formValues(body);
@@ -2301,7 +2307,7 @@ export function createApp(runtime: Runtime): Hono {
         if (contentType.includes('application/json')) {
           return c.json({ error: 'lead_not_found' }, 404);
         }
-        return c.html(renderNotFound(VERSION), 404);
+        return c.html(renderNotFound(VERSION, resolveLang(c), await getAuthDisplay(c, runtime)), 404);
       }
       throw err;
     }
@@ -2353,16 +2359,28 @@ export function createApp(runtime: Runtime): Hono {
     if (!await isAdmin(c, runtime)) return c.redirect('/login');
     if (!sameOrigin(c)) return c.text('Forbidden', 403);
     const source = await runtime.store.getSource(c.req.param('id'));
-    if (!source) return c.html(renderNotFound(VERSION), 404);
-    await runtime.store.updateSource(source.id, { enabled: !source.enabled });
+    if (!source) return c.html(renderNotFound(VERSION, resolveLang(c), await getAuthDisplay(c, runtime)), 404);
+    const nextEnabled = !source.enabled;
+    const nextConfig = { ...source.config };
+    if (nextEnabled) {
+      delete nextConfig.autoDisabledAt;
+      delete nextConfig.autoDisableReason;
+    }
+    await runtime.store.updateSource(source.id, { enabled: nextEnabled, config: nextConfig });
     return c.redirect(`/sources/${source.id}`);
+  });
+
+  app.post('/api/sources/hygiene', async (c) => {
+    if (!await isAdmin(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
+    const summary = await runSourceHygiene(runtime.store);
+    return c.json(summary);
   });
 
   app.post('/sources/:id/delete', async (c) => {
     if (!await isAdmin(c, runtime)) return c.redirect('/login');
     if (!sameOrigin(c)) return c.text('Forbidden', 403);
     const source = await runtime.store.getSource(c.req.param('id'));
-    if (!source) return c.html(renderNotFound(VERSION), 404);
+    if (!source) return c.html(renderNotFound(VERSION, resolveLang(c), await getAuthDisplay(c, runtime)), 404);
     await runtime.store.deleteSource(source.id);
     return c.redirect('/sources');
   });
@@ -2483,16 +2501,37 @@ export function createApp(runtime: Runtime): Hono {
     if (!await canRead(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
     const rawType = c.req.query('type')?.trim();
     const type: LeadType | undefined = rawType === 'job' || rawType === 'gig' ? rawType : undefined;
+    const itOnly = c.req.query('it') === '1' || c.req.query('it') === 'true';
+    const direction = c.req.query('direction')?.trim().slice(0, 40) || undefined;
     const days = Math.max(1, Math.min(Number(c.req.query('days') ?? 30) || 30, 90));
     const now = new Date();
     const leads = await runtime.store.getLeadsForFeed({
       type,
+      skillsAny: itOnly ? [...IT_SKILLS] : undefined,
+      directionsAny: direction ? [direction] : undefined,
       limit: 3000,
       createdAfter: new Date(now.getTime() - days * 86_400_000).toISOString(),
       createdBefore: visibleBefore({ tier: 'guest' }, runtime.access, now),
     });
     c.header('Cache-Control', 'public, max-age=600');
-    return c.json(computeInsights(leads, days));
+    c.header('Vary', 'Cookie');
+    const insights = computeInsights(leads, days);
+    if (resolveLang(c) === 'en') {
+      const merged = new Map<string, number>();
+      const total = insights.total_leads;
+      for (const s of insights.trending_skills) {
+        const enName = translateSkill(s.name, 'en');
+        merged.set(enName, (merged.get(enName) ?? 0) + s.count);
+      }
+      insights.trending_skills = [...merged.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([name, count]) => ({
+          name,
+          count,
+          share_pct: total > 0 ? Math.round((count / total) * 1000) / 10 : 0,
+        }));
+    }
+    return c.json(insights);
   });
 
   // Public stories wall JSON (Epic #60 [C-03]).
@@ -3259,7 +3298,7 @@ export function createApp(runtime: Runtime): Hono {
   app.get('/embed/:chartId', async (c) => {
     const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
     const html = renderEmbedPage({ chartId: c.req.param('chartId'), report, baseUrl: seoBaseUrl(c) });
-    if (!html) return c.html(renderNotFound(VERSION), 404);
+    if (!html) return c.html(renderNotFound(VERSION, resolveLang(c), await getAuthDisplay(c, runtime)), 404);
     // Widgets are meant for other sites: any page may frame them. X-Frame-Options has no
     // "allow" value, so it is dropped and frame-ancestors alone decides.
     c.header('access-control-allow-origin', '*');
@@ -3303,7 +3342,7 @@ export function createApp(runtime: Runtime): Hono {
   });
   app.get('/en/research/:period{[0-9]{4}-[0-9]{2}}', async (c) => {
     const report = await monthSnapshot(runtime.store, c.req.param('period'));
-    if (!report) return c.html(renderNotFound(VERSION), 404);
+    if (!report) return c.html(renderNotFound(VERSION, resolveLang(c), await getAuthDisplay(c, runtime)), 404);
     return c.html(renderReportPageEn({ report, baseUrl: seoBaseUrl(c), version: VERSION, snapshots: await researchSnapshots(), auth: await getAuthDisplay(c, runtime) }));
   });
   app.get('/research/methodology', async (c) => toEnglish(c, '/research/methodology') ?? c.html(renderMethodologyPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime) })));
@@ -3332,7 +3371,7 @@ export function createApp(runtime: Runtime): Hono {
     const param = c.req.param('period');
     const slug = param.slice(0, 7);
     const report = await monthSnapshot(runtime.store, slug);
-    if (!report) return c.html(renderNotFound(VERSION), 404);
+    if (!report) return c.html(renderNotFound(VERSION, resolveLang(c), await getAuthDisplay(c, runtime)), 404);
     if (param.endsWith('.json')) return c.json(report, 200, { 'access-control-allow-origin': '*' });
     const english = toEnglish(c, `/research/${slug}`);
     if (english) return english;
@@ -3340,7 +3379,10 @@ export function createApp(runtime: Runtime): Hono {
   });
 
   app.get('/llms.txt', (c) =>
-    c.text(renderLlmsTxt(seoBaseUrl(c)), 200, { 'content-type': 'text/plain; charset=utf-8' }),
+    c.text(renderLlmsTxt(seoBaseUrl(c), resolveLang(c)), 200, { 'content-type': 'text/plain; charset=utf-8' }),
+  );
+  app.get('/en/llms.txt', (c) =>
+    c.text(renderLlmsTxt(seoBaseUrl(c), 'en'), 200, { 'content-type': 'text/plain; charset=utf-8' }),
   );
   // Machine-readable API description: OpenAPI 3.1 plus the RFC 9727 catalog pointing at it.
   app.get('/openapi.json', (c) =>
@@ -3372,65 +3414,72 @@ export function createApp(runtime: Runtime): Hono {
     c.html(renderTrustPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c) })));
 
   // The network made visible: the 30-day leaderboard and the sources of the week.
-  let networkCache: { at: number; body: string } | undefined;
+  // Only the underlying data is cached; the page shell renders per request with the visitor's auth and language.
+  let networkCache: {
+    at: number;
+    participants: Array<{ shortPubkey: string; name?: string; about?: string; handle?: string; posts: number; points: number; tier: string }>;
+    topSources: Array<{ title: string; leads: number; href?: string }>;
+  } | undefined;
   app.get('/network', rateLimit({ windowMs: 60_000, max: 60 }), async (c) => {
-    if (networkCache && Date.now() - networkCache.at < 10 * 60_000) return c.html(networkCache.body);
     const lang = resolveLang(c);
-    const since = new Date(Date.now() - RATING_WINDOW_MS).toISOString();
-    const sums = [...(await runtime.store.sumLedger(since)).entries()]
-      .filter(([pubkey, points]) => /^[0-9a-f]{64}$/.test(pubkey) && points > 0)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 30);
-    const moderators = parseModerators(runtime.env.RADAR_MODERATORS);
-    const participants = [];
-    const accounts = await accountsByKey();
-    for (const [pubkey, points] of sums) {
-      const participant = await runtime.store.getParticipant(pubkey);
-      const account = accounts.get(pubkey) ?? (participant?.githubUserId ? await runtime.store.getUserById(participant.githubUserId) ?? undefined : undefined);
-      const shown = account && account.publicProfile !== false ? account : undefined;
-      const posts = await runtime.store.countObservationsByPubkey(pubkey);
-      const profileName = participant?.profile?.name;
-      const profileAbout = participant?.profile?.about;
-      participants.push({
-        shortPubkey: `${pubkey.slice(0, 8)}…${pubkey.slice(-4)}`,
-        name: typeof profileName === 'string' && profileName.trim() ? profileName.trim() : undefined,
-        about: typeof profileAbout === 'string' && profileAbout.trim() ? profileAbout.trim() : undefined,
-        points,
-        posts,
-        handle: shown?.handle,
-        tier: tierFor({ rating: points, moderator: moderators.has(pubkey), githubLinked: Boolean(participant?.githubUserId) }),
-      });
+    if (!networkCache || Date.now() - networkCache.at >= 10 * 60_000) {
+      const since = new Date(Date.now() - RATING_WINDOW_MS).toISOString();
+      const sums = [...(await runtime.store.sumLedger(since)).entries()]
+        .filter(([pubkey, points]) => /^[0-9a-f]{64}$/.test(pubkey) && points > 0)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 30);
+      const moderators = parseModerators(runtime.env.RADAR_MODERATORS);
+      const participants = [];
+      const accounts = await accountsByKey();
+      for (const [pubkey, points] of sums) {
+        const participant = await runtime.store.getParticipant(pubkey);
+        const account = accounts.get(pubkey) ?? (participant?.githubUserId ? await runtime.store.getUserById(participant.githubUserId) ?? undefined : undefined);
+        const shown = account && account.publicProfile !== false ? account : undefined;
+        const posts = await runtime.store.countObservationsByPubkey(pubkey);
+        const profileName = participant?.profile?.name;
+        const profileAbout = participant?.profile?.about;
+        participants.push({
+          shortPubkey: `${pubkey.slice(0, 8)}…${pubkey.slice(-4)}`,
+          name: typeof profileName === 'string' && profileName.trim() ? profileName.trim() : undefined,
+          about: typeof profileAbout === 'string' && profileAbout.trim() ? profileAbout.trim() : undefined,
+          points,
+          posts,
+          handle: shown?.handle,
+          tier: tierFor({ rating: points, moderator: moderators.has(pubkey), githubLinked: Boolean(participant?.githubUserId) }),
+        });
+      }
+      const weekLeads = await feedFor(runtime, { tier: 'guest' }, { limit: 3000, createdAfter: new Date(Date.now() - 7 * 24 * 3600_000).toISOString() });
+      const bySource = new Map<string, number>();
+      for (const lead of weekLeads) {
+        const id = lead.sourceRef ? `${lead.sourceRef.platform}:${lead.sourceRef.channel}` : lead.sourceId;
+        bySource.set(id, (bySource.get(id) ?? 0) + 1);
+      }
+      const sources = await runtime.store.listSources();
+      const titleById = new Map(sources.map((s) => [s.id, s]));
+      const topSources = [...bySource.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 7)
+        .map(([key, leads]) => {
+          const source = titleById.get(key) ?? sources.find((s) => `${s.kind}:${s.id}` === key);
+          return {
+            title: source?.title ?? sources.find((s) => s.id === key)?.title ?? key,
+            leads,
+            href: source ? `/sources/${source.id}` : undefined,
+          };
+        });
+      networkCache = { at: Date.now(), participants, topSources };
     }
-    const weekLeads = await feedFor(runtime, { tier: 'guest' }, { limit: 3000, createdAfter: new Date(Date.now() - 7 * 24 * 3600_000).toISOString() });
-    const bySource = new Map<string, number>();
-    for (const lead of weekLeads) {
-      const id = lead.sourceRef ? `${lead.sourceRef.platform}:${lead.sourceRef.channel}` : lead.sourceId;
-      bySource.set(id, (bySource.get(id) ?? 0) + 1);
-    }
-    const sources = await runtime.store.listSources();
-    const titleById = new Map(sources.map((s) => [s.id, s]));
-    const topSources = [...bySource.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 7)
-      .map(([key, leads]) => {
-        const source = titleById.get(key) ?? sources.find((s) => `${s.kind}:${s.id}` === key);
-        return {
-          title: source?.title ?? sources.find((s) => s.id === key)?.title ?? key,
-          leads,
-          href: source ? `/sources/${source.id}` : undefined,
-        };
-      });
     const body = renderNetworkPage({
       baseUrl: seoBaseUrl(c),
       version: VERSION,
       auth: await getAuthDisplay(c, runtime),
       lang,
-      participants,
-      sources: topSources,
+      participants: networkCache.participants,
+      sources: networkCache.topSources,
       windowDays: RATING_WINDOW_MS / 86_400_000,
     });
-    networkCache = { at: Date.now(), body };
-    c.header('Cache-Control', 'public, max-age=600');
+    c.header('Cache-Control', 'private, no-cache');
+    c.header('Vary', 'Cookie');
     return c.html(body);
   });
   // Employers: who hires now, one page per company. What a guest may read, without contacts.
@@ -3539,7 +3588,7 @@ export function createApp(runtime: Runtime): Hono {
   // Search-driven landing pages: indexable, each one doubles as an RSS subscription.
   app.get('/catalog/:slug', async (c) => {
     const entry = findCatalogEntry(c.req.param('slug') as string);
-    if (!entry) return c.html(renderNotFound(VERSION), 404);
+    if (!entry) return c.html(renderNotFound(VERSION, resolveLang(c), await getAuthDisplay(c, runtime)), 404);
 
     const leads = (await feedFor(runtime, await viewerFromRequest(c, runtime), {
       limit: 30,
@@ -3552,7 +3601,7 @@ export function createApp(runtime: Runtime): Hono {
       remote: entry.remote || undefined,
       // These pages are Russian: an English post is on them only by a shared word.
       language: 'ru',
-    })).filter((lead) => lead.status !== 'rejected' && lead.status !== 'failed').slice(0, 20);
+    })).filter((lead) => lead.status !== 'rejected' && lead.status !== 'failed' && isCatalogLeadRelevant(lead, entry)).slice(0, 20);
 
     return c.html(
       renderCatalogPage({

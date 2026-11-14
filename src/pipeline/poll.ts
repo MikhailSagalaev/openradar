@@ -1,3 +1,4 @@
+import { pollBackoffFactor, shouldQuarantineSource } from '../core/source-health.ts';
 import { randomUUID } from 'node:crypto';
 import type { PollContext, SourceRecord } from '../core/types.ts';
 import { sourceProxyUrl } from '../net/proxy.ts';
@@ -174,20 +175,58 @@ export interface PollAllOptions {
  * to be polled less often than every tick. With a deadline, a slow run stops starting new
  * sources instead of growing longer than the tick.
  */
+const MAX_BACKOFF_INTERVAL_SEC = 6 * 3600;
+const DEFAULT_ERROR_BASE_INTERVAL_SEC = 300;
+
 export async function pollAll(deps: PollDeps, options: PollAllOptions = {}): Promise<PollSummary[]> {
-  const allSources = await deps.store.listSources();
+  const [allSources, healthList] = await Promise.all([
+    deps.store.listSources(),
+    deps.store.getSourceHealth ? deps.store.getSourceHealth().catch(() => []) : Promise.resolve([]),
+  ]);
+  const healthById = new Map(healthList.map((h) => [h.source.id, h]));
   const now = Date.now();
-  const sources = allSources
-    .filter((source) => {
-      if (!source.enabled) return false;
-      const adapter = deps.sources.get(source.kind);
-      if (!adapter?.poll) return false;
-      // Explicit config wins; otherwise the adapter's own pacing applies.
-      const intervalSec = Number(source.config.intervalSec) || adapter.defaultPollIntervalSec || 0;
-      const last = lastPolledAt.get(source.id);
-      return !(intervalSec > 0 && last !== undefined && now - last < intervalSec * 1000);
-    })
-    .sort((a, b) => (lastPolledAt.get(a.id) ?? 0) - (lastPolledAt.get(b.id) ?? 0));
+  const eligible: SourceRecord[] = [];
+
+  for (const source of allSources) {
+    if (!source.enabled) continue;
+    const adapter = deps.sources.get(source.kind);
+    if (!adapter?.poll) continue;
+
+    const health = healthById.get(source.id);
+    if (health) {
+      const q = shouldQuarantineSource(health);
+      if (q.quarantine && q.reason) {
+        await deps.store.updateSource(source.id, {
+          enabled: false,
+          config: {
+            ...source.config,
+            autoDisabledAt: new Date(now).toISOString(),
+            autoDisableReason: q.reason,
+          },
+        }).catch(() => {});
+        deps.logger.warn('source auto-disabled by hygiene check', {
+          sourceId: source.id,
+          title: source.title,
+          reason: q.reason,
+        });
+        continue;
+      }
+    }
+
+    const baseIntervalSec = Number(source.config.intervalSec) || adapter.defaultPollIntervalSec || 0;
+    const factor = pollBackoffFactor(health);
+    const effectiveIntervalSec = factor > 1
+      ? Math.min((baseIntervalSec || DEFAULT_ERROR_BASE_INTERVAL_SEC) * factor, MAX_BACKOFF_INTERVAL_SEC)
+      : baseIntervalSec;
+
+    const last = lastPolledAt.get(source.id);
+    if (effectiveIntervalSec > 0 && last !== undefined && now - last < effectiveIntervalSec * 1000) {
+      continue;
+    }
+    eligible.push(source);
+  }
+
+  const sources = eligible.sort((a, b) => (lastPolledAt.get(a.id) ?? 0) - (lastPolledAt.get(b.id) ?? 0));
 
   const concurrency = Math.max(1, deps.env.RADAR_POLL_CONCURRENCY ?? 16);
   const limit = pLimit(concurrency);

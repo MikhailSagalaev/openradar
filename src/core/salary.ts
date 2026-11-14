@@ -37,7 +37,7 @@ const NUM = String.raw`\d+(?:[.,]\d+)?`;
 const MULT = String.raw`(?:(?<=\d)[кk]|\s?(?:тыс(?:яч[а-я]*|\.)?|млн\.?|миллион[а-я]*|mln))(?![\p{L}])`;
 const CURRENCY_NEAR = String.raw`\s*(?:[₽$€£₸₴]|руб|р\.|eur|usd|pln|zł|kzt|uah|byn|грн|тенге|евро|долл)`;
 
-const NOT_PAY_WORDS = String.raw`оборот[а-я]*|выручк[а-я]*|капитализац[а-я]*|инвестици[а-я]*|(?:средн[а-я]*\s+)?чек[а-я]*|подписк[а-я]*|revenue|turnover|arr|deal\s+sizes?|valuation|raised|funding|subscription|stipend|(?:signing|sign-on|joining|relocation|referral)\s+bonus|(?:travel|learning|training|education|equipment|wellness|home\s+office|conference)\s+(?:budget|allowance)`;
+const NOT_PAY_WORDS = String.raw`оборот[а-я]*|выручк[а-я]*|капитализац[а-я]*|инвестици[а-я]*|(?:средн[а-я]*\s+)?чек[а-я]*|подписк[а-я]*|дополнительн[а-я]*\s+выплат[а-я]*(?:\s+за\s+вахтов[а-я]*\s+метод(?:\s+работ[а-я]*)?)?|суточн[а-я]*|компенсаци[а-я]*\s+(?:питани[а-я]*|проезд[а-я]*|жиль[а-я]*|связ[а-я]*)|revenue|turnover|arr|deal\s+sizes?|valuation|raised|funding|subscription|stipend|(?:signing|sign-on|joining|relocation|referral)\s+bonus|(?:travel|learning|training|education|equipment|wellness|home\s+office|conference)\s+(?:budget|allowance)`;
 const NOT_PAY_BEFORE = new RegExp(`(?:^|[^\\p{L}])(?:${NOT_PAY_WORDS})(?![\\p{L}])[^.\\n\\d]{0,25}[$€£₽]?\\s?\\d[\\d\\s.,]*(?:[кk]|\\s?(?:тыс|млн|mln))?(?:\\s*(?:[-–—]|до|to)\\s*[$€£₽]?\\s?\\d[\\d\\s.,]*(?:[кk]|\\s?(?:тыс|млн|mln))?)?`, 'giu');
 const NOT_PAY_AFTER = new RegExp(`\\d(?:[\\d\\s.,]*\\d)?(?:[кk]|\\s?(?:тыс\\.?|млн\\.?|mln))?\\s*(?:[₽$€£]|руб[а-я.]*|usd|eur)?\\s{0,3}(?:(?:annual|yearly|monthly|ежегодн[а-я]*)\\s+)?(?:${NOT_PAY_WORDS})(?![\\p{L}])`, 'giu');
 
@@ -84,14 +84,14 @@ export function normalizeMoneyText(text: string, options: { keepNotPay?: boolean
     .replace(new RegExp(`(${NUM})(${MULT})`, 'giu'), (_m, a: string, word: string) => groupThousands(scaled(a, multiplierOf(word.trim()))))
     // «45.000,00 ₽», «€ 1.500»: dots group thousands only next to a currency.
     .replace(new RegExp(`(\\d{1,3}(?:\\.\\d{3})+)(?:,\\d{1,2})?(?=${CURRENCY_NEAR})`, 'giu'), (m) => groupThousands(Number(m.split(',')[0]!.replace(/\./g, ''))))
-    .replace(/([$€£₸₴]\s*)(\d{1,3}(?:\.\d{3})+)(?:,\d{1,2})?(?![\d.,])/gu, (_m, sign: string, n: string) => `${sign}${groupThousands(Number(n.replace(/\./g, '')))}`)
+    .replace(/([$€£₸₴₹]\s*)(\d{1,3}(?:\.\d{3})+)(?:,\d{1,2})?(?![\d.,])/gu, (_m, sign: string, n: string) => `${sign}${groupThousands(Number(n.replace(/\./g, '')))}`)
     // Kopecks and cents after grouped thousands: «150 000,50», «3,500.00».
     .replace(/(\d{1,3}(?:[  ]\d{3})+),\d{2}(?!\d)/g, '$1')
     .replace(/(\d{1,3}(?:,\d{3})+)\.\d{2}(?!\d)/g, '$1');
 }
 
 /** Pay per day or per shift: the amount is followed by «в день», «за смену», «/day». */
-const DAILY_RATE = /(?:[₽$€£₸₴]|руб[а-я.]*|р\.|usd|eur|\d)\s*(?:\/|в|за|per|a)\s*(?:день|смену|сутки|day|shift)(?![\p{L}])/iu;
+const DAILY_RATE = /(?:[₽$€£₸₴]|руб[а-я.]*|р\.?|usd|eur|\d)\s*(?:\/|в|за|per|a)\s*(?:день|смену|сутки|day|shift)(?![\p{L}])/iu;
 
 /** The amounts a post names per day: a day mentioned next to one sum says nothing of another. */
 function dayAmounts(text: string): number[] {
@@ -114,7 +114,9 @@ export function detectPaymentPeriod(text: string, defaultType: 'job' | 'gig' = '
     lower.includes('/hr') ||
     lower.includes('$/h') ||
     lower.includes('hourly') ||
-    /(?:pln|zł|zl|eur|usd|gbp|руб|₽|€|\$)\s*\/\s*h(?:r|our)?\b/.test(lower)
+    /(?:pln|zł|zl|eur|usd|gbp|руб|₽|€|\$)\s*\/\s*h(?:r|our)?\b/.test(lower) ||
+    /(?:per|\/)\s*(?:visit|session|consultation|appointment|lesson|class|call)\b/.test(lower) ||
+    /за\s+(?:визит|сеанс|консультаци[юи]|при[её]м|урок|занятие)\b/.test(lower)
   ) {
     return 'hourly';
   }
@@ -152,7 +154,7 @@ export function detectPaymentPeriod(text: string, defaultType: 'job' | 'gig' = '
  */
 const CURRENCY_MARKERS: Array<[string, RegExp]> = [
   // «белый», «Белгород» и пр. не валюты: только явные «бел. руб» / «белорусск» / BYN.
-  ['BYN', /бел\.?\s*руб|белорусск\S*\s+руб|(?<![a-z])byn(?![a-z])/i],
+  ['BYN', /бел\.?\s*руб|белорусск\S*\s+руб|(?<![a-z])byn(?![a-z])|\d[\d\s\u00a0]*Br(?![\p{L}>/])/iu],
   ['RUB', /₽|(?<![а-яё])руб(?:л|\.|(?![а-яё]))|(?<![a-z])rub(?![a-z])/i],
   ['USD', /\$|(?<![a-z])usdt?(?![a-z])|(?<![а-яё])долл/i],
   ['EUR', /€|(?<![a-z])eur(?![a-z])|(?<![а-яё])евро(?![а-яё])/i],
@@ -163,6 +165,7 @@ const CURRENCY_MARKERS: Array<[string, RegExp]> = [
   ['CHF', /(?<![a-z])chf(?![a-z])|швейцарск\S*\s+франк/i],
   ['AUD', /a\$|(?<![a-z])aud(?![a-z])|australian\s+dollar/i],
   ['CAD', /c\$|(?<![a-z])cad(?![a-z])|canadian\s+dollar/i],
+  ['INR', /₹|(?<![a-z])inr(?![a-z])|(?<![а-яё])рупи[ийя]/i],
 ];
 
 export function detectCurrency(text: string): string {
@@ -175,7 +178,7 @@ export function detectCurrency(text: string): string {
 
 export function parseSalaryRange(text: string): { min?: number; max?: number } {
   // Strip currency symbols in front of digits, e.g. $3000 -> 3000
-  const clean = normalizeMoneyText(text).replace(/zł|[$€₽£₸₴]/gi, ' ').replace(/\s+/g, ' ');
+  const clean = normalizeMoneyText(text).replace(/zł|[$€₽£₸₴₹]/gi, ' ').replace(/\s+/g, ' ');
 
   // Match pattern "от X до Y" or "X - Y"
   const rangeMatch = clean.match(/(?:от\s+)?(\d[\d\s.,]*\d|\d+)\s*(?:-|до|—|–)\s*(\d[\d\s.,]*\d|\d+)/i);
@@ -213,7 +216,7 @@ export function parseSalaryRange(text: string): { min?: number; max?: number } {
   return {};
 }
 
-const CURRENCY_UNIT = String.raw`₽|руб(?:лей|ля|ль|\.|,)?|р\.|usd|\$|eur|€|kzt|₸|byn|uah|₴|тенге|грн|pln|zł|gbp|£|chf|cad|aud`;
+const CURRENCY_UNIT = String.raw`₽|руб(?:лей|ля|ль|\.|,)?|р\.|usd|\$|eur|€|kzt|₸|byn|br|uah|₴|тенге|грн|pln|zł|gbp|£|chf|cad|aud|₹|inr`;
 // A comma or a space separates thousands only before exactly three digits: "350,800 USD",
 // "150 000 руб". Otherwise it is a list, and "Команда 5, 120 000 ₽" must not read as 5 120 000.
 const AMOUNT_PATTERN = String.raw`\d{1,3}(?:[ ,]\d{3})+(?!\d)|\d+`;
@@ -301,7 +304,25 @@ export function normalizeSalary(input: {
   const combinedText = `${input.rawSalary ?? ''} ${input.text ?? ''}`.trim();
   let period = detectPaymentPeriod(combinedText, input.type ?? 'gig');
   const daily = period !== 'hourly' && DAILY_RATE.test(combinedText);
-  const currency = (input.currency?.toUpperCase() || detectCurrency(combinedText)).trim();
+  const rawCurrency = input.rawSalary ? detectCurrency(input.rawSalary) : 'RUB';
+  const explicitRawNonRub = Boolean(
+    input.rawSalary &&
+      rawCurrency !== 'RUB' &&
+      !/₽|(?<![а-яё])руб|(?<![a-z])rur?(?![a-z])|(?<![a-z])rub(?![a-z])/i.test(input.rawSalary),
+  );
+  const textNonRub =
+    !input.rawSalary &&
+    input.budget === undefined &&
+    (!input.currency || input.currency.toUpperCase() === 'RUB')
+      ? detectCurrency(combinedText)
+      : undefined;
+  const currency = (
+    explicitRawNonRub
+      ? rawCurrency
+      : textNonRub && textNonRub !== 'RUB'
+        ? textNonRub
+        : input.currency?.toUpperCase() || detectCurrency(combinedText)
+  ).trim();
   const rate = FX_TO_USD[currency] ?? FX_TO_USD.RUB!;
 
   let min = input.budget;
@@ -342,12 +363,13 @@ export function normalizeSalary(input: {
   }
   const roubles = currency === 'RUB' || currency === 'RUR';
   const over = (usdMax ?? usdMin ?? 0) > YEARLY_SALARY_FLOOR_USD;
-  // Russian boards state pay by the month, so a huge rouble figure is not a yearly one.
+  // Russian boards state pay by the month, so a rouble figure is never a yearly one.
   const yearly =
+    !roubles &&
     period !== 'hourly' &&
     !perDay &&
     (input.type === 'job' || period === 'monthly') &&
-    (yearlyMarker || (over && !roubles));
+    (yearlyMarker || over);
   if (yearly) {
     usdMin = usdMin === undefined ? undefined : usdMin / 12;
     usdMax = usdMax === undefined ? undefined : usdMax / 12;

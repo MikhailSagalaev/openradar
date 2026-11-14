@@ -30,18 +30,26 @@ export function normalizeCompany(name: string): string | undefined {
 }
 
 /** Names of channels, boards and placeholders: where a post appeared, not who hires. */
-const OUTLET_NAME = /(?:^|[^\p{L}])(?:ваканси[а-я]*|работа\s+(?:в|для)|job\s+for|jobs?(?![\p{L}])|hiring|careerspace|хабр\s+карьер|компания\s+скрыта|it\s+job\s+hub|remote\s+jobs?|hn:|stagirovky|стажировк[а-я]*)/iu;
+const OUTLET_NAME = /^(?:ваканси[а-я]*|работа\s+(?:в|для)|job\s+for|jobs?(?![\p{L}]))|(?:^|[^\p{L}])(?:ваканси[а-я]*|job\s+for|jobs?(?![\p{L}])|hiring|careerspace|хабр\s+карьер|компания\s+скрыта|it\s+job\s+hub|remote\s+jobs?|hn:|stagirovky|стажировк[а-я]*)/iu;
+
+function cleanEmployerName(raw: string): string {
+  return raw
+    .replace(/\s*[.|(]?\s*(?:Работа в отделениях|Рабочие позиции)\)?\s*$/iu, '')
+    .trim();
+}
 
 /** True when a name in the author field is an outlet or a placeholder, not an employer. */
 export function isOutletName(name: string, channelTitle?: string): boolean {
-  if (/^(?:@|https?:)/i.test(name) || OUTLET_NAME.test(name)) return true;
-  return Boolean(channelTitle) && normalizeCompany(name) === normalizeCompany(channelTitle!);
+  const cleaned = cleanEmployerName(name);
+  if (!cleaned || /^(?:@|https?:)/i.test(cleaned) || OUTLET_NAME.test(cleaned)) return true;
+  return Boolean(channelTitle) && normalizeCompany(cleaned) === normalizeCompany(channelTitle!);
 }
 
-/** Feeds that name the employer only in the text: hh.ru, Habr Career, company boards. */
+/** Feeds that name the employer only in the text: hh.ru, Habr Career, GeekJob, company boards. */
 const COMPANY_IN_TEXT = [
   /Вакансия компании:\s*([^\n]{2,80})/u,
   /Компания «([^»]{2,80})»/u,
+  /Компания\s+([^\n«»]{2,60}?)\s+ищет\s+(?:хорошего\s+)?специалиста\s+на\s+вакансию/u,
   /^(?:Компания|Company):\s*([^\n]{2,80})/mu,
 ];
 
@@ -72,7 +80,7 @@ export function employerOf(
   };
   const author = lead.author?.trim();
   const named = author && !AUTHOR_IS_A_PERSON.has(sourceKind ?? '') ? author : fromText();
-  const name = named?.trim().slice(0, 80);
+  const name = named ? cleanEmployerName(named).slice(0, 80) : undefined;
   if (!name || isOutletName(name)) return undefined;
   const key = normalizeCompany(name);
   return key ? { key, name } : undefined;

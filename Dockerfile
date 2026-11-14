@@ -26,6 +26,7 @@ COPY migrations ./migrations
 COPY bin ./bin
 COPY README.md LICENSE ./
 COPY assets/og.png ./assets/og.png
+COPY docs/stories.json ./docs/stories.json
 COPY extension.zip* ./
 COPY extension ./extension
 RUN mkdir -p /app/data && chown -R node:node /app
