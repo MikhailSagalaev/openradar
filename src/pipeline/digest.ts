@@ -57,14 +57,17 @@ export async function runDigestIfDue(deps: DigestDeps): Promise<DigestSummary> {
   if (now - lastDigestAt < intervalMs) return { sent: false, leads: 0, skipped: 'not_due' };
 
   const since = new Date(lastDigestAt).toISOString();
-  lastDigestAt = now;
 
   const fresh = (await deps.store.listLeads({ limit: 200 }))
     .filter(
       (lead) =>
         lead.createdAt >= since && lead.status !== 'rejected' && lead.status !== 'failed',
     );
-  if (fresh.length === 0) return { sent: false, leads: 0, skipped: 'nothing_new' };
+  if (fresh.length === 0) {
+    // An empty window is consumed too, so it is not re-scanned forever.
+    lastDigestAt = now;
+    return { sent: false, leads: 0, skipped: 'nothing_new' };
+  }
 
   const top = [...fresh].sort((a, b) => b.score - a.score).slice(0, 10);
   const text = formatDigestMessage(top, intervalHours, deps.env.RADAR_PUBLIC_URL);
@@ -87,6 +90,8 @@ export async function runDigestIfDue(deps: DigestDeps): Promise<DigestSummary> {
       return { sent: false, leads: top.length, skipped: 'send_failed' };
     }
     deps.logger.info('digest sent', { leads: top.length, since });
+    // The watermark moves only after a successful send: a failed window is retried, not lost.
+    lastDigestAt = now;
     return { sent: true, leads: top.length };
   } catch (error) {
     deps.logger.warn('digest send error', {

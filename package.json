@@ -22,11 +22,14 @@
     "dev": "tsx src/cli/index.ts",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
+    "lint": "oxlint src test",
+    "verify": "pnpm lint && node scripts/check-version.js && pnpm typecheck && pnpm build && pnpm test && python -m unittest discover -s sdk/python/tests",
     "test": "vitest run",
     "test:watch": "vitest",
     "pack:extension": "node scripts/pack-extension.js",
     "new:connector": "tsx src/cli/index.ts new-connector",
     "init:env": "node scripts/init-env.mjs",
+    "publish:feed": "node --experimental-transform-types scripts/publish-listing-feed.mjs",
     "start": "node bin/radar.js",
     "rebuild": "pnpm rebuild"
   },
@@ -50,6 +53,7 @@
     "@types/mailparser": "^3.9.0",
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
+    "oxlint": "^1.93.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"

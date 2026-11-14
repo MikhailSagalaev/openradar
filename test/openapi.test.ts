@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { MCP_TOOLS } from '../src/mcp/server.ts';
 import { createApp } from '../src/server/app.ts';
 import { ingestRawLead } from '../src/pipeline/ingest.ts';
 import type { Runtime } from '../src/runtime.ts';
@@ -94,5 +95,42 @@ describe('OpenAPI description of the public API', () => {
     const suggestRes = await app.request('/api/companies/suggest?q=acme&limit=5');
     expect(suggestRes.status).toBe(200);
     expect(Array.isArray(await suggestRes.json())).toBe(true);
+  });
+
+  it('describes /mcp as POST-only, matching the live route', async () => {
+    const { app } = makeRuntime();
+    const spec = (await (await app.request('/openapi.json')).json()) as any;
+    expect(spec.paths['/mcp']).toHaveProperty('post');
+    expect(spec.paths['/mcp']).not.toHaveProperty('get');
+
+    const getRes = await app.request('/mcp');
+    expect(getRes.status).toBe(405);
+
+    const postRes = await app.request('/mcp', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    });
+    expect(postRes.status).toBe(200);
+    const body = (await postRes.json()) as any;
+    expect(Array.isArray(body.result.tools)).toBe(true);
+  });
+
+  it('lists exactly the real MCP tools in the spec description', async () => {
+    const { app } = makeRuntime();
+    const postRes = await app.request('/mcp', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    });
+    const body = (await postRes.json()) as any;
+    const liveNames = (body.result.tools as Array<{ name: string }>).map((tool) => tool.name).sort();
+    expect(liveNames).toEqual(MCP_TOOLS.map((tool) => tool.name).sort());
+
+    const spec = (await (await app.request('/openapi.json')).json()) as any;
+    const description: string = spec.paths['/mcp'].post.description;
+    for (const tool of MCP_TOOLS) {
+      expect(description, `tool ${tool.name} missing from the /mcp description`).toContain(tool.name);
+    }
   });
 });

@@ -36,4 +36,13 @@ describe('channel-post titles: hashtag rows are tags, not titles', () => {
     const title = cleanTitle(raw);
     expect(title).toBe('В проект врача диетолога · требуется технический специалист');
   });
+
+  it('keeps the last letter when a metadata label is glued to the title', () => {
+    expect(cleanTitle('РазработчикКомпания: Acme')).toContain('Разработчик');
+    expect(cleanTitle('РазработчикКомпания: Acme')).not.toContain('Разработчи ');
+    expect(cleanTitle('Python DeveloperCompany: Acme')).toContain('Developer');
+    expect(cleanTitle('Python Developer Company: Acme')).toContain('Developer');
+    expect(cleanTitle('Дизайнер Формат: удалённо')).toContain('Дизайнер');
+    expect(cleanTitle('Разработчик Компания: Acme')).toBe('Разработчик');
+  });
 });

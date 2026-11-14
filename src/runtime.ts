@@ -1,5 +1,6 @@
 import { createClassifier } from './classifier/openai.ts';
 import { parseTierDelays, type AccessPolicy } from './core/access.ts';
+import { leadEvents } from './core/events.ts';
 import { loadEnv } from './config.ts';
 import { createLogger } from './core/logger.ts';
 import type { Classifier, Env, Logger } from './core/types.ts';
@@ -54,6 +55,10 @@ export async function createRuntime(env: Env = loadEnv(), overrides: RuntimeOver
   const sources = createSourceRegistry();
   const sinks = createSinkRegistry(env);
   const classifier = createClassifier(env, logger);
+  const similar = new SimilarIndex(store);
+  // Deleted leads must not stay merge targets in the in-memory index. Retention
+  // cleanup self-heals via the 7-day prune; explicit deletes emit lead.deleted.
+  leadEvents.on('lead.deleted', (id: string) => similar.remove(id));
 
   return {
     env,
@@ -64,7 +69,7 @@ export async function createRuntime(env: Env = loadEnv(), overrides: RuntimeOver
     classifier,
     fetchImpl: overrides.fetchImpl ?? fetch,
     access: accessPolicyFromEnv(env),
-    similar: new SimilarIndex(store),
+    similar,
     services: new ServiceMonitor({ env, fetchImpl: overrides.fetchImpl ?? fetch }),
   };
 }

@@ -4,6 +4,7 @@ import type { SourceQualityInput } from './source-quality.ts';
 import type { PageFacts } from '../research/facts.ts';
 import type { WorkplaceType } from './text.ts';
 import type { SubscriptionRecord } from './subscriptions.ts';
+import type { VisaSponsorNote } from '../research/visa-sponsors.ts';
 import type {
   Contact,
   SourceVisibility,
@@ -87,6 +88,8 @@ export interface LeadDeliveryRecord {
   lastError?: string;
   createdAt: string;
   updatedAt: string;
+  /** While set and in the future, the row is claimed by a worker and skipped by others. */
+  leasedUntil?: string;
 }
 
 export interface UpsertGitHubUserInput {
@@ -500,6 +503,11 @@ export interface Store extends HubStore {
   /** How many posts a source brought; with byChannel, one row per Telegram channel. */
   sourceActivity?(options: { sourceId: string; byChannel?: boolean }): Promise<SourceActivity[]>;
   updateLeadState?(id: string, state: LeadState): Promise<void>;
+  /**
+   * Leads of one ATS board (plan 021B): every state, so the poll can diff the board's live
+   * job set against what is stored — soft-close removed jobs, reopen returned ones. Bounded.
+   */
+  listBoardLeads?(options: { sourceId: string; externalIdPrefix: string; createdAfter: string; limit: number }): Promise<Array<Pick<Lead, 'id' | 'externalId' | 'state'>>>;
   /** Active leads on these hosts whose page is due for a closed-post check, oldest check first. */
   listLeadsToCheck?(options: { hosts: string[]; limit: number; createdAfter: string; now?: Date }): Promise<Array<Pick<Lead, 'id' | 'url' | 'createdAt' | 'type'>>>;
   /** Remembers that the lead's page was checked just now. */
@@ -509,6 +517,8 @@ export interface Store extends HubStore {
    * employer when the lead has none yet.
    */
   saveLeadFacts?(id: string, facts: PageFacts, fill: LeadFactsFill): Promise<void>;
+  /** A public-register visa sponsorship note for a vacancy (plan 021D). */
+  saveLeadVisaSponsor?(id: string, note: VisaSponsorNote): Promise<void>;
   /** Leads published in [from, to) for the market report: text cut to its head, junk and scam left out. */
   /** In id order; `afterId` continues from the last lead of the previous page. */
   listLeadsForResearch?(options: { from: string; to: string; limit: number; afterId?: string }): Promise<Lead[]>;
@@ -601,7 +611,12 @@ export interface Store extends HubStore {
 
   initLeadDeliveries?(leadId: string, sinks: string[]): Promise<void>;
   updateLeadDelivery?(leadId: string, sink: string, status: 'sent' | 'failed', error?: string, nextAttemptAt?: string): Promise<void>;
+  /** Read-only peek at due deliveries (admin views). Does not claim rows. */
   getPendingDeliveries?(limit?: number): Promise<LeadDeliveryRecord[]>;
+  /** Atomically claims due deliveries for `leaseMs`; claimed rows are skipped by other callers until the lease expires or the row is updated. */
+  claimPendingDeliveries?(limit: number, leaseMs: number): Promise<LeadDeliveryRecord[]>;
+  /** Atomically claims one lead's pending deliveries (the inline ingest path) so the outbox worker cannot race it. */
+  claimLeadDeliveries?(leadId: string, leaseMs: number): Promise<LeadDeliveryRecord[]>;
   getLeadDeliveries?(leadId: string): Promise<LeadDeliveryRecord[]>;
 
   createSession?(sessionId: string, expiresAt: string, userId?: number): Promise<void>;

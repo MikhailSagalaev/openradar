@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { handleMcpRequest, MCP_TOOLS, sinceInstant, type McpBackend } from '../src/mcp/server.ts';
+import { ConfirmationLadder } from '../src/mcp/safety.ts';
 import type { ListLeadsOptions } from '../src/core/store.ts';
 import type { Lead } from '../src/core/types.ts';
 
@@ -179,47 +180,108 @@ describe('MCP server', () => {
     expect(res).toHaveProperty('period', 'month');
   });
 
-  it('submits leads via submit_lead tool', async () => {
+  it('submits leads via submit_lead tool only after confirmation', async () => {
     let submitted: unknown;
+    let calls = 0;
     const submitBackend: McpBackend = {
       ...backend,
       async submitLead(l) {
+        calls++;
         submitted = l;
         return { ok: true, id: 'new-lead-1', status: 'inserted' };
       },
     };
-    const resp = (await handleMcpRequest(
-      { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'submit_lead', arguments: { title: 'New Role', text: 'Work description', type: 'job', budget: 150000 } } },
-      submitBackend,
+    const ladder = new ConfirmationLadder();
+    const args = { title: 'New Role', text: 'Work description', type: 'job', budget: 150000 };
+    // First call is dry-run: held, nothing submitted.
+    const held = (await handleMcpRequest(
+      { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'submit_lead', arguments: args } },
+      submitBackend, { ladder },
     )) as Content;
-    const res = JSON.parse(resp.result!.content![0]!.text);
-    expect(res.ok).toBe(true);
-    expect(res.id).toBe('new-lead-1');
+    const heldRes = parsed(held);
+    expect(heldRes.status).toBe('held');
+    expect(heldRes.confirmationToken).toBeTruthy();
+    expect(calls).toBe(0);
+    // Confirm with the token and identical args: executed once.
+    const confirmed = (await handleMcpRequest(
+      { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'submit_lead', arguments: { ...args, confirm: true, confirmation_token: heldRes.confirmationToken } } },
+      submitBackend, { ladder },
+    )) as Content;
+    const res = parsed(confirmed);
+    expect(res.status).toBe('executed');
+    expect(res.result.ok).toBe(true);
+    expect(res.result.id).toBe('new-lead-1');
+    expect(res.actedOnBehalfOfUser).toBe(true);
     expect(submitted).toMatchObject({ title: 'New Role', type: 'job', budget: 150000 });
+    expect(calls).toBe(1);
   });
 
-  it('casts quality and verification votes via vote_lead', async () => {
+  it('casts quality and verification votes via vote_lead only after confirmation', async () => {
     let voted: unknown;
+    let calls = 0;
     const voteBackend: McpBackend = {
       ...backend,
       async voteLead(id, verdict, reason) {
+        calls++;
         voted = { id, verdict, reason };
         return { ok: true, myVote: verdict };
       },
     };
-    const resp = (await handleMcpRequest(
-      { jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'vote_lead', arguments: { id: 'lead-go', verdict: 'useful' } } },
-      voteBackend,
-    )) as Content;
-    const res = JSON.parse(resp.result!.content![0]!.text);
-    expect(res.ok).toBe(true);
+    const ladder = new ConfirmationLadder();
+    const args = { id: 'lead-go', verdict: 'useful' };
+    const held = parsed((await handleMcpRequest(
+      { jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'vote_lead', arguments: args } },
+      voteBackend, { ladder },
+    )) as Content);
+    expect(held.status).toBe('held');
+    expect(calls).toBe(0);
+    const confirmed = parsed((await handleMcpRequest(
+      { jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'vote_lead', arguments: { ...args, confirm: true, confirmation_token: held.confirmationToken } } },
+      voteBackend, { ladder },
+    )) as Content);
+    expect(confirmed.status).toBe('executed');
+    expect(confirmed.result.ok).toBe(true);
     expect(voted).toEqual({ id: 'lead-go', verdict: 'useful', reason: undefined });
+    expect(calls).toBe(1);
 
+    // Validation still rejects a bad verdict before any hold.
     const badVerdict = await handleMcpRequest(
       { jsonrpc: '2.0', id: 6, method: 'tools/call', params: { name: 'vote_lead', arguments: { id: 'lead-go', verdict: 'bad_verdict' } } },
-      voteBackend,
+      voteBackend, { ladder },
     ) as Content;
     expect(badVerdict.error?.code).toBe(-32602);
+  });
+
+  it('replays an executed confirmation instead of re-submitting (idempotent receipt)', async () => {
+    let calls = 0;
+    const submitBackend: McpBackend = {
+      ...backend,
+      async submitLead() { calls++; return { ok: true, id: 'once', status: 'inserted' }; },
+    };
+    const ladder = new ConfirmationLadder();
+    const args = { title: 'Once', text: 'description', type: 'job' };
+    const held = parsed((await handleMcpRequest(
+      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'submit_lead', arguments: args } }, submitBackend, { ladder },
+    )) as Content);
+    const confirmArgs = { ...args, confirm: true, confirmation_token: held.confirmationToken };
+    const first = parsed((await handleMcpRequest(
+      { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'submit_lead', arguments: confirmArgs } }, submitBackend, { ladder },
+    )) as Content);
+    expect(first.status).toBe('executed');
+    expect(first.replayed).toBe(false);
+    const again = parsed((await handleMcpRequest(
+      { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'submit_lead', arguments: confirmArgs } }, submitBackend, { ladder },
+    )) as Content);
+    expect(again.status).toBe('executed');
+    expect(again.replayed).toBe(true); // receipt returned, not re-executed
+    expect(calls).toBe(1); // submitted exactly once
+
+    // Changing the payload after confirmation re-arms the hold instead of executing.
+    const changed = parsed((await handleMcpRequest(
+      { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'submit_lead', arguments: { ...args, title: 'Different', confirm: true, confirmation_token: held.confirmationToken } } }, submitBackend, { ladder },
+    )) as Content);
+    expect(changed.status).toBe('held');
+    expect(calls).toBe(1);
   });
 
   it('filters search_leads by company, grade, and has_budget', async () => {

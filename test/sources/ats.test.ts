@@ -163,6 +163,22 @@ describe('ATS source adapter', () => {
     expect(leads[0]!.text).toContain('Location: Saguenay, QC, Canada');
   });
 
+  it('reads Teamtailor JSON feeds with their schema.org job postings', async () => {
+    const source = makeSource({ kind: 'ats', config: { provider: 'teamtailor', companies: ['tradingview=TradingView'], maxAgeDays: 365 } });
+    const urls: string[] = [];
+    const leads = await adapter.poll!(source, served({ 'tradingview.teamtailor.com/jobs.json': fixture('ats-teamtailor.json') }, urls));
+    expect(urls[0]).toBe('https://tradingview.teamtailor.com/jobs.json');
+    expect(leads).toHaveLength(2);
+    // Newest first.
+    expect(leads[0]!.publishedAt! >= leads[1]!.publishedAt!).toBe(true);
+    const lead = leads.find((l) => l.title.includes('Backend Unit Lead'))!;
+    expect(lead).toMatchObject({ type: 'job', author: 'TradingView', city: 'Limassol', isRemote: false });
+    expect(lead.externalId).toMatch(/^teamtailor:tradingview:/);
+    expect(lead.url).toMatch(/^https:\/\/tradingview\.teamtailor\.com\/jobs\/\d+-/);
+    expect(lead.text).toContain('Location: Limassol, CY');
+    expect(lead.text).not.toMatch(/<p>|&lt;/);
+  });
+
   it('asks for a provider and companies', async () => {
     await expect(adapter.poll!(makeSource({ kind: 'ats', config: { companies: ['x'] } }), served({}))).rejects.toThrow(/provider/);
     await expect(adapter.poll!(makeSource({ kind: 'ats', config: { provider: 'lever' } }), served({}))).rejects.toThrow(/companies/);

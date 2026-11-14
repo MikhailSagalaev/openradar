@@ -114,7 +114,7 @@ describe('http server', () => {
   });
 
   it('limits a client looping over the public feed', async () => {
-    const runtime = makeRuntime();
+    const runtime = makeRuntime({ RADAR_TRUSTED_PROXY: true });
     const app = createApp(runtime);
     const get = (path: string, ip: string) => app.request(path, { headers: { 'x-forwarded-for': ip } });
     let last = 0;
@@ -125,7 +125,7 @@ describe('http server', () => {
   });
 
   it('limits the sitemap to 10 requests a minute per client, with retry-after', async () => {
-    const runtime = makeRuntime();
+    const runtime = makeRuntime({ RADAR_TRUSTED_PROXY: true });
     const app = createApp(runtime);
     const get = () => app.request('/sitemap.xml', { headers: { 'x-forwarded-for': '203.0.113.11' } });
     for (let i = 0; i < 10; i++) expect((await get()).status).toBe(200);
@@ -135,7 +135,7 @@ describe('http server', () => {
   });
 
   it('takes public rate limits from the environment', async () => {
-    const runtime = makeRuntime({ RADAR_RSS_RATE_PER_MIN: 2 } as Partial<Env>);
+    const runtime = makeRuntime({ RADAR_RSS_RATE_PER_MIN: 2, RADAR_TRUSTED_PROXY: true } as Partial<Env>);
     const app = createApp(runtime);
     const get = () => app.request('/feed.xml', { headers: { 'x-forwarded-for': '203.0.113.12' } });
     expect((await get()).status).not.toBe(429);
@@ -281,7 +281,9 @@ describe('http server', () => {
     const sources = await runtime.store.listSources();
     expect(sources.length).toBeGreaterThan(0);
 
-    await expect.poll(async () => (await runtime.store.listRuns(sources.length)).length).toBe(sources.length);
+    // The presets catalog is large (150+ sources polled sequentially in the background);
+    // against Postgres each run row is a real round-trip, so allow more than the 5s default.
+    await expect.poll(async () => (await runtime.store.listRuns(sources.length)).length, { timeout: 60_000 }).toBe(sources.length);
     expect(requested.length).toBeGreaterThan(0);
   });
 
@@ -420,8 +422,31 @@ describe('http server', () => {
     await runtime.store.close();
   });
 
+  it('sets a secure cookie from configuration even without a proxy header', async () => {
+    // An https RADAR_PUBLIC_URL forces Secure even when the proxy omits x-forwarded-proto.
+    const configured = makeRuntime({ RADAR_PUBLIC_URL: 'https://hub.example' });
+    const viaUrl = await createApp(configured).request('/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', origin: 'http://localhost' },
+      body: formBody({ token: 'secret' }),
+    });
+    expect(viaUrl.status).toBe(302);
+    expect(viaUrl.headers.get('set-cookie')).toContain('Secure');
+
+    // Production always issues Secure cookies. Production mode requires a strong admin token.
+    const strongToken = '9c41e7a2b8d05f3691c4e8a7d2b60f5194a3c8e7d1b60f4295c4e8a7d2b60f51';
+    const production = makeRuntime({ NODE_ENV: 'production', RADAR_ADMIN_TOKEN: strongToken });
+    const viaEnv = await createApp(production).request('/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', origin: 'http://localhost' },
+      body: formBody({ token: strongToken }),
+    });
+    expect(viaEnv.status).toBe(302);
+    expect(viaEnv.headers.get('set-cookie')).toContain('Secure');
+  });
+
   it('rate limits brute-force attempts on /login', async () => {
-    const runtime = makeRuntime();
+    const runtime = makeRuntime({ RADAR_TRUSTED_PROXY: true });
     const app = createApp(runtime);
 
     // The limiter allows 10 attempts per 15 minutes per client.
@@ -927,11 +952,15 @@ describe('http server', () => {
     const runtime = makeRuntime({ RADAR_PUBLIC_READ: true, GITHUB_CLIENT_ID: 'id', GITHUB_CLIENT_SECRET: 'secret', RADAR_PUBLIC_URL: 'https://hub.example' });
     const app = createApp(runtime);
     const redirect = 'https://abcdefghijklmnopabcdefghijklmnop.chromiumapp.org/';
-    const connect = `/extension/connect?redirect_uri=${encodeURIComponent(redirect)}`;
+    const state = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
+    const connect = `/extension/connect?redirect_uri=${encodeURIComponent(redirect)}&state=${state}`;
 
     expect((await app.request('/extension/connect?redirect_uri=https://evil.example/')).status).toBe(400);
     expect((await app.request('/extension/connect?redirect_uri=chrome-extension://abcdefghijklmnopabcdefghijklmnop/popup.html')).status).toBe(400);
-    const tabFlow = `/extension/connect?redirect_uri=${encodeURIComponent('chrome-extension://abcdefghijklmnopabcdefghijklmnop/connected.html')}`;
+    // The flow nonce is mandatory and must look like a UUID.
+    expect((await app.request(`/extension/connect?redirect_uri=${encodeURIComponent(redirect)}`)).status).toBe(400);
+    expect((await app.request(`/extension/connect?redirect_uri=${encodeURIComponent(redirect)}&state=not-a-nonce`)).status).toBe(400);
+    const tabFlow = `/extension/connect?redirect_uri=${encodeURIComponent('chrome-extension://abcdefghijklmnopabcdefghijklmnop/connected.html')}&state=${state}`;
     expect((await app.request(tabFlow)).status).toBe(302);
     const anonymous = await app.request(connect);
     expect(anonymous.headers.get('location')).toBe(`/auth/github?returnTo=${encodeURIComponent(connect)}`);
@@ -941,18 +970,27 @@ describe('http server', () => {
     const consent = await (await app.request(connect, { headers: cookie })).text();
     expect(consent).toContain('@octocat');
     expect(consent).toContain(`name="redirect_uri" value="${redirect}"`);
+    expect(consent).toContain(`name="state" value="${state}"`);
 
     const evil = await app.request('/extension/connect', {
       method: 'POST',
       headers: { ...cookie, origin: 'http://localhost', 'content-type': 'application/x-www-form-urlencoded' },
-      body: formBody({ redirect_uri: 'https://evil.example/' }),
+      body: formBody({ redirect_uri: 'https://evil.example/', state }),
     });
     expect(evil.status).toBe(400);
+
+    // Without the nonce the token must not be issued at all.
+    const stateless = await app.request('/extension/connect', {
+      method: 'POST',
+      headers: { ...cookie, origin: 'http://localhost', 'content-type': 'application/x-www-form-urlencoded' },
+      body: formBody({ redirect_uri: redirect }),
+    });
+    expect(stateless.status).toBe(400);
 
     const granted = await app.request('/extension/connect', {
       method: 'POST',
       headers: { ...cookie, origin: 'http://localhost', 'content-type': 'application/x-www-form-urlencoded' },
-      body: formBody({ redirect_uri: redirect }),
+      body: formBody({ redirect_uri: redirect, state }),
     });
     const location = granted.headers.get('location') ?? '';
     expect(location.startsWith(`${redirect}#`)).toBe(true);
@@ -961,6 +999,7 @@ describe('http server', () => {
     expect(token).toMatch(/^ext_[0-9a-f]{64}$/);
     expect(fragment.get('handle')).toBe('octocat');
     expect(fragment.get('base')).toBe('https://hub.example');
+    expect(fragment.get('state')).toBe(state);
 
     const bearer = { authorization: `Bearer ${token}` };
     const preflight = await app.request('/api/ext/submit', { method: 'OPTIONS' });
@@ -1645,6 +1684,83 @@ describe('http server', () => {
     expect(stored?.type).toBe('job');
     expect(stored?.budget).toBe(350000);
     expect(stored?.author).toBe('octocat');
+
+    await runtime.store.close();
+  });
+
+  it('derives the author from the session, ignoring a forged author field', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true });
+    const app = createApp(runtime);
+    const session = await makeUserSession(runtime, 'octocat');
+    const cookie = { cookie: `radar_session=${session}` };
+
+    const api = await app.request('/api/submit', {
+      method: 'POST',
+      headers: { ...cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'API автор', text: 'Нужен парсер на Python, бюджет 15 000 ₽', type: 'gig', author: 'Someone else', url: 'https://example.com/order/api-author' }),
+    });
+    expect(api.status).toBe(200);
+    const apiResult = (await api.json()) as { ok: boolean; leadId?: string };
+    expect(apiResult.ok).toBe(true);
+    expect((await runtime.store.getLead(apiResult.leadId!))?.author).toBe('octocat');
+
+    const form = await app.request('/submit', {
+      method: 'POST',
+      headers: { ...cookie, origin: 'http://localhost', 'content-type': 'application/x-www-form-urlencoded' },
+      body: formBody({ title: 'Форма автор', text: 'Сверстать лендинг, бюджет 10 000 ₽', leadType: 'gig', author: 'Someone else', url: 'https://example.com/order/form-author' }),
+    });
+    expect(form.status).toBe(302);
+    const location = form.headers.get('location') ?? '';
+    expect(location.startsWith('/leads/')).toBe(true);
+    expect((await runtime.store.getLead(location.slice('/leads/'.length)))?.author).toBe('octocat');
+
+    await runtime.store.close();
+  });
+
+  it('logs out only via same-origin POST, never via GET', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true });
+    const app = createApp(runtime);
+    const session = await makeUserSession(runtime, 'octocat');
+    const cookie = { cookie: `radar_session=${session}` };
+
+    // GET is gone: a cross-site <img> or link can no longer end the session.
+    const viaGet = await app.request('/logout', { headers: cookie });
+    expect([404, 405]).toContain(viaGet.status);
+    expect(await runtime.store.getUserBySession!(session)).toBeTruthy();
+
+    // POST without an Origin header is refused by the CSRF gate.
+    const noOrigin = await app.request('/logout', { method: 'POST', headers: cookie });
+    expect(noOrigin.status).toBe(403);
+    expect(await runtime.store.getUserBySession!(session)).toBeTruthy();
+
+    const posted = await app.request('/logout', { method: 'POST', headers: { ...cookie, origin: 'http://localhost' } });
+    expect(posted.status).toBe(302);
+    expect(posted.headers.get('location')).toBe('/login');
+    expect(await runtime.store.getUserBySession!(session)).toBeFalsy();
+
+    await runtime.store.close();
+  });
+
+  it('ignores forwarded headers for rate limits without a trusted proxy', async () => {
+    const runtime = makeRuntime();
+    const app = createApp(runtime);
+
+    // Rotating X-Forwarded-For must not buy fresh buckets when the app is reachable directly.
+    let lastStatus = 0;
+    for (let attempt = 0; attempt < 11; attempt++) {
+      const res = await app.request('/login', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          'x-forwarded-for': `203.0.113.${attempt}`,
+          'x-real-ip': `198.51.100.${attempt}`,
+          origin: 'http://localhost',
+        },
+        body: formBody({ token: 'wrong-token' }),
+      });
+      lastStatus = res.status;
+    }
+    expect(lastStatus).toBe(429);
 
     await runtime.store.close();
   });

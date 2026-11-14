@@ -344,6 +344,80 @@ describe('ingest pipeline', () => {
     await runtime.store.close();
   });
 
+  it('a claimed delivery is invisible to a second claim until it is updated', async () => {
+    const runtime = makeTestRuntime();
+    const telegramMock: SinkAdapter = {
+      kind: 'telegram',
+      async deliver() {
+        throw new Error('Telegram network error');
+      },
+    };
+    runtime.sinks.register(telegramMock);
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed' });
+    const outcome = await ingestRawLead(
+      { sourceId: source.id, title: 'Заказ на сайт', text: 'Нужно сделать лендинг срочно' },
+      source,
+      { store: runtime.store, sinks: runtime.sinks, logger: runtime.logger, env: runtime.env, now: () => TEST_NOW },
+    );
+    expect(outcome.status).toBe('failed');
+
+    // Make the failed row due again.
+    await runtime.store.updateLeadDelivery?.(outcome.lead!.id, 'telegram', 'failed', 'network error', new Date(Date.now() - 1000).toISOString());
+
+    const a = await runtime.store.claimPendingDeliveries!(50, 60_000);
+    const b = await runtime.store.claimPendingDeliveries!(50, 60_000);
+    expect(a.map((d) => d.sink)).toContain('telegram');
+    expect(b).toHaveLength(0);
+
+    // Updating the row (a retry result) releases the lease for the next claim.
+    await runtime.store.updateLeadDelivery?.(outcome.lead!.id, 'telegram', 'failed', 'network error', new Date(Date.now() - 1000).toISOString());
+    const c = await runtime.store.claimPendingDeliveries!(50, 60_000);
+    expect(c.map((d) => d.sink)).toContain('telegram');
+
+    await runtime.store.close();
+  });
+
+  it('the outbox cannot race an in-flight inline delivery', async () => {
+    const runtime = makeTestRuntime();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let started!: () => void;
+    const deliveryStarted = new Promise<void>((resolve) => { started = resolve; });
+    let calls = 0;
+    const slowSink: SinkAdapter = {
+      kind: 'webhook',
+      async deliver() {
+        calls++;
+        started();
+        await gate;
+      },
+    };
+    runtime.sinks.register(slowSink);
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed' });
+
+    const ingestPromise = ingestRawLead(
+      { sourceId: source.id, title: 'Заказ на сайт', text: 'Нужно сделать лендинг срочно' },
+      source,
+      { store: runtime.store, sinks: runtime.sinks, logger: runtime.logger, env: runtime.env, now: () => TEST_NOW },
+    );
+    await deliveryStarted;
+
+    // While the inline send is blocked, the outbox worker must see nothing to do.
+    const summary = await processOutbox({ store: runtime.store, sinks: runtime.sinks, env: runtime.env, logger: runtime.logger });
+    expect(summary.processed).toBe(0);
+    expect(calls).toBe(1);
+
+    release();
+    const outcome = await ingestPromise;
+    expect(outcome.status).toBe('delivered');
+
+    const after = await processOutbox({ store: runtime.store, sinks: runtime.sinks, env: runtime.env, logger: runtime.logger });
+    expect(after.processed).toBe(0);
+    expect(calls).toBe(1);
+
+    await runtime.store.close();
+  });
+
   it('limits parallel source polling concurrency with pLimit', async () => {
     const { pLimit, pollAll } = await import('../src/pipeline/poll.ts');
 

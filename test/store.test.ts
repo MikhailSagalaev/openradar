@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Lead } from '../src/core/types.ts';
 import { MemoryStore } from '../src/store/memory.ts';
-import { TEST_NOW } from './helpers.ts';
+import { createTestStore, TEST_NOW } from './helpers.ts';
 
 function makeLead(overrides: Partial<Lead> = {}): Lead {
   return {
@@ -343,6 +343,36 @@ describe('store', () => {
 
     const dotnetResults = await store.listLeads({ query: '.NET' });
     expect(dotnetResults.map((l) => l.id)).toContain('lead-csharp');
+
+    await store.close();
+  });
+
+  it('title-key dedup without a city matches a lead that has one (memory/postgres parity)', async () => {
+    const store = createTestStore();
+    const source = await store.createSource({ kind: 'rss', title: 'Feed' });
+    await store.insertLead(makeLead({ sourceId: source.id, id: 'lead-city', city: 'Ставрополь' }));
+
+    const recent = await store.findRecentByTitleKey(
+      'нужен сантехник в ставрополе',
+      undefined,
+      new Date(TEST_NOW.getTime() - 24 * 3600 * 1000).toISOString(),
+    );
+    expect(recent?.id).toBe('lead-city');
+
+    await store.close();
+  });
+
+  it('updateLeadStatus without deliveredAt keeps the recorded delivery time (memory/postgres parity)', async () => {
+    const store = createTestStore();
+    const source = await store.createSource({ kind: 'rss', title: 'Feed' });
+    await store.insertLead(makeLead({ sourceId: source.id, id: 'lead-delivered' }));
+    const deliveredAt = TEST_NOW.toISOString();
+    await store.updateLeadStatus('lead-delivered', 'delivered', deliveredAt);
+
+    await store.updateLeadStatus('lead-delivered', 'failed');
+    const lead = await store.getLead('lead-delivered');
+    expect(lead?.status).toBe('failed');
+    expect(lead?.deliveredAt).toBe(deliveredAt);
 
     await store.close();
   });

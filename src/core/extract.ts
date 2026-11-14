@@ -289,8 +289,9 @@ export function cleanTitle(rawTitle: string, fallbackText = ''): string {
     }
   }
 
-  // Strip glued metadata labels like "Компания: ...", "Формат: ...", "Локация: ..." if they follow the job title
-  candidate = candidate.replace(/(?:\s*[-–—|·]\s*)?Вакансия\s+компании\s*:[\s\S]*$/iu, '').replace(/(?:\s+|[a-zа-яё0-9\)])(?:Компания|Город|Регион|Работодатель|Создана|Company|City|Location|Формат\s+работы|Формат|Локация|Уровень|Занятость|Вилка|ЗП|Зарплата)\s*:[^·\n]*/iu, '');
+  // Strip glued metadata labels like "Компания: ...", "Формат: ...", "Локация: ..." if they follow the job title.
+  // The lookbehind keeps the title's last letter: «РазработчикКомпания: X» must not become «Разработчи».
+  candidate = candidate.replace(/(?:\s*[-–—|·]\s*)?Вакансия\s+компании\s*:[\s\S]*$/iu, '').replace(/(?<=\s|[a-zа-яё0-9\)])(?:Компания|Город|Регион|Работодатель|Создана|Company|City|Location|Формат\s+работы|Формат|Локация|Уровень|Занятость|Вилка|ЗП|Зарплата)\s*:[^·\n]*/iu, '');
 
   let title = stripEmoji(toPlainText(candidate))
     .replace(/^[\s«"„“—–·•|*:-]+|[\s»"”\.…—–·•|*:-]+$/g, '')

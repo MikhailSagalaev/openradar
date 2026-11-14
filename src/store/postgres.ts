@@ -48,6 +48,7 @@ import type { PageFacts } from '../research/facts.ts';
 import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
 import { BROKEN_AFTER, countFailedInRow } from '../core/source-health.ts';
 import type { SubscriptionRecord } from '../core/subscriptions.ts';
+import type { VisaSponsorNote } from '../research/visa-sponsors.ts';
 
 import { normalizeSalary } from '../core/salary.ts';
 import { MIN_CONFIDENCE, type ModelFacts } from '../research/model.ts';
@@ -749,6 +750,13 @@ export class PostgresStore implements Store {
     );
   }
 
+  async saveLeadVisaSponsor(id: string, note: VisaSponsorNote): Promise<void> {
+    await this.pool.query(
+      `UPDATE leads SET metadata_json = COALESCE(metadata_json, '{}'::jsonb) || jsonb_build_object('visaSponsor', $2::jsonb) WHERE id = $1`,
+      [id, JSON.stringify(note)],
+    );
+  }
+
   async nextLeadToReview(userId: number, options: { direction?: string; bucket: ReviewBucket }): Promise<Lead | null> {
     const base = `l.state = 'active' AND l.status <> 'rejected'
           AND l.created_at BETWEEN now() - interval '14 days' AND now() - interval '12 hours'
@@ -938,20 +946,34 @@ export class PostgresStore implements Store {
   }
 
   async updateLeadScore(id: string, baseScore: number): Promise<number | undefined> {
-    const res = await this.pool.query(
-      `SELECT status, votes_up, votes_down, votes_scam, votes_closed FROM leads WHERE id = $1`,
-      [id],
-    );
-    const row = res.rows[0];
-    if (!row) return undefined;
-    const { score } = recalculateVoteScoreAndStatus(row.status as LeadStatus, baseScore, {
-      useful: Number(row.votes_up) || 0,
-      junk: Number(row.votes_down) || 0,
-      scam: Number(row.votes_scam) || 0,
-      closed: Number(row.votes_closed) || 0,
-    });
-    await this.pool.query(`UPDATE leads SET score = $1, quality_score = $2 WHERE id = $3`, [score, baseScore, id]);
-    return score;
+    // The row is locked: a vote committed between the read and the write must not be erased.
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const res = await client.query(
+        `SELECT status, votes_up, votes_down, votes_scam, votes_closed FROM leads WHERE id = $1 FOR UPDATE`,
+        [id],
+      );
+      const row = res.rows[0];
+      if (!row) {
+        await client.query('ROLLBACK');
+        return undefined;
+      }
+      const { score } = recalculateVoteScoreAndStatus(row.status as LeadStatus, baseScore, {
+        useful: Number(row.votes_up) || 0,
+        junk: Number(row.votes_down) || 0,
+        scam: Number(row.votes_scam) || 0,
+        closed: Number(row.votes_closed) || 0,
+      });
+      await client.query(`UPDATE leads SET score = $1, quality_score = $2 WHERE id = $3`, [score, baseScore, id]);
+      await client.query('COMMIT');
+      return score;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   async updateLeadStatus(id: string, status: LeadStatus, deliveredAt?: string, scoreDelta?: number): Promise<void> {
@@ -960,12 +982,12 @@ export class PostgresStore implements Store {
       await client.query('BEGIN');
       if (typeof scoreDelta === 'number') {
         await client.query(
-          `UPDATE leads SET status = $1, delivered_at = $2, score = score + $3 WHERE id = $4`,
+          `UPDATE leads SET status = $1, delivered_at = COALESCE($2::timestamptz, delivered_at), score = score + $3 WHERE id = $4`,
           [status, deliveredAt ? new Date(deliveredAt) : null, scoreDelta, id]
         );
       } else {
         await client.query(
-          `UPDATE leads SET status = $1, delivered_at = $2 WHERE id = $3`,
+          `UPDATE leads SET status = $1, delivered_at = COALESCE($2::timestamptz, delivered_at) WHERE id = $3`,
           [status, deliveredAt ? new Date(deliveredAt) : null, id]
         );
       }
@@ -1668,6 +1690,7 @@ export class PostgresStore implements Store {
            attempts = attempts + 1,
            last_error = $4,
            next_attempt_at = COALESCE($5::timestamptz, NOW()),
+           leased_until = NULL,
            updated_at = NOW()
        WHERE lead_id = $1 AND sink = $2`,
       [leadId, sink, status, error || null, nextAttemptAt || null]
@@ -1679,10 +1702,64 @@ export class PostgresStore implements Store {
       `SELECT lead_id, sink, status, attempts, next_attempt_at, last_error, created_at, updated_at
        FROM lead_deliveries
        WHERE status != 'sent' AND attempts < 5 AND next_attempt_at <= NOW()
+         AND (leased_until IS NULL OR leased_until < NOW())
        ORDER BY next_attempt_at ASC
-       LIMIT $1
-       FOR UPDATE SKIP LOCKED`,
+       LIMIT $1`,
       [limit]
+    );
+    return res.rows.map((r: any) => ({
+      leadId: r.lead_id,
+      sink: r.sink,
+      status: r.status,
+      attempts: parseInt(r.attempts, 10) || 0,
+      nextAttemptAt: new Date(r.next_attempt_at).toISOString(),
+      lastError: r.last_error || undefined,
+      createdAt: new Date(r.created_at).toISOString(),
+      updatedAt: new Date(r.updated_at).toISOString(),
+    }));
+  }
+
+  /**
+   * Atomic claim: the FOR UPDATE SKIP LOCKED lives inside the UPDATE's own
+   * transaction, so the lock is real (a bare pool.query SELECT released it
+   * immediately). Claimed rows stay invisible until the lease expires.
+   */
+  async claimPendingDeliveries(limit: number, leaseMs: number): Promise<LeadDeliveryRecord[]> {
+    const res = await this.pool.query(
+      `UPDATE lead_deliveries
+       SET leased_until = NOW() + ($2 || ' milliseconds')::interval
+       WHERE (lead_id, sink) IN (
+         SELECT lead_id, sink FROM lead_deliveries
+         WHERE status <> 'sent' AND attempts < 5 AND next_attempt_at <= NOW()
+           AND (leased_until IS NULL OR leased_until < NOW())
+         ORDER BY next_attempt_at ASC
+         LIMIT $1
+         FOR UPDATE SKIP LOCKED
+       )
+       RETURNING lead_id, sink, status, attempts, next_attempt_at, last_error, created_at, updated_at`,
+      [limit, String(leaseMs)]
+    );
+    return res.rows.map((r: any) => ({
+      leadId: r.lead_id,
+      sink: r.sink,
+      status: r.status,
+      attempts: parseInt(r.attempts, 10) || 0,
+      nextAttemptAt: new Date(r.next_attempt_at).toISOString(),
+      lastError: r.last_error || undefined,
+      createdAt: new Date(r.created_at).toISOString(),
+      updatedAt: new Date(r.updated_at).toISOString(),
+    }));
+  }
+
+  /** The inline ingest path claims only its own lead's rows before sending. */
+  async claimLeadDeliveries(leadId: string, leaseMs: number): Promise<LeadDeliveryRecord[]> {
+    const res = await this.pool.query(
+      `UPDATE lead_deliveries
+       SET leased_until = NOW() + ($2 || ' milliseconds')::interval
+       WHERE lead_id = $1 AND status <> 'sent'
+         AND (leased_until IS NULL OR leased_until < NOW())
+       RETURNING lead_id, sink, status, attempts, next_attempt_at, last_error, created_at, updated_at`,
+      [leadId, String(leaseMs)]
     );
     return res.rows.map((r: any) => ({
       leadId: r.lead_id,
@@ -2078,16 +2155,6 @@ export class PostgresStore implements Store {
         alreadyVoted: false,
         myVote: activeVote,
       };
-
-      return {
-        votes_up,
-        votes_down,
-        votes_scam,
-        votes_closed,
-        score: newScore,
-        status: newStatus,
-        alreadyVoted: false,
-      };
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;
@@ -2208,14 +2275,7 @@ export class PostgresStore implements Store {
 
   async listSignals(leadId: string): Promise<SignalRecord[]> {
     const res = await this.pool.query(`SELECT * FROM signals WHERE lead_id = $1 ORDER BY created_at ASC`, [leadId]);
-    return res.rows.map((r) => ({
-      leadId: r.lead_id,
-      pubkey: r.pubkey,
-      signal: r.signal,
-      comment: r.comment ?? '',
-      eventId: r.event_id || undefined,
-      createdAt: new Date(r.created_at).toISOString(),
-    }));
+    return res.rows.map(rowToSignal);
   }
 
   async rememberAuth(id: string, expiresAt: string): Promise<boolean> {
@@ -2487,6 +2547,16 @@ export class PostgresStore implements Store {
 
   async updateLeadState(id: string, state: LeadState): Promise<void> {
     await this.pool.query(`UPDATE leads SET state = $1 WHERE id = $2`, [state, id]);
+  }
+
+  async listBoardLeads(options: { sourceId: string; externalIdPrefix: string; createdAfter: string; limit: number }): Promise<Array<Pick<Lead, 'id' | 'externalId' | 'state'>>> {
+    const result = await this.pool.query(
+      `SELECT id, external_id, state FROM leads
+        WHERE source_id = $1 AND external_id LIKE $2 || '%' AND created_at >= $3::timestamptz
+        ORDER BY created_at DESC LIMIT $4`,
+      [options.sourceId, options.externalIdPrefix, options.createdAfter, options.limit],
+    );
+    return result.rows.map((r) => ({ id: r.id, externalId: r.external_id || undefined, state: (r.state as LeadState) || 'active' }));
   }
 
   async saveLeadFacts(id: string, facts: PageFacts, fill: LeadFactsFill): Promise<void> {
@@ -2785,6 +2855,17 @@ function rowToUser(r: any): UserRecord {
     createdAt: new Date(r.created_at).toISOString(),
     githubCreatedAt: r.github_created_at ? new Date(r.github_created_at).toISOString() : undefined,
     publicProfile: r.public_profile !== false,
+  };
+}
+
+function rowToSignal(r: any): SignalRecord {
+  return {
+    leadId: r.lead_id,
+    pubkey: r.pubkey,
+    signal: r.signal,
+    comment: r.comment ?? '',
+    eventId: r.event_id || undefined,
+    createdAt: new Date(r.created_at).toISOString(),
   };
 }
 

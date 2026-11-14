@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { cleanText, findJobPosting, extractJobPosting, extractPageData } from '../extension/content.js';
 // @ts-ignore
 import { cleanCompanyName, categorizePersonas, buildXRayPlan } from '../extension/xray.js';
+// @ts-ignore
+import { validateConnectFragment } from '../extension/connected.js';
 
 describe('extension content script JobPosting extractor', () => {
   it('cleans HTML text tags cleanly', () => {
@@ -180,6 +182,40 @@ describe('extension content script JobPosting extractor', () => {
       expect(habr.query).toContain('site:habr.com');
       expect(github.query).toContain('site:github.com');
       expect(plan.outreachTemplate).toContain('Авито Тех');
+    });
+  });
+
+  describe('extension connect fragment validation', () => {
+    const state = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
+    const fragment = (overrides: Record<string, string> = {}) =>
+      new URLSearchParams({ token: 'ext_' + 'ab'.repeat(32), base: 'https://hub.example', handle: 'octocat', state, ...overrides });
+
+    it('accepts a valid token, https base and matching flow nonce', () => {
+      const result = validateConnectFragment(fragment(), state);
+      expect(result.ok).toBe(true);
+      expect(result.token).toMatch(/^ext_/);
+      expect(result.base).toBe('https://hub.example');
+      expect(result.handle).toBe('octocat');
+    });
+
+    it('rejects a missing or mismatched flow nonce', () => {
+      expect(validateConnectFragment(fragment(), undefined).ok).toBe(false);
+      expect(validateConnectFragment(fragment(), '').ok).toBe(false);
+      expect(validateConnectFragment(fragment(), 'ffffffff-0000-4000-8000-000000000000').ok).toBe(false);
+      expect(validateConnectFragment(fragment({ state: '' }), state).ok).toBe(false);
+    });
+
+    it('rejects non-ext tokens', () => {
+      expect(validateConnectFragment(fragment({ token: 'mcp_deadbeef' }), state).ok).toBe(false);
+      expect(validateConnectFragment(fragment({ token: '' }), state).ok).toBe(false);
+    });
+
+    it('allows https hosts and loopback http only', () => {
+      expect(validateConnectFragment(fragment({ base: 'http://evil.example' }), state).ok).toBe(false);
+      expect(validateConnectFragment(fragment({ base: 'ftp://hub.example' }), state).ok).toBe(false);
+      expect(validateConnectFragment(fragment({ base: 'not a url' }), state).ok).toBe(false);
+      expect(validateConnectFragment(fragment({ base: 'http://127.0.0.1:8787' }), state).ok).toBe(true);
+      expect(validateConnectFragment(fragment({ base: 'http://localhost:8787/' }), state).base).toBe('http://localhost:8787');
     });
   });
 });

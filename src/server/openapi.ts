@@ -158,9 +158,14 @@ export function renderOpenApi(baseUrl: string): Record<string, unknown> {
         },
       },
       '/mcp': {
-        get: {
+        post: {
           summary: 'Model Context Protocol server',
           description: 'Streamable HTTP MCP with tools search_leads, get_lead_details, estimate_compensation, submit_lead, vote_lead, get_market_analytics, save_search, list_saved_searches, xray_generate_dorks. Keyless guest access; a signed participant key raises the tier.',
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: { type: 'object' } } },
+            description: 'JSON-RPC 2.0 request (initialize, tools/list, tools/call).',
+          },
           responses: { '200': { description: 'JSON-RPC over MCP; see https://modelcontextprotocol.io' } },
         },
       },
@@ -199,6 +204,9 @@ function leadSchema(): Record<string, unknown> {
       type: { type: 'string', enum: ['job', 'gig'] },
       title: { type: 'string' },
       score: { type: 'integer', minimum: 0, maximum: 100, description: 'Static quality estimate; median ~60, 80+ is a strong lead' },
+      verdict: { type: 'string', enum: ['strong', 'stretch', 'skip'], description: 'Explainable fit verdict from the score and binary gates; a failed gate always means skip' },
+      gates: { type: 'array', description: 'Hard binary filters applied before the verdict (live, single offer)', items: { type: 'object', properties: { name: { type: 'string' }, pass: { type: 'boolean' }, note: { type: 'string' } } } },
+      checks: { type: 'array', description: 'Named, human-readable checks explaining the score (score, pay, requirements, direction, detail)', items: { type: 'object', properties: { name: { type: 'string' }, pass: { type: 'boolean' }, note: { type: 'string' } } } },
       text: { type: 'string', description: 'Up to 20 000 characters, contacts included for signed-in viewers' },
       url: { type: 'string', format: 'uri' },
       canonicalUrl: { type: 'string', format: 'uri' },

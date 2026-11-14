@@ -1,5 +1,6 @@
-import { applyDecisions, decisionsEnabled, runDecisions } from './decide.ts';
+import { applyDecisions, decisionsEnabled, newDecisionReplay, runDecisions } from './decide.ts';
 import { runEnrichment } from './enrich.ts';
+import { runVisaSponsors } from '../research/visa-sponsors.ts';
 import { webPubkey } from '../hub/web-key.ts';
 import type { Logger } from '../core/types.ts';
 import { pollAll, type PollDeps } from './poll.ts';
@@ -37,8 +38,11 @@ export class PollRunner {
   private extractionRunning = false;
   private decisionsRunning = false;
   private nextDecisionsAt = 0;
+  /** Shared idempotency cache for the paid model call across rounds (plan 021E). */
+  private decisionReplay = newDecisionReplay();
   private enrichmentRunning = false;
   private nextEnrichmentAt = 0;
+  private visaSponsorsRunning = false;
   private lastUserTelegramAt = 0;
   private userTelegramRunning = false;
 
@@ -108,6 +112,7 @@ export class PollRunner {
       this.runExtractionIfDue();
       this.runDecisionsIfDue();
       this.runEnrichmentIfDue();
+      this.runVisaSponsorsIfDue();
       this.runUserTelegramIfDue();
       // Keeps the live research report built, so no visitor waits the seconds it takes.
       const useModel = this.deps.env.RADAR_EXTRACT_APPLY;
@@ -209,6 +214,26 @@ export class PollRunner {
       });
   }
 
+  /**
+   * UK sponsor-register matching (plan 021D). The round itself decides when the register
+   * needs a re-read (twice a day); this guard only keeps one round at a time.
+   */
+  private runVisaSponsorsIfDue(): void {
+    const env = this.deps.env;
+    if (env.RADAR_VISA_SPONSORS === false || this.visaSponsorsRunning || !this.deps.store.saveLeadVisaSponsor) return;
+    this.visaSponsorsRunning = true;
+    void runVisaSponsors({ store: this.deps.store, env, logger: this.deps.logger.child('visa'), fetchImpl: this.deps.fetchImpl ?? fetch })
+      .then((summary) => {
+        if (summary.matched) this.logger.info('visa sponsors matched', { ...summary });
+      })
+      .catch((error) => {
+        this.logger.warn('visa sponsor matching failed', { error: error instanceof Error ? error.message : String(error) });
+      })
+      .finally(() => {
+        this.visaSponsorsRunning = false;
+      });
+  }
+
   /** A batch of decisions every two minutes, sized to RADAR_DECIDE_PER_HOUR. */
   private runDecisionsIfDue(): void {
     const env = this.deps.env;
@@ -217,7 +242,7 @@ export class PollRunner {
     if (Date.now() < this.nextDecisionsAt) return;
     this.nextDecisionsAt = Date.now() + EXTRACTION_INTERVAL_MS;
     this.decisionsRunning = true;
-    void runDecisions({ store: this.deps.store, env, logger: this.deps.logger.child('decide'), fetchImpl: fetch }, Math.max(1, Math.round(perHour / BATCHES_PER_HOUR)))
+    void runDecisions({ store: this.deps.store, env, logger: this.deps.logger.child('decide'), fetchImpl: fetch, replay: this.decisionReplay }, Math.max(1, Math.round(perHour / BATCHES_PER_HOUR)))
       .then((summary) => {
         if (summary.asked) this.logger.info('decisions finished', { ...summary });
         if (this.deps.services) {

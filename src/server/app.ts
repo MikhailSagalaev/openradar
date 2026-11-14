@@ -7,6 +7,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import fs from 'node:fs';
 import path from 'node:path';
 import { escapeHtml, extractSkills, stripInvisible } from '../core/text.ts';
+import { emitLeadDeleted } from '../core/events.ts';
 import { renderRssFeed } from './feed.ts';
 import type { ParticipantRecord, UserRecord } from '../core/store.ts';
 import type { Lead, LeadStatus, LeadType, RawLead, SourceConfig, SourceKind, SourceRecord, Viewer, VoteSignal } from '../core/types.ts';
@@ -16,6 +17,7 @@ import { ingestRawLead, type IngestDeps } from '../pipeline/ingest.ts';
 import type { UserTelegramDeps } from '../pipeline/user-telegram.ts';
 import { renderSVG } from 'uqr';
 import { fetchSafeHttp } from '../pipeline/preview.ts';
+import type { VisaSponsorNote } from '../research/visa-sponsors.ts';
 import { feedMaxAge } from '../pipeline/liveness.ts';
 import type { Runtime } from '../runtime.ts';
 import { SOURCE_PRESETS, presetSource } from '../sources/presets.ts';
@@ -24,15 +26,16 @@ import { ATS_PROVIDERS } from '../sources/ats.ts';
 import { remoteFromText } from '../core/extract.ts';
 import { DEFAULT_SESSION_ENV, TELEGRAM_SESSION_ENV_RE } from '../sources/telegram-account.ts';
 import { VERSION } from '../version.ts';
-import { githubOAuthConfigured, startGitHubOAuth, handleGitHubCallback } from './auth.ts';
+import { githubOAuthConfigured, startGitHubOAuth, handleGitHubCallback, secureCookie } from './auth.ts';
 import { renderAdminPage } from './admin.ts';
 import { analyticsFromEnv, contentSecurityPolicy } from './analytics.ts';
 import { filterOptions, IT_SKILLS, matchesSavedFilters, parseFeedFilters, type FeedFilters } from './filters.ts';
 import { computeInsights, estimateMarket } from '../core/market.ts';
 import { COLLECTOR_MAX_ORDERS, COLLECTOR_PLATFORMS, collectedOrderToRaw, type CollectorPlatform, COLLECTOR_SITES, collectedVacancyToRaw, type CollectorSite } from './collector.ts';
-import { rateLimit } from './ratelimit.ts';
+import { configureRateLimit, rateLimit } from './ratelimit.ts';
 import { indexCsv, openradarIndex } from '../research/index.ts';
 import { qualityFlagsOf } from '../core/quality.ts';
+import { explainLead } from '../core/explain.ts';
 import { rubToUsd } from '../core/salary.ts';
 import { TelegramAuthService } from './tg-auth.ts';
 import { runSourceHygiene, sourceState } from '../core/source-health.ts';
@@ -419,10 +422,17 @@ async function feedFor(runtime: Runtime, viewer: Viewer, options: ListLeadsOptio
 /**
  * Absolute base URL for links in feeds, sitemaps and OAuth. RADAR_PUBLIC_URL wins:
  * the Host header is client-controlled and must not decide where links point.
+ * Without it in production the request Host is still used (self-hosted default),
+ * but the operator gets one warning — public deployments must configure the URL.
  */
+let warnedMissingPublicUrl = false;
 function publicBaseUrl(c: Context, runtime: Runtime): string {
   const configured = runtime.env.RADAR_PUBLIC_URL?.replace(/\/+$/, '');
   if (configured) return configured;
+  if (runtime.env.NODE_ENV === 'production' && !warnedMissingPublicUrl) {
+    warnedMissingPublicUrl = true;
+    runtime.logger.warn('RADAR_PUBLIC_URL is unset in production: absolute links fall back to the request Host; set RADAR_PUBLIC_URL for public deployments');
+  }
   const host = c.req.header('host') || '127.0.0.1:8787';
   const proto = c.req.header('x-forwarded-proto') === 'https' ? 'https' : 'http';
   return `${proto}://${host}`;
@@ -445,6 +455,13 @@ const PUBLIC_LEAD_KEYS = [
   'category', 'skills', 'isRemote', 'workplaceType', 'direction', 'publishedAt', 'createdAt',
   'votes_up', 'votes_down', 'votes_scam', 'votes_closed', 'contacts', 'sourceRef',
 ] as const;
+
+/** The public projection of the visa-sponsor note: only the register's own fields. */
+function publicVisaSponsor(lead: Lead): VisaSponsorNote | undefined {
+  const note = (lead.metadata as Record<string, unknown> | undefined)?.visaSponsor as VisaSponsorNote | undefined;
+  if (!note || typeof note !== 'object' || note.register !== 'uk' || typeof note.name !== 'string') return undefined;
+  return note;
+}
 
 function toPublicLead(lead: Lead): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -469,6 +486,13 @@ function toPublicLead(lead: Lead): Record<string, unknown> {
   }
   const flags = qualityFlagsOf(lead);
   if (flags.length) out.qualityFlags = flags;
+  const visa = publicVisaSponsor(lead);
+  if (visa) out.visaSponsor = visa;
+  // Explainable scoring (plan 021A): named checks, binary gates and a verdict, additive.
+  const explanation = explainLead(lead);
+  out.checks = explanation.checks;
+  out.gates = explanation.gates;
+  out.verdict = explanation.verdict;
   return out;
 }
 
@@ -547,6 +571,10 @@ function formValues(body: Record<string, unknown>): SourceFormValues {
     provider: formString(body, 'provider'),
     companies: formString(body, 'companies'),
     pattern: formString(body, 'pattern'),
+    titles: formString(body, 'titles'),
+    countries: formString(body, 'countries'),
+    lastDays: formString(body, 'lastDays'),
+    maxResults: formString(body, 'maxResults'),
     intervalSec: formString(body, 'intervalSec'),
     perPoll: formString(body, 'perPoll'),
     maxAgeDays: formString(body, 'maxAgeDays'),
@@ -589,6 +617,10 @@ function formValuesFromSource(source: SourceRecord): SourceFormValues {
     provider: text(config.provider),
     companies: text(config.companies),
     pattern: text(config.pattern),
+    titles: text(config.titles),
+    countries: text(config.countries),
+    lastDays: text(config.lastDays),
+    maxResults: text(config.maxResults),
     intervalSec: text(config.intervalSec),
     perPoll: text(config.perPoll),
     maxAgeDays: text(config.maxAgeDays),
@@ -600,7 +632,7 @@ function formValuesFromSource(source: SourceRecord): SourceFormValues {
 const FORM_CONFIG_KEYS = new Set([
   'share', 'city', 'includeKeywords', 'excludeKeywords', 'minBudget', 'limit', 'url', 'channel', 'chats', 'folder',
   'sessionEnv', 'categoryId', 'token', 'host', 'user', 'passwordEnv', 'port', 'mailbox', 'sinceDays', 'subjectIncludes',
-  'query', 'text', 'tag', 'area', 'category', 'provider', 'companies', 'pattern',
+  'query', 'text', 'tag', 'area', 'category', 'provider', 'companies', 'pattern', 'titles', 'countries', 'lastDays', 'maxResults',
 ]);
 
 function buildSourceConfig(
@@ -713,6 +745,24 @@ function buildSourceConfig(
     const what = formString(body, 'query').trim();
     if (what.length > 200) return { config, error: 'Поисковый запрос — не длиннее 200 символов.' };
     if (what) config.what = what;
+  }
+
+  if (kind === 'alexandria') {
+    const titles = parseList(formString(body, 'titles'));
+    if (titles.length) config.titles = titles;
+    const countries = parseList(formString(body, 'countries')).map((c) => c.toUpperCase());
+    if (countries.some((c) => !/^[A-Z]{2}$/.test(c))) return { config, error: 'Коды стран Alexandria — две буквы, например US или DE.' };
+    if (countries.length) config.countries = countries;
+    const lastDays = asNumber(formString(body, 'lastDays'));
+    if (lastDays !== undefined) {
+      if (isNaN(lastDays) || lastDays < 1) return { config, error: 'Свежесть Alexandria — от 1 до 90 дней.' };
+      config.lastDays = Math.min(Math.round(lastDays), 90);
+    }
+    const maxResults = asNumber(formString(body, 'maxResults'));
+    if (maxResults !== undefined) {
+      if (isNaN(maxResults) || maxResults < 1) return { config, error: 'Записей за опрос Alexandria — от 1 до 100 (кредиты).' };
+      config.maxResults = Math.min(Math.round(maxResults), 100);
+    }
   }
 
   if (kind === 'hh' || kind === 'trudvsem' || kind === 'remoteok') {
@@ -938,6 +988,7 @@ export async function startSubscriptionBot(runtime: Runtime, signal: AbortSignal
 export function createApp(runtime: Runtime): Hono {
   const app = new Hono();
   setPublicBaseUrl(runtime.env.RADAR_PUBLIC_URL);
+  configureRateLimit({ trustProxy: runtime.env.RADAR_TRUSTED_PROXY === true });
 
   if (runtime.env.RADAR_ADMIN_GITHUB) {
     const nonNumeric = runtime.env.RADAR_ADMIN_GITHUB
@@ -1158,14 +1209,16 @@ export function createApp(runtime: Runtime): Hono {
     setCookie(c, 'radar_session', sessionId, {
       httpOnly: true,
       sameSite: 'Lax',
-      secure: c.req.header('x-forwarded-proto') === 'https',
+      secure: secureCookie(c, runtime),
       path: '/',
       maxAge: 7 * 24 * 3600,
     });
     return c.redirect('/');
   });
 
-  app.get('/logout', async (c) => {
+  // Logout mutates session state, so it is a POST behind the same-origin guard —
+  // a GET would let any page log the visitor out with an <img> tag.
+  app.post('/logout', async (c) => {
     const sessionId = getCookie(c, 'radar_session');
     if (sessionId && runtime.store.deleteSession) {
       await runtime.store.deleteSession(sessionId);
@@ -1838,7 +1891,6 @@ export function createApp(runtime: Runtime): Hono {
     }
     const rawType = typeof body.leadType === 'string' ? body.leadType.trim() : '';
     const type: LeadType = rawType === 'job' || rawType === 'gig' ? rawType : 'gig';
-    const author = typeof body.author === 'string' ? body.author.trim() : undefined;
     const category = typeof body.category === 'string' && body.category.trim() ? body.category.trim() : undefined;
     const city = typeof body.city === 'string' ? body.city.trim() : undefined;
     const budget = asNumber(body.budget);
@@ -1869,7 +1921,8 @@ export function createApp(runtime: Runtime): Hono {
       title: title || text,
       text: text || title,
       url: url || undefined,
-      author: author || user.handle,
+      // Attribution always comes from the authenticated identity, never the form.
+      author: user.handle,
       category,
       city,
       budget,
@@ -2620,6 +2673,8 @@ export function createApp(runtime: Runtime): Hono {
     const id = c.req.param('id');
     const deleted = runtime.store.deleteLead ? await runtime.store.deleteLead(id) : false;
     if (!deleted) return c.json({ error: 'not_found' }, 404);
+    // Drop the id from the in-memory similar index; retention cleanup self-heals via the 7-day prune.
+    emitLeadDeleted(id);
     return c.json({ ok: true, deleted: id });
   });
 
@@ -2814,7 +2869,8 @@ export function createApp(runtime: Runtime): Hono {
       title: title ?? text ?? '',
       text: text ?? title ?? '',
       url,
-      author: asString(body.author) || user.handle,
+      // Attribution always comes from the authenticated identity, whatever the body sends.
+      author: user.handle,
       category: asString(body.category),
       city: asString(body.city),
       budget: asNumber(body.budget),
@@ -2872,16 +2928,21 @@ export function createApp(runtime: Runtime): Hono {
     c.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   };
 
+  // The flow nonce binds the token handoff to the popup that started it: without
+  // it any page could open connected.html and replace the stored account.
+  const EXTENSION_STATE_RE = /^[0-9a-f-]{36}$/i;
   app.get('/extension/connect', async (c) => {
     const redirectUri = c.req.query('redirect_uri') ?? '';
     if (!EXTENSION_REDIRECT_RE.test(redirectUri)) return c.text('Bad redirect_uri', 400);
+    const state = c.req.query('state') ?? '';
+    if (!EXTENSION_STATE_RE.test(state)) return c.text('Bad state', 400);
     if (!githubOAuthConfigured(runtime) || !runtime.store.saveExtensionToken) return c.text('GitHub sign-in is not configured on this server', 501);
     const user = await currentUser(c, runtime);
     if (!user) {
-      const back = `/extension/connect?redirect_uri=${encodeURIComponent(redirectUri)}`;
+      const back = `/extension/connect?redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
       return c.redirect(`/auth/github?returnTo=${encodeURIComponent(back)}`);
     }
-    return c.html(renderExtensionConnectPage({ version: VERSION, lang: resolveLang(c), auth: await getAuthDisplay(c, runtime), handle: user.handle, redirectUri }));
+    return c.html(renderExtensionConnectPage({ version: VERSION, lang: resolveLang(c), auth: await getAuthDisplay(c, runtime), handle: user.handle, redirectUri, state }));
   });
 
   app.post('/extension/connect', rateLimit({ windowMs: 10 * 60_000, max: 10 }), async (c) => {
@@ -2890,9 +2951,11 @@ export function createApp(runtime: Runtime): Hono {
     const form = await c.req.parseBody();
     const redirectUri = typeof form.redirect_uri === 'string' ? form.redirect_uri : '';
     if (!EXTENSION_REDIRECT_RE.test(redirectUri)) return c.text('Bad redirect_uri', 400);
+    const state = typeof form.state === 'string' ? form.state : '';
+    if (!EXTENSION_STATE_RE.test(state)) return c.text('Bad state', 400);
     const token = `ext_${randomBytes(32).toString('hex')}`;
     await runtime.store.saveExtensionToken(createHash('sha256').update(token).digest('hex'), user.id);
-    const fragment = new URLSearchParams({ token, handle: user.handle, base: publicBaseUrl(c, runtime) });
+    const fragment = new URLSearchParams({ token, handle: user.handle, base: publicBaseUrl(c, runtime), state });
     return c.redirect(`${redirectUri}#${fragment.toString()}`);
   });
 
