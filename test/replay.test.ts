@@ -3,7 +3,6 @@ import { ReplayCache, idempotencyKey } from '../src/core/replay.ts';
 import { newDecisionReplay, runDecisions } from '../src/pipeline/decide.ts';
 import { makeTestRuntime } from './helpers.ts';
 
-const NOW = new Date('2026-11-13T12:00:00.000Z');
 const logger = { info() {}, warn() {}, error() {}, debug() {}, child() { return logger; } } as never;
 
 describe('replay cache (plan 021E idempotency)', () => {
@@ -60,7 +59,8 @@ describe('idempotent model decisions (plan 021E)', () => {
   async function runtimeWithLead() {
     const runtime = makeTestRuntime({ ...env });
     const source = await runtime.store.createSource({ kind: 'rss', title: 'Лента', config: {}, enabled: true });
-    await runtime.store.insertLead({ id: 'a', sourceId: source.id, type: 'job', title: 'Пост a', text: 'Текст вакансии достаточно длинный для решения модели.', fingerprint: 'fa', titleKey: 'ka', status: 'new', score: 50, reasons: [], skills: [], createdAt: NOW.toISOString() } as never);
+    // Fresh, not the fixed 2026 date: Postgres listLeadsToDecide only sees the last 30 days.
+    await runtime.store.insertLead({ id: 'a', sourceId: source.id, type: 'job', title: 'Пост a', text: 'Текст вакансии достаточно длинный для решения модели.', fingerprint: 'fa', titleKey: 'ka', status: 'new', score: 50, reasons: [], skills: [], createdAt: new Date().toISOString() } as never);
     return runtime;
   }
 
