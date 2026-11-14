@@ -216,9 +216,9 @@ describe('visa sponsor projection', () => {
   it('exposes the note through the public API and only its own fields', async () => {
     const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true });
     const app = createApp(runtime);
-    await runtime.store.createSource({ kind: 'rss', title: 'Feed', config: {}, enabled: true });
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed', config: {}, enabled: true });
     // Old enough to pass the guest tier delay.
-    await runtime.store.insertLead(lead({ createdAt: new Date(Date.now() - 3 * 86_400_000).toISOString() }));
+    await runtime.store.insertLead(lead({ sourceId: source.id, createdAt: new Date(Date.now() - 3 * 86_400_000).toISOString() }));
     await runtime.store.saveLeadVisaSponsor!('l1', { ...note });
     const list = (await (await app.request('/api/leads')).json()) as Array<Record<string, any>>;
     expect(list[0]?.visaSponsor).toMatchObject({ register: 'uk', name: 'Monzo Bank Ltd', matched: 'employer' });

@@ -69,9 +69,9 @@ describe('explainability in the public projection and UI', () => {
   it('the API carries checks, gates and verdict additively, score intact', async () => {
     const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true });
     const app = createApp(runtime);
-    await runtime.store.createSource({ kind: 'ats', title: 'Acme', config: {} });
-    await runtime.store.insertLead(lead({ id: 'strong' }));
-    await runtime.store.insertLead(lead({ id: 'gated', score: 95, fingerprint: 'fp-gated', titleKey: 'tk-gated', url: 'https://jobs.ashbyhq.com/acme/2', metadata: { qualityFlags: ['mlm'] } }));
+    const source = await runtime.store.createSource({ kind: 'ats', title: 'Acme', config: {} });
+    await runtime.store.insertLead(lead({ id: 'strong', sourceId: source.id }));
+    await runtime.store.insertLead(lead({ id: 'gated', sourceId: source.id, score: 95, fingerprint: 'fp-gated', titleKey: 'tk-gated', url: 'https://jobs.ashbyhq.com/acme/2', metadata: { qualityFlags: ['mlm'] } }));
     const res = await app.request('/v2/feed?limit=200');
     const body = await res.json() as { leads: Array<Record<string, unknown>> };
     const strong = body.leads.find((l) => l.id === 'strong')!;
@@ -88,8 +88,8 @@ describe('explainability in the public projection and UI', () => {
   it('the lead page renders the verdict and named checks', async () => {
     const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true });
     const app = createApp(runtime);
-    await runtime.store.createSource({ kind: 'ats', title: 'Acme', config: {} });
-    await runtime.store.insertLead(lead({ id: 'page' }));
+    const source = await runtime.store.createSource({ kind: 'ats', title: 'Acme', config: {} });
+    await runtime.store.insertLead(lead({ id: 'page', sourceId: source.id }));
     const res = await app.request('/leads/page');
     expect(res.status).toBe(200);
     const html = await res.text();

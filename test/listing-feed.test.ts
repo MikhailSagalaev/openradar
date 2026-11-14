@@ -89,9 +89,9 @@ describe('listing feed from the live guest projection', () => {
   it('publishes only what a guest may see: no contacts, original links', async () => {
     const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true });
     const app = createApp(runtime);
-    await runtime.store.createSource({ kind: 'ats', title: 'Acme', config: {} });
+    const source = await runtime.store.createSource({ kind: 'ats', title: 'Acme', config: {} });
     const insert = (id: string, over: Partial<Lead>) => runtime.store.insertLead({
-      id, sourceId: 's1', type: 'job', title: `Role ${id}`, text: 'Build things. Contact hr@acme.io or @acme_hr.',
+      id, sourceId: source.id, type: 'job', title: `Role ${id}`, text: 'Build things. Contact hr@acme.io or @acme_hr.',
       url: `https://jobs.ashbyhq.com/acme/${id}`, fingerprint: `fp-${id}`, titleKey: `role-${id}`,
       status: 'new', score: 50, reasons: [], skills: ['Go'], createdAt: daysAgo(3),
       contacts: [{ type: 'email', value: 'hr@acme.io' }, { type: 'telegram', value: '@acme_hr' }], ...over,
