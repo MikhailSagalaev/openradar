@@ -72,12 +72,17 @@ describe('idempotent model decisions (plan 021E)', () => {
     const runtime = await runtimeWithLead();
     let calls = 0;
     let release!: () => void;
+    let entered!: () => void;
     const gate = new Promise<void>((r) => { release = r; });
-    const fetchImpl = (async () => { calls++; await gate; return new Response(JSON.stringify(answer), { status: 200 }); }) as unknown as typeof fetch;
+    const callEntered = new Promise<void>((r) => { entered = r; });
+    const fetchImpl = (async () => { calls++; entered(); await gate; return new Response(JSON.stringify(answer), { status: 200 }); }) as unknown as typeof fetch;
     const replay = newDecisionReplay();
     const deps = { store: runtime.store, env: runtime.env, logger, fetchImpl, replay };
-    // Two rounds start before either answer is saved: the second must replay, not re-bill.
+    // The first round must have listed the lead and entered the paid call before the
+    // second round lists: against a real database the listing is async, and a round
+    // that lists after the answer was saved legitimately sees nothing (CI race).
     const first = runDecisions(deps, 10);
+    await callEntered;
     const second = runDecisions(deps, 10);
     release();
     const [a, b] = await Promise.all([first, second]);
