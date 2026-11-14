@@ -16,10 +16,16 @@ beforeEach(async () => {
   migrated ??= runMigrations(url).then(() => undefined);
   await migrated;
   pool ??= new pg.Pool({ connectionString: url });
-  await pool.query(
-    `TRUNCATE deliveries, runs, leads, sources, sessions,
-     lead_deliveries, app_users, lead_votes, participants, events, auth_replay, contact_flags, model_decisions CASCADE`,
+  // Truncate every data table (not a hand-picked list that drifts as migrations add
+  // tables — model_decisions and research_fx once leaked state between tests).
+  // schema_migrations stays: it is the migrator's own bookkeeping.
+  const tables = await pool.query(
+    `SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'schema_migrations'`,
   );
+  if (tables.rows.length) {
+    const list = tables.rows.map((r: { tablename: string }) => `"${r.tablename}"`).join(', ');
+    await pool.query(`TRUNCATE ${list} CASCADE`);
+  }
 });
 
 afterAll(async () => {

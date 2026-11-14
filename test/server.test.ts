@@ -281,7 +281,9 @@ describe('http server', () => {
     const sources = await runtime.store.listSources();
     expect(sources.length).toBeGreaterThan(0);
 
-    await expect.poll(async () => (await runtime.store.listRuns(sources.length)).length).toBe(sources.length);
+    // The presets catalog is large (150+ sources polled sequentially in the background);
+    // against Postgres each run row is a real round-trip, so allow more than the 5s default.
+    await expect.poll(async () => (await runtime.store.listRuns(sources.length)).length, { timeout: 60_000 }).toBe(sources.length);
     expect(requested.length).toBeGreaterThan(0);
   });
 

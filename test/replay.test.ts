@@ -56,11 +56,15 @@ describe('idempotent model decisions (plan 021E)', () => {
   const env = { RADAR_DECIDE_ENABLED: true, RADAR_DECIDE_KEY: 'k', RADAR_DECIDE_URL: 'https://d.test/v1', RADAR_DECIDE_MODEL: 'm' };
   const answer = { answers: { kind: { type: 'choice', choice: 'vacancy', confidence: 0.9 }, closed: { type: 'noul', noul: 0.01 }, scam: { type: 'noul', noul: 0 }, fullness: { type: 'score', score: 2 } }, usage: { input_tokens: 100 } };
 
+  let runtimeNo = 0;
   async function runtimeWithLead() {
     const runtime = makeTestRuntime({ ...env });
     const source = await runtime.store.createSource({ kind: 'rss', title: 'Лента', config: {}, enabled: true });
-    // Fresh, not the fixed 2026 date: Postgres listLeadsToDecide only sees the last 30 days.
-    await runtime.store.insertLead({ id: 'a', sourceId: source.id, type: 'job', title: 'Пост a', text: 'Текст вакансии достаточно длинный для решения модели.', fingerprint: 'fa', titleKey: 'ka', status: 'new', score: 50, reasons: [], skills: [], createdAt: new Date().toISOString() } as never);
+    // Distinct identity per runtime: Postgres has UNIQUE(fingerprint) and a PRIMARY KEY on id,
+    // and insertLead is ON CONFLICT DO NOTHING — a shared 'a'/'fa' would silently no-op.
+    // Fresh createdAt too: Postgres listLeadsToDecide only sees the last 30 days.
+    const n = ++runtimeNo;
+    await runtime.store.insertLead({ id: `a${n}`, sourceId: source.id, type: 'job', title: 'Пост a', text: 'Текст вакансии достаточно длинный для решения модели.', fingerprint: `fa${n}`, titleKey: `ka${n}`, status: 'new', score: 50, reasons: [], skills: [], createdAt: new Date().toISOString() } as never);
     return runtime;
   }
 
@@ -88,10 +92,15 @@ describe('idempotent model decisions (plan 021E)', () => {
     let calls = 0;
     const fetchImpl = (async () => { calls++; return new Response(JSON.stringify(answer), { status: 200 }); }) as unknown as typeof fetch;
     // Same lead content, two independent runtimes: each pays once, no module-level leak.
+    // Distinct lead ids (Postgres: UNIQUE fingerprint, PK id; insertLead is ON CONFLICT DO
+    // NOTHING). Round 1 decides only its own lead (the other runtime does not exist yet);
+    // round 2 then sees just its own fresh lead, because round 1's answer is already saved.
+    const first = await runDecisions({ store: runtime.store, env: runtime.env, logger, fetchImpl }, 10);
     const other = await runtimeWithLead();
-    await runDecisions({ store: runtime.store, env: runtime.env, logger, fetchImpl }, 10);
-    await runDecisions({ store: other.store, env: other.env, logger, fetchImpl }, 10);
-    expect(calls).toBe(2);
+    const second = await runDecisions({ store: other.store, env: other.env, logger, fetchImpl }, 10);
+    expect(first.asked).toBe(1);
+    expect(second.asked).toBe(1);
+    expect(calls).toBe(2); // a fresh cache paid again: no cross-runtime replay leak
     await runtime.store.close();
     await other.store.close();
   });
