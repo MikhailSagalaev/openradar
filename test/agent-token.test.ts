@@ -34,13 +34,21 @@ describe('agent token and save_search', () => {
     const anonymous = (await (await app.request('/mcp', mcp(undefined, 'tools/call', { name: 'save_search', arguments: { skill: 'Python' } }))).json()) as { error: { message: string } };
     expect(anonymous.error.message).toContain('personal token');
 
-    const saved = (await (await app.request('/mcp', mcp(token, 'tools/call', { name: 'save_search', arguments: { skill: 'Python', remote: true, market: 'ru' } }))).json()) as { result: { content: Array<{ text: string }> } };
-    const result = JSON.parse(saved.result.content[0]!.text);
+    const saveArgs = { skill: 'Python', remote: true, market: 'ru' };
+    const saveCall = async (a: Record<string, unknown>) => JSON.parse(((await (await app.request('/mcp', mcp(token, 'tools/call', { name: 'save_search', arguments: a }))).json()) as { result: { content: Array<{ text: string }> } }).result.content[0]!.text);
+    // First call is dry-run: held, nothing subscribed yet.
+    const held = await saveCall(saveArgs);
+    expect(held.status).toBe('held');
+    expect(held.confirmationToken).toBeTruthy();
+    // Confirm with identical args + token: the subscription is created.
+    const result = (await saveCall({ ...saveArgs, confirm: true, confirmation_token: held.confirmationToken })).result;
     expect(result).toMatchObject({ name: 'Python · удалённо · на русском', created: true, telegramLinked: false });
     expect(result.note).toContain('Подключить Telegram');
 
-    const again = (await (await app.request('/mcp', mcp(token, 'tools/call', { name: 'save_search', arguments: { skill: 'Python', remote: true, market: 'ru' } }))).json()) as { result: { content: Array<{ text: string }> } };
-    expect(JSON.parse(again.result.content[0]!.text).created).toBe(false);
+    // A fresh call re-arms the hold; confirming it finds the existing subscription (created:false).
+    const held2 = await saveCall(saveArgs);
+    const again = (await saveCall({ ...saveArgs, confirm: true, confirmation_token: held2.confirmationToken })).result;
+    expect(again.created).toBe(false);
 
     const listed = (await (await app.request('/mcp', mcp(token, 'tools/call', { name: 'list_saved_searches', arguments: {} }))).json()) as { result: { content: Array<{ text: string }> } };
     expect(JSON.parse(listed.result.content[0]!.text).searches).toHaveLength(1);
