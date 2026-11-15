@@ -8,7 +8,7 @@ import { escapeHtml, jsonForScript } from '../core/text.ts';
 import { layout, type AuthDisplay } from '../server/ui.ts';
 import { translateSkill, translateSourceTitle } from '../server/i18n.ts';
 import type { IndexSeries, OpenradarIndex } from './index.ts';
-import { lineChart, renderPlatformIndexTable, renderWeekdayProfileSection } from './index-page.ts';
+import { lineChart, renderIntlIndexSection, renderPlatformIndexTable, renderWeekdayProfileSection } from './index-page.ts';
 import { renderGigBracketsSection, renderGradeMatrixSection } from './pages.ts';
 import { MIN_MEDIAN, MIN_QUARTILES, RELIABLE, REPORT_VERSION, rubMonthToUsdYear, type Dist, type Report, type Slice } from './report.ts';
 
@@ -245,8 +245,15 @@ ${(jobs.itCompanies?.length || jobs.companies.length) ? `<section class="rs-sect
   <p class="small">Russian-language orders. <b>${pct(gigs.budgetShare)}</b> of them state a budget, for the whole project.${totals.intlGigs ? ` English-language orders (${num(totals.intlGigs)}) stay out.` : ''}</p>
   ${rangeChart(translate(gigs.byCategory.filter((s) => s.key !== 'other'), ROLE_EN))}
   ${renderGigBracketsSection(gigs.brackets, 'en')}</section>
-${intlMedian ? `<section class="rs-section"><h2>International remote vacancies</h2>
-  <p class="small">English-language vacancies from international boards and company career pages (${num(totals.intlJobs ?? 0)}): a median of <b>$${num(rubMonthToUsdYear(intlMedian, report.fx?.USD))} a year</b> (n = ${jobs.intl.n}). They stay out of the main figures above.</p></section>` : ''}
+${intlMedian ? `<section class="rs-section" id="international"><h2>International remote vacancies &amp; global market</h2>
+  <p class="small">English-language vacancies from international remote boards and company ATS career pages in Greenhouse, Lever, and Ashby (${num(totals.intlJobs ?? 0)} vacancies): a median of <b>${num(rubMonthToUsdYear(intlMedian, report.fx?.USD))} a year</b>${jobs.intl.p25 && jobs.intl.p75 ? ` (middle half: ${num(rubMonthToUsdYear(jobs.intl.p25, report.fx?.USD))}–${num(rubMonthToUsdYear(jobs.intl.p75, report.fx?.USD))}/yr)` : ''} (n = ${num(jobs.intl.n)}). They stay out of the Russian rouble figures above; daily volume dynamics are tracked in the <a href="/en/research/index#global-index">openradar international index</a>.</p>
+  ${jobs.intlByRole?.length ? `<h3 style="margin-top:16px">Global annual pay by role ($/year)</h3>
+  ${rangeChart(translate(jobs.intlByRole, ROLE_EN), (v) => `${num(rubMonthToUsdYear(v, report.fx?.USD))}/yr`)}` : ''}
+  ${jobs.intlByGrade?.length ? `<h3 style="margin-top:16px">Global annual pay by seniority ($/year)</h3>
+  ${rangeChart(translate(jobs.intlByGrade, GRADE_EN), (v) => `${num(rubMonthToUsdYear(v, report.fx?.USD))}/yr`)}` : ''}
+  ${jobs.intlCompanies?.length ? `<h3 style="margin-top:16px">Top hiring international employers</h3>
+  ${countBars(jobs.intlCompanies.slice(0, 10).map((c) => ({ label: c.name, n: c.n })))}` : ''}
+  ${gigs.intlBudget?.median ? `<p class="small" style="margin-top:14px"><b>Global freelance orders (Freelancer.com, ${num(totals.intlGigs ?? 0)} orders):</b> median project budget is <b>${num(Math.round(gigs.intlBudget.median / (report.fx?.USD ?? 80)))}</b>${gigs.intlBudget.p25 && gigs.intlBudget.p75 ? ` (middle half: ${num(Math.round(gigs.intlBudget.p25 / (report.fx?.USD ?? 80)))}–${num(Math.round(gigs.intlBudget.p75 / (report.fx?.USD ?? 80)))})` : ''}, sample n = ${num(gigs.intlBudget.n)} orders with stated budget.</p>` : ''}</section>` : ''}
 <section class="rs-section"><h2>Where the data comes from</h2>
   ${countBars(totals.platforms.slice(0, 12).map((p) => ({ label: p.key, n: p.n })))}
   ${totals.payOrigins && Object.keys(totals.payOrigins).length ? `<p class="small">Where the pay was read: ${Object.entries(totals.payOrigins).map(([o, n]) => `${escapeHtml(ORIGIN_EN[o] ?? o)} — ${num(n)}`).join(', ')}.</p>` : ''}</section>
@@ -306,9 +313,9 @@ export function renderIndexPageEn(options: { index: OpenradarIndex; baseUrl: str
     ? `The base is provisional for now: the mean of every day since 30 October (${index.base.days} days). The final base is 9 November to 6 December 2026; it is fixed on 7 December and the values are recalculated.`
     : `The base is the mean number of posts a day from 9 November to 6 December 2026 (${index.base.days} days) = 100.`;
   const body = `<nav class="crumbs" aria-label="Breadcrumbs"><a href="/">openradar</a> / <a href="/en/research">Research</a> / Index</nav>
-<div class="page-head"><div><h1>The openradar index</h1><p class="muted small">How many new vacancies and freelance orders appear in Russian-language IT and freelance each day, against a base of 100.</p></div>
+<div class="page-head"><div><h1>The openradar index</h1><p class="muted small">How many new vacancies and freelance orders appear each day against a base of 100 — tracked across both the Russian-language panel and the International (Global &amp; Remote) panel.</p></div>
 <div class="actions"><a class="btn ghost" href="/en/research">Salary report</a><a class="btn ghost" href="/en/research/methodology#index">Methodology</a><a class="btn ghost" href="/research/index.csv">CSV</a><a class="btn ghost" href="/research/index.json">JSON</a></div></div>
-<div class="rs-kpis">${headlineEn(index.jobs, 'Vacancies')}${index.itJobs?.latest?.index !== undefined ? headlineEn(index.itJobs, 'IT vacancies') : ''}${headlineEn(index.gigs, 'Orders')}</div>
+<div class="rs-kpis">${headlineEn(index.jobs, 'Vacancies (RU)')}${index.itJobs?.latest?.index !== undefined ? headlineEn(index.itJobs, 'IT vacancies (RU)') : ''}${headlineEn(index.gigs, 'Orders (RU)')}${index.intl?.jobs.latest?.index !== undefined ? headlineEn(index.intl.jobs, 'Vacancies (Global)') : ''}${index.intl?.gigs.latest?.index !== undefined ? headlineEn(index.intl.gigs, 'Orders (Global)') : ''}</div>
 <p class="small muted">${escapeHtml(baseNote)}</p>
 <section class="rs-section"><h2>Vacancies</h2><p class="small">Panel boards: ${escapeHtml(index.panel.job.join(', '))}.${index.jobs.latest?.avg7 !== undefined && index.jobs.base !== undefined ? ` Current 7-day flow: <b>${num(index.jobs.latest.avg7)}</b> vacancies/day vs <b>${num(index.jobs.base)}</b> in the base.` : ''}</p>${lineChart(index.jobs.points, 'openradar vacancy index', 'en')}</section>
 <section class="rs-section"><h2>Freelance orders</h2><p class="small">Panel boards: ${escapeHtml(index.panel.gig.join(', '))}.${index.gigs.latest?.avg7 !== undefined && index.gigs.base !== undefined ? ` Current 7-day flow: <b>${num(index.gigs.latest.avg7)}</b> orders/day vs <b>${num(index.gigs.base)}</b> in the base.` : ''}</p>${lineChart(index.gigs.points, 'openradar order index', 'en')}</section>
@@ -317,8 +324,9 @@ ${roles.length ? `<section class="rs-section"><h2>By role</h2><p class="small">R
 ${roles.map((r) => `<tr><td><a href="/en/research/roles/${escapeHtml(r.slug)}">${escapeHtml(ROLE_EN[r.slug] ?? r.label)}</a></td><td><b>${num(r.latest!.index!)}</b></td><td>${r.weekChange !== undefined ? `${r.weekChange > 0 ? '+' : ''}${r.weekChange}%` : '—'}</td><td>${r.latest?.avg7 !== undefined ? num(r.latest.avg7) : '—'}</td><td>${num(r.base)}</td><td>${r.sharePct !== undefined ? `${r.sharePct}%` : '—'}</td></tr>`).join('')}
 </tbody></table></section>` : ''}
 ${renderWeekdayProfileSection(index.weekdayProfile, 'en')}
+${renderIntlIndexSection(index.intl, 'en', (slug, fallback) => ROLE_EN[slug] ?? fallback)}
 <section class="rs-section prose"><h2>How the index works</h2><ul>
-  <li><b>Fixed panel of feeds:</b> it counts new Russian-language vacancies and orders seen by a constant panel of 8 reference feeds (<code>hh-it</code>, <code>hh-remote-project</code>, <code>habr-career</code>, <code>getmatch</code>, <code>trudvsem-remote</code>, <code>kwork-all</code>, <code>fl-all</code>, <code>freelancehunt</code>). Feeds and sources added later never enter it: the index tracks the market, not our coverage growth.</li>
+  <li><b>Two independent fixed panels (Russian-language &amp; Global):</b> the Russian-language index tracks 8 constant reference feeds (<code>hh-it</code>, <code>hh-remote-project</code>, <code>habr-career</code>, <code>getmatch</code>, <code>trudvsem-remote</code>, <code>kwork-all</code>, <code>fl-all</code>, <code>freelancehunt</code>), while the International index tracks 10 global job boards and ATS feeds (<code>himalayas</code>, <code>arbeitnow</code>, <code>justjoin.it</code>, <code>jobicy</code>, <code>weworkremotely</code>, <code>remoteworker-uk</code>, <code>cryptojobslist</code>, <code>ats-ashby</code>, <code>ats-greenhouse</code>, <code>ats-lever</code>) plus <code>freelancer.com</code>. Feeds added later never enter either panel.</li>
   <li><b>Freshness Gate (no bumped vacancies):</b> an old vacancy raised in search is not counted as new. On hh.ru and Habr Career this is verified by the sequential vacancy ID ($\Delta\text{id} \le 230,000$ on hh.ru and $\le 100$ on Habr Career — roughly 7 days of numbering).</li>
   <li><b>7-day rolling mean & onboarding spike Winsorization:</b> a day's value is the 7-day moving average ($\text{MA}_7$). Pre-base single-day feed onboarding bursts ($> 2.5\times\text{median}$) are Winsorized in the rolling mean so initial feed backfills do not cause artificial drops 7 days later.</li>
   <li><b>Unadjusted seasonality:</b> holidays and year-end troughs appear as they are. The last two days are recalculated as late posts arrive.</li>
@@ -390,8 +398,8 @@ export function renderMethodologyPageEn(options: { baseUrl: string; version: str
     <li><b>Laspeyres fixed-basket weekly salary index (<code>weeklyIndexed</code>):</b> holds role weights $w_r = N_r / \sum N_j$ fixed across weeks so short-term shifts in source mix cannot masquerade as wage inflation.</li>
   </ul>
 
-  <h2 id="index">7. The openradar index</h2>
-  <p>The index (<a href="/en/research/index">/en/research/index</a>) tracks daily new vacancies and freelance orders on a fixed panel of 8 feeds against a base of 100 (9 November – 6 December 2026). Sequential vacancy IDs on hh.ru ($\Delta\text{id} \le 230,000$) and Habr Career ($\Delta\text{id} \le 100$) filter out bumped older vacancies. Values are 7-day rolling averages ($\text{MA}_7$) with pre-base onboarding spike Winsorization ($2.5\times\text{median}$), accompanied by an IT-vacancies sub-index, per-board indices, role indices, and a Monday–Sunday seasonality profile.</p>
+  <h2 id="index">7. The openradar index (Russian-language &amp; Global panels)</h2>
+  <p>The index (<a href="/en/research/index">/en/research/index</a>) tracks daily new vacancies and freelance orders against a base of 100 (9 November – 6 December 2026) across two independent fixed panels: the 8-feed Russian-language panel (hh.ru, Habr Career, getmatch, Rabota Rossii, Kwork, FL.ru, Freelancehunt) and the 11-board International Global &amp; Remote panel (Himalayas, Arbeitnow, JustJoin, Jobicy, WeWorkRemotely, RemoteWorker UK, CryptoJobsList, Ashby, Greenhouse, Lever, and Freelancer.com). Sequential vacancy IDs on hh.ru ($\Delta\text{id} \le 230,000$) and Habr Career ($\Delta\text{id} \le 100$) filter out bumped older vacancies. Values are 7-day rolling averages ($\text{MA}_7$) with pre-base onboarding spike Winsorization ($2.5\times\text{median}$), accompanied by IT-vacancies sub-indices, per-board indices, role indices, and Monday–Sunday seasonality profiles.</p>
 
   <h2 id="versions">8. Versions & open data</h2>
   <p><b>Report version 2 and index version 2 (November 2026).</b> Russian-language order isolation, Bank of Russia monthly FX rates, order-statistic 95% CIs, stratified role-and-seniority gap adjustments, role × seniority salary matrix, skill pay premiums, retail clerk exclusion from IT seniority grades, and panel index freshness gating. Open data under ${LICENSE} (<a href="/research/dataset.csv">CSV</a> and <a href="/research/report.json">JSON</a>).</p>

@@ -665,4 +665,42 @@ describe('research data consistency & honest visual metrics', () => {
     expect(updated!.normalizedUsdMin).toBeGreaterThan(0);
     expect(updated!.normalizedUsdMax).toBeGreaterThan(0);
   });
+
+  it('computes international salary breakdowns by role, seniority, companies, and global freelance budgets', () => {
+    const records = [];
+    for (let i = 0; i < 12; i++) {
+      records.push(
+        deriveRecord({
+          id: `intl-job-${i}`,
+          title: 'Senior Backend Engineer (Go)',
+          text: 'Remote software engineering role. Compensation: $120,000 - $140,000 per year.',
+          url: `https://himalayas.app/jobs/acme/backend-${i}`,
+          publishedAt: '2026-11-10T10:00:00Z',
+          createdAt: '2026-11-10T10:00:00Z',
+          type: 'job',
+          company: 'Acme Global',
+          skills: ['Go', 'PostgreSQL'],
+        } as unknown as Lead),
+      );
+      records.push(
+        deriveRecord({
+          id: `intl-gig-${i}`,
+          title: 'Build a React dashboard',
+          text: 'Need a frontend developer to build an admin panel. Budget: $500.',
+          url: `https://www.freelancer.com/projects/react/dashboard-${i}`,
+          publishedAt: '2026-11-10T10:00:00Z',
+          createdAt: '2026-11-10T10:00:00Z',
+          type: 'gig',
+          budgetMax: 500,
+          currency: 'USD',
+          skills: ['React'],
+        } as unknown as Lead),
+      );
+    }
+    const report = buildReport(records, { from: '2026-11-01', to: '2026-11-15', label: 'Ноябрь 2026', phrase: 'в ноябре 2026' }, 'live');
+    expect(report.jobs.intlByRole?.map((s) => s.key)).toEqual(['backend']);
+    expect(report.jobs.intlByGrade?.map((s) => s.key)).toEqual(['senior']);
+    expect(report.jobs.intlCompanies?.[0]).toEqual({ name: 'Acme Global', n: 12 });
+    expect(report.gigs.intlBudget?.median).toBeGreaterThan(0);
+  });
 });

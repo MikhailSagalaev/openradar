@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.71.0 — 2026-11-15
+
+- **International (Global & Remote) Index (`/research/index`, `/en/research/index`):** extended `OpenradarIndex` with `intl` (`MarketSubIndex`), tracking daily new vacancies and freelance orders across the fixed 11-board global panel (`himalayas.app`, `arbeitnow.com`, `justjoin.it`, `jobicy.com`, `weworkremotely.com`, `remoteworker.co.uk`, `cryptojobslist.com`, `jobs.ashbyhq.com`, `job-boards.greenhouse.io`, `jobs.lever.co`, and `freelancer.com`), with 7-day rolling averages, IT-vacancies sub-index, per-board breakdown, role indices, and CSV export (`intl-job`, `intl-gig`).
+- **Global Market Analytics in Salary Report (`/research`, `/en/research`):** expanded the international section with annual USD salary distributions by role (`jobs.intlByRole`) and seniority (`jobs.intlByGrade`: Intern → Junior → Middle → Senior → Lead), top international hiring companies (`jobs.intlCompanies`), and global freelance project budgets (`gigs.intlBudget`).
+- **Dual-Panel Methodology (`/research/methodology`, `/en/research/methodology`):** documented both the 8-feed Russian-language panel and the 11-board Global & Remote panel.
+
 ## 0.70.0 — 2026-11-15
 
 ### Added

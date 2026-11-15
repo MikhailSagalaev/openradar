@@ -162,6 +162,56 @@ function headline(s: IndexSeries, what: string): string {
   return `<div class="rs-kpi"><b>${num(latest?.count ?? 0)}</b><span>${escapeHtml(what)} за ${latest ? dm(latest.date) : '—'}; индекс — через 7 дней данных</span></div>`;
 }
 
+export function renderIntlIndexSection(
+  intl: OpenradarIndex["intl"],
+  lang: "ru" | "en" = "ru",
+  roleLabelOf?: (slug: string, fallback: string) => string,
+): string {
+  if (!intl) return "";
+  const hasJobs = intl.jobs.points.some((p) => p.count > 0);
+  const hasGigs = intl.gigs.points.some((p) => p.count > 0);
+  if (!hasJobs && !hasGigs) return "";
+  const en = lang === "en";
+  const fmt = (v: number): string => new Intl.NumberFormat(en ? "en-US" : "ru-RU").format(v).replace(/\u00a0/g, " ");
+  const sign = (v: number): string => `${v > 0 ? "+" : v < 0 ? (en ? "-" : "−") : ""}${fmt(Math.abs(v))}%`;
+  const roles = intl.roles.filter((r) => r.latest?.index !== undefined);
+
+  return `<section class="rs-section" id="global-index" style="margin-top:36px;padding-top:24px;border-top:2px solid var(--line-strong)">
+  <h2>${en ? "International index (Global & Remote panel)" : "Международный индекс (Global & Remote панель)"}</h2>
+  <p class="small">${en
+    ? "Alongside the Russian-language panel, openradar tracks a fixed global panel of English-language remote job boards, company ATS career pages (Greenhouse, Lever, Ashby), and global freelance projects on Freelancer.com against the same base period (= 100)."
+    : "Параллельно с русскоязычной панелью openradar считает ежедневный индекс мирового рынка удалённого найма и глобального фриланса на фиксированной панели англоязычных площадок и ATS-систем компаний (Greenhouse, Lever, Ashby, Himalayas, Arbeitnow, JustJoin, Jobicy, WeWorkRemotely, Freelancer.com) относительно той же базы (= 100)."}</p>
+  <div class="rs-kpis" style="margin-top:12px">
+    ${hasJobs && intl.jobs.latest?.index !== undefined
+      ? `<div class="rs-kpi"><b>${fmt(intl.jobs.latest.index)}</b><span>${en ? `Global vacancies: index${intl.jobs.weekChange !== undefined ? `, ${sign(intl.jobs.weekChange)} a week` : ""}` : `Мировые вакансии: индекс${intl.jobs.weekChange !== undefined ? `, ${sign(intl.jobs.weekChange)} за неделю` : ""}`}</span></div>`
+      : ""}
+    ${intl.itJobs?.latest?.index !== undefined
+      ? `<div class="rs-kpi"><b>${fmt(intl.itJobs.latest.index)}</b><span>${en ? `Global IT vacancies${intl.itJobs.weekChange !== undefined ? `, ${sign(intl.itJobs.weekChange)} a week` : ""}` : `Мировые IT-вакансии${intl.itJobs.weekChange !== undefined ? `, ${sign(intl.itJobs.weekChange)} за неделю` : ""}`}</span></div>`
+      : ""}
+    ${hasGigs && intl.gigs.latest?.index !== undefined
+      ? `<div class="rs-kpi"><b>${fmt(intl.gigs.latest.index)}</b><span>${en ? `Global freelance orders${intl.gigs.weekChange !== undefined ? `, ${sign(intl.gigs.weekChange)} a week` : ""}` : `Мировые фриланс-заказы${intl.gigs.weekChange !== undefined ? `, ${sign(intl.gigs.weekChange)} за неделю` : ""}`}</span></div>`
+      : ""}
+  </div>
+  ${hasJobs ? `<div style="margin-top:18px">
+    <h3>${en ? "Global remote vacancies" : "Международные вакансии"}</h3>
+    <p class="small">${en ? "Panel boards:" : "Площадки панели:"} ${escapeHtml(intl.panel.job.join(", "))}.${intl.jobs.latest?.avg7 !== undefined && intl.jobs.base !== undefined ? (en ? ` Current 7-day flow: <b>${fmt(intl.jobs.latest.avg7)}</b> vacancies/day vs <b>${fmt(intl.jobs.base)}</b> in the base.` : ` Текущий 7-дневный поток — <b>${fmt(intl.jobs.latest.avg7)}</b> вакансий в день против <b>${fmt(intl.jobs.base)}</b> в базе.`) : ""}</p>
+    ${lineChart(intl.jobs.points, en ? "openradar international vacancy index" : "Международный индекс вакансий openradar", lang)}
+  </div>` : ""}
+  ${hasGigs ? `<div style="margin-top:18px">
+    <h3>${en ? "Global freelance orders" : "Международные фриланс-заказы"}</h3>
+    <p class="small">${en ? "Panel boards:" : "Площадки панели:"} ${escapeHtml(intl.panel.gig.join(", "))}.${intl.gigs.latest?.avg7 !== undefined && intl.gigs.base !== undefined ? (en ? ` Current 7-day flow: <b>${fmt(intl.gigs.latest.avg7)}</b> orders/day vs <b>${fmt(intl.gigs.base)}</b> in the base.` : ` Текущий 7-дневный поток — <b>${fmt(intl.gigs.latest.avg7)}</b> заказов в день против <b>${fmt(intl.gigs.base)}</b> в базе.`) : ""}</p>
+    ${lineChart(intl.gigs.points, en ? "openradar international order index" : "Международный индекс заказов openradar", lang)}
+  </div>` : ""}
+  ${renderPlatformIndexTable(intl.byPlatform, lang)}
+  ${roles.length ? `<div style="margin-top:18px">
+    <h3>${en ? "Global index by role" : "Международный индекс по направлениям"}</h3>
+    <table class="table"><thead><tr><th>${en ? "Role" : "Направление"}</th><th>${en ? "Index" : "Индекс"}</th><th>${en ? "Week" : "За неделю"}</th><th>${en ? "Daily (7d avg)" : "В день (7 дн.)"}</th><th>${en ? "Base (per day)" : "В день в базе"}</th><th>${en ? "Panel share" : "Доля панели"}</th></tr></thead><tbody>
+      ${roles.map((r) => `<tr><td><b>${escapeHtml(roleLabelOf ? roleLabelOf(r.slug, r.label) : r.label)}</b></td><td><b>${fmt(r.latest!.index!)}</b></td><td>${r.weekChange !== undefined ? sign(r.weekChange) : "—"}</td><td>${r.latest?.avg7 !== undefined ? fmt(r.latest.avg7) : "—"}</td><td>${fmt(r.base)}</td><td>${r.sharePct !== undefined ? `${fmt(r.sharePct)}%` : "—"}</td></tr>`).join("")}
+    </tbody></table>
+  </div>` : ""}
+</section>`;
+}
+
 export function renderIndexPage(options: { index: OpenradarIndex; baseUrl: string; version: string; auth?: AuthDisplay }): string {
   const { index, baseUrl, version } = options;
   const { jobs, itJobs, gigs, base } = index;
@@ -189,10 +239,10 @@ export function renderIndexPage(options: { index: OpenradarIndex; baseUrl: strin
   };
 
   const body = `<nav class="crumbs" aria-label="Навигация"><a href="/">openradar</a> / <a href="/research">Исследования</a> / Индекс</nav>
-<div class="page-head"><div><h1>Индекс openradar</h1><p class="muted small">Сколько новых вакансий и заказов появляется в русскоязычном IT и фрилансе каждый день — относительно базы, равной 100.</p></div>
+<div class="page-head"><div><h1>Индекс openradar</h1><p class="muted small">Сколько новых вакансий и заказов появляется каждый день относительно базы, равной 100 — отдельно по русскоязычной панели (РФ и СНГ) и по международной панели (Global &amp; Remote).</p></div>
 <div class="actions"><a class="btn ghost" href="/research">Отчёт по зарплатам</a><a class="btn ghost" href="/research/methodology#index">Методика</a><a class="btn ghost" href="/research/index.csv">CSV</a><a class="btn ghost" href="/research/index.json">JSON</a></div></div>
 
-<div class="rs-kpis">${headline(jobs, 'Вакансии')}${itJobs?.latest?.index !== undefined ? headline(itJobs, 'IT-вакансии') : ''}${headline(gigs, 'Заказы')}</div>
+<div class="rs-kpis">${headline(jobs, 'Вакансии (РФ)')}${itJobs?.latest?.index !== undefined ? headline(itJobs, 'IT-вакансии (РФ)') : ''}${headline(gigs, 'Заказы (РФ)')}${index.intl?.jobs.latest?.index !== undefined ? headline(index.intl.jobs, 'Вакансии (Global)') : ''}${index.intl?.gigs.latest?.index !== undefined ? headline(index.intl.gigs, 'Заказы (Global)') : ''}</div>
 <p class="small muted">${escapeHtml(baseNote)}</p>
 ${quote ? `<p class="small">${escapeHtml(quote)} <button type="button" class="rs-quote" data-quote="${escapeHtml(quote)}">Скопировать цитату</button></p>` : ''}
 
@@ -220,10 +270,12 @@ ${roles.length ? `<section class="rs-section">
 
 ${renderWeekdayProfileSection(index.weekdayProfile, 'ru')}
 
+${renderIntlIndexSection(index.intl, 'ru')}
+
 <section class="rs-section prose">
   <h2>Как устроен индекс</h2>
   <ul>
-    <li><b>Фиксированная панель лент:</b> считаются только новые русскоязычные вакансии и заказы, увиденные постоянной панелью из 8 эталонных лент (<code>hh-it</code>, <code>hh-remote-project</code>, <code>habr-career</code>, <code>getmatch</code>, <code>trudvsem-remote</code>, <code>kwork-all</code>, <code>fl-all</code>, <code>freelancehunt</code>). Новые источники, подключённые к openradar позже, в индекс не входят — поэтому индекс отражает движение рынка, а не рост охвата агрегатора.</li>
+    <li><b>Две независимые фиксированные панели (РФ и Global):</b> русскоязычный индекс строится на постоянной панели из 8 эталонных лент (<code>hh-it</code>, <code>hh-remote-project</code>, <code>habr-career</code>, <code>getmatch</code>, <code>trudvsem-remote</code>, <code>kwork-all</code>, <code>fl-all</code>, <code>freelancehunt</code>), а международный индекс — на постоянной панели из 10 глобальных job-бордов, ATS-систем (<code>himalayas</code>, <code>arbeitnow</code>, <code>justjoin.it</code>, <code>jobicy</code>, <code>weworkremotely</code>, <code>remoteworker-uk</code>, <code>cryptojobslist</code>, <code>ats-ashby</code>, <code>ats-greenhouse</code>, <code>ats-lever</code>) и <code>freelancer.com</code>. Новые источники, подключённые к openradar позже, в панели не входят — поэтому оба индекса отражают движение рынка, а не рост охвата агрегатора.</li>
     <li><b>Отсечение поднятых вакансий (Freshness Gate):</b> старая вакансия, поднятая работодателем в поиске, не считается новой. На hh.ru и Хабр Карьере это проверяется по сквозному номеру публикации ($\Delta\text{id} \le 230\,000$ для hh.ru и $\le 100$ для Хабр Карьеры — около 7 суток номеров).</li>
     <li><b>7-дневное сглаживание и защита от залповых выгрузок:</b> значение дня — скользящее среднее за 7 суток ($\text{MA}_7$), убирающее провалы выходных дней. Разовые технические всплески при первичном подключении ленты до базового периода ($> 2{,}5 \times \text{медианы}$) виндзоризуются при расчёте скользящего среднего, чтобы не создавать ложного падения через 7 дней.</li>
     <li><b>Честная сезонность:</b> индекс не очищается от календарных праздников, майских и новогодних каникул — сезонные спады и волны найма видны как есть.</li>

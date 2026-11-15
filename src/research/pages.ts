@@ -635,9 +635,16 @@ ${(jobs.itCompanies?.length || jobs.companies.length) ? `<section class="rs-sect
   ${gigs.hourly.median ? `<p class="small" style="margin-top:12px">Почасовая ставка в заказах, где она указана: медиана ${formatRub(gigs.hourly.median)} в час (n = ${gigs.hourly.n}).</p>` : ''}
 </section>
 
-${intlMedian ? `<section class="rs-section">
-  <h2>Международная удалёнка</h2>
-  <p class="small">Англоязычные вакансии: зарубежные доски и карьерные страницы компаний (${num(totals.intlJobs ?? 0)} вакансий). Медиана в долларах и евро — <b>$${num(rubMonthToUsdYear(intlMedian, usd))} в год</b> (n = ${jobs.intl.n}). В основные цифры отчёта они не входят.</p>
+${intlMedian ? `<section class="rs-section" id="international">
+  <h2>Международная удалёнка и глобальный рынок</h2>
+  <p class="small">Англоязычные вакансии на зарубежных job-бордах и карьерных страницах компаний в Greenhouse, Lever, Ashby (${num(totals.intlJobs ?? 0)} вакансий). Годовая медиана в валюте — <b>${num(rubMonthToUsdYear(intlMedian, usd))} в год</b>${jobs.intl.p25 && jobs.intl.p75 ? ` (межквартильный коридор ${num(rubMonthToUsdYear(jobs.intl.p25, usd))}–${num(rubMonthToUsdYear(jobs.intl.p75, usd))} в год)` : ''}, n = ${num(jobs.intl.n)} вакансий с указанной вилкой. В рублёвые медианы РФ эти публикации не входят; динамика потока отслеживается в <a href="/research/index#global-index">международном индексе openradar</a>.</p>
+  ${jobs.intlByRole?.length ? `<h3 style="margin-top:16px">Годовые зарплаты на глобальном рынке по направлениям ($/год)</h3>
+  ${rangeChart(sliceRows(jobs.intlByRole), { unit: (v) => `${num(rubMonthToUsdYear(v, usd))} / год` })}` : ''}
+  ${jobs.intlByGrade?.length ? `<h3 style="margin-top:16px">По грейду на международном рынке ($/год)</h3>
+  ${rangeChart(sliceRows(jobs.intlByGrade), { unit: (v) => `${num(rubMonthToUsdYear(v, usd))} / год` })}` : ''}
+  ${jobs.intlCompanies?.length ? `<h3 style="margin-top:16px">Крупнейшие международные наниматели за период</h3>
+  ${countBars(jobs.intlCompanies.slice(0, 10).map((c) => ({ label: c.name, n: c.n })))}` : ''}
+  ${gigs.intlBudget?.median ? `<p class="small" style="margin-top:14px"><b>Глобальный фриланс (Freelancer.com, ${num(totals.intlGigs ?? 0)} заказов):</b> медианный проектный бюджет — <b>${num(Math.round(gigs.intlBudget.median / (usd ?? 80)))}</b>${gigs.intlBudget.p25 && gigs.intlBudget.p75 ? ` (половина проектов — от ${num(Math.round(gigs.intlBudget.p25 / (usd ?? 80)))} до ${num(Math.round(gigs.intlBudget.p75 / (usd ?? 80)))})` : ''}, выборка n = ${num(gigs.intlBudget.n)} заказов с бюджетом.</p>` : ''}
 </section>` : ''}
 
 <section class="rs-section">
@@ -984,7 +991,7 @@ export function renderMethodologyPage(options: { baseUrl: string; version: strin
   <h2 id="index">8. Индекс openradar (панельный индекс рыночной активности)</h2>
   <p>Индекс (<a href="/research/index">/research/index</a>) показывает, сколько новых вакансий и фриланс-заказов появляется на рынке каждый день относительно базового периода (9 ноября — 6 декабря 2026 = 100).</p>
   <ul>
-    <li><b>Постоянная панель из 8 эталонных лент:</b> в индекс входят только русскоязычные публикации, замеченные фиксированным набором лент (<code>hh-it</code>, <code>hh-remote-project</code>, <code>habr-career</code>, <code>getmatch</code>, <code>trudvsem-remote</code>, <code>kwork-all</code>, <code>fl-all</code>, <code>freelancehunt</code>). Подключение новых Telegram-каналов или досок в агрегатор не раздувает индекс.</li>
+    <li><b>Две независимые фиксированные панели (РФ и Global):</b> русскоязычный индекс строится на постоянной панели из 8 эталонных лент (<code>hh-it</code>, <code>hh-remote-project</code>, <code>habr-career</code>, <code>getmatch</code>, <code>trudvsem-remote</code>, <code>kwork-all</code>, <code>fl-all</code>, <code>freelancehunt</code>), а международный индекс (Global &amp; Remote) — на постоянной панели из 10 англоязычных площадок и ATS-систем (<code>himalayas.app</code>, <code>arbeitnow.com</code>, <code>justjoin.it</code>, <code>jobicy.com</code>, <code>weworkremotely.com</code>, <code>remoteworker.co.uk</code>, <code>cryptojobslist.com</code>, <code>jobs.ashbyhq.com</code>, <code>job-boards.greenhouse.io</code>, <code>jobs.lever.co</code>) и глобальной фриланс-биржи <code>freelancer.com</code>. Подключение новых Telegram-каналов или досок в агрегатор не раздувает ни одну из панелей.</li>
     <li><b>Отсечение поднятых старых вакансий (Freshness Gate):</b> на hh.ru и Хабр Карьере вакансии нумеруются последовательно. Если номер вакансии отстаёт от максимального замеченного за окно более чем на $230\,000$ (на hh.ru генерируется ~32 тыс. номеров в сутки) или на $100$ (на Хабр Карьере), это старая вакансия, поднятая работодателем в поиске — в индекс новых публикаций она не входит.</li>
     <li><b>Скользящее 7-дневное окно и виндзоризация технических всплесков:</b> поскольку в субботу и воскресенье поток вакансий падает в 4–6 раз, значение дня рассчитывается как среднее за последние 7 суток $\text{MA}_7(t) = \frac{1}{7}\sum_{i=0}^6 C_{t-i}$. Если до начала базового периода при первичном подключении ленты произошла разовая выгрузка архива за несколько дней ($C_t > 2{,}5 \times \text{median}(C)$), при расчёте $\text{MA}_7$ этот день ограничивается порогом $2{,}5 \times \text{median}(C)$, чтобы через 7 суток выход пика из окна не создавал искусственного обвала индекса.</li>
     <li><b>Субиндексы и недельный профиль:</b> помимо сводных индексов вакансий и фриланс-заказов рассчитываются субиндексы по IT-вакансиям, по каждой площадке панели, по направлениям (от 3 вакансий в день в базе) и профиль внутринедельной сезонности (Пн–Вс).</li>

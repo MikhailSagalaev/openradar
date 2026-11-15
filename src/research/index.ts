@@ -19,13 +19,54 @@ export const INDEX_VERSION = 2;
 export const PANEL_START = '2026-10-30';
 /** Four whole weeks after the rules of 0.44 settled make 100; until they are over, the base is provisional. */
 export const BASE = { from: '2026-11-09', to: '2026-12-07' };
-/** The boards of the panel, for the pages. */
+/** The boards of the Russian-language panel, for the pages. */
 export const PANEL: Record<'job' | 'gig', string[]> = {
   job: ['hh.ru', 'career.habr.com', 'getmatch.ru', 'trudvsem.ru'],
   gig: ['kwork.ru', 'fl.ru', 'freelancehunt.com'],
 };
-/** The feeds of the panel. Other feeds of the same boards do not belong to it. */
-const PANEL_PRESETS = ['hh-it', 'hh-remote-project', 'habr-career', 'getmatch', 'trudvsem-remote', 'kwork-all', 'fl-all', 'freelancehunt'];
+/** The boards of the international (English-language & global remote) panel. */
+export const INTL_PANEL: Record<'job' | 'gig', string[]> = {
+  job: [
+    'himalayas.app',
+    'arbeitnow.com',
+    'justjoin.it',
+    'jobicy.com',
+    'weworkremotely.com',
+    'remoteworker.co.uk',
+    'cryptojobslist.com',
+    'jobs.ashbyhq.com',
+    'job-boards.greenhouse.io',
+    'jobs.lever.co',
+  ],
+  gig: ['freelancer.com'],
+};
+const INTL_PANEL_BOARDS = new Set<string>([
+  ...INTL_PANEL.job,
+  ...INTL_PANEL.gig,
+  'boards.greenhouse.io',
+  'job-boards.eu.greenhouse.io',
+]);
+/** The feeds of both panels. Other feeds of the same boards do not belong to them. */
+const PANEL_PRESETS = [
+  'hh-it',
+  'hh-remote-project',
+  'habr-career',
+  'getmatch',
+  'trudvsem-remote',
+  'kwork-all',
+  'fl-all',
+  'freelancehunt',
+  'himalayas',
+  'arbeitnow',
+  'jobicy',
+  'weworkremotely',
+  'remoteworker-uk',
+  'cryptojobslist',
+  'ats-ashby',
+  'ats-greenhouse',
+  'ats-lever',
+  'freelancer',
+];
 /**
  * How far behind the newest number a vacancy may be and still be new: about seven days of
  * numbers (hh.ru hands out some 32 000 a day to all its vacancies, Habr Career about 13).
@@ -150,6 +191,16 @@ export interface WeekdayPoint {
   gigPctOfMean: number;
 }
 
+export interface MarketSubIndex {
+  panel: typeof PANEL;
+  jobs: IndexSeries;
+  itJobs?: IndexSeries;
+  gigs: IndexSeries;
+  roles: RoleIndex[];
+  byPlatform: PlatformIndex[];
+  weekdayProfile: WeekdayPoint[];
+}
+
 export interface OpenradarIndex {
   version: number;
   updatedAt: string;
@@ -161,6 +212,8 @@ export interface OpenradarIndex {
   roles: RoleIndex[];
   byPlatform?: PlatformIndex[];
   weekdayProfile?: WeekdayPoint[];
+  /** International (global & remote English-language) market index. */
+  intl?: MarketSubIndex;
 }
 
 const round1 = (v: number): number => Math.round(v * 10) / 10;
@@ -284,6 +337,64 @@ export function buildIndex(rows: ResearchDailyRow[], now: Date = new Date()): Op
     }))
     .sort((a, b) => (a.type === b.type ? b.base - a.base : a.type === 'job' ? -1 : 1));
 
+  // International panel: uses panelN when present, or n on dedicated international reference boards
+  // so historical daily rows saved before international presets joined PANEL_PRESETS are preserved seamlessly.
+  const intlRows = rows.filter(
+    (r) =>
+      r.scope === 'intl' &&
+      (r.type === 'job' || r.type === 'gig') &&
+      INTL_PANEL_BOARDS.has(r.platform) &&
+      ((r.panelN ?? 0) > 0 || r.n > 0),
+  );
+  const intlVal = (r: ResearchDailyRow): number => ((r.panelN ?? 0) > 0 ? r.panelN! : r.n);
+  const intlPlatformKey = (platform: string): string =>
+    platform === 'boards.greenhouse.io' || platform === 'job-boards.eu.greenhouse.io'
+      ? 'job-boards.greenhouse.io'
+      : platform;
+  const intlCountsOf = (filter: (r: ResearchDailyRow) => boolean): Map<string, number> => {
+    const counts = new Map<string, number>();
+    for (const r of intlRows) if (filter(r)) counts.set(r.day, (counts.get(r.day) ?? 0) + intlVal(r));
+    return counts;
+  };
+  const intlJobCounts = intlCountsOf((r) => r.type === 'job');
+  const intlGigCounts = intlCountsOf((r) => r.type === 'gig');
+  const intlJobsSeries = series(days, intlJobCounts, baseDays);
+  const intlItJobsSeries = series(days, intlCountsOf((r) => r.type === 'job' && TECH_ROLES.has(r.role)), baseDays);
+  const intlGigsSeries = series(days, intlGigCounts, baseDays);
+  const intlTotalJobBase = intlJobsSeries.base ?? 0;
+
+  const intlRoleSlugs = [...new Set(intlRows.filter((r) => r.type === 'job' && r.role !== OTHER_ROLE.slug).map((r) => r.role))];
+  const intlRoles: RoleIndex[] = intlRoleSlugs
+    .map((slug) => ({ slug, s: series(days, intlCountsOf((r) => r.type === 'job' && r.role === slug), baseDays) }))
+    .filter(({ s }) => s.base !== undefined && s.base >= ROLE_MIN_BASE)
+    .map(({ slug, s }) => ({
+      slug,
+      label: roleDef(slug)?.label ?? slug,
+      base: s.base!,
+      sharePct: intlTotalJobBase > 0 ? round1((s.base! / intlTotalJobBase) * 100) : undefined,
+      latest: s.latest,
+      weekChange: s.weekChange,
+      recentCounts: s.points.slice(-7).map((p) => p.count),
+    }))
+    .sort((a, b) => b.base - a.base);
+
+  const intlPlatformKeys = [...new Set(intlRows.map((r) => `${r.type}|${intlPlatformKey(r.platform)}`))];
+  const intlByPlatform: PlatformIndex[] = intlPlatformKeys
+    .map((key) => {
+      const [type, platform] = key.split('|') as ['job' | 'gig', string];
+      const s = series(days, intlCountsOf((r) => r.type === type && intlPlatformKey(r.platform) === platform), baseDays);
+      return { platform, type, s };
+    })
+    .filter(({ s }) => s.base !== undefined && s.base >= 0.5)
+    .map(({ platform, type, s }) => ({
+      platform,
+      type,
+      base: s.base!,
+      latest: s.latest,
+      weekChange: s.weekChange,
+    }))
+    .sort((a, b) => (a.type === b.type ? b.base - a.base : a.type === 'job' ? -1 : 1));
+
   return {
     version: INDEX_VERSION,
     updatedAt: now.toISOString(),
@@ -295,6 +406,15 @@ export function buildIndex(rows: ResearchDailyRow[], now: Date = new Date()): Op
     roles,
     byPlatform,
     weekdayProfile: buildWeekdayProfile(days, jobCounts, gigCounts),
+    intl: {
+      panel: INTL_PANEL,
+      jobs: intlJobsSeries,
+      itJobs: intlItJobsSeries,
+      gigs: intlGigsSeries,
+      roles: intlRoles,
+      byPlatform: intlByPlatform,
+      weekdayProfile: buildWeekdayProfile(days, intlJobCounts, intlGigCounts),
+    },
   };
 }
 
@@ -331,7 +451,10 @@ async function buildOpenradarIndex(store: Store, now: Date, options: DeriveOptio
 
 export function indexCsv(index: OpenradarIndex): string {
   const lines = ['date,type,count,avg7,index'];
-  for (const [type, s] of [['job', index.jobs], ['gig', index.gigs]] as const) {
+  const streams: Array<[string, IndexSeries]> = [['job', index.jobs], ['gig', index.gigs]];
+  if (index.intl?.jobs.points.some((p) => p.count > 0)) streams.push(['intl-job', index.intl.jobs]);
+  if (index.intl?.gigs.points.some((p) => p.count > 0)) streams.push(['intl-gig', index.intl.gigs]);
+  for (const [type, s] of streams) {
     for (const p of s.points) lines.push([p.date, type, p.count, p.avg7 ?? '', p.index ?? ''].join(','));
   }
   return `${lines.join('\n')}\n`;

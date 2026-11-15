@@ -161,6 +161,9 @@ export interface Report {
     bounds?: { range: number; from: number; to: number; single: number; rangeMedian?: number; medianSpreadPct?: number };
     byPlatform?: Slice[];
     intl: Dist;
+    intlByRole?: Slice[];
+    intlByGrade?: Slice[];
+    intlCompanies?: Array<{ name: string; n: number }>;
     byRole: Slice[];
     byGrade: Slice[];
     /** Seniority ladder within IT roles only, free of non-IT composition bias. */
@@ -181,7 +184,7 @@ export interface Report {
     weeklyIndexed?: Array<{ week: string; index: number; n: number }>;
     roles: RoleDetail[];
   };
-  gigs: { budget: Dist; budgetShare: number; byCategory: Slice[]; hourly: Dist; brackets?: GigBracket[] };
+  gigs: { budget: Dist; budgetShare: number; byCategory: Slice[]; hourly: Dist; brackets?: GigBracket[]; intlBudget?: Dist };
   findings: Finding[];
   /** Roubles per unit at the end of the period (Bank of Russia). */
   fx?: Record<string, number>;
@@ -809,7 +812,9 @@ export function buildReport(
   // Russian-market monthly pay is the headline figure; international boards pay in USD and are kept apart.
   const ruPaid = (r: ResearchRecord): boolean => r.market === 'ru' && r.payPeriod === 'month' && r.pay !== undefined && !repeated.has(r.id);
   const ruJobs = jobs.filter(ruPaid);
-  const intlJobs = intlScope.filter((r) => r.market === 'intl' && r.payPeriod === 'month' && r.pay !== undefined);
+  const intlPaid = (r: ResearchRecord): boolean => r.market === 'intl' && r.payPeriod === 'month' && r.pay !== undefined;
+  const intlJobs = intlScope.filter(intlPaid);
+  const intlGigsScope = records.filter((r) => r.type === 'gig' && r.scope === 'intl');
   const projectPaid = (r: ResearchRecord): boolean => r.payPeriod === 'project' && r.pay !== undefined;
   const gigsPaid = gigs.filter(projectPaid);
 
@@ -869,6 +874,9 @@ export function buildReport(
       },
       byPlatform: sliceBy(jobs, (r) => r.platform, (k) => k, ruPaid).filter((slice) => slice.pay.median !== undefined),
       intl: dist(intlJobs.map((r) => r.pay!)),
+      intlByRole: sliceBy(intlScope.filter((r) => r.role !== OTHER_ROLE.slug), (r) => r.role, (k) => roleDef(k)?.label ?? OTHER_ROLE.label, intlPaid).filter((s) => s.pay.median !== undefined),
+      intlByGrade: sliceBy(intlScope.filter((r) => r.role !== OTHER_ROLE.slug), (r) => r.grade, (k) => GRADE_LABELS[k as keyof typeof GRADE_LABELS], intlPaid, GRADE_ORDER).filter((s) => s.pay.median !== undefined),
+      intlCompanies: topCounts(intlScope.map((r) => r.company), 12),
       byRole: sliceBy(jobs, (r) => r.role, (k) => roleDef(k)?.label ?? OTHER_ROLE.label, ruPaid),
       byGrade: sliceBy(jobs.filter((r) => r.role !== OTHER_ROLE.slug), (r) => r.grade, (k) => GRADE_LABELS[k as keyof typeof GRADE_LABELS], ruPaid, GRADE_ORDER),
       itByGrade: sliceBy(jobs.filter((r) => TECH_ROLES.has(r.role)), (r) => r.grade, (k) => GRADE_LABELS[k as keyof typeof GRADE_LABELS], ruPaid, GRADE_ORDER),
@@ -905,6 +913,7 @@ export function buildReport(
       byCategory: sliceBy(gigs, (r) => r.role, (k) => roleDef(k)?.label ?? OTHER_ROLE.label, projectPaid),
       hourly: dist(gigs.filter((r) => r.payPeriod === 'hour').map((r) => r.pay!)),
       brackets: computeGigBrackets(gigsPaid),
+      intlBudget: dist(intlGigsScope.filter(projectPaid).map((r) => r.pay!)),
     },
     findings: [],
     cartaCapital,

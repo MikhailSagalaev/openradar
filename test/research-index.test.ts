@@ -94,4 +94,28 @@ describe('openradar index', () => {
     expect(stored.reduce((sum, r) => sum + r.n, 0)).toBe(4);
     expect(stored.reduce((sum, r) => sum + (r.panelN ?? 0), 0)).toBe(2);
   });
+
+  it('builds the international (Global & Remote) sub-index alongside the Russian panel', () => {
+    const rows: ResearchDailyRow[] = [];
+    for (let i = 0; i < 14; i++) {
+      const day = addDays(PANEL_START, i);
+      const scale = i >= 7 ? 1.25 : 1;
+      rows.push(
+        { day, type: 'job', platform: 'hh.ru', role: 'backend', scope: 'ru', n: 20, panelN: 20 },
+        { day, type: 'job', platform: 'himalayas.app', role: 'backend', scope: 'intl', n: Math.round(40 * scale), panelN: 0 },
+        { day, type: 'job', platform: 'boards.greenhouse.io', role: 'ml', scope: 'intl', n: Math.round(10 * scale), panelN: Math.round(10 * scale) },
+        { day, type: 'gig', platform: 'freelancer.com', role: 'web', scope: 'intl', n: Math.round(30 * scale), panelN: 0 },
+      );
+    }
+    const index = buildIndex(rows, new Date(`${addDays(PANEL_START, 14)}T12:00:00Z`));
+    expect(index.intl).toBeDefined();
+    expect(index.intl!.jobs.base).toBe(56.5);
+    expect(index.intl!.jobs.latest?.avg7).toBe(63);
+    expect(index.intl!.jobs.weekChange).toBe(26);
+    expect(index.intl!.gigs.base).toBe(34);
+    expect(index.intl!.roles.map((r) => r.slug)).toEqual(['backend', 'ml']);
+    expect(index.intl!.byPlatform.map((p) => p.platform)).toContain('job-boards.greenhouse.io');
+    expect(indexCsv(index)).toContain(`,intl-job,`);
+    expect(indexCsv(index)).toContain(`,intl-gig,`);
+  });
 });
