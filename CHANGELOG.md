@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.68.0 — 2026-11-15
+
+### Fixed
+- **Crash loop on dropped idle Postgres connections**: `PostgresStore` now registers `pool.on('error')`, so a network reset or server-side idle timeout on a pooled connection is logged instead of crashing the process with an unhandled `'error'` event (the production hub had accumulated 106 container restarts from this). `pg-pool` evicts the dead client and opens a fresh one on the next query. Covered by a PostgreSQL regression test.
+- **MCP safety-ladder confirmations**: destructive or wide-reach tools require explicit confirmation per the cascade ladder; scoring decisions are explainable (`explain`), and cascade decisions are logged with their rationale.
+
+### Performance (lossless — identical outputs, verified by parity tests)
+- **`getStats` 7 → 2 SQL passes**: the seven `COUNT(*)` scans are collapsed into two queries using `COUNT(*) FILTER (WHERE ...)`, shared by the in-memory store contract. A 30-second in-process cache with in-flight deduplication now serves `/health`, the feed page, `/admin` and `/api/stats` from one computation.
+- **`countLeads()`**: `foundToday` no longer pulls up to 5000 full lead rows just to count them — a `SELECT count(*) FROM (... LIMIT ...)` capped count shares the exact `WHERE` builder with `queryLeads` (memory store implements the same contract). Parity test included.
+- **HTTP compression**: Hono `compress()` middleware gzips/deflates HTML, JSON and CSV responses (`text/event-stream` left untouched), plus `Cache-Control` on research datasets, indices and `/sitemap.xml`. Round-trip tested.
+- **Scheduler cadence guards**: UK visa-sponsor register matching runs every 15 minutes instead of every poll round; CBR FX rates are checked hourly.
+- **MinHash hot path**: `BigInt` constants hoisted out of the shingle loop (~1.9× faster fingerprinting, bit-identical hashes).
+
+### Added
+- **Source expansion (plans 007–021)**: machine-readable docs truth, outbox exactly-once delivery, verify + oxlint + retention tooling, opt-in Alexandria connector, Teamtailor and Telegram-account connectors, 295-board catalog (609 presets), Dreamwork/Jobbie adapters, UK visa-sponsor register matching, board-diff ghost detection, source-quality scoring + replay, and a listing-feed endpoint.
+
 ## 0.67.4 — 2026-11-11
 
 - **Foreign salary & currency normalization**: `sitemap` (`leadFromPosting`), `prepareRawLead`, and `normalizeSalary` now preserve and prioritize explicit foreign currencies (`PLN`, `EUR`, `USD`, `BYN`/`Br`) in `rawSalary` and anchored text over the default `RUB` fallback, eliminating false `RUB` division on `justjoin.it` and Belarusian `hh.ru` vacancies; Russian rouble salaries are never divided by 12 as yearly figures, and per-visit/per-consultation rates are classified as `hourly`.
