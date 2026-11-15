@@ -41,7 +41,7 @@ export const STRETCH_AT = 45;
 
 /** A lead the reader can filter on: the fields the explanation reads. */
 export type ExplainableLead = Pick<Lead, 'score' | 'state' | 'metadata'> &
-  Partial<Pick<Lead, 'type' | 'skills' | 'rawSalary' | 'normalizedUsdMin' | 'normalizedUsdMax' | 'budget' | 'direction' | 'text'>>;
+  Partial<Pick<Lead, 'status' | 'type' | 'skills' | 'rawSalary' | 'normalizedUsdMin' | 'normalizedUsdMax' | 'budget' | 'direction' | 'text'>>;
 
 const GATE_NOTE: Record<'ru' | 'en', Record<QualityFlag, string>> = {
   ru: {
@@ -71,13 +71,28 @@ export function explainLead(lead: ExplainableLead, lang: 'ru' | 'en' = 'ru'): Le
   const state = lead.state ?? 'active';
   const flags = qualityFlagsOf(lead);
   const score = Math.max(0, Math.min(100, lead.score ?? 0));
+  // A lead the pipeline rejected (spam, junk, duplicate, failed) is not a fit even while its
+  // visibility state stays 'active': rejection is a status, not a state. Without this the card
+  // showed a green "strong" verdict on rejected vacancies (4k+ such rows on production).
+  const status = lead.status;
+  const rejected = status === 'rejected' || status === 'duplicate' || status === 'failed';
+  const live = state === 'active' && !rejected;
+  const liveNote = live
+    ? (en ? 'listing is active' : 'вакансия активна')
+    : rejected
+      ? (status === 'duplicate'
+          ? (en ? 'duplicate of another listing' : 'дубликат другой вакансии')
+          : status === 'failed'
+            ? (en ? 'failed to process' : 'ошибка обработки')
+            : (en ? 'rejected by the pipeline' : 'отклонена при проверке'))
+      : (en ? `state: ${state}` : `состояние: ${state}`);
 
   // Gates: hard filters. Any failure means the lead is not a fit, regardless of score.
   const gates: ScoreGate[] = [
     {
       name: 'live',
-      pass: state === 'active',
-      note: state === 'active' ? (en ? 'listing is active' : 'вакансия активна') : (en ? `state: ${state}` : `состояние: ${state}`),
+      pass: live,
+      note: liveNote,
     },
     {
       name: 'real-offer',

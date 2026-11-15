@@ -1569,7 +1569,6 @@ a:focus-visible, button:focus-visible, summary:focus-visible, input[type=checkbo
   pointer-events: none;
 }
 .explain-item:hover::after, .explain-item:focus::after { opacity: 1; visibility: visible; transform: translateY(0); }
-.explain-hint { margin: 12px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--muted); }
 .btn {
   display: inline-flex;
   align-items: center;
@@ -3564,7 +3563,6 @@ document.getElementById('share-lead')?.addEventListener('click', async (event) =
       <div class="explain-label">${escapeHtml(t.explainChecks)} <span class="explain-count">${escapeHtml(t.explainPassed(checksPassed, explanation.checks.length))}</span></div>
       <div class="explain-line">${checkRows}</div>
     </div>
-    <p class="explain-hint">${escapeHtml(t.explainHint)}</p>
   </section>`;
 
   const cautionBanner = ((lead.votes_scam ?? 0) >= 1 && lead.status !== 'rejected')
