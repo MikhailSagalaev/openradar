@@ -1,4 +1,4 @@
-import type { AdminStats } from '../core/store.ts';
+import type { AdminStats, AdminUsersData } from '../core/store.ts';
 import { escapeHtml } from '../core/text.ts';
 import type { SourceHealth, Stats } from '../core/types.ts';
 import type { ServiceCheck } from '../core/services.ts';
@@ -138,4 +138,86 @@ ${servicesRows ? `<section class="admin-section">
 </section>`;
 
   return layout({ title: isEn ? 'Admin' : 'Админка', version: data.version, body, auth: data.auth, lang });
+}
+
+/** Operator view of the people on the service: sign-ups, their actions, and the delivery consumers. */
+export function renderAdminUsersPage(data: AdminUsersPageData): string {
+  const { totals, users, subscriptions } = data;
+  const lang = data.lang ?? 'ru';
+  const isEn = lang === 'en';
+
+  const tiles: Array<[string, string, string?]> = isEn
+    ? [
+        ['Users', number(totals.users, lang)],
+        ['New in 30 days', number(totals.new30d, lang)],
+        ['Active sessions', number(totals.sessions, lang)],
+        ['Reviewers', number(totals.reviewers, lang)],
+        ['Voters', number(totals.voters, lang)],
+        ['Deliveries, 7 days', number(totals.deliveries7d, lang)],
+      ]
+    : [
+        ['Пользователи', number(totals.users, lang)],
+        ['Новые за 30 дней', number(totals.new30d, lang)],
+        ['Активные сессии', number(totals.sessions, lang)],
+        ['Ревьюеры', number(totals.reviewers, lang)],
+        ['Голосовавшие', number(totals.voters, lang)],
+        ['Доставки, 7 дней', number(totals.deliveries7d, lang)],
+      ];
+
+  const userRows = users
+    .map((u) => {
+      const active = u.votes + u.reviews + u.labels;
+      return `<tr>
+        <td><strong>${escapeHtml(u.handle)}</strong></td>
+        <td class="small muted">${escapeHtml(u.role)}</td>
+        <td class="num">${u.reputation === null ? '—' : number(u.reputation, lang)}</td>
+        <td class="small muted">${u.createdAt ? escapeHtml(u.createdAt.slice(0, 10)) : '—'}</td>
+        <td class="num">${number(u.votes, lang)}</td>
+        <td class="num">${number(u.reviews, lang)}</td>
+        <td class="num">${number(u.labels, lang)}</td>
+        <td>${u.banned ? `<span class="text-warn">${isEn ? 'banned' : 'забанен'}</span>` : active > 0 ? `<span class="muted">${isEn ? 'active' : 'активен'}</span>` : `<span class="muted">${isEn ? '—' : '—'}</span>`}</td>
+      </tr>`;
+    })
+    .join('');
+
+  const subRows = subscriptions
+    .map((s) => {
+      const last = s.lastSentAt ? s.lastSentAt.replace('T', ' ').slice(0, 16) : isEn ? 'never' : 'ещё не отправлялась';
+      return `<tr>
+        <td><strong>${escapeHtml(s.name)}</strong> <span class="muted small">${escapeHtml(s.id.slice(0, 8))}</span></td>
+        <td class="small">${escapeHtml(s.channel)}</td>
+        <td>${s.paused ? `<span class="text-warn">${isEn ? 'paused' : 'на паузе'}</span>` : `<span class="muted">${isEn ? 'running' : 'работает'}</span>`}</td>
+        <td class="small muted">${escapeHtml(last)}</td>
+      </tr>`;
+    })
+    .join('');
+
+  const body = `<div class="page-head"><div><h1>${isEn ? 'Service Users' : 'Пользователи сервиса'}</h1>
+  <p class="muted small">${isEn ? 'Sign-ups, their activity, and the delivery consumers. Full detail in the database.' : 'Регистрации, их активность и потребители доставок. Полные данные — в базе.'}</p></div></div>
+<div class="admin-tiles">
+  ${tiles.map(([label, value, hint]) => `<div class="admin-tile"><div class="admin-tile-label">${escapeHtml(label)}</div><div class="admin-tile-value">${value}</div>${hint ? `<div class="admin-tile-hint">${escapeHtml(hint)}</div>` : ''}</div>`).join('')}
+</div>
+<section class="admin-section">
+  <h2>${isEn ? 'Latest sign-ups (up to 100)' : 'Последние регистрации (до 100)'}</h2>
+  <table class="admin-table"><thead><tr>
+    <th>${isEn ? 'Handle' : 'Хендл'}</th><th>${isEn ? 'Role' : 'Роль'}</th><th class="num">${isEn ? 'Reputation' : 'Репутация'}</th><th>${isEn ? 'Joined' : 'Регистрация'}</th>
+    <th class="num">${isEn ? 'Votes' : 'Голоса'}</th><th class="num">${isEn ? 'Reviews' : 'Ревью'}</th><th class="num">${isEn ? 'Labels' : 'Метки'}</th><th>${isEn ? 'Status' : 'Статус'}</th>
+  </tr></thead><tbody>${userRows}</tbody></table>
+</section>
+<section class="admin-section">
+  <h2>${isEn ? 'Delivery consumers (subscriptions)' : 'Потребители доставок (подписки)'}</h2>
+  <table class="admin-table"><thead><tr><th>${isEn ? 'Name' : 'Название'}</th><th>${isEn ? 'Channel' : 'Канал'}</th><th>${isEn ? 'State' : 'Состояние'}</th><th>${isEn ? 'Last delivery' : 'Последняя доставка'}</th></tr></thead>
+  <tbody>${subRows}</tbody></table>
+</section>
+<section class="admin-section">
+  <div class="admin-links"><a class="btn ghost" href="/admin">${isEn ? 'Back to dashboard' : 'Назад в админку'}</a></div>
+</section>`;
+
+  return layout({ title: isEn ? 'Service Users' : 'Пользователи сервиса', version: data.version, body, auth: data.auth, lang });
+}
+
+export interface AdminUsersPageData extends AdminUsersData {
+  version: string;
+  auth?: AuthDisplay;
+  lang?: SupportedLang;
 }

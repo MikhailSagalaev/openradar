@@ -111,6 +111,23 @@ export interface AdminStats {
   observations7d: number;
 }
 
+/** Who is on the service: sign-ups, their activity, and the delivery consumers. */
+export interface AdminUsersData {
+  totals: { users: number; new30d: number; sessions: number; reviewers: number; voters: number; deliveries7d: number };
+  users: Array<{
+    id: number;
+    handle: string;
+    role: string;
+    reputation: number | null;
+    createdAt?: string;
+    banned: boolean;
+    votes: number;
+    reviews: number;
+    labels: number;
+  }>;
+  subscriptions: Array<{ id: string; name: string; channel: string; paused: boolean; lastSentAt?: string }>;
+}
+
 /** The last `count` UTC dates ending today, oldest first. */
 export function lastDays(count: number, now: Date = new Date()): string[] {
   const out: string[] = [];
@@ -585,6 +602,8 @@ export interface Store extends HubStore {
   hasAgentToken?(userId: number): Promise<boolean>;
   deleteAgentToken?(userId: number): Promise<void>;
   getAdminStats?(days?: number): Promise<AdminStats>;
+  /** Operator view of the people on the service: who signed up, who acts, who consumes. */
+  adminUsersOverview?(): Promise<AdminUsersData>;
   /** Browser extension tokens, stored as SHA-256 hashes. */
   saveExtensionToken?(tokenHash: string, userId: number): Promise<void>;
   getUserByExtensionToken?(tokenHash: string): Promise<UserRecord | null>;

@@ -28,7 +28,7 @@ import { remoteFromText } from '../core/extract.ts';
 import { DEFAULT_SESSION_ENV, TELEGRAM_SESSION_ENV_RE } from '../sources/telegram-account.ts';
 import { VERSION } from '../version.ts';
 import { githubOAuthConfigured, startGitHubOAuth, handleGitHubCallback, secureCookie } from './auth.ts';
-import { renderAdminPage } from './admin.ts';
+import { renderAdminPage, renderAdminUsersPage } from './admin.ts';
 import { analyticsFromEnv, contentSecurityPolicy } from './analytics.ts';
 import { filterOptions, IT_SKILLS, matchesSavedFilters, parseFeedFilters, type FeedFilters } from './filters.ts';
 import { computeInsights, estimateMarket } from '../core/market.ts';
@@ -1629,6 +1629,22 @@ export function createApp(runtime: Runtime): Hono {
         admin,
         services: runtime.services?.all() ?? [],
         analytics: analyticsFromEnv(runtime.env),
+      }),
+    );
+  });
+
+  app.get('/admin/users', async (c) => {
+    if (!await isAdmin(c, runtime)) return c.redirect('/login?returnTo=/admin/users');
+    const data = runtime.store.adminUsersOverview ? await runtime.store.adminUsersOverview() : undefined;
+    if (!data) return c.text('This store has no admin users overview', 501);
+    return c.html(
+      renderAdminUsersPage({
+        version: VERSION,
+        auth: await getAuthDisplay(c, runtime),
+        lang: resolveLang(c),
+        totals: data.totals,
+        users: data.users,
+        subscriptions: data.subscriptions,
       }),
     );
   });
