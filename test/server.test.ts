@@ -1037,6 +1037,25 @@ describe('http server', () => {
     expect((await createApp(byLogin).request('/admin', { headers: { cookie: `radar_session=${loginSession}` } })).status).toBe(200);
   });
 
+  it('shows the service users page to admins with sign-ups and consumers', async () => {
+    const plain = makeRuntime({ RADAR_PUBLIC_READ: true });
+    const plainApp = createApp(plain);
+    expect((await plainApp.request('/admin/users')).headers.get('location')).toBe('/login?returnTo=/admin/users');
+
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true, RADAR_ADMIN_GITHUB: '583231' });
+    const session = await makeUserSession(runtime, 'octocat');
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed' });
+    await runtime.store.insertLead({
+      id: 'a1', sourceId: source.id, externalId: 'a1', titleKey: 'a1', fingerprint: 'fp-a1', title: 'Пост', text: 'Текст',
+      type: 'job', status: 'delivered', score: 60, reasons: [], createdAt: new Date().toISOString(),
+    });
+    await runtime.store.saveLeadReview?.({ leadId: 'a1', userId: 1, verdict: 'ok', issues: [] } as never);
+    const page = await (await createApp(runtime).request('/admin/users', { headers: { cookie: `radar_session=${session}` } })).text();
+    expect(page).toContain('Пользователи сервиса');
+    expect(page).toContain('octocat');
+    expect(page).toContain('class="admin-tiles"');
+  });
+
   it('keeps the Telegram section in the profile of a GitHub administrator', async () => {
     const runtime = makeRuntime({ RADAR_PUBLIC_READ: true, RADAR_ADMIN_GITHUB: '583231', RADAR_USER_TELEGRAM: true, RADAR_WEB_KEY_SECRET: '0123456789abcdef0123456789abcdef' });
     const session = await makeUserSession(runtime, 'octocat');

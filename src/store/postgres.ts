@@ -36,6 +36,7 @@ import type {
   UserRecord,
   UserVoteResult,
   AdminStats,
+  AdminUsersData,
   UserTelegramAccountInput,
   UserTelegramAccountRecord,
   UserSourceInput,
@@ -1394,6 +1395,56 @@ export class PostgresStore implements Store {
       votes7d: votes[1] ?? 0,
       participants: participants[0] ?? 0,
       observations7d: observations[0] ?? 0,
+    };
+  }
+
+  async adminUsersOverview(): Promise<AdminUsersData> {
+    const totals = await this.pool.query(
+      `SELECT (SELECT COUNT(*) FROM app_users) AS users,
+              (SELECT COUNT(*) FROM app_users WHERE created_at > NOW() - INTERVAL '30 days') AS new30d,
+              (SELECT COUNT(*) FROM sessions WHERE expires_at > NOW()) AS sessions,
+              (SELECT COUNT(DISTINCT user_id) FROM lead_reviews) AS reviewers,
+              (SELECT COUNT(DISTINCT user_id) FROM lead_votes) AS voters,
+              (SELECT COUNT(*) FROM deliveries WHERE created_at > NOW() - INTERVAL '7 days') AS deliveries7d`,
+    );
+    const t = totals.rows[0] ?? {};
+    const users = await this.pool.query(
+      `SELECT u.id, u.handle, u.role, u.reputation, u.created_at, (u.banned_at IS NOT NULL) AS banned,
+              (SELECT COUNT(*) FROM lead_votes v WHERE v.user_id = u.id) AS votes,
+              (SELECT COUNT(*) FROM lead_reviews r WHERE r.user_id = u.id) AS reviews,
+              (SELECT COUNT(*) FROM lead_labels b WHERE b.labelled_by = u.id) AS labels
+         FROM app_users u ORDER BY u.created_at DESC, u.id DESC LIMIT 100`,
+    );
+    const subs = await this.pool.query(
+      `SELECT id, name, channel, paused, last_sent_at FROM subscriptions ORDER BY created_at DESC`,
+    );
+    return {
+      totals: {
+        users: Number(t.users) || 0,
+        new30d: Number(t.new30d) || 0,
+        sessions: Number(t.sessions) || 0,
+        reviewers: Number(t.reviewers) || 0,
+        voters: Number(t.voters) || 0,
+        deliveries7d: Number(t.deliveries7d) || 0,
+      },
+      users: users.rows.map((r) => ({
+        id: Number(r.id),
+        handle: String(r.handle ?? ''),
+        role: String(r.role ?? ''),
+        reputation: r.reputation === null ? null : Number(r.reputation),
+        createdAt: r.created_at ? new Date(r.created_at).toISOString() : undefined,
+        banned: Boolean(r.banned),
+        votes: Number(r.votes) || 0,
+        reviews: Number(r.reviews) || 0,
+        labels: Number(r.labels) || 0,
+      })),
+      subscriptions: subs.rows.map((r) => ({
+        id: String(r.id ?? ''),
+        name: String(r.name ?? ''),
+        channel: String(r.channel ?? ''),
+        paused: Boolean(r.paused),
+        lastSentAt: r.last_sent_at ? new Date(r.last_sent_at).toISOString() : undefined,
+      })),
     };
   }
 

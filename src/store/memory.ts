@@ -20,6 +20,7 @@ import type {
   UserRecord,
   UserVoteResult,
   AdminStats,
+  AdminUsersData,
   UserTelegramAccountInput,
   UserTelegramAccountRecord,
   UserSourceInput,
@@ -1019,6 +1020,37 @@ export class MemoryStore implements Store {
       votes7d: this.userVotes.size,
       participants: this.participants.size,
       observations7d: this.observations.filter((o) => o.receivedAt > week).length,
+    };
+  }
+
+  async adminUsersOverview(): Promise<AdminUsersData> {
+    const nowIso = new Date().toISOString();
+    const users = Array.from(this.users.values())
+      .sort((a, b) => b.id - a.id)
+      .slice(0, 100)
+      .map((u) => ({
+        id: u.id,
+        handle: u.handle,
+        role: u.role,
+        reputation: null,
+        createdAt: u.createdAt,
+        banned: false,
+        // Lead-level votes and lead-level labels cannot be attributed to a user here.
+        votes: 0,
+        reviews: Array.from(this.reviews.values()).filter((perUser) => perUser.has(u.id)).length,
+        labels: 0,
+      }));
+    return {
+      totals: {
+        users: this.users.size,
+        new30d: Array.from(this.users.values()).filter((u) => u.createdAt >= new Date(Date.now() - 30 * 86_400_000).toISOString()).length,
+        sessions: Array.from(this.sessions.values()).filter((s) => s.expiresAt > nowIso).length,
+        reviewers: new Set(Array.from(this.reviews.values()).flatMap((perUser) => [...perUser.keys()])).size,
+        voters: 0,
+        deliveries7d: 0,
+      },
+      users,
+      subscriptions: [],
     };
   }
 
