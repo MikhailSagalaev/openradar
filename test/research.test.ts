@@ -101,6 +101,10 @@ describe('role, grade, language and employer', () => {
     expect(detectGrade('Java разработчик', 'Требуемые навыки: #middle, #Java')).toBe('middle');
     expect(detectGrade('Java разработчик', '', 'Junior')).toBe('junior');
     expect(detectGrade('Менеджер по лидогенерации', '')).toBeUndefined();
+    expect(detectGrade('Старший продавец-кассир', '')).toBeUndefined();
+    expect(detectGrade('Старший смены на склад', '')).toBeUndefined();
+    expect(detectGrade('Старший менеджер по продажам', '', undefined, 'sales')).toBeUndefined();
+    expect(detectGrade('Backend разработчик (Go)', 'Опыт от 3 лет.\nГрейд: Senior')).toBe('senior');
   });
 
   it('finds the language and the employer', () => {

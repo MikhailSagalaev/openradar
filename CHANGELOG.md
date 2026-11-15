@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.70.0 — 2026-11-15
+
+### Added
+- **Salary matrix by role and seniority (`gradeMatrix`) and IT seniority ladder (`itByGrade`)**: `/research` and `/en/research` now publish a full cross-tabulation of monthly medians across `Junior / Middle / Senior / Lead`, `Senior / Junior` progression multipliers, salary disclosure shares (`payShare`), remote work shares, and typical salary range spreads (`±%`) for every specialization (`src/research/report.ts`, `src/research/pages.ts`, `src/research/pages-en.ts`).
+- **Stratified skill pay premiums (`premiumPct`) and umbrella category filtering**: `skillStats` filters out generic umbrella category tags (`Продажи`, `Маркетинг`, `Разработка`, `Аналитика`, `Дизайн`, etc.) and computes role-and-grade-adjusted pay premiums (`±%`) for specific technologies and tools (`src/research/report.ts`, `src/research/pages.ts`, `src/research/pages-en.ts`).
+- **Freelance project budget brackets (`gigs.brackets`)**: breaks down Russian-language freelance orders into 4 budget tiers (`< 3 000 ₽`, `3 000 – 15 000 ₽`, `15 000 – 50 000 ₽`, `50 000+ ₽`) comparing share of order volume against share of total budget capital (`src/research/report.ts`, `src/research/pages.ts`, `src/research/pages-en.ts`).
+- **Enriched OpenRadar Index (`itJobs`, `byPlatform`, `weekdayProfile`)**: `/research/index` and `/en/research/index` now include an IT-vacancies sub-index, per-board panel indices (`hh.ru`, `career.habr.com`, `getmatch.ru`, `trudvsem.ru`, `kwork.ru`, `fl.ru`, `freelancehunt.com`), a Monday–Sunday publication seasonality profile, daily volume background bars on SVG charts, and panel share columns (`src/research/index.ts`, `src/research/index-page.ts`, `src/research/pages-en.ts`).
+- **Expanded Methodology specification (`/research/methodology` & `/en/research/methodology`)**: adds a parameter & threshold summary table (`MIN_MEDIAN=10`, `MIN_QUARTILES=20`, `RELIABLE=30`, `MIN_ADJUSTED=30`, pay bounds, panel Freshness Gate $\Delta\text{id}$ limits, LLM confidence gates) and mathematical formulations for order-statistic 95% CIs, Cochran–Mantel–Haenszel stratified gap adjustments, Laspeyres fixed-basket salary indexing, and panel index smoothing (`src/research/pages.ts`, `src/research/pages-en.ts`).
+
+### Fixed
+- **Simpson's paradox in seniority medians (`Senior < Middle`) and retail chain dominance in top employers**: `detectGrade` now guards Russian adjectives (`старший / ведущий / младший / руководитель`) against retail/store/service clerk titles (`Старший продавец-кассир`, `Старший смены`, `Заведующий складом`) and non-IT roles, while supporting explicit `Грейд: / Квалификация:` labels in vacancy text; `jobs.companies` excludes non-IT retail store chains and `jobs.itCompanies` highlights IT employers (`src/research/derive.ts`, `src/research/report.ts`).
+- **Pre-base feed-onboarding spike damping in `buildIndex`**: single-day feed backfill spikes prior to `BASE.from` (`> 2.2x` the series median, such as `2026-11-06`) are Winsorized to the median in the 7-day rolling mean so initial feed onboarding bursts do not create artificial `-22%` to `-89%` weekly drops when exiting the 7-day window (`src/research/index.ts`).
+- **Routine translation gig distortion in `taskTransformation` and `bumpChart` role ranking**: excludes monthly salary offers (`> 45 000 ₽`) from routine single-article translation/banner gig medians and prioritizes IT & digital specializations in `computeBumpChart` (`src/research/report.ts`).
+
 ## 0.69.3 — 2026-11-15
 
 ### Fixed

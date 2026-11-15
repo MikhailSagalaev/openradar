@@ -11,6 +11,7 @@
 import type { ResearchDailyRow, Store } from '../core/store.ts';
 import { SOURCE_PRESETS, presetSource } from '../sources/presets.ts';
 import { OTHER_ROLE, roleDef, type DeriveOptions, type ResearchRecord } from './derive.ts';
+import { TECH_ROLES } from './report.ts';
 import { researchRecords } from './service.ts';
 
 export const INDEX_VERSION = 2;
@@ -124,8 +125,29 @@ export interface RoleIndex {
   slug: string;
   label: string;
   base: number;
+  sharePct?: number;
   latest?: IndexPoint;
   weekChange?: number;
+  recentCounts?: number[];
+}
+
+export interface PlatformIndex {
+  platform: string;
+  type: 'job' | 'gig';
+  base: number;
+  latest?: IndexPoint;
+  weekChange?: number;
+}
+
+export interface WeekdayPoint {
+  /** 1 = Mon ... 7 = Sun */
+  isoDay: number;
+  label: string;
+  labelEn: string;
+  jobAvg: number;
+  gigAvg: number;
+  jobPctOfMean: number;
+  gigPctOfMean: number;
 }
 
 export interface OpenradarIndex {
@@ -134,20 +156,34 @@ export interface OpenradarIndex {
   base: { from: string; to: string; provisional: boolean; days: number };
   panel: typeof PANEL;
   jobs: IndexSeries;
+  itJobs?: IndexSeries;
   gigs: IndexSeries;
   roles: RoleIndex[];
+  byPlatform?: PlatformIndex[];
+  weekdayProfile?: WeekdayPoint[];
 }
 
 const round1 = (v: number): number => Math.round(v * 10) / 10;
 
+/**
+ * Computes 7-day rolling averages and index series.
+ * Single-day pre-base feed onboarding spikes (> 2.5x the series median before BASE.from)
+ * are Winsorized in the rolling mean so initial feed backfill bursts do not create artificial
+ * -70% crashes seven days later when exiting the window, while raw daily counts stay untouched.
+ */
 function series(days: string[], counts: Map<string, number>, baseDays: string[]): IndexSeries {
-  const values = days.map((d) => counts.get(d) ?? 0);
-  const baseValues = baseDays.map((d) => counts.get(d) ?? 0);
+  const rawValues = days.map((d) => counts.get(d) ?? 0);
+  const pos = [...rawValues].filter((v) => v > 0).sort((a, b) => a - b);
+  const med = pos.length >= MIN_BASE_DAYS ? pos[Math.floor(pos.length / 2)]! : undefined;
+  const spikeThreshold = med !== undefined ? med * 2.2 : Infinity;
+  const smoothedInput = days.map((d, i) => (d < BASE.from && rawValues[i]! > spikeThreshold ? med! : rawValues[i]!));
+  const baseIndexByDay = new Map(days.map((d, i) => [d, smoothedInput[i]!]));
+  const baseValues = baseDays.map((d) => baseIndexByDay.get(d) ?? counts.get(d) ?? 0);
   const base = baseValues.length >= MIN_BASE_DAYS ? baseValues.reduce((a, b) => a + b, 0) / baseValues.length : undefined;
   const points: IndexPoint[] = days.map((date, i) => {
-    const point: IndexPoint = { date, count: values[i]! };
+    const point: IndexPoint = { date, count: rawValues[i]! };
     if (i >= 6) {
-      point.avg7 = round1(values.slice(i - 6, i + 1).reduce((a, b) => a + b, 0) / 7);
+      point.avg7 = round1(smoothedInput.slice(i - 6, i + 1).reduce((a, b) => a + b, 0) / 7);
       if (base) point.index = round1((point.avg7 / base) * 100);
     }
     return point;
@@ -156,6 +192,42 @@ function series(days: string[], counts: Map<string, number>, baseDays: string[])
   const weekAgo = points.at(-8);
   const weekChange = latest?.avg7 && weekAgo?.avg7 ? round1(((latest.avg7 - weekAgo.avg7) / weekAgo.avg7) * 100) : undefined;
   return { points, base: base === undefined ? undefined : round1(base), latest, weekChange };
+}
+
+const WEEKDAYS_RU = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+const WEEKDAYS_EN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+function buildWeekdayProfile(days: string[], jobCounts: Map<string, number>, gigCounts: Map<string, number>): WeekdayPoint[] {
+  if (days.length < MIN_BASE_DAYS) return [];
+  const buckets = Array.from({ length: 7 }, (_, i) => ({
+    isoDay: i + 1,
+    label: WEEKDAYS_RU[i]!,
+    labelEn: WEEKDAYS_EN[i]!,
+    jobs: [] as number[],
+    gigs: [] as number[],
+  }));
+  for (const d of days) {
+    const utcDay = new Date(`${d}T12:00:00Z`).getUTCDay();
+    const idx = (utcDay + 6) % 7;
+    buckets[idx]!.jobs.push(jobCounts.get(d) ?? 0);
+    buckets[idx]!.gigs.push(gigCounts.get(d) ?? 0);
+  }
+  const avg = (arr: number[]): number => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
+  const overallJobMean = avg(days.map((d) => jobCounts.get(d) ?? 0));
+  const overallGigMean = avg(days.map((d) => gigCounts.get(d) ?? 0));
+  return buckets.map((b) => {
+    const jobAvg = round1(avg(b.jobs));
+    const gigAvg = round1(avg(b.gigs));
+    return {
+      isoDay: b.isoDay,
+      label: b.label,
+      labelEn: b.labelEn,
+      jobAvg,
+      gigAvg,
+      jobPctOfMean: overallJobMean > 0 ? Math.round((jobAvg / overallJobMean) * 100) : 0,
+      gigPctOfMean: overallGigMean > 0 ? Math.round((gigAvg / overallGigMean) * 100) : 0,
+    };
+  });
 }
 
 export function buildIndex(rows: ResearchDailyRow[], now: Date = new Date()): OpenradarIndex {
@@ -173,21 +245,56 @@ export function buildIndex(rows: ResearchDailyRow[], now: Date = new Date()): Op
     return counts;
   };
 
+  const jobCounts = countsOf((r) => r.type === 'job');
+  const gigCounts = countsOf((r) => r.type === 'gig');
+  const jobsSeries = series(days, jobCounts, baseDays);
+  const itJobsSeries = series(days, countsOf((r) => r.type === 'job' && TECH_ROLES.has(r.role)), baseDays);
+  const gigsSeries = series(days, gigCounts, baseDays);
+  const totalJobBase = jobsSeries.base ?? 0;
+
   const roleSlugs = [...new Set(panelRows.filter((r) => r.type === 'job' && r.role !== OTHER_ROLE.slug).map((r) => r.role))];
   const roles: RoleIndex[] = roleSlugs
     .map((slug) => ({ slug, s: series(days, countsOf((r) => r.type === 'job' && r.role === slug), baseDays) }))
     .filter(({ s }) => s.base !== undefined && s.base >= ROLE_MIN_BASE)
-    .map(({ slug, s }) => ({ slug, label: roleDef(slug)?.label ?? slug, base: s.base!, latest: s.latest, weekChange: s.weekChange }))
+    .map(({ slug, s }) => ({
+      slug,
+      label: roleDef(slug)?.label ?? slug,
+      base: s.base!,
+      sharePct: totalJobBase > 0 ? round1((s.base! / totalJobBase) * 100) : undefined,
+      latest: s.latest,
+      weekChange: s.weekChange,
+      recentCounts: s.points.slice(-7).map((p) => p.count),
+    }))
     .sort((a, b) => b.base - a.base);
+
+  const platformKeys = [...new Set(panelRows.map((r) => `${r.type}|${r.platform}`))];
+  const byPlatform: PlatformIndex[] = platformKeys
+    .map((key) => {
+      const [type, platform] = key.split('|') as ['job' | 'gig', string];
+      const s = series(days, countsOf((r) => r.type === type && r.platform === platform), baseDays);
+      return { platform, type, s };
+    })
+    .filter(({ s }) => s.base !== undefined && s.base >= 0.5)
+    .map(({ platform, type, s }) => ({
+      platform,
+      type,
+      base: s.base!,
+      latest: s.latest,
+      weekChange: s.weekChange,
+    }))
+    .sort((a, b) => (a.type === b.type ? b.base - a.base : a.type === 'job' ? -1 : 1));
 
   return {
     version: INDEX_VERSION,
     updatedAt: now.toISOString(),
     base: { ...BASE, provisional, days: baseDays.length },
     panel: PANEL,
-    jobs: series(days, countsOf((r) => r.type === 'job'), baseDays),
-    gigs: series(days, countsOf((r) => r.type === 'gig'), baseDays),
+    jobs: jobsSeries,
+    itJobs: itJobsSeries,
+    gigs: gigsSeries,
     roles,
+    byPlatform,
+    weekdayProfile: buildWeekdayProfile(days, jobCounts, gigCounts),
   };
 }
 

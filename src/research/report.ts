@@ -13,7 +13,43 @@ export const RELIABLE = 30;
 /** Pay figures compared at equal role and grade need this many matched posts. */
 const MIN_ADJUSTED = 30;
 /** Roles of the IT market: the headline for it leaves sales, support and the like out. */
-const TECH_ROLES = new Set(['ai', '1c', 'security', 'qa', 'devops', 'architect', 'sysadmin', 'data-engineer', 'analyst-system', 'analyst-business', 'analyst-data', 'ml', 'product', 'project', 'gamedev', 'mobile', 'fullstack', 'frontend', 'embedded', 'backend']);
+export const TECH_ROLES = new Set(['ai', '1c', 'security', 'qa', 'devops', 'architect', 'sysadmin', 'data-engineer', 'analyst-system', 'analyst-business', 'analyst-data', 'ml', 'product', 'project', 'gamedev', 'mobile', 'fullstack', 'frontend', 'embedded', 'backend']);
+
+/** Generic category names stored as tags on older leads; excluded from technology skill rankings. */
+const UMBRELLA_SKILLS = new Set([
+  'продажи', 'маркетинг', 'разработка', 'аналитика', 'дизайн', 'маркетплейсы',
+  'рекрутинг', 'управление проектами', 'тестирование', 'поддержка', 'техподдержка',
+  'копирайтинг', 'тексты', 'контент', 'администрирование', 'перевод', 'переводы',
+  'другое', 'it', 'ит', 'работа с клиентами', 'консультирование', 'менеджмент',
+]);
+
+export interface GradeMatrixRow {
+  slug: string;
+  label: string;
+  n: number;
+  withPay: number;
+  payShare: number;
+  remoteShare: number;
+  median?: number;
+  p25?: number;
+  p75?: number;
+  junior?: number;
+  middle?: number;
+  senior?: number;
+  lead?: number;
+  seniorToJuniorRatio?: number;
+  spreadPct?: number;
+}
+
+export interface GigBracket {
+  key: 'micro' | 'small' | 'medium' | 'large';
+  label: string;
+  n: number;
+  nShare: number;
+  capitalRub: number;
+  capitalShare: number;
+  median?: number;
+}
 
 export interface Dist {
   n: number;
@@ -80,7 +116,8 @@ export interface RoleDetail {
   byGrade: Slice[];
   byLanguage: Slice[];
   byRegion: Slice[];
-  skills: Array<{ skill: string; n: number; pay: Dist }>;
+  skills: Array<{ skill: string; n: number; pay: Dist; premiumPct?: number }>;
+  spreadPct?: number;
   companies: Array<{ name: string; n: number }>;
   remoteShare: number;
 }
@@ -121,25 +158,30 @@ export interface Report {
     /** Vacancies of IT roles only. */
     it?: Dist;
     /** How the sums were written, and the median of full ranges alone. */
-    bounds?: { range: number; from: number; to: number; single: number; rangeMedian?: number };
+    bounds?: { range: number; from: number; to: number; single: number; rangeMedian?: number; medianSpreadPct?: number };
     byPlatform?: Slice[];
     intl: Dist;
     byRole: Slice[];
     byGrade: Slice[];
+    /** Seniority ladder within IT roles only, free of non-IT composition bias. */
+    itByGrade?: Slice[];
+    /** Cross-tabulation of pay by role and seniority grade. */
+    gradeMatrix?: GradeMatrixRow[];
     byLanguage: Slice[];
     byRegion: Slice[];
     remote: { share: number; remote: Dist; office: Dist; adjusted?: Adjusted };
     ai: { share: number; with: Dist; without: Dist; adjusted?: Adjusted };
     moscowAdjusted?: Adjusted;
-    skills: Array<{ skill: string; n: number; pay: Dist }>;
+    skills: Array<{ skill: string; n: number; pay: Dist; premiumPct?: number }>;
     companies: Array<{ name: string; n: number }>;
+    itCompanies?: Array<{ name: string; n: number }>;
     histogram: Array<{ from: number; to?: number; n: number }>;
     weekly: Array<{ week: string; n: number; median?: number }>;
     /** Same pay, held to a fixed role mix. 100 is the first week that has a basket. */
     weeklyIndexed?: Array<{ week: string; index: number; n: number }>;
     roles: RoleDetail[];
   };
-  gigs: { budget: Dist; budgetShare: number; byCategory: Slice[]; hourly: Dist };
+  gigs: { budget: Dist; budgetShare: number; byCategory: Slice[]; hourly: Dist; brackets?: GigBracket[] };
   findings: Finding[];
   /** Roubles per unit at the end of the period (Bank of Russia). */
   fx?: Record<string, number>;
@@ -343,6 +385,8 @@ function computeTaskTransformation(records: ResearchRecord[]) {
     if (!matchedEmerging) {
       for (const d of routineDefs) {
         if (d.rx.test(text)) {
+          // Full-time monthly salaries in Telegram translation/design posts (> 45k) are not single-article/banner gig budgets.
+          if ((d.key === 'translation' || d.key === 'banner') && (r.pay ?? 0) > 45_000) continue;
           const cur = routineStats.get(d.key)!;
           cur.n++;
           if (projectPay(r)) {
@@ -403,13 +447,18 @@ function computeTaskTransformation(records: ResearchRecord[]) {
 }
 
 function computeBumpChart(records: ResearchRecord[]): { quarters: BumpSnapshot[]; months: BumpSnapshot[] } {
-  const overallRoleCounts = new Map<string, number>();
+  const techCounts = new Map<string, number>();
+  const allCounts = new Map<string, number>();
   for (const r of records) {
     const slug = r.role;
     if (slug && slug !== OTHER_ROLE.slug) {
-      overallRoleCounts.set(slug, (overallRoleCounts.get(slug) ?? 0) + 1);
+      allCounts.set(slug, (allCounts.get(slug) ?? 0) + 1);
+      if (TECH_ROLES.has(slug) || slug === 'design') {
+        techCounts.set(slug, (techCounts.get(slug) ?? 0) + 1);
+      }
     }
   }
+  const overallRoleCounts = techCounts.size >= 5 ? techCounts : allCounts;
   const topSlugs = [...overallRoleCounts.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
@@ -560,10 +609,25 @@ function topCounts(values: Array<string | undefined>, limit: number): Array<{ na
   return Array.from(counts, ([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n).slice(0, limit);
 }
 
-function skillStats(records: ResearchRecord[], limit: number): Array<{ skill: string; n: number; pay: Dist }> {
+function skillStats(
+  records: ResearchRecord[],
+  limit: number,
+  baselineMedian?: number,
+): Array<{ skill: string; n: number; pay: Dist; premiumPct?: number }> {
   const by = new Map<string, number[]>();
-  for (const record of records) for (const skill of record.skills) by.set(skill, [...(by.get(skill) ?? []), record.pay!]);
-  return Array.from(by, ([skill, values]) => ({ skill, n: values.length, pay: dist(values) }))
+  for (const record of records) {
+    for (const skill of record.skills) {
+      if (UMBRELLA_SKILLS.has(skill.trim().toLowerCase())) continue;
+      by.set(skill, [...(by.get(skill) ?? []), record.pay!]);
+    }
+  }
+  const base = baselineMedian ?? dist(records.map((r) => r.pay!)).median;
+  return Array.from(by, ([skill, values]) => {
+    const pay = dist(values);
+    const matched = records.length >= MIN_ADJUSTED ? adjustedGap(records, (r) => r.skills.includes(skill))?.pct : undefined;
+    const rawPct = pay.median !== undefined && base ? Math.round(((pay.median - base) / base) * 100) : undefined;
+    return { skill, n: values.length, pay, premiumPct: matched ?? rawPct };
+  })
     .filter((s) => s.pay.median !== undefined)
     .sort((a, b) => b.n - a.n)
     .slice(0, limit)
@@ -625,22 +689,97 @@ export function formatShare(value: number): string {
   return `${String(value).replace('.', ',')}%`;
 }
 
+function medianSpreadPctOf(records: ResearchRecord[]): number | undefined {
+  const spreads = records
+    .filter((r) => r.payMin !== undefined && r.payMax !== undefined && r.payMax > r.payMin && (r.pay ?? 0) > 0)
+    .map((r) => ((r.payMax! - r.payMin!) / (2 * r.pay!)) * 100)
+    .sort((a, b) => a - b);
+  if (spreads.length < 5) return undefined;
+  return Math.round(quantile(spreads, 0.5));
+}
+
+function computeGigBrackets(records: ResearchRecord[]): GigBracket[] {
+  const defs: Array<{ key: GigBracket['key']; label: string; pred: (pay: number) => boolean }> = [
+    { key: 'micro', label: 'До 3 000 ₽ (микрозадачи)', pred: (p) => p < 3_000 },
+    { key: 'small', label: '3 000 – 15 000 ₽ (небольшие работы)', pred: (p) => p >= 3_000 && p < 15_000 },
+    { key: 'medium', label: '15 000 – 50 000 ₽ (средние проекты)', pred: (p) => p >= 15_000 && p < 50_000 },
+    { key: 'large', label: 'От 50 000 ₽ (крупные проекты и MVP)', pred: (p) => p >= 50_000 },
+  ];
+  const totalN = records.length;
+  const totalCap = records.reduce((s, r) => s + (r.pay ?? 0), 0);
+  if (!totalN || !totalCap) return [];
+  return defs.map((d) => {
+    const group = records.filter((r) => d.pred(r.pay ?? 0));
+    const cap = group.reduce((s, r) => s + (r.pay ?? 0), 0);
+    return {
+      key: d.key,
+      label: d.label,
+      n: group.length,
+      nShare: share(group.length, totalN),
+      capitalRub: cap,
+      capitalShare: share(cap, totalCap),
+      median: dist(group.map((r) => r.pay!), 3).median,
+    };
+  });
+}
+
+function computeGradeMatrix(roles: RoleDetail[], jobs: ResearchRecord[], paid: (r: ResearchRecord) => boolean): GradeMatrixRow[] {
+  return roles
+    .filter((r) => r.pay.median !== undefined)
+    .map((r) => {
+      const roleJobs = jobs.filter((j) => j.role === r.slug);
+      const rolePaid = roleJobs.filter(paid);
+      const gradeMed = (g: string): number | undefined => {
+        const vals = rolePaid.filter((j) => j.grade === g).map((j) => j.pay!);
+        return dist(vals, 5).median;
+      };
+      const junior = gradeMed('junior');
+      const middle = gradeMed('middle');
+      const senior = gradeMed('senior');
+      const lead = gradeMed('lead');
+      const seniorToJuniorRatio =
+        junior && senior && senior >= junior ? Math.round((senior / junior) * 10) / 10 : undefined;
+      return {
+        slug: r.slug,
+        label: r.label,
+        n: r.n,
+        withPay: r.withPay,
+        payShare: share(r.withPay, r.n),
+        remoteShare: r.remoteShare,
+        median: r.pay.median,
+        p25: r.pay.p25,
+        p75: r.pay.p75,
+        junior,
+        middle,
+        senior,
+        lead,
+        seniorToJuniorRatio,
+        spreadPct: r.spreadPct,
+      };
+    })
+    .sort((a, b) => (b.median ?? 0) - (a.median ?? 0));
+}
+
+const RETAIL_STORE_COMPANY = /\.\s*(?:Магазины|Команда магазинов|Магазины продуктов)$/i;
+
 function roleDetail(slug: string, records: ResearchRecord[], paid: (r: ResearchRecord) => boolean): RoleDetail {
   const def = roleDef(slug);
   const withPay = records.filter(paid);
+  const payDist = dist(withPay.map((r) => r.pay!));
   return {
     slug,
     label: def?.label ?? OTHER_ROLE.label,
     plural: def?.plural ?? OTHER_ROLE.plural,
     n: records.length,
     withPay: withPay.length,
-    pay: dist(withPay.map((r) => r.pay!)),
+    pay: payDist,
     byGrade: sliceBy(records, (r) => r.grade, (k) => GRADE_LABELS[k as keyof typeof GRADE_LABELS], paid, GRADE_ORDER),
     byLanguage: sliceBy(records, (r) => r.language, (k) => k, paid).filter((s) => s.n >= 3),
     byRegion: sliceBy(records, (r) => r.region, (k) => k, paid, REGION_ORDER),
-    skills: skillStats(withPay, 12),
+    skills: skillStats(withPay, 12, payDist.median),
     companies: topCounts(records.map((r) => r.company), 10),
     remoteShare: share(records.filter((r) => r.remote).length, records.length),
+    spreadPct: medianSpreadPctOf(withPay),
   };
 }
 
@@ -726,11 +865,14 @@ export function buildReport(
         to: ruJobs.filter((r) => r.payMax !== undefined && r.payMin === undefined).length,
         single: ruJobs.filter((r) => r.payMin !== undefined && r.payMin === r.payMax).length,
         rangeMedian: dist(twoBounds.map((r) => r.pay!)).median,
+        medianSpreadPct: medianSpreadPctOf(twoBounds),
       },
       byPlatform: sliceBy(jobs, (r) => r.platform, (k) => k, ruPaid).filter((slice) => slice.pay.median !== undefined),
       intl: dist(intlJobs.map((r) => r.pay!)),
       byRole: sliceBy(jobs, (r) => r.role, (k) => roleDef(k)?.label ?? OTHER_ROLE.label, ruPaid),
-      byGrade: sliceBy(jobs, (r) => r.grade, (k) => GRADE_LABELS[k as keyof typeof GRADE_LABELS], ruPaid, GRADE_ORDER),
+      byGrade: sliceBy(jobs.filter((r) => r.role !== OTHER_ROLE.slug), (r) => r.grade, (k) => GRADE_LABELS[k as keyof typeof GRADE_LABELS], ruPaid, GRADE_ORDER),
+      itByGrade: sliceBy(jobs.filter((r) => TECH_ROLES.has(r.role)), (r) => r.grade, (k) => GRADE_LABELS[k as keyof typeof GRADE_LABELS], ruPaid, GRADE_ORDER),
+      gradeMatrix: computeGradeMatrix(roles, jobs, ruPaid),
       byLanguage: sliceBy(jobs, (r) => r.language, (k) => k, ruPaid),
       byRegion: sliceBy(jobs, (r) => r.region, (k) => k, ruPaid, REGION_ORDER),
       remote: {
@@ -746,8 +888,9 @@ export function buildReport(
         adjusted: adjustedGap(ruJobs, (r) => r.ai),
       },
       moscowAdjusted: adjustedGap(ruJobs.filter((r) => r.region === 'Москва' || r.region === 'Другие города'), (r) => r.region === 'Москва'),
-      skills: skillStats(ruJobs, 20),
-      companies: topCounts(jobs.map((r) => r.company), 15),
+      skills: skillStats(ruJobs.filter((r) => r.role !== OTHER_ROLE.slug), 20),
+      companies: topCounts(jobs.filter((r) => !(r.role === OTHER_ROLE.slug && r.company && RETAIL_STORE_COMPANY.test(r.company))).map((r) => r.company), 15),
+      itCompanies: topCounts(jobs.filter((r) => TECH_ROLES.has(r.role)).map((r) => r.company), 15),
       histogram: bins,
       weekly: [...weekCounts.keys()].sort().map((week) => {
         const d = dist(weeks.get(week) ?? []);
@@ -761,6 +904,7 @@ export function buildReport(
       budgetShare: share(gigsPaid.length, gigs.length),
       byCategory: sliceBy(gigs, (r) => r.role, (k) => roleDef(k)?.label ?? OTHER_ROLE.label, projectPaid),
       hourly: dist(gigs.filter((r) => r.payPeriod === 'hour').map((r) => r.pay!)),
+      brackets: computeGigBrackets(gigsPaid),
     },
     findings: [],
     cartaCapital,
@@ -807,13 +951,19 @@ export function findingsOf(report: Report): Finding[] {
       quote: cite(`медианная зарплата в вакансиях направления «${top.label}» составила ${formatRub(top.pay.median!)} в месяц — ${clear ? 'больше, чем в других направлениях' : 'одна из самых высоких среди направлений'}`, top.pay.n),
     });
   }
-  const junior = jobs.byGrade.find((s) => s.key === 'junior')?.pay.median;
-  const senior = jobs.byGrade.find((s) => s.key === 'senior');
+  const gradeSource =
+    jobs.itByGrade?.some((s) => s.key === 'junior' && s.pay.median) &&
+    jobs.itByGrade?.some((s) => s.key === 'senior' && s.pay.median)
+      ? jobs.itByGrade
+      : jobs.byGrade;
+  const juniorSlice = gradeSource.find((s) => s.key === 'junior');
+  const senior = gradeSource.find((s) => s.key === 'senior');
+  const junior = juniorSlice?.pay.median;
   if (junior && senior?.pay.median) {
     const ratio = Math.round((senior.pay.median / junior) * 10) / 10;
     out.push({
       text: `Вакансии Senior предлагают в ${String(ratio).replace('.', ',')} раза больше, чем Junior: ${formatRub(senior.pay.median)} против ${formatRub(junior)}.`,
-      quote: cite(`медианная зарплата в вакансиях уровня Senior (${formatRub(senior.pay.median)}) в ${String(ratio).replace('.', ',')} раза выше, чем у Junior (${formatRub(junior)})`, senior.pay.n + (jobs.byGrade.find((s) => s.key === 'junior')?.pay.n ?? 0)),
+      quote: cite(`медианная зарплата в вакансиях уровня Senior (${formatRub(senior.pay.median)}) в ${String(ratio).replace('.', ',')} раза выше, чем у Junior (${formatRub(junior)})`, senior.pay.n + (juniorSlice?.pay.n ?? 0)),
     });
   }
   const gap = (a: Adjusted): string => (a.pct === 0 ? 'разницы нет' : `разница ${a.pct > 0 ? '+' : '−'}${Math.abs(a.pct)}%`);
@@ -842,6 +992,19 @@ export function findingsOf(report: Report): Finding[] {
     out.push({
       text: `В Москве медиана ${formatRub(moscow.median)}, в других городах (кроме Петербурга) — ${formatRub(regions.median)}${adjusted ? `; при той же роли и уровне ${gap(adjusted)}` : ''}.`,
       quote: cite(`медианная зарплата в московских вакансиях составила ${formatRub(moscow.median)}, в других городах кроме Петербурга — ${formatRub(regions.median)}${adjusted ? `; при той же роли и уровне ${gap(adjusted)}` : ''}`, moscow.n + regions.n),
+    });
+  }
+  if (jobs.bounds && jobs.bounds.range >= RELIABLE && jobs.bounds.medianSpreadPct) {
+    out.push({
+      text: `Полную зарплатную вилку («от и до») указывают в ${jobs.bounds.range} вакансиях; типичный разброс внутри вилки — ±${jobs.bounds.medianSpreadPct}% от середины.`,
+      quote: cite(`полная зарплатная вилка («от и до») указана в ${jobs.bounds.range} вакансиях, а медианный разброс внутри вилки составляет ±${jobs.bounds.medianSpreadPct}%`, jobs.bounds.range),
+    });
+  }
+  const topSkill = jobs.skills.find((s) => s.n >= RELIABLE && (s.premiumPct ?? 0) >= 10 && s.pay.median !== undefined);
+  if (topSkill) {
+    out.push({
+      text: `Среди востребованных навыков высокую зарплатную премию даёт ${topSkill.skill}: медиана ${formatRub(topSkill.pay.median!)} (+${topSkill.premiumPct}%).`,
+      quote: cite(`медианная зарплата в вакансиях с требованием ${topSkill.skill} составила ${formatRub(topSkill.pay.median!)} в месяц (+${topSkill.premiumPct}%)`, topSkill.n),
     });
   }
   if (gigs.budget.median !== undefined) {

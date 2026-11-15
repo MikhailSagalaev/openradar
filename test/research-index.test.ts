@@ -33,6 +33,16 @@ describe('openradar index', () => {
     expect(index.gigs.latest?.index).toBe(100);
     expect(index.roles.map((r) => r.slug)).toEqual(['backend']);
     expect(indexCsv(index).split('\n')[0]).toBe('date,type,count,avg7,index');
+    expect(index.itJobs?.latest?.index).toBe(109.1);
+    expect(index.byPlatform?.length).toBe(2);
+    expect(index.weekdayProfile?.length).toBe(7);
+  });
+
+  it('damps single-day pre-base feed onboarding spikes in the 7-day rolling mean', () => {
+    const data = Array.from({ length: 16 }, (_, i) => rows(addDays(PANEL_START, i), i === 7 ? 1400 : 350)).flat();
+    const index = buildIndex(data, new Date(`${addDays(PANEL_START, 16)}T12:00:00Z`));
+    expect(index.jobs.points[7]!.count).toBe(1400);
+    expect(index.jobs.weekChange).toBe(0);
   });
 
   it('fixes the base once its four weeks are over', () => {

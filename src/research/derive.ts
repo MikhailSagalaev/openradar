@@ -296,6 +296,14 @@ export function detectLanguage(title: string, skills: string[]): string | undefi
 
 // ---------- Grade ----------
 
+const EXPLICIT_GRADE_PATTERNS: Array<[Grade, RegExp]> = [
+  ['lead', rx(`${W}(?:team ?lead|tech ?lead|lead|лид|тимлид|техлид|head|principal|architect|архитектор|cto)${E}`)],
+  ['senior', rx(`${W}(?:senior|сеньор|синьор|sr\\.?)${E}`)],
+  ['middle', rx(`${W}(?:middle|мидл|mid)${E}`)],
+  ['junior', rx(`${W}(?:junior|джуниор|джун|jr\\.?)${E}`)],
+  ['intern', rx(`${W}(?:intern|internship|стаж[её]р\\p{L}*|стажировк\\p{L}*|trainee|практикант\\p{L}*)${E}`)],
+];
+
 const GRADE_PATTERNS: Array<[Grade, RegExp]> = [
   ['lead', rx(`${W}(?:team ?lead|tech ?lead|lead|лид|тимлид|техлид|head|principal|architect|архитектор|руководител\\p{L}*|cto)${E}`)],
   ['senior', rx(`${W}(?:senior|сеньор|синьор|старш\\p{L}*|ведущ\\p{L}*|sr\\.?)${E}`)],
@@ -304,11 +312,23 @@ const GRADE_PATTERNS: Array<[Grade, RegExp]> = [
   ['intern', rx(`${W}(?:intern|internship|стаж[её]р\\p{L}*|стажировк\\p{L}*|trainee|практикант\\p{L}*)${E}`)],
 ];
 
-/** Seniority from the title, the board's own grade, or Хабр's #junior/#middle tags. */
-export function detectGrade(title: string, text: string, boardGrade?: string): Grade | undefined {
+const RETAIL_CLERK_GRADE_TITLE =
+  /(?:продавец|кассир|кладовщик|работник\s+торгового|сборщик|комплектовщик|курьер|водител|охранник|уборщ|мойщ|пекар|повар|бариста|официант|горничн|грузчик|фасовщ|мерчандайзер|товаровед|директор\s+магазин|управляющ\p{L}*\s+магазин|заведующ\p{L}*\s+(?:магазин|склад|аптек|производств|отдел|хозяйств)|начальник\s+(?:склад|смен|цех|участк|котельн|гараж)|администратор\s+(?:магазин|торгового|зал|клуб|отел|гостиниц|салон|клиник|ресторан|кафе)|старш\p{L}*\s+(?:смен|кассир|продавец|кладовщик|администратор\s+магазин))/iu;
+
+const TEXT_GRADE_LABEL =
+  /(?:^|\n|[.;•])\s*(?:грейд|уровень(?:\s+позиции|\s+вакансии)?|квалификация|grade|level|seniority)\s*[:—–-]\s*([^\n.;,]{2,35})/iu;
+
+/** Seniority from the title, the board's own grade, explicit grade label in text, or Хабр's #junior/#middle tags. */
+export function detectGrade(title: string, text: string, boardGrade?: string, role?: string): Grade | undefined {
+  const explicitOnly = RETAIL_CLERK_GRADE_TITLE.test(title) || (role !== undefined && (role === OTHER_ROLE.slug || role === 'sales' || role === 'support'));
+  const patterns = explicitOnly ? EXPLICIT_GRADE_PATTERNS : GRADE_PATTERNS;
   // «Middle+/Senior» means senior: the highest grade named wins.
-  for (const [grade, pattern] of GRADE_PATTERNS) if (pattern.test(title)) return grade;
-  if (boardGrade) for (const [grade, pattern] of GRADE_PATTERNS) if (pattern.test(boardGrade)) return grade;
+  for (const [grade, pattern] of patterns) if (pattern.test(title)) return grade;
+  if (boardGrade) for (const [grade, pattern] of patterns) if (pattern.test(boardGrade)) return grade;
+  const labeled = text.match(TEXT_GRADE_LABEL)?.[1];
+  if (labeled) {
+    for (const [grade, pattern] of EXPLICIT_GRADE_PATTERNS) if (pattern.test(labeled)) return grade;
+  }
   const tag = text.match(/#(intern|junior|middle|senior|lead)\b/i)?.[1]?.toLowerCase();
   return tag ? (tag as Grade) : undefined;
 }
@@ -569,7 +589,7 @@ export function deriveRecord(lead: Lead, options: DeriveOptions = {}): ResearchR
     type,
     platform: lead.sourceRef?.platform === 'telegram' ? 'telegram' : platformOf(lead.url, lead.sourceRef?.platform ?? 'other'),
     role,
-    grade: type === 'job' ? detectGrade(lead.title, head, facts?.grade) ?? model?.grade : undefined,
+    grade: type === 'job' ? detectGrade(lead.title, head, facts?.grade, role) ?? (role !== OTHER_ROLE.slug ? model?.grade : undefined) : undefined,
     language: type === 'job' && developer
       ? detectLanguage(lead.title, role === 'frontend' ? skills.filter((skill) => /script|^js$|^ts$/i.test(skill)) : skills)
         ?? (model?.language ? detectLanguage(model.language, []) : undefined)

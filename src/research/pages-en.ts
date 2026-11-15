@@ -8,8 +8,9 @@ import { escapeHtml, jsonForScript } from '../core/text.ts';
 import { layout, type AuthDisplay } from '../server/ui.ts';
 import { translateSkill, translateSourceTitle } from '../server/i18n.ts';
 import type { IndexSeries, OpenradarIndex } from './index.ts';
-import { lineChart } from './index-page.ts';
-import { MIN_MEDIAN, RELIABLE, REPORT_VERSION, rubMonthToUsdYear, type Dist, type Report, type Slice } from './report.ts';
+import { lineChart, renderPlatformIndexTable, renderWeekdayProfileSection } from './index-page.ts';
+import { renderGigBracketsSection, renderGradeMatrixSection } from './pages.ts';
+import { MIN_MEDIAN, MIN_QUARTILES, RELIABLE, REPORT_VERSION, rubMonthToUsdYear, type Dist, type Report, type Slice } from './report.ts';
 
 const LICENSE = 'CC BY 4.0';
 const REPO_URL = 'https://github.com/MikhailSagalaev/openradar';
@@ -230,18 +231,20 @@ ${findings.length ? `<section class="rs-section">
 <section class="rs-section"><h2>Pay by role</h2>
   <p class="muted small">Vacancies in roubles that state the pay, a month. The role comes from the vacancy title.</p>
   ${rangeChart(translate(jobs.byRole.filter((s) => s.key !== 'other'), ROLE_EN, (key) => `/en/research/roles/${key}`))}</section>
-<section class="rs-section"><h2>By seniority</h2>${rangeChart(translate(jobs.byGrade, GRADE_EN))}</section>
+<section class="rs-section"><h2>By seniority</h2><p class="muted small">Median and interquartile range (25th to 75th percentile) across IT seniority levels.</p>${rangeChart(translate(jobs.itByGrade?.some((s) => s.pay.median !== undefined) ? jobs.itByGrade : jobs.byGrade, GRADE_EN))}</section>
+${renderGradeMatrixSection(jobs.gradeMatrix, (slug) => (jobs.roles.some((r) => r.slug === slug) ? `/en/research/roles/${slug}` : undefined), 'en')}
 <section class="rs-section"><h2>By programming language</h2>${rangeChart(jobs.byLanguage)}</section>
 <section class="rs-section"><h2>Location and remote work</h2>${rangeChart(translate(jobs.byRegion, REGION_EN))}
   <p class="small"><b>${pct(jobs.remote.share)}</b> of vacancies allow remote work.${jobs.remote.remote.median && jobs.remote.office.median ? ` Median: ${rub(jobs.remote.remote.median)} remote, ${rub(jobs.remote.office.median)} on site.` : ''}${jobs.remote.adjusted ? ` At the same role and seniority the difference is ${jobs.remote.adjusted.pct > 0 ? '+' : ''}${jobs.remote.adjusted.pct}% (${num(jobs.remote.adjusted.n)} vacancies compared).` : ''}</p></section>
-<section class="rs-section"><h2>Skills</h2>${rangeChart(jobs.skills.map((s) => ({ label: translateSkill(s.skill, 'en'), pay: s.pay })))}</section>
+<section class="rs-section"><h2>Skills and pay premium</h2><p class="muted small">Concrete technologies and tools in vacancies with stated pay (excluding umbrella categories), with stratified pay premiums at equal role and seniority.</p>${rangeChart(jobs.skills.map((s) => ({ label: s.premiumPct !== undefined && s.premiumPct !== 0 ? `${translateSkill(s.skill, 'en')} (${s.premiumPct > 0 ? '+' : ''}${s.premiumPct}%)` : translateSkill(s.skill, 'en'), pay: s.pay })))}</section>
 <section class="rs-section"><h2>AI in vacancies</h2>
   <p class="small">Neural networks, LLMs, GPT, Cursor, Copilot or machine learning appear in <b>${pct(jobs.ai.share)}</b> of vacancies.</p>
   ${rangeChart([{ label: 'Mention AI', pay: jobs.ai.with }, { label: 'Do not', pay: jobs.ai.without }])}</section>
-${jobs.companies.length ? `<section class="rs-section"><h2>Who hires most</h2>${countBars(jobs.companies.slice(0, 12).map((c) => ({ label: translateSourceTitle(c.name, 'en'), n: c.n })))}</section>` : ''}
+${(jobs.itCompanies?.length || jobs.companies.length) ? `<section class="rs-section"><h2>Who hires most in IT</h2><p class="muted small">Employers with the highest number of open IT vacancies over the period.</p>${countBars((jobs.itCompanies?.length ? jobs.itCompanies : jobs.companies).slice(0, 12).map((c) => ({ label: translateSourceTitle(c.name, 'en'), n: c.n })))}</section>` : ''}
 <section class="rs-section"><h2>Freelance order budgets</h2>
   <p class="small">Russian-language orders. <b>${pct(gigs.budgetShare)}</b> of them state a budget, for the whole project.${totals.intlGigs ? ` English-language orders (${num(totals.intlGigs)}) stay out.` : ''}</p>
-  ${rangeChart(translate(gigs.byCategory.filter((s) => s.key !== 'other'), ROLE_EN))}</section>
+  ${rangeChart(translate(gigs.byCategory.filter((s) => s.key !== 'other'), ROLE_EN))}
+  ${renderGigBracketsSection(gigs.brackets, 'en')}</section>
 ${intlMedian ? `<section class="rs-section"><h2>International remote vacancies</h2>
   <p class="small">English-language vacancies from international boards and company career pages (${num(totals.intlJobs ?? 0)}): a median of <b>$${num(rubMonthToUsdYear(intlMedian, report.fx?.USD))} a year</b> (n = ${jobs.intl.n}). They stay out of the main figures above.</p></section>` : ''}
 <section class="rs-section"><h2>Where the data comes from</h2>
@@ -304,20 +307,21 @@ export function renderIndexPageEn(options: { index: OpenradarIndex; baseUrl: str
     : `The base is the mean number of posts a day from 9 November to 6 December 2026 (${index.base.days} days) = 100.`;
   const body = `<nav class="crumbs" aria-label="Breadcrumbs"><a href="/">openradar</a> / <a href="/en/research">Research</a> / Index</nav>
 <div class="page-head"><div><h1>The openradar index</h1><p class="muted small">How many new vacancies and freelance orders appear in Russian-language IT and freelance each day, against a base of 100.</p></div>
-<div class="actions"><a class="btn ghost" href="/research/index.csv">CSV</a><a class="btn ghost" href="/research/index.json">JSON</a></div></div>
-<div class="rs-kpis">${headlineEn(index.jobs, 'Vacancies')}${headlineEn(index.gigs, 'Orders')}</div>
+<div class="actions"><a class="btn ghost" href="/en/research">Salary report</a><a class="btn ghost" href="/en/research/methodology#index">Methodology</a><a class="btn ghost" href="/research/index.csv">CSV</a><a class="btn ghost" href="/research/index.json">JSON</a></div></div>
+<div class="rs-kpis">${headlineEn(index.jobs, 'Vacancies')}${index.itJobs?.latest?.index !== undefined ? headlineEn(index.itJobs, 'IT vacancies') : ''}${headlineEn(index.gigs, 'Orders')}</div>
 <p class="small muted">${escapeHtml(baseNote)}</p>
-<section class="rs-section"><h2>Vacancies</h2><p class="small">Panel boards: ${escapeHtml(index.panel.job.join(', '))}.</p>${lineChart(index.jobs.points, 'openradar vacancy index', 'en')}</section>
-<section class="rs-section"><h2>Freelance orders</h2><p class="small">Panel boards: ${escapeHtml(index.panel.gig.join(', '))}.</p>${lineChart(index.gigs.points, 'openradar order index', 'en')}</section>
-${roles.length ? `<section class="rs-section"><h2>By role</h2><table class="table"><thead><tr><th>Role</th><th>Index</th><th>Week</th><th>A day in the base</th></tr></thead><tbody>
-${roles.map((r) => `<tr><td>${escapeHtml(ROLE_EN[r.slug] ?? r.label)}</td><td>${num(r.latest!.index!)}</td><td>${r.weekChange !== undefined ? `${r.weekChange > 0 ? '+' : ''}${r.weekChange}%` : '—'}</td><td>${num(r.base)}</td></tr>`).join('')}
+<section class="rs-section"><h2>Vacancies</h2><p class="small">Panel boards: ${escapeHtml(index.panel.job.join(', '))}.${index.jobs.latest?.avg7 !== undefined && index.jobs.base !== undefined ? ` Current 7-day flow: <b>${num(index.jobs.latest.avg7)}</b> vacancies/day vs <b>${num(index.jobs.base)}</b> in the base.` : ''}</p>${lineChart(index.jobs.points, 'openradar vacancy index', 'en')}</section>
+<section class="rs-section"><h2>Freelance orders</h2><p class="small">Panel boards: ${escapeHtml(index.panel.gig.join(', '))}.${index.gigs.latest?.avg7 !== undefined && index.gigs.base !== undefined ? ` Current 7-day flow: <b>${num(index.gigs.latest.avg7)}</b> orders/day vs <b>${num(index.gigs.base)}</b> in the base.` : ''}</p>${lineChart(index.gigs.points, 'openradar order index', 'en')}</section>
+${renderPlatformIndexTable(index.byPlatform, 'en')}
+${roles.length ? `<section class="rs-section"><h2>By role</h2><p class="small">Roles with at least three vacancies per day in the base. Click any role for detailed salary analytics.</p><table class="table"><thead><tr><th>Role</th><th>Index</th><th>Week</th><th>Daily (7d avg)</th><th>A day in the base</th><th>Panel share</th></tr></thead><tbody>
+${roles.map((r) => `<tr><td><a href="/en/research/roles/${escapeHtml(r.slug)}">${escapeHtml(ROLE_EN[r.slug] ?? r.label)}</a></td><td><b>${num(r.latest!.index!)}</b></td><td>${r.weekChange !== undefined ? `${r.weekChange > 0 ? '+' : ''}${r.weekChange}%` : '—'}</td><td>${r.latest?.avg7 !== undefined ? num(r.latest.avg7) : '—'}</td><td>${num(r.base)}</td><td>${r.sharePct !== undefined ? `${r.sharePct}%` : '—'}</td></tr>`).join('')}
 </tbody></table></section>` : ''}
+${renderWeekdayProfileSection(index.weekdayProfile, 'en')}
 <section class="rs-section prose"><h2>How the index works</h2><ul>
-  <li>It counts new Russian-language vacancies and orders seen by a fixed panel of feeds. Other feeds of the same boards and sources added later never enter it: it follows the market, not our coverage.</li>
-  <li>An old vacancy raised in search is not new: on hh.ru and Habr Career the vacancy number tells them apart.</li>
-  <li>It is not seasonally adjusted: holidays and the year's end show as they are.</li>
-  <li>A day's value is the mean of the last seven days. The index is that mean divided by the mean of the base period, times 100.</li>
-  <li>Posts flagged as junk or scam, and those the model is sure are not posts, are not counted. The last two days are recalculated as late posts arrive.</li>
+  <li><b>Fixed panel of feeds:</b> it counts new Russian-language vacancies and orders seen by a constant panel of 8 reference feeds (<code>hh-it</code>, <code>hh-remote-project</code>, <code>habr-career</code>, <code>getmatch</code>, <code>trudvsem-remote</code>, <code>kwork-all</code>, <code>fl-all</code>, <code>freelancehunt</code>). Feeds and sources added later never enter it: the index tracks the market, not our coverage growth.</li>
+  <li><b>Freshness Gate (no bumped vacancies):</b> an old vacancy raised in search is not counted as new. On hh.ru and Habr Career this is verified by the sequential vacancy ID ($\Delta\text{id} \le 230,000$ on hh.ru and $\le 100$ on Habr Career — roughly 7 days of numbering).</li>
+  <li><b>7-day rolling mean & onboarding spike Winsorization:</b> a day's value is the 7-day moving average ($\text{MA}_7$). Pre-base single-day feed onboarding bursts ($> 2.5\times\text{median}$) are Winsorized in the rolling mean so initial feed backfills do not cause artificial drops 7 days later.</li>
+  <li><b>Unadjusted seasonality:</b> holidays and year-end troughs appear as they are. The last two days are recalculated as late posts arrive.</li>
 </ul><p>Details are in the <a href="/en/research/methodology#index">methodology</a>. Open data under ${LICENSE}. Cite as: openradar, “The openradar index”. ${escapeHtml(baseUrl)}/en/research/index</p></section>`;
   return layout({
     title: 'The openradar index: vacancies and freelance orders in Russia',
@@ -333,52 +337,72 @@ ${roles.map((r) => `<tr><td>${escapeHtml(ROLE_EN[r.slug] ?? r.label)}</td><td>${
 export function renderMethodologyPageEn(options: { baseUrl: string; version: string; auth?: AuthDisplay }): string {
   const { baseUrl, version } = options;
   const body = `<nav class="crumbs" aria-label="Breadcrumbs"><a href="/">openradar</a> / <a href="/en/research">Research</a> / Methodology</nav>
-<div class="page-head"><div><h1>Methodology</h1><p class="muted small">How openradar counts pay and budgets.</p></div></div>
+<div class="page-head"><div><h1>Methodology of Research & Index</h1><p class="muted small">Complete specification of data collection, pay range normalization, stratified statistics, and the openradar index.</p></div>
+<div class="actions"><a class="btn ghost" href="/en/research">Report</a><a class="btn ghost" href="/en/research/index">Index</a><a class="btn ghost" href="/research/dataset.csv">CSV</a></div></div>
 <section class="prose" style="margin-top:0">
-  <h2>What is measured</h2>
-  <p>openradar research shows what employers and clients offer: the pay stated in published vacancies and orders. It is neither what people take home nor a survey. Such data shows the hiring market as it is now and how it changes month to month.</p>
-  <h2>Sources</h2>
-  <p>Vacancies and orders published in the period on hh.ru, Habr Career, the state portal Rabota Rossii, getmatch, FL.ru, Kwork, Freelancehunt, Telegram channels, international boards and company career pages (the public job-board APIs of Greenhouse, Lever and Ashby), and posts added by participants. A post on several boards counts once: openradar merges duplicates by link, by title with the employer, and by text similarity. Posts flagged as junk or scam are left out.</p>
-  <h2>Russian-language and international market</h2>
-  <p>The main figures describe the Russian-language market: posts written mostly in Cyrillic. The rule is the same for vacancies and orders. English-language posts are shown apart and do not enter the shares, medians or employer lists of the main part.</p>
-  <h2>How pay is read</h2>
+  <h2>1. What is measured</h2>
+  <p>openradar research measures the <b>demand side (employer and client offers)</b>: the compensation stated in published vacancies and project orders. It is neither a take-home pay survey nor tax registry data. Its strength is zero reporting lag: shifts in offered pay ranges, seniority demand, and freelance project pricing are captured in real time.</p>
+
+  <h2>2. Summary of thresholds and parameters (Version 2)</h2>
+  <div style="overflow-x:auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Parameter</th>
+          <th>Value</th>
+          <th>Role in calculations</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><code>MIN_MEDIAN</code></td><td><b>${MIN_MEDIAN}</b> posts</td><td>Minimum paid posts required to publish a median and its 95% confidence interval</td></tr>
+        <tr><td><code>MIN_QUARTILES</code></td><td><b>${MIN_QUARTILES}</b> posts</td><td>Minimum paid posts required to publish the 25th and 75th percentiles (IQR)</td></tr>
+        <tr><td><code>RELIABLE</code></td><td><b>${RELIABLE}</b> posts</td><td>High-reliability threshold; slices with <code>n &lt; ${RELIABLE}</code> are marked “few” and excluded from key findings</td></tr>
+        <tr><td><code>MIN_ADJUSTED</code></td><td><b>30</b> (min <b>3</b>/cell)</td><td>Minimum matched weight across <code>role × seniority</code> cells for Cochran–Mantel–Haenszel adjusted gaps</td></tr>
+        <tr><td><code>BASKET_MIN / WEEK_CELL_MIN</code></td><td><b>30 / 10</b> posts</td><td>Thresholds for the fixed-basket Laspeyres weekly salary index (<code>weeklyIndexed</code>)</td></tr>
+        <tr><td>Monthly pay bounds</td><td><b>₽12,000 – ₽3,000,000</b></td><td>Valid monthly salary corridor (ceiling for free-text extraction is <b>₽1,000,000</b>)</td></tr>
+        <tr><td>Project budget bounds</td><td><b>₽300 – ₽5,000,000</b></td><td>Valid project budget corridor (ceiling for free-text sums on freelance boards is <b>₽150,000</b>)</td></tr>
+        <tr><td>Panel Freshness Gate</td><td><b>Δid ≤ 230,000</b> (hh.ru)<br><b>Δid ≤ 100</b> (Habr)</td><td>Excludes older vacancies bumped in search (~7 days of sequential vacancy IDs)</td></tr>
+        <tr><td>LLM confidence gate</td><td><b>confidence ≥ 0.70</b><br><b>agreement ≥ 85%</b></td><td>Model extraction only fills gaps above 70% confidence and 85% benchmark agreement</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>3. Sources and 3-tier deduplication</h2>
+  <p>Vacancies and orders published on Russian boards (hh.ru, Habr Career, Rabota Rossii, getmatch, GeekJob, FL.ru, Kwork, Freelancehunt), Telegram channels, international boards and company career pages (Greenhouse, Lever, Ashby public APIs), and participant submissions. Duplicates are merged at three levels: 1) canonical URL and board ID; 2) normalized title + employer across platforms; 3) multi-city corporate postings (when one employer posts the same role, seniority, and pay across dozens of cities, it counts strictly <b>once</b> in salary medians).</p>
+
+  <h2>4. Russian-language and international market separation</h2>
+  <p>Main report figures cover the <b>Russian-language market</b> (posts with at least 25% Cyrillic characters in the title and opening 600 characters). English-language posts are isolated into the “International remote vacancies” section (reported in USD/year) and never enter Russian rouble medians, remote shares, or domestic employer rankings.</p>
+
+  <h2>5. How pay is extracted and normalized</h2>
   <ul>
-    <li>First the vacancy page markup (schema.org JobPosting), then the post text, then the budget the board states.</li>
-    <li>Only sums next to a currency or salary keywords (base pay, wage) count: «3–5 years of experience» never becomes pay.</li>
-    <li>A range gives its middle; a single bound («from ₽150,000») gives itself, which is not an exact sum, so reports show how sums were written and the median of full ranges alone. Yearly sums are divided by 12; hourly rates stay out of the monthly figures.</li>
-    <li>Currencies are converted to roubles at the Bank of Russia rate on the first day of the month of publication.</li>
-    <li>Values below ₽12,000 or above ₽3,000,000 a month are parsing errors and dropped. For a monthly or order sum read from free text the upper limit is ₽1,000,000: above it stood commissions and stray numbers. A range whose top is over the limit gives its lower sum. Ad budgets, profit, bonuses, subscription prices and market statistics are not pay.</li>
-    <li>On exchanges with a budget field (Kwork, FL.ru, Freelancehunt) the sum comes from that field. A sum from the description counts only up to ₽150,000.</li>
-    <li>Ads, channel articles and vacancy roundups count in no figure: they hold no single offer of work.</li>
+    <li><b>Priority order:</b> 1) vacancy page structured markup (<code>schema.org/JobPosting</code>); 2) dedicated board budget fields (Kwork, FL.ru, Freelancehunt); 3) contextual free-text pay parser; 4) verified LLM extraction.</li>
+    <li><b>Contextual guards:</b> numbers count only alongside currency symbols or explicit compensation keywords. Experience ranges (“3–5 years”), team sizes, advertising budgets, company revenue, referral bonuses, and course tuition fees are rejected.</li>
+    <li><b>Range midpoints & spread:</b> a two-sided range $[y_{\min}, y_{\max}]$ yields its midpoint $y = (y_{\min}+y_{\max})/2$. Reports also publish how sums were stated, the median of two-sided ranges alone, and the typical half-spread $\pm\frac{y_{\max}-y_{\min}}{2y}\times 100\%$.</li>
+    <li><b>Exchange rates:</b> foreign currencies convert to RUB at the official Bank of Russia rate on the 1st of the publication month.</li>
   </ul>
-  <h2 id="index">The openradar index</h2>
-  <p>The index shows how many new vacancies and orders appear each day against a base of 100. Only Russian-language posts seen by a fixed panel of feeds count: two hh.ru feeds, the main Habr Career feed, getmatch, Rabota Rossii, Kwork, FL.ru and Freelancehunt. Vacancies raised in search are not new: on hh.ru and Habr Career a vacancy counts when its number is within about a week of the newest one. A day's value is the seven-day mean. The base is the mean daily count from 9 November to 6 December 2026; until 7 December it is provisional and covers every day since 30 October. The index is not seasonally adjusted and shows the panel, not the whole market. The last two days are recalculated as late posts arrive.</p>
-  <h2>Language model</h2>
-  <p>Some posts are free text («pay 50k», «need a mid-level Python dev»). A language model reads them and returns a strict set of fields. It only fills gaps: page markup, rules and the board's budget always win. Answers below 70% confidence are dropped. The model's answers are not in the figures yet: they enter only after a check against hand-labelled posts, with at least 85% agreement on role and pay.</p>
-  <h2>Statistics</h2>
+
+  <h2>6. Statistical methods & Simpson's paradox adjustment</h2>
   <ul>
-    <li>The median is the main figure. The wide band is the 25th to 75th percentile; the thin line is the 95% confidence interval of the median, from order statistics. Overlapping intervals mean no difference can be claimed. The interval covers sampling only, not which vacancies state pay at all.</li>
-    <li>Gaps between groups (remote and on site, Moscow and the regions, AI mentions) are shown at the same role and seniority: role-and-seniority cells with at least three posts on each side, weighted by the smaller side, at least 30 posts in all. It is a comparison, not proof of a cause.</li>
+    <li><b>Order-statistic 95% confidence interval of the median:</b> for $n$ sorted observations $x_{(0)} \le \dots \le x_{(n-1)}$, the non-parametric 95% confidence interval is $[x_{(k)}, x_{(n-1-k)}]$ where $k = \lfloor \frac{n-1}{2} - 1.96\frac{\sqrt{n}}{2} \rfloor$.</li>
+    <li><b>Stratified Cochran–Mantel–Haenszel adjustment (<code>adjustedGap</code>):</b> raw median gaps between remote and on-site jobs (or AI vs non-AI jobs) are heavily confounded by composition (remote roles skew Senior; non-IT retail roles skew on-site). openradar matches vacancies within homogeneous $c = (\text{role}, \text{grade})$ cells with at least 3 paid posts per side, weighting each cell by $w_c = \min(n_{c,1}, n_{c,0})$:
+      <p><code>adjustedGap = exp( sum_c( w_c * ln(median_{c,1} / median_{c,0}) ) / sum_c(w_c) ) - 1</code></p>
+      Published when total matched weight $\sum w_c \ge 30$.</li>
+    <li><b>Laspeyres fixed-basket weekly salary index (<code>weeklyIndexed</code>):</b> holds role weights $w_r = N_r / \sum N_j$ fixed across weeks so short-term shifts in source mix cannot masquerade as wage inflation.</li>
   </ul>
-  <h2>Limits</h2>
-  <ul>
-    <li>The sample is set by the feeds we read: it is not a random sample of the market and is not weighted to official statistics. The overall median moves with the mix of sources, so reports show it by board.</li>
-    <li>Not every vacancy states the pay, and not at random: US research finds high-paying occupations and firms disclose less. The share is shown in each report.</li>
-    <li>Whether a sum is before or after tax is not always stated, so the two are not separated.</li>
-    <li>A freelance budget is the client's estimate before negotiation.</li>
-  </ul>
-  <h2 id="versions">Versions</h2>
-  <p><b>Report version 2 and index version 2 (November 2026).</b> Orders cover the Russian-language market only. Budgets are compared within one stream. Bank of Russia rates replace a fixed reference rate. Group gaps are shown at the same role and seniority, and medians carry intervals. The index panel is a set of feeds, raised vacancies are not new, and the base moved to 9 November – 6 December. The October 2026 report stays frozen under version 1.</p>
-  <h2>Data</h2>
-  <p>Open under ${LICENSE}. The <a href="/research/dataset.csv">CSV</a> has a row per post with derived fields only: date, board, role, seniority, language, city, company, pay in roubles, skills and market scope.</p>
+
+  <h2 id="index">7. The openradar index</h2>
+  <p>The index (<a href="/en/research/index">/en/research/index</a>) tracks daily new vacancies and freelance orders on a fixed panel of 8 feeds against a base of 100 (9 November – 6 December 2026). Sequential vacancy IDs on hh.ru ($\Delta\text{id} \le 230,000$) and Habr Career ($\Delta\text{id} \le 100$) filter out bumped older vacancies. Values are 7-day rolling averages ($\text{MA}_7$) with pre-base onboarding spike Winsorization ($2.5\times\text{median}$), accompanied by an IT-vacancies sub-index, per-board indices, role indices, and a Monday–Sunday seasonality profile.</p>
+
+  <h2 id="versions">8. Versions & open data</h2>
+  <p><b>Report version 2 and index version 2 (November 2026).</b> Russian-language order isolation, Bank of Russia monthly FX rates, order-statistic 95% CIs, stratified role-and-seniority gap adjustments, role × seniority salary matrix, skill pay premiums, retail clerk exclusion from IT seniority grades, and panel index freshness gating. Open data under ${LICENSE} (<a href="/research/dataset.csv">CSV</a> and <a href="/research/report.json">JSON</a>).</p>
 </section>`;
   return layout({
-    title: 'Methodology of openradar research',
+    title: 'Methodology of openradar research & index',
     version,
     active: 'research',
     body,
     lang: 'en',
     auth: options.auth,
-    head: enHead('How openradar counts pay and budgets: sources, pay parsing, roles and seniority, medians, the index and sample thresholds.', `${baseUrl}/en/research/methodology`, '/research/methodology', baseUrl),
+    head: enHead('How openradar counts pay and budgets: sources, pay parsing, roles and seniority, 95% CIs, Simpson paradox adjustment, and the panel index.', `${baseUrl}/en/research/methodology`, '/research/methodology', baseUrl),
   });
 }
