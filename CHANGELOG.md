@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.69.1 — 2026-11-15
+
+### Fixed
+- **Microcache correctness (pre-deploy review of the nginx edge config)**: the cache-read bypass now uses request-side facts only — `$upstream_http_cache_control` is empty when `proxy_cache_bypass` is evaluated, so the previous combined map would have filled the cache and never hit; the app-`public` requirement moved to `proxy_no_cache` (write side). The cache key carries the resolved language bucket (`openradar_lang` cookie / Accept-Language, mirroring `resolveLang`) so one visitor's language is never served to another; nginx `Vary` variants keep gzip/identity and cookie states apart. `x-radar-token` requests bypass like Authorization. `limit_req_status 429` moved to server level (a duplicate http-level directive fails `nginx -t` on shared boxes). `robots.txt` stays uncached; `/v2/stream` keeps `proxy_cache off`.
+- **Anonymous feed cache marker**: the guest feed (`/`) now sends `Cache-Control: public, max-age=RADAR_LEAD_CACHE_SEC` like lead cards, so the edge microcache can serve the crawlers' main entry point; signed-in views stay private. Regression test included.
+
 ## 0.69.0 — 2026-11-15
 
 ### Added

@@ -900,6 +900,28 @@ describe('http server', () => {
     getLeadSpy.mockRestore();
   });
 
+  it('marks the anonymous feed public for the edge microcache, signed-in views private', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true, RADAR_LEAD_CACHE_SEC: 60 });
+    const app = createApp(runtime);
+
+    const guest = await app.request('/');
+    expect(guest.status).toBe(200);
+    expect(guest.headers.get('cache-control')).toBe('public, max-age=60');
+    // The edge key must carry every content axis: language, cookie state, encoding.
+    expect(guest.headers.get('vary') ?? '').toContain('Accept-Language');
+    expect(guest.headers.get('vary') ?? '').toContain('Cookie');
+
+    const session = await makeUserSession(runtime, 'feed-reader');
+    const member = await app.request('/', { headers: { cookie: `radar_session=${session}` } });
+    expect(member.status).toBe(200);
+    expect(member.headers.get('cache-control') ?? '').not.toContain('public');
+
+    // Caching off: guests get no public marker either.
+    const off = createApp(makeRuntime({ RADAR_PUBLIC_READ: true, RADAR_LEAD_CACHE_SEC: 0 }));
+    const guestOff = await off.request('/');
+    expect(guestOff.headers.get('cache-control') ?? '').not.toContain('public');
+  });
+
   it('adds analytics and console verification only when configured', async () => {
     const plain = createApp(makeRuntime({ RADAR_PUBLIC_READ: true }));
     const plainRes = await plain.request('/', { headers: { accept: 'text/html' } });
