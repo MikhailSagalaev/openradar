@@ -102,6 +102,17 @@ const envSchema = z.object({
   RADAR_RSS_RATE_PER_MIN: z.coerce.number().int().positive().default(60),
   RADAR_DELTA_RATE_PER_MIN: z.coerce.number().int().positive().default(30),
   RADAR_SITEMAP_RATE_PER_MIN: z.coerce.number().int().positive().default(10),
+  // Pooled PG connections are recycled after this age/usage: a pg_search backend keeps its
+  // Tantivy caches and allocator high-water mark for the life of the connection, so recycling
+  // is the only way to hand that memory back (docs/OPS_BOT_AND_MEMORY.md). 0 disables a limit.
+  RADAR_PG_CONN_MAX_AGE_SEC: z.coerce.number().int().nonnegative().default(1800),
+  RADAR_PG_CONN_MAX_USES: z.coerce.number().int().nonnegative().default(500),
+  // Per-request statement timeout for web reads (SET LOCAL inside the request's transaction):
+  // a runaway BM25 query dies alone instead of growing until the OOM-killer picks a victim.
+  // Background jobs keep the role-level timeout. 0 disables.
+  RADAR_WEB_STATEMENT_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(15_000),
+  // Anonymous lead-card HTML cache TTL (seconds); logged-in views are never cached. 0 disables.
+  RADAR_LEAD_CACHE_SEC: z.coerce.number().int().nonnegative().default(60),
   RADAR_LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   PORT: z.coerce.number().int().positive().default(8787),
   /** Interface to listen on; the Docker image sets 0.0.0.0. */

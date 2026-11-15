@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { createApp } from '../src/server/app.ts';
@@ -849,6 +849,55 @@ describe('http server', () => {
     const partial = await (await app.request('/?q=' + encodeURIComponent('аналитик кондитер'))).text();
     expect(partial).toContain('Точных совпадений нет');
     expect(partial).toContain('/leads/card"');
+  });
+
+  it('caches anonymous lead cards but never logged-in ones', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true, RADAR_LEAD_CACHE_SEC: 60 });
+    const app = createApp(runtime);
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed' });
+    await runtime.store.insertLead({
+      id: 'cached-card', sourceId: source.id, externalId: 'cached-card', titleKey: 'cached-card', fingerprint: 'fp-cached-card',
+      title: 'Go разработчик', text: 'Ищем Go разработчика. Навыки: #Go.',
+      status: 'new', score: 60, reasons: [], createdAt: new Date(Date.now() - 86_400_000).toISOString(),
+    });
+    const getLeadSpy = vi.spyOn(runtime.store, 'getLead');
+
+    // Two anonymous fetches: one render, the second served from the in-process cache.
+    const first = await app.request('/leads/cached-card');
+    expect(first.status).toBe(200);
+    expect(first.headers.get('cache-control')).toBe('public, max-age=60');
+    const second = await app.request('/leads/cached-card');
+    expect(second.status).toBe(200);
+    expect(await second.text()).toBe(await first.text());
+    expect(getLeadSpy).toHaveBeenCalledTimes(1);
+
+    // A signed-in member always renders live: their tier content must never come from the guest cache.
+    const session = await makeUserSession(runtime, 'card-reader');
+    const member = await app.request('/leads/cached-card', { headers: { cookie: `radar_session=${session}` } });
+    expect(member.status).toBe(200);
+    expect(getLeadSpy).toHaveBeenCalledTimes(2);
+    expect(member.headers.get('cache-control') ?? '').not.toContain('public');
+
+    // The guest cache still serves guests after the member's live render.
+    await app.request('/leads/cached-card');
+    expect(getLeadSpy).toHaveBeenCalledTimes(2);
+    getLeadSpy.mockRestore();
+  });
+
+  it('does not cache lead cards when RADAR_LEAD_CACHE_SEC=0', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true, RADAR_LEAD_CACHE_SEC: 0 });
+    const app = createApp(runtime);
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed' });
+    await runtime.store.insertLead({
+      id: 'uncached-card', sourceId: source.id, externalId: 'uncached-card', titleKey: 'uncached-card', fingerprint: 'fp-uncached-card',
+      title: 'Python разработчик', text: 'Ищем Python разработчика.',
+      status: 'new', score: 60, reasons: [], createdAt: new Date(Date.now() - 86_400_000).toISOString(),
+    });
+    const getLeadSpy = vi.spyOn(runtime.store, 'getLead');
+    expect((await app.request('/leads/uncached-card')).status).toBe(200);
+    expect((await app.request('/leads/uncached-card')).status).toBe(200);
+    expect(getLeadSpy).toHaveBeenCalledTimes(2);
+    getLeadSpy.mockRestore();
   });
 
   it('adds analytics and console verification only when configured', async () => {

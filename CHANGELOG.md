@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.69.0 — 2026-11-15
+
+### Added
+- **Bot budgets and the anonymous microcache at the edge** (`docs/nginx-bots.conf`, `docs/nginx.example.conf`): per-vendor `limit_req` zones classify AI crawlers by UA token (search / training / user-triggered / SEO tools) and answer over-budget requests with `429 + Retry-After`; Googlebot/bingbot/YandexBot are never throttled, `robots.txt` is never limited. An nginx `proxy_cache` serves anonymous GETs (people and crawlers share one cache — no cloaking) with `proxy_cache_lock`, background revalidation and stale-on-error; session/Authorization requests bypass it. Rollout switch: `limit_req_dry_run`.
+- **Connection recycling in `PostgresStore`**: pooled connections are retired after `RADAR_PG_CONN_MAX_AGE_SEC` (default 1800) or `RADAR_PG_CONN_MAX_USES` (default 500) queries. A pg_search backend keeps its Tantivy caches and allocator high-water mark for the life of the connection (one idle backend held 1.2 GiB in production); recycling is the only reliable way to hand that memory back. PostgreSQL regression tests included.
+- **Per-request statement timeout for web reads**: `getLead`, feed listings and counts run with `SET LOCAL statement_timeout` (`RADAR_WEB_STATEMENT_TIMEOUT_MS`, default 15 s) inside their own transaction — a runaway BM25 query is cancelled alone instead of growing until the OOM-killer picks a victim. `SET LOCAL` never leaks to the next borrower of a pooled connection.
+- **Anonymous lead-card cache**: guests without a session cookie share one in-process HTML render per card+language for `RADAR_LEAD_CACHE_SEC` (default 60 s), with single in-flight render per key; logged-in views always render live. Tests cover both paths.
+- **`scripts/pg-memory-budgets.sh`**: idempotent `ALTER DATABASE`/`ALTER ROLE` budgets — `paradedb.max_topk_chunk_size=10000`, `work_mem=16MB`, `paradedb.spill_to_disk=on`, `temp_file_limit=2GB`, one parallel worker per gather, `log_temp_files=0`, role-level `statement_timeout=120s` / idle timeouts. Rationale, measured numbers and sources: `docs/OPS_BOT_AND_MEMORY.md`.
+
+### Fixed
+- **Trusted long operations opt out of the statement-timeout backstop**: migrations (`SET statement_timeout = 0` in the migrator), `pg_dump`/`pg_restore` in `backup.sh`, `deploy-server.sh` and `pg-upgrade.sh` (`PGOPTIONS`) — a multi-minute index build or COPY must not be killed by the new role-level timeout.
+
 ## 0.68.2 — 2026-11-15
 
 ### Fixed

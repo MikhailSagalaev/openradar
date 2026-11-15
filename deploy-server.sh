@@ -128,7 +128,8 @@ docker compose stop radar
 PG_USER=$(grep -E "^POSTGRES_USER=" .env | cut -d '=' -f2- | tr -d ' "' || true)
 PG_DB=$(grep -E "^POSTGRES_DB=" .env | cut -d '=' -f2- | tr -d ' "' || true)
 BACKUP_FILE="$BACKUP_DIR/pre-deploy-$(date +%Y%m%d-%H%M%S).dump"
-if docker compose exec -T postgres pg_dump -U "${PG_USER:-radar}" -Fc "${PG_DB:-radar}" </dev/null > "$BACKUP_FILE"; then
+# PGOPTIONS: the role-level statement_timeout backstop must not kill a long COPY.
+if docker compose exec -T -e PGOPTIONS='-c statement_timeout=0' postgres pg_dump -U "${PG_USER:-radar}" -Fc "${PG_DB:-radar}" </dev/null > "$BACKUP_FILE"; then
   echo "Резервная копия: $BACKUP_FILE"
 else
   echo "Не удалось сделать резервную копию, деплой остановлен"

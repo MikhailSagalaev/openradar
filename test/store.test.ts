@@ -433,4 +433,56 @@ describe('store', () => {
       }
     },
   );
+
+  // Postgres-only: a pg_search backend keeps its Tantivy caches and allocator high-water mark
+  // for the life of the connection (one idle backend held 1.2 GiB in prod). The pool must
+  // retire connections by use/age budget, and a runaway web query must die alone.
+  it.skipIf(process.env.RADAR_TEST_STORE !== 'postgres')(
+    'recycles pooled connections by budget and cancels runaway web queries alone',
+    async () => {
+      const url = process.env.DATABASE_URL || 'postgres://radar:radar@127.0.0.1:5432/radar_test';
+      const store = new PostgresStore(url, { maxConnUses: 2, webStatementTimeoutMs: 100 });
+      const internals = store as unknown as {
+        pool: {
+          on: (e: string, cb: () => void) => void;
+          query: (q: string) => Promise<{ rows: Array<{ statement_timeout: string }> }>;
+        };
+        webQuery: (q: string, p?: unknown[]) => Promise<unknown>;
+      };
+      let connects = 0;
+      internals.pool.on('connect', () => { connects += 1; });
+      try {
+        // Three web reads on a two-use budget: the third must open a fresh backend.
+        await store.getLead('missing-1');
+        await store.getLead('missing-2');
+        expect(connects).toBe(1);
+        await store.getLead('missing-3');
+        expect(connects).toBe(2);
+
+        // A web query slower than the budget is cancelled…
+        await expect(internals.webQuery('SELECT pg_sleep(1)')).rejects.toThrow(/canceling statement due to statement timeout/);
+        // …and SET LOCAL never leaks to the next borrower of a pooled connection.
+        const shown = await internals.pool.query('SHOW statement_timeout');
+        expect(shown.rows[0]?.statement_timeout).not.toBe('100ms');
+        // The store keeps working after the cancelled query.
+        expect(await store.getLead('missing-4')).toBeNull();
+      } finally {
+        await store.close();
+      }
+
+      // Age budget: a connection older than the budget is retired on its next release.
+      const aged = new PostgresStore(url, { maxConnAgeSec: 1, maxConnUses: 0, webStatementTimeoutMs: 0 });
+      let agedConnects = 0;
+      (aged as unknown as { pool: { on: (e: string, cb: () => void) => void } }).pool.on('connect', () => { agedConnects += 1; });
+      try {
+        await aged.getLead('missing-age-1');
+        expect(agedConnects).toBe(1);
+        await new Promise((resolve) => setTimeout(resolve, 1100));
+        await aged.getLead('missing-age-2');
+        expect(agedConnects).toBe(2);
+      } finally {
+        await aged.close();
+      }
+    },
+  );
 });

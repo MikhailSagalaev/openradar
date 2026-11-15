@@ -27,11 +27,13 @@ echo "[Radar Backup] Starting backup of database ${POSTGRES_DB}..."
 # over its memory limit mid-COPY and the OOM killer terminates the backend (seen on a 3g
 # box); when the dump fails, stop the app so the dump owns the memory, then always restart it.
 dump_ok() {
+  # PGOPTIONS: the role-level statement_timeout (120s backstop) must not kill a long
+  # COPY of the leads table; the dump is a trusted operator command.
   if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
     # No -t: a TTY rewrites LF to CRLF and corrupts the binary custom-format dump.
-    docker exec "$CONTAINER_NAME" pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB" > "$BACKUP_FILE"
+    docker exec -e PGOPTIONS='-c statement_timeout=0' "$CONTAINER_NAME" pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB" > "$BACKUP_FILE"
   elif command -v pg_dump >/dev/null 2>&1; then
-    pg_dump -Fc "$DATABASE_URL" > "$BACKUP_FILE"
+    PGOPTIONS='-c statement_timeout=0' pg_dump -Fc "$DATABASE_URL" > "$BACKUP_FILE"
   else
     echo "[Radar Backup] Error: Neither container ${CONTAINER_NAME} nor pg_dump found"
     return 1

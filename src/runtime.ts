@@ -42,7 +42,11 @@ export async function createRuntime(env: Env = loadEnv(), overrides: RuntimeOver
     }
   } else if (env.DATABASE_URL) {
     logger.info('Using PostgreSQL storage engine', { url: env.DATABASE_URL.replace(/:[^:@]+@/, ':***@') });
-    const pgStore = new PostgresStore(env.DATABASE_URL);
+    const pgStore = new PostgresStore(env.DATABASE_URL, {
+      maxConnAgeSec: env.RADAR_PG_CONN_MAX_AGE_SEC,
+      maxConnUses: env.RADAR_PG_CONN_MAX_USES,
+      webStatementTimeoutMs: env.RADAR_WEB_STATEMENT_TIMEOUT_MS,
+    });
     await pgStore.init();
     store = pgStore;
   } else {

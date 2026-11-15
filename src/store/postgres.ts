@@ -59,13 +59,34 @@ const { Pool } = pg;
 export class PostgresStore implements Store {
   private pool: pg.Pool;
   private hasPgSearch: boolean = false;
+  /**
+   * Connection recycling. A pg_search backend keeps its Tantivy reader caches and the
+   * allocator's high-water mark for the life of the connection: one idle backend was
+   * measured holding 1.2 GiB RSS after a single heavy search (docs/OPS_BOT_AND_MEMORY.md).
+   * Retiring connections by age and use is the only reliable way to hand that memory back.
+   * Metadata lives in a WeakMap keyed by the underlying pg client, so it survives the
+   * pool's release wrappers and never leaks.
+   */
+  private connMeta = new WeakMap<object, { born: number; uses: number }>();
+  private maxConnAgeMs: number;
+  private maxConnUses: number;
+  private webStatementTimeoutMs: number;
 
-  constructor(connectionString: string) {
+  constructor(connectionString: string, options: { maxConnAgeSec?: number; maxConnUses?: number; webStatementTimeoutMs?: number } = {}) {
+    this.maxConnAgeMs = Math.max(0, options.maxConnAgeSec ?? 1800) * 1000;
+    this.maxConnUses = Math.max(0, options.maxConnUses ?? 500);
+    this.webStatementTimeoutMs = Math.max(0, options.webStatementTimeoutMs ?? 0);
     this.pool = new Pool({
       connectionString,
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
+      // pg-pool's own budgets (pg 8.23+): a connection is retired after maxUses
+      // checkouts or maxLifetimeSeconds, whichever comes first — the native path
+      // for the recycling this store needs. The WeakMap check in webQuery is the
+      // belt to these suspenders (and covers pools built without the options).
+      maxUses: this.maxConnUses > 0 ? this.maxConnUses : undefined,
+      maxLifetimeSeconds: options.maxConnAgeSec && options.maxConnAgeSec > 0 ? options.maxConnAgeSec : undefined,
     });
     // An idle client whose connection the server (or a network blip) drops emits 'error' on
     // the pool. Without a listener Node treats it as an unhandled 'error' event and crashes the
@@ -75,6 +96,46 @@ export class PostgresStore implements Store {
     this.pool.on('error', (err) => {
       console.error('[radar:postgres] idle client error', err.message);
     });
+    this.pool.on('connect', (client) => {
+      this.connMeta.set(client, { born: Date.now(), uses: 0 });
+    });
+  }
+
+  /** True when the client has served its budget and must not be reused. */
+  private connExpired(client: object): boolean {
+    const meta = this.connMeta.get(client);
+    if (!meta) return false;
+    if (this.maxConnUses > 0 && meta.uses >= this.maxConnUses) return true;
+    return this.maxConnAgeMs > 0 && Date.now() - meta.born >= this.maxConnAgeMs;
+  }
+
+  /**
+   * One web read in its own transaction with SET LOCAL statement_timeout: a runaway BM25
+   * query is cancelled alone instead of growing until the OOM-killer picks a victim. SET
+   * LOCAL never leaks to the next borrower of a pooled connection. With the timeout off
+   * (0) this is a plain query. The connection is retired when its budget is spent.
+   */
+  private async webQuery<T extends pg.QueryResultRow = any>(query: string, params: unknown[] = []): Promise<pg.QueryResult<T>> {
+    const client = await this.pool.connect();
+    const meta = this.connMeta.get(client);
+    if (meta) meta.uses += 1;
+    try {
+      if (this.webStatementTimeoutMs <= 0) return await client.query<T>(query, params);
+      await client.query('BEGIN');
+      try {
+        await client.query(`SET LOCAL statement_timeout = ${this.webStatementTimeoutMs}`);
+        const res = await client.query<T>(query, params);
+        await client.query('COMMIT');
+        return res;
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw err;
+      }
+    } finally {
+      // release(true) destroys the connection instead of pooling it; the pool opens a
+      // fresh one on the next query. Errors are logged by the pool's 'error' listener.
+      client.release(this.connExpired(client));
+    }
   }
 
   async init(): Promise<void> {
@@ -395,7 +456,7 @@ export class PostgresStore implements Store {
   }
 
   async getLead(id: string): Promise<Lead | null> {
-    const res = await this.pool.query(`SELECT * FROM leads WHERE id = $1`, [id]);
+    const res = await this.webQuery(`SELECT * FROM leads WHERE id = $1`, [id]);
     return res.rows[0] ? this.rowToLead(res.rows[0]) : null;
   }
 
@@ -1136,7 +1197,7 @@ export class PostgresStore implements Store {
     const offset = Math.max(0, Math.min(Math.floor(options.offset ?? 0), 10_000));
     const query = `SELECT * FROM leads ${whereClause} ORDER BY ${order} LIMIT $${idx}${offset ? ` OFFSET ${offset}` : ''}`;
 
-    const res = await this.pool.query(query, params);
+    const res = await this.webQuery(query, params);
     return res.rows.map((r) => this.rowToLead(r));
   }
 
@@ -1151,7 +1212,7 @@ export class PostgresStore implements Store {
     const offset = Math.max(0, Math.min(Math.floor(options.offset ?? 0), 10_000));
     const query = `SELECT count(*) AS count FROM (SELECT 1 FROM leads ${whereClause} LIMIT $${idx}${offset ? ` OFFSET ${offset}` : ''}) AS counted`;
     params.push(limit);
-    const res = await this.pool.query(query, params);
+    const res = await this.webQuery(query, params);
     return parseInt(res.rows[0]?.count, 10) || 0;
   }
 
