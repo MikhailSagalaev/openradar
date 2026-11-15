@@ -373,16 +373,25 @@ export class PollRunner {
         if (notices.sent) this.logger.info('points notices sent', { ...notices });
       }
       // Sure SubQ directions onto leads still stuck on empty/other (ingest always wrote a slug).
-      if (this.deps.env.RADAR_DECIDE_APPLY && store.applyDirectionsFromDecisions) {
-        const directed = await store.applyDirectionsFromDecisions(0.8);
-        if (directed) this.logger.info('directions backfilled from decisions', { directed });
+      // Its own try/catch: a slow backfill must not skip the research steps below it.
+      try {
+        if (this.deps.env.RADAR_DECIDE_APPLY && store.applyDirectionsFromDecisions) {
+          const directed = await store.applyDirectionsFromDecisions(0.8);
+          if (directed) this.logger.info('directions backfilled from decisions', { directed });
+        }
+      } catch (error) {
+        this.logger.warn('directions backfill failed', { error: error instanceof Error ? error.message : String(error) });
       }
       // Last month's market report is frozen once, early in the next month.
-      const snapshot = await ensureMonthlySnapshot(store, new Date(), { useModel: this.deps.env.RADAR_EXTRACT_APPLY });
-      if (snapshot) this.logger.info('research snapshot saved', { period: snapshot });
-      // The days that are over join the openradar index.
-      const days = await ensureDailyCounts(store, new Date(), { useModel: this.deps.env.RADAR_EXTRACT_APPLY });
-      if (days.length) this.logger.info('research daily counts saved', { from: days[0], to: days.at(-1) });
+      try {
+        const snapshot = await ensureMonthlySnapshot(store, new Date(), { useModel: this.deps.env.RADAR_EXTRACT_APPLY });
+        if (snapshot) this.logger.info('research snapshot saved', { period: snapshot });
+        // The days that are over join the openradar index.
+        const days = await ensureDailyCounts(store, new Date(), { useModel: this.deps.env.RADAR_EXTRACT_APPLY });
+        if (days.length) this.logger.info('research daily counts saved', { from: days[0], to: days.at(-1) });
+      } catch (error) {
+        this.logger.warn('research maintenance failed', { error: error instanceof Error ? error.message : String(error) });
+      }
       // Once a day: what robots.txt says about each source's address (report only, nothing is switched off).
       const robots = await auditSourceRobotsIfDue(
         (await store.listSources()).filter((s) => s.enabled),
