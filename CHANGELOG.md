@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.68.1 — 2026-11-15
+
+### Fixed
+- **OOM-safe backups**: a concurrent ParadeDB BM25 search plus `pg_dump` could push the postgres cgroup over its memory limit mid-`COPY`, and the OOM killer terminated the backend (the dump aborted, postgres crash-recovered). `scripts/backup.sh` now retries a failed dump with the app stopped and always restarts it afterwards; `deploy-server.sh` takes its pre-migration dump with the app stopped (the site pauses for the dump, not for the image build).
+- **No racing deploys**: `deploy-server.sh` takes a `flock`, so the cron autodeploy and a manual deploy can no longer run two `pg_dump` against postgres at the same time.
+
+### Changed
+- **Backup rotation by count**: `scripts/backup.sh` keeps the newest `BACKUP_KEEP` dumps (default 4) and nothing older than `BACKUP_KEEP_DAYS` (default 30); pre-deploy dumps keep the newest 3 and nothing older than 14 days. Recommended cron cadence is twice a week instead of daily (a pre-deploy dump precedes every release anyway).
+
 ## 0.68.0 — 2026-11-15
 
 ### Fixed

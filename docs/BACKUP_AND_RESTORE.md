@@ -3,17 +3,17 @@
 ## Автоматическое резервное копирование
 
 Скрипт `scripts/backup.sh` выполняет:
-1. Создание бинарного дампа `pg_dump -Fc` из контейнера `radar_postgres`.
+1. Создание бинарного дампа `pg_dump -Fc` из контейнера `radar_postgres`. Если дамп при работающем приложении срывается (тяжёлый BM25-поиск + `pg_dump` могут пробить лимит памяти postgres, и OOM-killer убивает бэкенд), скрипт останавливает приложение, повторяет дамп и в любом случае запускает приложение обратно.
 2. Опциональное асимметричное шифрование с помощью `age` открытым ключом `BACKUP_AGE_RECIPIENT`.
 3. Опциональную загрузку в S3-совместимое объектное хранилище (MinIO, Timeweb Cloud S3, Yandex Object Storage).
-4. Удаление локальных копий старше 14 дней.
+4. Ротацию: остаются `BACKUP_KEEP` свежих дампов (по умолчанию 4) и ничего старше `BACKUP_KEEP_DAYS` дней (по умолчанию 30). Pre-deploy дампы `deploy-server.sh` ротируются отдельно: 3 свежих, не старше 14 дней.
 
 ### Настройка cron
 
-Добавьте задание в crontab (`crontab -e`) для ежедневного запуска в 03:00 ночи. Замените `/opt/radar` на каталог, где реально живёт compose-проект (`docker inspect radar_app --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}'`):
+Дамп тяжёлой базы нагружает postgres, поэтому ежедневный бэкап не обязателен: для хаба с постоянно пополняемой лентой достаточно двух раз в неделю (перед каждым деплоем `deploy-server.sh` снимает отдельный pre-deploy дамп). Добавьте задание в crontab (`crontab -e`), например понедельник и четверг в 03:15. Замените `/opt/radar` на каталог, где реально живёт compose-проект (`docker inspect radar_app --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}'`):
 
 ```cron
-0 3 * * * cd /opt/radar && bash scripts/backup.sh >> /var/log/radar-backup.log 2>&1
+15 3 * * 1,4 cd /opt/radar && bash scripts/backup.sh >> /var/log/radar-backup.log 2>&1
 ```
 
 ---
