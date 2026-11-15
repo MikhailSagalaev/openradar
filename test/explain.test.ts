@@ -39,6 +39,23 @@ describe('explainable scoring (plan 021A)', () => {
     }
   });
 
+  it('a rejected lead is never strong, however high the score and active the state', () => {
+    // Production carried 4k+ rejected rows whose visibility state stayed 'active': the live
+    // gate must read the pipeline status too, or the card shows green on rejected vacancies.
+    for (const status of ['rejected', 'duplicate', 'failed'] as const) {
+      const e = explainLead(lead({ score: 100, state: 'active', status }));
+      expect(e.verdict).toBe('skip');
+      expect(e.gates.find((g) => g.name === 'live')?.pass).toBe(false);
+    }
+    expect(explainLead(lead({ score: 100, status: 'rejected' })).gates.find((g) => g.name === 'live')?.note).toBe('отклонена при проверке');
+    expect(explainLead(lead({ score: 100, status: 'duplicate' })).gates.find((g) => g.name === 'live')?.note).toBe('дубликат другой вакансии');
+    expect(explainLead(lead({ score: 100, status: 'rejected' }), 'en').gates.find((g) => g.name === 'live')?.note).toBe('rejected by the pipeline');
+    // Funnel statuses a reader sets are not rejections: the listing is still live.
+    for (const status of ['new', 'delivered', 'interesting', 'applied', 'in_work'] as const) {
+      expect(explainLead(lead({ score: 80, status })).verdict).toBe('strong');
+    }
+  });
+
   it('outstaff is a check note, not a hard gate', () => {
     const e = explainLead(lead({ score: 80, metadata: { qualityFlags: ['outstaff'] } }));
     expect(e.gates.find((g) => g.name === 'real-offer')?.pass).toBe(true);
@@ -113,6 +130,27 @@ describe('explainability in the public projection and UI', () => {
     expect(html).toContain('5 из 5');
     expect(html).toContain('data-tip="');
     expect(html).toContain('tabindex="0"');
+    // The long explanatory hint under the checks is gone: the chips carry their own reasons.
+    expect(html).not.toContain('explain-hint');
+    expect(html).not.toContain('Вердикт складывается');
+    await runtime.store.close();
+  });
+
+  it('a rejected lead shows the skip verdict to the admin who can see it', async () => {
+    const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true, RADAR_ADMIN_TOKEN: 'test-admin-token' });
+    const app = createApp(runtime);
+    const source = await runtime.store.createSource({ kind: 'ats', title: 'Acme', config: {} });
+    await runtime.store.insertLead(lead({ id: 'rejected-page', sourceId: source.id, score: 95, status: 'rejected', state: 'active', fingerprint: 'fp-rp', titleKey: 'tk-rp', url: 'https://jobs.ashbyhq.com/acme/10' }));
+    const sessionId = 'admin-explain-session';
+    await runtime.store.createSession?.(sessionId, new Date(Date.now() + 3600_000).toISOString());
+    const res = await app.request('/leads/rejected-page', { headers: { cookie: `radar_session=${sessionId}` } });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('explain-card explain-bad');
+    expect(html).toContain('verdict-bad');
+    expect(html).toContain('Пропустить');
+    expect(html).toContain('отклонена при проверке');
+    expect(html).not.toContain('Сильное совпадение');
     await runtime.store.close();
   });
 
