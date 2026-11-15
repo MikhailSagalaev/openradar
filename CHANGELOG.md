@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.68.2 — 2026-11-15
+
+### Fixed
+- **Admin tier outside requests**: `viewerForUser` now honours `RADAR_ADMIN_GITHUB`, so saved-search delivery and agent tokens of a GitHub administrator see leads without the member delay, exactly like the feed does. Previously only in-request views resolved the admin tier; a subscription digest still waited the member delay.
+
 ## 0.68.1 — 2026-11-15
 
 ### Fixed

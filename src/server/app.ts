@@ -319,6 +319,11 @@ async function viewerFromRequest(c: Context, runtime: Runtime): Promise<Viewer> 
 
 /** The viewer a signed-in user is, also outside a request (saved-search delivery). */
 export async function viewerForUser(runtime: Runtime, userId: number): Promise<Viewer> {
+  // A GitHub administrator keeps the admin tier outside requests too: saved-search
+  // delivery and agent tokens must see leads without the member delay, like the feed does.
+  if (runtime.env.RADAR_ADMIN_GITHUB && isGitHubAdmin((await runtime.store.getUserById(userId)) ?? undefined, runtime)) {
+    return { tier: 'admin', userId };
+  }
   // A web user linked to a participant key gets that key's tier (never below member).
   const linked = runtime.access.mode === 'hub' ? await runtime.store.getParticipantByGithubUser(userId) : null;
   if (linked && !linked.bannedAt) {
