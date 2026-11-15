@@ -1425,6 +1425,13 @@ export function createApp(runtime: Runtime): Hono {
     const pageSize = 50;
 
     const viewer = await viewerFromRequest(c, runtime);
+    // Anonymous guests share one cached feed render per URL+language (the nginx microcache
+    // keys on the same URL); logged-in viewers always render live. The feed is the crawlers'
+    // main entry point, so this is the biggest origin-load saver after the edge budgets.
+    const anonymous = viewer.tier === 'guest' && !getCookie(c, 'radar_session');
+    if (anonymous && runtime.env.RADAR_LEAD_CACHE_SEC > 0) {
+      c.header('Cache-Control', `public, max-age=${runtime.env.RADAR_LEAD_CACHE_SEC}`);
+    }
     const [stats, health, fetched] = await Promise.all([
       cachedStats(),
       runtime.store.getSourceHealth(),

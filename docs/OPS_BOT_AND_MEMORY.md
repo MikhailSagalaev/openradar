@@ -79,15 +79,31 @@ them per viewer tier, but **anonymous** content is identical for everyone
 without a session. So:
 
 * `proxy_cache` (500 MB, `/var/cache/nginx/openradar`) for **anonymous GETs** on
-  HTML pages, `/sitemap.xml`, `/robots.txt` and public JSON: 60 s TTL,
-  `proxy_cache_lock` (one upstream fetch per cold URL — kills the thundering
-  herd), `proxy_cache_background_update` + `use_stale updating error timeout`
-  (a crawler wave during a DB hiccup gets stale pages, not 500s).
-* Cache key includes host+URI; requests with a session cookie or Authorization
-  header **bypass** the cache entirely — no logged-in page is ever stored, so no
-  cross-user leakage and no cloaking (bots and anonymous people share one cache).
-* Only 200/301/302/404 are cached (404 briefly, 30 s); 5xx never.
+  HTML pages (feed + lead cards), `/sitemap.xml` and public JSON that the app
+  marks `Cache-Control: public`: 60 s TTL, `proxy_cache_lock` (one upstream fetch
+  per cold URL — kills the thundering herd), `proxy_cache_background_update` +
+  `use_stale updating error timeout` (a crawler wave during a DB hiccup gets
+  stale pages, not 500s). `robots.txt` is deliberately **not** cached (RFC 9309:
+  a stale/4xx robots reads as "no rules" / "disallow all").
+* **Read and write are different decisions.** `proxy_cache_bypass` (read) is
+  evaluated *before* the upstream answers, so it may only use request-side facts
+  (method + no session/Authorization/x-radar-token). `proxy_no_cache` (write) is
+  evaluated *after* and additionally requires the app to say `public`. Putting
+  `$upstream_http_cache_control` into the bypass map makes the cache fill up and
+  **never hit** — that bug was caught in review, not in production.
+* The cache key is `$scheme$host$request_uri:$radar_lang`: the language bucket
+  mirrors `resolveLang` (the `openradar_lang` cookie, else Accept-Language →
+  ru/en). On top, nginx honours the app's `Vary: Accept-Language, Cookie,
+  Accept-Encoding` and stores per-header variants, so gzip/identity and cookie
+  states can never mix. Session/Authorization/token requests bypass entirely —
+  no logged-in page is ever stored, no cross-user leakage, no cloaking (bots and
+  anonymous people share one cache; content never varies by user-agent).
+* Only 200/301/302/404 are cached (404 briefly, 30 s); 5xx never. Responses with
+  `Set-Cookie` (e.g. `?lang=` switches, login) are never stored by nginx itself.
 * `X-Cache-Status` header + a dedicated log line make hit rate measurable.
+* `limit_req_status 429` is set at **server** level, not http: a shared box may
+  already define it (ours does, in `security.conf`); a duplicate http-level
+  directive fails `nginx -t`.
 
 Honest limit (measured by Nerdulator on their site): crawlers that walk *unique*
 URLs get little from a cache. That is why Layer 1 (budgets) is the primary
