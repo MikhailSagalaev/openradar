@@ -50,6 +50,8 @@ const SITES: CareerSite[] = [
   { id: 'career-smbc', name: 'SMBC', sitemap: 'https://careersemea.smbcgroup.com/sitemap.xml', pattern: String.raw`/job/[^/]+/(\d+)`, company: true },
   { id: 'career-crowdstrike', name: 'CrowdStrike', sitemap: 'https://crowdstrike.wd5.myworkdayjobs.com/crowdstrikecareers/siteMap.xml', pattern: String.raw`/job/[^/]+/([^/]+)`, company: true },
   { id: 'career-intapp', name: 'Intapp', sitemap: 'https://intapp.wd1.myworkdayjobs.com/Intapp/siteMap.xml', pattern: String.raw`/job/[^/]+/([^/]+)`, company: true },
+  { id: 'career-abbott', name: 'Abbott', sitemap: 'https://abbott.wd5.myworkdayjobs.com/abbottcareers/siteMap.xml', pattern: String.raw`/job/[^/]+/([^/]+)`, company: true },
+  { id: 'career-elevance', name: 'Elevance Health', sitemap: 'https://elevancehealth.wd1.myworkdayjobs.com/ANT/siteMap.xml', pattern: String.raw`/job/[^/]+/([^/]+)`, company: true },
   { id: 'career-damate', name: 'Дамате', sitemap: 'https://www.acdamate.com/sitemap_000.xml', pattern: String.raw`/job/[^/]+/[^/]+/([a-z0-9-]+)`, company: true },
   { id: 'career-cdek', name: 'СДЭК', list: 'https://rabota.cdek.ru/vacancies/', pattern: String.raw`/vacancies/item/(\d+)`, company: true },
   { id: 'career-azur', name: 'Azur Games', list: 'https://azurgames.com/ru/jobs/', pattern: String.raw`/ru/jobs/([a-z0-9-]+)/?$`, company: true },

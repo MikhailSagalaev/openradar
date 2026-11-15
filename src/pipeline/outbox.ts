@@ -17,11 +17,13 @@ export interface OutboxProcessSummary {
 }
 
 export async function processOutbox(deps: OutboxDeps, limit = 50): Promise<OutboxProcessSummary> {
-  if (!deps.store.getPendingDeliveries || !deps.store.updateLeadDelivery) {
+  if (!deps.store.claimPendingDeliveries || !deps.store.updateLeadDelivery) {
     return { processed: 0, succeeded: 0, failed: 0 };
   }
 
-  const pending = await deps.store.getPendingDeliveries(limit);
+  // Lease 15 min: a batch of 50 items at the worst 15s sink timeout each is
+  // 12.5 min, so the lease must outlast the whole batch, not one item.
+  const pending = await deps.store.claimPendingDeliveries(limit, 15 * 60_000);
   if (pending.length === 0) {
     return { processed: 0, succeeded: 0, failed: 0 };
   }

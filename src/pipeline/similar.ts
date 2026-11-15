@@ -49,7 +49,11 @@ export class SimilarIndex {
       for (const row of await this.store.listRecentSketches(since, this.maxEntries)) {
         if (!isEmptySketch(row.minhash)) await this.store.saveLeadBands!(row.id, computeMinHashBands(row.minhash), row.createdAt);
       }
-    })();
+    })().catch((error) => {
+      // A transient failure must not poison every later lookup with the cached rejection.
+      this.loading = undefined;
+      throw error;
+    });
     await this.loading;
     if (now.getTime() - this.prunedAt > PRUNE_EVERY_MS && this.store.pruneLeadBands) {
       this.prunedAt = now.getTime();
@@ -86,7 +90,11 @@ export class SimilarIndex {
       }
       // prune() takes the first entry as the oldest: entries added while loading came first.
       this.entries.sort((a, b) => a.createdAtMs - b.createdAtMs);
-    })();
+    })().catch((error) => {
+      // A transient failure must not poison every later lookup with the cached rejection.
+      this.loading = undefined;
+      throw error;
+    });
     await this.loading;
   }
 

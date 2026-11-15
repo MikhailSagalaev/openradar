@@ -1,0 +1,83 @@
+{
+  "generatedAt": "2026-11-11T18:41:43.283Z",
+  "source": "https://www.dreamworkhq.com",
+  "list": "Remote-Tech-Jobs",
+  "count": 5,
+  "listings": [
+    {
+      "id": "71054d44-2b5a-4582-bd0b-c77fcab74608",
+      "title": "Senior Data Engineer, Back End Systems (Remote-CST/EST)",
+      "company": "Firstam",
+      "companyDomain": "firstam.com",
+      "location": "USA, South Carolina, Remote",
+      "remoteType": "remote",
+      "salaryMin": 121980,
+      "salaryMax": 130525,
+      "salaryPeriod": "annual",
+      "aiRoleKind": "non_ai",
+      "postedAt": "2026-11-10T17:45:40.225Z",
+      "firstIndexedAt": "2026-11-11T17:45:41.815Z",
+      "url": "https://www.dreamworkhq.com/job/71054d44-2b5a-4582-bd0b-c77fcab74608?utm_source=github&utm_campaign=gh-remote-tech-jobs"
+    },
+    {
+      "id": "81fd3458-e06a-4206-be2b-018add377b66",
+      "title": "Ingeniero Cloud DevOps / GCP. Remoto - remoto",
+      "company": "Mainsoft LTDA",
+      "companyDomain": null,
+      "location": "Bogotá, D.C., Bogotá, D.C., Colombia",
+      "remoteType": "remote",
+      "salaryMin": 25000,
+      "salaryMax": 25000,
+      "salaryPeriod": "annual",
+      "aiRoleKind": "non_ai",
+      "postedAt": "2026-11-11T00:00:00.000Z",
+      "firstIndexedAt": "2026-11-11T16:18:07.871Z",
+      "url": "https://www.dreamworkhq.com/job/81fd3458-e06a-4206-be2b-018add377b66?utm_source=github&utm_campaign=gh-remote-tech-jobs"
+    },
+    {
+      "id": "fc91f7b8-264e-4c74-bf72-6fffc2be45e9",
+      "title": "Software Test Engineer",
+      "company": "Valtech",
+      "companyDomain": "valtech.com",
+      "location": "India - Remote",
+      "remoteType": "remote",
+      "salaryMin": null,
+      "salaryMax": null,
+      "salaryPeriod": null,
+      "aiRoleKind": "non_ai",
+      "postedAt": "2026-11-11T10:06:17.000Z",
+      "firstIndexedAt": "2026-11-11T18:34:28.943Z",
+      "url": "https://www.dreamworkhq.com/job/fc91f7b8-264e-4c74-bf72-6fffc2be45e9?utm_source=github&utm_campaign=gh-remote-tech-jobs"
+    },
+    {
+      "id": "906e7be3-2ff4-49b2-bd14-5cb0c8f9aa6d",
+      "title": "QA Automation Engineer",
+      "company": "Valtech",
+      "companyDomain": "valtech.com",
+      "location": "India - Remote",
+      "remoteType": "remote",
+      "salaryMin": null,
+      "salaryMax": null,
+      "salaryPeriod": null,
+      "aiRoleKind": "non_ai",
+      "postedAt": "2026-11-11T10:02:10.000Z",
+      "firstIndexedAt": "2026-11-11T18:34:24.772Z",
+      "url": "https://www.dreamworkhq.com/job/906e7be3-2ff4-49b2-bd14-5cb0c8f9aa6d?utm_source=github&utm_campaign=gh-remote-tech-jobs"
+    },
+    {
+      "id": "403057f4-f4e2-4118-8ed6-eeb092bf0c07",
+      "title": "Senior Civil Engineer",
+      "company": "Jll",
+      "companyDomain": "jll.com",
+      "location": "Bangkok, THA",
+      "remoteType": "remote",
+      "salaryMin": null,
+      "salaryMax": null,
+      "salaryPeriod": null,
+      "aiRoleKind": "non_ai",
+      "postedAt": "2026-11-11T18:21:08.573Z",
+      "firstIndexedAt": "2026-11-11T18:21:37.667Z",
+      "url": "https://www.dreamworkhq.com/job/403057f4-f4e2-4118-8ed6-eeb092bf0c07?utm_source=github&utm_campaign=gh-remote-tech-jobs"
+    }
+  ]
+}

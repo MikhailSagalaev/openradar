@@ -1,4 +1,5 @@
 import type { PollContext, RawLead, SourceAdapter, SourceRecord } from '../core/types.ts';
+import type { Store } from '../core/store.ts';
 import { decodeHtmlEntities, stripHtml } from '../core/text.ts';
 import { fetchText } from './http.ts';
 
@@ -8,11 +9,11 @@ import { fetchText } from './http.ts';
  * to read, without a key. One source holds a list of companies of one system; each poll
  * reads a few of them in turn.
  */
-export type AtsProvider = 'greenhouse' | 'lever' | 'ashby' | 'workable' | 'recruitee' | 'smartrecruiters' | 'pinpoint' | 'bamboohr' | 'personio';
+export type AtsProvider = 'greenhouse' | 'lever' | 'ashby' | 'workable' | 'recruitee' | 'smartrecruiters' | 'pinpoint' | 'bamboohr' | 'personio' | 'teamtailor';
 
-export const ATS_PROVIDERS: AtsProvider[] = ['greenhouse', 'lever', 'ashby', 'workable', 'recruitee', 'smartrecruiters', 'pinpoint', 'bamboohr', 'personio'];
+export const ATS_PROVIDERS: AtsProvider[] = ['greenhouse', 'lever', 'ashby', 'workable', 'recruitee', 'smartrecruiters', 'pinpoint', 'bamboohr', 'personio', 'teamtailor'];
 export const ATS_LABELS: Record<AtsProvider, string> = {
-  greenhouse: 'Greenhouse', lever: 'Lever', ashby: 'Ashby', workable: 'Workable', recruitee: 'Recruitee', smartrecruiters: 'SmartRecruiters', pinpoint: 'Pinpoint', bamboohr: 'BambooHR', personio: 'Personio',
+  greenhouse: 'Greenhouse', lever: 'Lever', ashby: 'Ashby', workable: 'Workable', recruitee: 'Recruitee', smartrecruiters: 'SmartRecruiters', pinpoint: 'Pinpoint', bamboohr: 'BambooHR', personio: 'Personio', teamtailor: 'Teamtailor',
 };
 const PROVIDERS = ATS_PROVIDERS;
 const MAX_TEXT = 8000;
@@ -449,6 +450,48 @@ function fromPersonio(source: SourceRecord, slug: string, name: string | undefin
     .filter((item): item is RawLead => item !== undefined);
 }
 
+/** Teamtailor serves a JSON Feed (jsonfeed.org): items with a schema.org JobPosting inside. */
+interface TeamtailorItem {
+  id?: string;
+  title?: string;
+  url?: string;
+  date_published?: string;
+  content_html?: string;
+  _jobposting?: {
+    datePosted?: string;
+    employmentType?: string | string[];
+    hiringOrganization?: { name?: string };
+    jobLocation?: Array<{ address?: { addressLocality?: string; addressCountry?: string } }> | { address?: { addressLocality?: string; addressCountry?: string } };
+  };
+}
+
+function fromTeamtailor(source: SourceRecord, slug: string, name: string | undefined, json: string): RawLead[] {
+  const items = (JSON.parse(json) as { items?: TeamtailorItem[] }).items ?? [];
+  return items.filter((it) => it.id && it.title?.trim() && it.url).map((it) => {
+    const title = it.title!.trim();
+    const posting = it._jobposting ?? {};
+    const company = name ?? posting.hiringOrganization?.name?.trim() ?? slug;
+    const places = Array.isArray(posting.jobLocation) ? posting.jobLocation : posting.jobLocation ? [posting.jobLocation] : [];
+    const location = places.map((p) => [p.address?.addressLocality, p.address?.addressCountry].filter(Boolean).join(', ')).filter(Boolean).join('; ');
+    const remote = REMOTE.test(`${title} ${location}`);
+    const body = stripHtml(decodeHtmlEntities(it.content_html ?? '')).trim();
+    const employment = Array.isArray(posting.employmentType) ? posting.employmentType.join(', ') : posting.employmentType;
+    return {
+      sourceId: source.id,
+      type: 'job',
+      externalId: `teamtailor:${slug}:${it.id}`,
+      url: it.url,
+      title,
+      text: text(title, [`Company: ${company}`, location && `Location: ${location}`, employment && `Type: ${employment}`], body),
+      author: company,
+      city: cityFor(location, company, remote),
+      isRemote: remote,
+      publishedAt: posting.datePosted ?? it.date_published,
+      raw: { ats: 'teamtailor', board: slug },
+    } satisfies RawLead;
+  });
+}
+
 const ENDPOINTS: Record<AtsProvider, (slug: string) => string> = {
   greenhouse: (slug) => `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(slug)}/jobs?content=true`,
   lever: (slug) => `https://api.lever.co/v0/postings/${encodeURIComponent(slug)}?mode=json`,
@@ -460,6 +503,7 @@ const ENDPOINTS: Record<AtsProvider, (slug: string) => string> = {
   pinpoint: (slug) => `https://${encodeURIComponent(slug)}.pinpointhq.com/postings.json`,
   bamboohr: (slug) => `https://${encodeURIComponent(slug)}.bamboohr.com/careers/list`,
   personio: (slug) => `https://${encodeURIComponent(slug)}.jobs.personio.de/xml?language=en`,
+  teamtailor: (slug) => `https://${encodeURIComponent(slug)}.teamtailor.com/jobs.json`,
 };
 
 /**
@@ -497,7 +541,58 @@ const PARSERS: Record<AtsProvider, (source: SourceRecord, slug: string, name: st
   pinpoint: fromPinpoint,
   bamboohr: fromBambooHr,
   personio: fromPersonio,
+  teamtailor: fromTeamtailor,
 };
+
+/**
+ * Board diff (plan 021B): the store already holds every job this board ever gave us, so it
+ * is the snapshot — no separate history to grow unbounded, and it survives a restart. A job
+ * the board no longer lists is soft-closed (kept for dedup, never deleted); a job that comes
+ * back is reopened, but only when the board itself closed it — a moderator's or model's
+ * decision is never undone. Only a complete (untruncated) board read is diffed: a capped
+ * list would look like removals. The age window is wider than the feed's so a job that ages
+ * out of the flow is closed here rather than lingering active.
+ */
+export interface BoardDiffSummary {
+  closed: number;
+  reopened: number;
+}
+
+const DIFF_WINDOW_MULT = 2;
+const DIFF_MAX_LEADS = 5000;
+
+export async function diffBoard(
+  store: Store,
+  source: SourceRecord,
+  provider: AtsProvider,
+  slug: string,
+  presentExternalIds: Set<string>,
+  maxAgeDays: number,
+  now: Date,
+): Promise<BoardDiffSummary> {
+  const summary: BoardDiffSummary = { closed: 0, reopened: 0 };
+  if (!store.listBoardLeads || !store.updateLeadState) return summary;
+  const prefix = `${provider}:${slug}:`;
+  const createdAfter = new Date(now.getTime() - maxAgeDays * DIFF_WINDOW_MULT * 86_400_000).toISOString();
+  const stored = await store.listBoardLeads({ sourceId: source.id, externalIdPrefix: prefix, createdAfter, limit: DIFF_MAX_LEADS });
+  for (const lead of stored) {
+    if (!lead.externalId) continue;
+    const present = presentExternalIds.has(lead.externalId);
+    if (!present && lead.state === 'active') {
+      await store.setLeadDecision(lead.id, { state: 'closed', decidedBy: 'source', reason: 'removed from the board' });
+      await store.updateLeadState(lead.id, 'closed');
+      summary.closed++;
+    } else if (present && lead.state === 'closed') {
+      const decision = await store.getLeadDecision(lead.id);
+      if (decision?.decidedBy === 'source') {
+        await store.setLeadDecision(lead.id, null);
+        await store.updateLeadState(lead.id, 'active');
+        summary.reopened++;
+      }
+    }
+  }
+  return summary;
+}
 
 export const atsSource: SourceAdapter = {
   kind: 'ats',
@@ -527,10 +622,19 @@ export const atsSource: SourceAdapter = {
 
     const leads: RawLead[] = [];
     const hour = Math.floor(ctx.now().getTime() / 3_600_000);
+    // Ghost-job detection (plan 021B): diff each fully-read board against the store.
+    const ghostCheck = ctx.store && ctx.ghostCheck !== false && source.config.ghostCheck !== false;
     for (const { slug, name } of nextBatch(source.id, companies, perPoll, hour * perPoll)) {
       try {
         const json = await fetchBoard(boardCtx, ENDPOINTS[provider](slug));
-        const found = PARSERS[provider](source, slug, name, json)
+        const parsed = PARSERS[provider](source, slug, name, json);
+        if (ghostCheck && parsed.length < perCompany) {
+          // A complete read: every job the board lists right now, before the freshness cut.
+          const present = new Set(parsed.map((lead) => lead.externalId).filter((id): id is string => Boolean(id)));
+          const diff = await diffBoard(ctx.store!, source, provider, slug, present, maxAgeDays, ctx.now());
+          if (diff.closed || diff.reopened) ctx.logger.info('ATS board diff', { provider, slug, ...diff });
+        }
+        const found = parsed
           .filter((lead) => !lead.publishedAt || new Date(lead.publishedAt).toISOString() >= since)
           .sort((a, b) => (b.publishedAt ?? '').localeCompare(a.publishedAt ?? ''))
           .slice(0, perCompany);

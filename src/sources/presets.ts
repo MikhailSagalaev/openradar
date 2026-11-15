@@ -671,6 +671,18 @@ const BASE_PRESETS: SourcePreset[] = [
     },
   },
   {
+    id: 'ats-teamtailor',
+    kind: 'ats',
+    title: 'Карьерные страницы компаний — Teamtailor',
+    description: 'Публичный JSON-фид вакансий компаний на платформе Teamtailor (JSON Feed + schema.org JobPosting), без ключа.',
+    config: {
+      provider: 'teamtailor',
+      perPoll: 3,
+      maxAgeDays: 30,
+      companies: ['tradingview=TradingView'],
+    },
+  },
+  {
     id: 'vuejobs',
     kind: 'rss',
     title: 'VueJobs — Вакансии Vue.js и Frontend',
@@ -741,6 +753,16 @@ const BASE_PRESETS: SourcePreset[] = [
     config: {
       country: 'us',
       limit: 50,
+    },
+  },
+  {
+    id: 'alexandria-jobs',
+    kind: 'alexandria',
+    title: 'Alexandria — Международные вакансии (BlitzAPI)',
+    description: 'Официальный API Firecrawl Alexandria: международные корпоративные вакансии BlitzAPI (~33k живых). Требует FIRECRAWL_API_KEY в переменных окружения; кредиты Firecrawl списываются за запись, пустые ответы бесплатны.',
+    config: {
+      lastDays: 30,
+      maxResults: 20,
     },
   },
   // --- RU-батч 1 (2026-11-04): hh по ролям через RSS (API за WAF), нишевые RSS, публичные TG-каналы ---
@@ -940,6 +962,96 @@ const BASE_PRESETS: SourcePreset[] = [
     description: 'Публичный TG-канал с вакансиями в SMM, контенте и маркетинге',
     config: {
       channel: 'vacancysmm',
+    },
+  },
+  {
+    id: 'tg-ai-ml-bigdata',
+    kind: 'telegram',
+    title: 'Telegram — @ai_machinelearning_big_data: AI/ML и Big Data',
+    description: 'Публичный TG-канал Machinelearning: вакансии и новости AI, ML и Big Data',
+    config: {
+      channel: 'ai_machinelearning_big_data',
+    },
+  },
+  {
+    id: 'djinni',
+    kind: 'rss',
+    title: 'Djinni — IT-вакансии Украины',
+    description: 'Крупнейшая украинская IT-доска: анонимный поиск кандидатов, много удалённых вакансий',
+    config: {
+      url: 'https://djinni.co/jobs/rss/',
+    },
+  },
+  {
+    id: 'dou-jobs',
+    kind: 'rss',
+    title: 'DOU Jobs — IT-вакансии Украины',
+    description: 'Главная IT-доска Украины (jobs.dou.ua): вакансии украинских и международных компаний',
+    config: {
+      url: 'https://jobs.dou.ua/vacancies/feeds/',
+    },
+  },
+  {
+    id: 'hh-kz',
+    kind: 'rss',
+    title: 'HeadHunter Казахстан — Все вакансии',
+    description: 'Поисковый RSS HeadHunter Казахстан (hh.kz): вакансии Казахстана всех направлений',
+    config: {
+      url: 'https://hh.kz/search/vacancy/rss',
+    },
+  },
+  {
+    id: 'hh-ge',
+    kind: 'rss',
+    title: 'HeadHunter Грузия — Все вакансии',
+    description: 'Поисковый RSS HeadHunter Грузия (headhunter.ge): вакансии Грузии всех направлений',
+    config: {
+      url: 'https://headhunter.ge/search/vacancy/rss',
+    },
+  },
+  {
+    id: 'zarplata-ru',
+    kind: 'rss',
+    title: 'Zarplata.ru — Вакансии России',
+    description: 'Поисковый RSS российской доски Zarplata.ru: вакансии регионов России',
+    config: {
+      url: 'https://www.zarplata.ru/search/vacancy/rss',
+    },
+  },
+  {
+    id: 'jobindex-dk',
+    kind: 'rss',
+    title: 'Jobindex — Вакансии Дании',
+    description: 'Крупнейшая доска вакансий Дании (jobindex.dk): все отрасли, включая IT',
+    config: {
+      url: 'https://www.jobindex.dk/jobsoegning.rss',
+    },
+  },
+  {
+    id: 'jsjobbs',
+    kind: 'rss',
+    title: 'JSJobbs — JavaScript-вакансии',
+    description: 'Нишевая доска JavaScript/TypeScript-вакансий со всего мира (jsjobbs.com)',
+    config: {
+      url: 'https://jsjobbs.com/rss',
+    },
+  },
+  {
+    id: 'virtual-vocations',
+    kind: 'rss',
+    title: 'Virtual Vocations — Удалённые вакансии США',
+    description: 'Проверенные удалённые вакансии США (virtualvocations.com): публичный RSS, часть описаний может быть сокращена',
+    config: {
+      url: 'https://www.virtualvocations.com/rss',
+    },
+  },
+  {
+    id: 'swissdevjobs',
+    kind: 'rss',
+    title: 'SwissDevJobs — IT-вакансии Швейцарии',
+    description: 'Официальный RSS-фид IT-вакансий Швейцарии: высокие зарплаты, прозрачные вилки (swissdevjobs.ch)',
+    config: {
+      url: 'https://swissdevjobs.ch/rss',
     },
   },
   ...CAREER_SITE_PRESETS,

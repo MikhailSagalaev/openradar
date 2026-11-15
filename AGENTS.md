@@ -10,6 +10,8 @@ node scripts/check-version.js      # MUST PASS: package.json, src/version.ts, an
 pnpm typecheck                     # MUST PASS: tsc --noEmit (typechecks both src/ and test/)
 pnpm build                         # MUST PASS: tsc -p tsconfig.build.json (builds dist/)
 pnpm test                          # MUST PASS: vitest run against in-memory store (no network calls)
+pnpm lint                          # MUST PASS: oxlint over src/ and test/ (correctness rules; baseline debt in .oxlintrc.json)
+pnpm verify                        # MUST PASS: the local CI subset — lint + version lock + typecheck + build + tests + Python SDK (needs `python` on PATH)
 python3 -m unittest discover -s sdk/python/tests  # Python SDK unit tests
 ```
 

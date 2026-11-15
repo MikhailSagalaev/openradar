@@ -93,4 +93,23 @@ describe('SimilarIndex LSH deduplication', () => {
 
     expect(foundId).toBeUndefined();
   });
+
+  it('retries loading after a transient store failure instead of caching the rejection', async () => {
+    let calls = 0;
+    const flakyStore = {
+      listRecentSketches: async () => {
+        calls += 1;
+        if (calls === 1) throw new Error('transient db blip');
+        return [];
+      },
+    };
+    const index = new SimilarIndex(flakyStore);
+    const now = new Date('2026-10-30T12:00:00Z');
+    const sketch = computeMinHashSketch(text1);
+
+    await expect(index.findSimilar(sketch, now)).rejects.toThrow('transient db blip');
+    // The second call must reload, not re-await the poisoned promise.
+    await expect(index.findSimilar(sketch, now)).resolves.toBeUndefined();
+    expect(calls).toBe(2);
+  });
 });

@@ -15,3 +15,8 @@ __pycache__/
 .deployed-tag
 .failed-tag
 .deploy-pin
+
+# Local research / competitive analysis (cloned competitor repos, probes, PDFs).
+# Never commit: contains third-party code with mixed/absent licenses.
+.research/
+.firecrawl/

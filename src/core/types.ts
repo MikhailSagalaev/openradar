@@ -44,6 +44,10 @@ export interface Env {
   RADAR_DECIDE_KEY?: string;
   RADAR_DECIDE_APPLY?: boolean;
   RADAR_ENRICH_PER_HOUR?: number;
+  /** UK sponsor-register matching for vacancies (plan 021D); off stops the download. */
+  RADAR_VISA_SPONSORS?: boolean;
+  /** ATS board-diff: soft-close jobs removed from their board, reopen returned ones (plan 021B). */
+  RADAR_ATS_GHOST_CHECK?: boolean;
   SUBQ_API_KEY?: string;
   /** Site visitors may link their own Telegram account by QR (sessions stored encrypted). */
   RADAR_USER_TELEGRAM: boolean;
@@ -65,6 +69,8 @@ export interface Env {
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
   RADAR_PUBLIC_URL?: string;
+  /** Honor X-Forwarded-For / X-Real-IP for rate-limit keys only behind a proxy that appends the client IP. */
+  RADAR_TRUSTED_PROXY?: boolean;
   /** GitHub accounts with admin rights: comma-separated numeric ids or logins. */
   RADAR_ADMIN_GITHUB?: string;
   /** Optional web analytics and search console verification (see src/server/analytics.ts). */
@@ -235,6 +241,13 @@ export interface PollContext {
   now: () => Date;
   /** Set for sources with config.proxy: every fetchText of the poll goes through it. */
   proxyUrl?: string;
+  /**
+   * Store access for adapters that diff a board against what is already stored (ATS
+   * ghost-job detection, plan 021B). Optional: adapters that do not need it ignore it.
+   */
+  store?: import('./store.ts').Store;
+  /** ATS ghost-job detection enabled (RADAR_ATS_GHOST_CHECK); a source may opt out via config.ghostCheck. */
+  ghostCheck?: boolean;
 }
 
 export interface SourceAdapter {

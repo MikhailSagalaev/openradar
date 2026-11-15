@@ -28,6 +28,8 @@
 | RemoteWorker UK — Все вакансии | rss | official | да | `https://remoteworker.co.uk/feeds/all.xml` | разрешено (`Allow: /`) |
 | Карьерные страницы компаний — Ashby | ats | official | да | публичный API карьерных страниц компаний (Ashby) | не применяется |
 | Карьерные страницы компаний — Greenhouse | ats | official | да | публичный API карьерных страниц компаний (Greenhouse) | не применяется |
+| Dreamwork — MIT-фиды вакансий (GitHub raw) | json | public | opt-in | `https://raw.githubusercontent.com/dreamworkhq/<Repo>/main/data/listings.json` | разрешено — статический хост файлов, robots не ограничивает |
+| Jobbie — US Tech Internships | json | public | opt-in | `https://api.jobbie.bot/public/internships.json` | robots.txt: HTTP 401 (нет файла); фид публично приглашает к чтению (ETag, 30 req/min, описательный UA) |
 | Карьерные страницы компаний — Lever | ats | official | да | публичный API карьерных страниц компаний (Lever) | не применяется |
 | Telegram — Хабр Карьера | telegram | public | да | `https://t.me/s/habr_career` | разрешено — robots.txt: HTTP 404 |
 | Telegram — Game Development Jobs | telegram | public | да | `https://t.me/s/devjobs` | разрешено — robots.txt: HTTP 404 |
@@ -107,8 +109,30 @@
 | Telegram — @stagirovky: стажировки | telegram | public | да | `https://t.me/s/stagirovky` | разрешено — robots.txt: HTTP 404 |
 | Telegram — @startup_job_russia: стартапы | telegram | public | да | `https://t.me/s/startup_job_russia` | разрешено — robots.txt: HTTP 404 |
 | Telegram — @vacancysmm: SMM и маркетинг | telegram | public | да | `https://t.me/s/vacancysmm` | разрешено — robots.txt: HTTP 404 |
+| Telegram — @ai_machinelearning_big_data: AI/ML и Big Data | telegram | public | да | `https://t.me/s/ai_machinelearning_big_data` | разрешено — robots.txt: HTTP 404 (проверено 2026-11-13: 20 постов) |
+| Djinni — IT-вакансии Украины | rss | official | да | `https://djinni.co/jobs/rss/` | разрешено (проверено 2026-11-13: запрещены `/jobs2`, `/q`, `/developers`, `/free-jobs`, `/set_lang` — фид не покрыт) |
+| DOU Jobs — IT-вакансии Украины | rss | official | да | `https://jobs.dou.ua/vacancies/feeds/` | разрешено (проверено 2026-11-13: запрещён `/vacancies/*search=*` — фид без query не покрыт) |
+| HeadHunter Казахстан — Все вакансии | rss | official | да | `https://hh.kz/search/vacancy/rss` | разрешено (проверено 2026-11-13: `Disallow: /rss/*` не покрывает `/search/vacancy/rss`; правила `*?*` нет — в отличие от hh.ru) |
+| HeadHunter Грузия — Все вакансии | rss | official | да | `https://headhunter.ge/search/vacancy/rss` | разрешено (проверено 2026-11-13: тот же движок, `Disallow: /rss/*` не покрывает поисковый RSS) |
+| Zarplata.ru — Вакансии России | rss | official | да | `https://www.zarplata.ru/search/vacancy/rss` | разрешено (проверено 2026-11-13 на zarplata.ru: `Disallow: /rss/*`, `/*?page=` — фид без query не покрыт) |
+| Jobindex — Вакансии Дании | rss | official | да | `https://www.jobindex.dk/jobsoegning.rss` | разрешено (проверено 2026-11-13: запрещены конкретные `/jobsoegning*q=ofir`-адреса — чистый `.rss` не покрыт) |
+| JSJobbs — JavaScript-вакансии | rss | official | да | `https://jsjobbs.com/rss` | разрешено (проверено 2026-11-13: пустой `Disallow:`) |
+| Virtual Vocations — Удалённые вакансии США | rss | official | да | `https://www.virtualvocations.com/rss` | разрешено (проверено 2026-11-13: запрещены `/jobs/*/c-*` и `/advanced_search/index/` — фид не покрыт) |
+| SwissDevJobs — IT-вакансии Швейцарии | rss | official | да | `https://swissdevjobs.ch/rss` | разрешено (проверено 2026-11-13: запрещены `/*.txt$`, `/wp-content/`, служебные пути — `/rss` не покрыт) |
+| TradingView — Вакансии (Teamtailor) | ats | official | да | `https://tradingview.teamtailor.com/jobs.json` | разрешено (проверено 2026-11-13: запрещены `/app/`, `/messages/`, `/messenger/`, `/jobs/internal/`; `Content-Signal: search=yes`; переходный RSS-пресет заменён провайдером ats-teamtailor) |
+| Abbott — Вакансии (Workday) | sitemap | public | да | `https://abbott.wd5.myworkdayjobs.com/abbottcareers/siteMap.xml` | разрешено (проверено 2026-11-13: `Allow: /abbottcareers/`, sitemap объявлен в robots) |
+| Elevance Health — Вакансии (Workday) | sitemap | public | да | `https://elevancehealth.wd1.myworkdayjobs.com/ANT/siteMap.xml` | разрешено (проверено 2026-11-13: `Allow: /ANT/`, sitemap объявлен в robots) |
+| ATS — SmartRecruiters API (существующие 9 компаний) | ats | official | да | `https://api.smartrecruiters.com/v1/companies/{slug}/postings` | **запрещено для RadarBot** (проверено 2026-11-13: `User-agent: LinkedInBot / Allow: /v1/companies/`, `User-agent: * / Disallow: /`) |
 
 ## Решения
+
+- **UK Register of Licensed Sponsors (workers) — визовое обогащение (план 021D, 2026-11-13)** — источник: [gov.uk публикация](https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers), CSV-вложение на `assets.publishing.service.gov.uk` (редакция 2026-11-12: 142 998 строк, 142 249 индексированных имён). Лицензия: **Open Government Licence v3.0** (явно указана на странице публикации) — свободное использование с атрибуцией. Robots: `www.gov.uk/robots.txt` для `User-agent: *` запрещает только `/*/print$` и `/search/all*` — страница публикации разрешена; `assets.publishing.service.gov.uk/robots.txt` — HTTP 404 (файла нет, ограничений нет). Проверено 2026-11-13. Дисциплина: не чаще 2 чтений в сутки (12-часовое окно кэша), часовой backoff при ошибке, потоковое чтение с лимитом 60 МБ, sanity-floor 1000 имён. Матчинг — только точный по нормализованному имени (`normalizeCompany`), включая торговые имена «t/a»; отсутствие в реестре НЕ порождает негативной пометки. Заметка `visaSponsor` — факт о лицензии компании, не обещание спонсорства конкретной вакансии; UI и API несут дисклеймер. Живая проверка: `scripts/check-visa-sponsors.mjs` (15/21 пробных работодателей, включая Monzo, Deliveroo/Roofoods, Revolut, Wise, Anthropic, Cursor, ElevenLabs).
+
+- **ATS — SmartRecruiters (9 компаний, включая Wise и ServiceNow)** — robots.txt разрешает API только LinkedInBot (`User-agent: * / Disallow: /`, подтверждено 2026-11-11 и 2026-11-13). Решение: _ждёт решения оператора_ (варианты: отключить провайдер; читать публичные HTML-страницы jobs.smartrecruiters.com, если их robots позволит — проверить отдельно; запросить разрешение у SmartRecruiters). Новые компании (Alten 1242, Experian 390, Joom 2 — борды проверены, ответы 200) НЕ добавлять до решения.
+
+- **hh-семейство (hh.kz, headhunter.ge, zarplata.ru), добавлено 2026-11-13** — robots запрещает `/rss/*`, но поисковый RSS `/search/vacancy/rss` этим правилом НЕ покрыт (RFC 9309: префиксное совпадение пути), а запрета `*?*` (как на hh.ru) у этих сайтов нет. Вердикт: разрешено. Не «чинить» в запрет без свежего robots.txt.
+
+- **Происхождение каталога ATS-борд (импорт 2026-11-13)** — список компаний Ashby расширен данными `directory.json` проекта [groundtruthtools/ats-jobs-mcp](https://github.com/groundtruthtools/ats-jobs-mcp) (MIT, Copyright 2026 Ground Truth; снапшот 2026-08-24, 7 479 борд). Импортируются только факты «провайдер + slug», не код. Каждый импортированный борд повторно проверен живым чтением того же публичного API (`scripts/verify-ats-boards.mjs`): батч 1 — 295 live из 300. robots API-хостов перепроверен перед импортом: `boards-api.greenhouse.io` — `Disallow: /embed/` (наш путь `/v1/boards/` разрешён); `api.ashbyhq.com/robots.txt` — HTTP 401 (файла нет, ограничений нет). Колонка jobs снапшота использовалась только для приоритизации проверки, не как живые данные.
 
 - **FL.ru — Все заказы** — robots.txt запрещает `Disallow: */rss/*`. Решение: _ждёт решения оператора_.
 - **Работа России — Удалённая работа** — robots.txt запрещает `Disallow: /`. Решение: _ждёт решения оператора_.

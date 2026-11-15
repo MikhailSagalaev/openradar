@@ -13,16 +13,28 @@ export function githubOAuthConfigured(runtime: Runtime): boolean {
 }
 
 /** OAuth redirect base: RADAR_PUBLIC_URL when configured, never a client-chosen Host otherwise unchecked. */
+let warnedMissingPublicUrl = false;
 function baseUrlOf(c: Context, runtime: Runtime): string {
   const configured = runtime.env.RADAR_PUBLIC_URL?.replace(/\/+$/, '');
   if (configured) return configured;
+  if (runtime.env.NODE_ENV === 'production' && !warnedMissingPublicUrl) {
+    warnedMissingPublicUrl = true;
+    runtime.logger.warn('RADAR_PUBLIC_URL is unset in production: OAuth redirects fall back to the request Host; set RADAR_PUBLIC_URL for public deployments');
+  }
   const host = c.req.header('host') ?? new URL(c.req.url).host;
   const proto = c.req.header('x-forwarded-proto') === 'https' ? 'https' : 'http';
   return `${proto}://${host}`;
 }
 
-function secureCookie(c: Context): boolean {
-  return c.req.header('x-forwarded-proto') === 'https';
+/**
+ * Cookie `Secure` comes from configuration, not only from a proxy header: a TLS
+ * proxy that omits x-forwarded-proto must not downgrade session cookies. The
+ * header stays as an additional signal for dev behind TLS-terminating proxies.
+ */
+export function secureCookie(c: Context, runtime: Runtime): boolean {
+  return runtime.env.RADAR_PUBLIC_URL?.startsWith('https:') === true
+    || runtime.env.NODE_ENV === 'production'
+    || c.req.header('x-forwarded-proto') === 'https';
 }
 
 function loginRedirect(c: Context, reason: string): Response {
@@ -37,7 +49,7 @@ export function startGitHubOAuth(c: Context, runtime: Runtime): Response {
   setCookie(c, STATE_COOKIE, state, {
     httpOnly: true,
     sameSite: 'Lax',
-    secure: secureCookie(c),
+    secure: secureCookie(c, runtime),
     path: '/auth/github/callback',
     maxAge: STATE_TTL_SEC,
   });
@@ -47,7 +59,7 @@ export function startGitHubOAuth(c: Context, runtime: Runtime): Response {
     setCookie(c, RETURN_TO_COOKIE, rawReturnTo, {
       httpOnly: true,
       sameSite: 'Lax',
-      secure: secureCookie(c),
+      secure: secureCookie(c, runtime),
       path: '/auth/github/callback',
       maxAge: STATE_TTL_SEC,
     });
@@ -122,7 +134,7 @@ export async function handleGitHubCallback(c: Context, runtime: Runtime): Promis
   setCookie(c, 'radar_session', sessionId, {
     httpOnly: true,
     sameSite: 'Lax',
-    secure: secureCookie(c),
+    secure: secureCookie(c, runtime),
     path: '/',
     maxAge: SESSION_TTL_SEC,
   });

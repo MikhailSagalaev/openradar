@@ -10,6 +10,19 @@ interface RateLimitOptions {
    * Falls back to the proxy-derived client IP.
    */
   keyFrom?: (c: Context) => string | undefined;
+  /** Per-route override of the process-wide trusted-proxy setting. */
+  trustProxy?: boolean;
+}
+
+// Deployment invariant: forwarded headers are only trustworthy behind a proxy that
+// APPENDS the real client IP to X-Forwarded-For (nginx `proxy_set_header X-Forwarded-For
+// $proxy_add_x_forwarded_for;`). Reachable directly, the header is client-controlled,
+// so by default every direct client shares one bucket instead of rotating keys.
+let defaultTrustProxy = false;
+
+/** Called once from createApp with the RADAR_TRUSTED_PROXY env flag. */
+export function configureRateLimit(settings: { trustProxy: boolean }): void {
+  defaultTrustProxy = settings.trustProxy;
 }
 
 /**
@@ -31,10 +44,14 @@ export function rateLimit(options: RateLimitOptions) {
       }
     }
 
-    // Our nginx APPENDS the real client IP to X-Forwarded-For, so the LAST
-    // value is the only one the client cannot spoof by sending its own header.
-    const forwardedParts = c.req.header('x-forwarded-for')?.split(',').map((p) => p.trim()).filter(Boolean) ?? [];
-    const client = options.keyFrom?.(c) || forwardedParts[forwardedParts.length - 1] || c.req.header('x-real-ip') || 'local';
+    // Behind a trusted proxy, nginx APPENDS the real client IP to X-Forwarded-For,
+    // so the LAST value is the only one the client cannot spoof by sending its own
+    // header. Without a trusted proxy the headers are ignored entirely.
+    const trustProxy = options.trustProxy ?? defaultTrustProxy;
+    const forwardedParts = trustProxy
+      ? c.req.header('x-forwarded-for')?.split(',').map((p) => p.trim()).filter(Boolean) ?? []
+      : [];
+    const client = options.keyFrom?.(c) || forwardedParts[forwardedParts.length - 1] || (trustProxy ? c.req.header('x-real-ip') : undefined) || 'local';
     const key = client;
     const hits = (buckets.get(key) ?? []).filter((ts) => now - ts < options.windowMs);
     // Agents pace themselves by these headers instead of discovering 429s blind.

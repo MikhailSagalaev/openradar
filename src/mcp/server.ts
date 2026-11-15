@@ -9,13 +9,15 @@ import { createInterface } from 'node:readline';
 import { qualityFlagsOf } from '../core/quality.ts';
 import { salaryLooksWrong } from '../core/salary-sanity.ts';
 import { stripInvisible } from '../core/text.ts';
-import { savedFiltersFrom, type SavedFilters } from '../core/subscriptions.ts';
+import { isEmptyFilter, savedFiltersFrom, type SavedFilters } from '../core/subscriptions.ts';
 import type { LeadSort, ListLeadsOptions } from '../core/store.ts';
 import { rubToUsd } from '../core/salary.ts';
 import { buildXRayResult } from '../core/xray.ts';
 import { computeInsights, estimateMarket } from '../core/market.ts';
 import { VERSION } from '../version.ts';
 import type { Lead, LeadType } from '../core/types.ts';
+import { argsHash, ConfirmationLadder, WRITE_TOOLS } from './safety.ts';
+import { explainLead } from '../core/explain.ts';
 
 export interface McpBackend {
   /** Feed leads as this caller may see them (already delayed and contact-projected). */
@@ -115,7 +117,9 @@ export const MCP_TOOLS: McpTool[] = [
     name: 'submit_lead',
     description:
       'Submit a newly discovered job vacancy or freelance order into the openradar network. ' +
-      'Requires user authorization (Bearer mcp_…) to attribute contribution and earn participant points.',
+      'Requires user authorization (Bearer mcp_…) to attribute contribution and earn participant points. ' +
+      'Safety-ladder: the first call is dry-run and returns status "held" with a summary and a confirmation_token; ' +
+      'nothing is submitted until you call again with the identical arguments plus confirm:true and that token. A replayed confirmation returns the original receipt.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -129,6 +133,8 @@ export const MCP_TOOLS: McpTool[] = [
         remote: { type: 'boolean', description: 'Whether remote work is allowed' },
         author: { type: 'string', description: 'Company name or client handle' },
         city: { type: 'string', description: 'City if tied to location' },
+        confirm: { type: 'boolean', description: 'Set true (with confirmation_token) to execute a previously held action after the user approves' },
+        confirmation_token: { type: 'string', description: 'The token returned by the held first call' },
       },
       required: ['title', 'text', 'type'],
     },
@@ -137,13 +143,16 @@ export const MCP_TOOLS: McpTool[] = [
     name: 'vote_lead',
     description:
       'Cast a verification or quality vote on a lead: useful, junk (spam, course, ad, not work), ' +
-      'scam (fraud, upfront fee, illegal), or closed (already expired or taken). Requires user token.',
+      'scam (fraud, upfront fee, illegal), or closed (already expired or taken). Requires user token. ' +
+      'Safety-ladder: the first call returns status "held" with a confirmation_token; the vote is recorded only on a repeat call with identical arguments plus confirm:true and that token.',
     inputSchema: {
       type: 'object',
       properties: {
         id: { type: 'string', description: 'Lead ID to vote on' },
         verdict: { type: 'string', enum: ['useful', 'junk', 'scam', 'closed'], description: 'Quality verdict' },
         reason: { type: 'string', description: 'Optional explanation of the verdict' },
+        confirm: { type: 'boolean', description: 'Set true (with confirmation_token) to execute a previously held vote after the user approves' },
+        confirmation_token: { type: 'string', description: 'The token returned by the held first call' },
       },
       required: ['id', 'verdict'],
     },
@@ -160,7 +169,8 @@ export const MCP_TOOLS: McpTool[] = [
     name: 'save_search',
     description:
       'Subscribe the user to a search: new matching leads arrive in their Telegram (or webhook) at most every 15 minutes. ' +
-      'Needs the user\'s personal token (Authorization: Bearer mcp_…, made in their openradar profile). Ask the user before subscribing.',
+      'Needs the user\'s personal token (Authorization: Bearer mcp_…, made in their openradar profile). Ask the user before subscribing. ' +
+      'Safety-ladder: the first call returns status "held" with a confirmation_token; the subscription is created only on a repeat call with identical arguments plus confirm:true and that token.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -171,6 +181,8 @@ export const MCP_TOOLS: McpTool[] = [
         remote: { type: 'boolean', description: 'Only remote work' },
         min_budget_rub: { type: 'number', description: 'Minimum budget or monthly pay in roubles' },
         market: { type: 'string', enum: ['ru', 'intl'], description: 'ru = Russian-language posts, intl = the rest' },
+        confirm: { type: 'boolean', description: 'Set true (with confirmation_token) to execute a previously held subscription after the user approves' },
+        confirmation_token: { type: 'string', description: 'The token returned by the held first call' },
       },
     },
   },
@@ -307,6 +319,7 @@ function leadDetails(lead: Lead): Record<string, unknown> {
       : undefined,
     payment_period: lead.paymentPeriod,
     votes: { useful: lead.votes_up ?? 0, junk: lead.votes_down ?? 0, scam: lead.votes_scam ?? 0, closed: lead.votes_closed ?? 0 },
+    explanation: explainLead(lead),
   };
 }
 
@@ -317,7 +330,30 @@ function asType(value: unknown): LeadType | undefined {
 /**
  * Handles one JSON-RPC 2.0 message. Notifications (no `id`) get no response: null.
  */
-export async function handleMcpRequest(req: McpRequest, backend: McpBackend): Promise<McpResponse | null> {
+/** Shared confirmation ladder for the HTTP surface (one process); stdio may pass its own. */
+const defaultLadder = new ConfirmationLadder();
+
+/**
+ * Runs a write tool through the safety-ladder: held until the user confirms with the token
+ * and identical args, executed once, then replayed from the receipt. Read tools never come here.
+ */
+async function runWrite(
+  id: McpResponse['id'],
+  ladder: ConfirmationLadder,
+  tool: string,
+  args: Record<string, unknown>,
+  execute: () => Promise<unknown>,
+): Promise<McpResponse> {
+  const decision = ladder.check(tool, args);
+  if (decision.kind === 'held') return text(id, decision.held);
+  if (decision.kind === 'replay') return text(id, decision.receipt);
+  const result = await execute();
+  ladder.record(decision.token, tool, result, argsHash(tool, args));
+  return text(id, { status: 'executed', tool, replayed: false, result, actedOnBehalfOfUser: true });
+}
+
+export async function handleMcpRequest(req: McpRequest, backend: McpBackend, options: { ladder?: ConfirmationLadder } = {}): Promise<McpResponse | null> {
+  const ladder = options.ladder ?? defaultLadder;
   const isNotification = req.id === undefined;
   const id = req.id ?? null;
   if (req?.jsonrpc !== '2.0' || typeof req.method !== 'string') {
@@ -441,7 +477,7 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend): Pr
       const remote = typeof args.remote === 'boolean' ? args.remote : undefined;
       const author = typeof args.author === 'string' ? args.author.trim() : undefined;
       const city = typeof args.city === 'string' ? args.city.trim() : undefined;
-      const res = await backend.submitLead({
+      return runWrite(id, ladder, 'submit_lead', args, () => backend.submitLead!({
         url,
         title: title || textContent.slice(0, 100),
         text: textContent || title,
@@ -452,8 +488,7 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend): Pr
         remote,
         author,
         city,
-      });
-      return text(id, res);
+      }));
     }
 
     if (name === 'vote_lead') {
@@ -465,8 +500,7 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend): Pr
       }
       if (!backend.voteLead) return fail(id, -32001, 'Voting requires personal agent token (Authorization: Bearer mcp_…)');
       const reason = typeof args.reason === 'string' ? args.reason.trim() : undefined;
-      const res = await backend.voteLead(leadId, verdict as 'useful' | 'junk' | 'scam' | 'closed', reason);
-      return text(id, res);
+      return runWrite(id, ladder, 'vote_lead', args, () => backend.voteLead!(leadId, verdict as 'useful' | 'junk' | 'scam' | 'closed', reason));
     }
 
     if (name === 'get_lead_details') {
@@ -512,13 +546,17 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend): Pr
         budget: args.min_budget_rub,
         language: args.market === 'ru' ? 'ru' : args.market === 'intl' ? 'en' : undefined,
       });
-      const saved = await backend.subscriptions.save(filters);
-      if ('error' in saved) return fail(id, -32602, saved.error);
-      return text(id, {
-        ...saved,
-        note: saved.telegramLinked
-          ? 'New matching leads will arrive in the user\'s Telegram.'
-          : `The user has not linked Telegram yet: they open ${saved.manageUrl} and press «Подключить Telegram», or set a webhook there.`,
+      // Reject an empty search before holding: there is nothing valid to confirm.
+      if (isEmptyFilter(filters)) return fail(id, -32602, 'Give at least one filter: query, skill, type, it, remote or budget');
+      return runWrite(id, ladder, 'save_search', args, async () => {
+        const saved = await backend.subscriptions!.save(filters);
+        if ('error' in saved) throw new Error(saved.error);
+        return {
+          ...saved,
+          note: saved.telegramLinked
+            ? 'New matching leads will arrive in the user\'s Telegram.'
+            : `The user has not linked Telegram yet: they open ${saved.manageUrl} and press «Подключить Telegram», or set a webhook there.`,
+        };
       });
     }
 

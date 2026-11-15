@@ -37,10 +37,16 @@ export interface JsonBoardConfig {
   published?: string;
   salaryMin?: string;
   salaryMax?: string;
+  /** Field with the pay as published («$20 – $30/hr»): kept verbatim, wins over salaryMin/Max. */
+  salary?: string;
   currency?: string;
+  /** Field with the pay period (`year`/`annual`, `month`, `hour`). Without it the board's pay is monthly. */
+  salaryPeriod?: string;
   /** Field that says the format; a mention of remote work in it counts. */
   format?: string;
   maxAgeDays?: number;
+  /** Title/text keywords the pipeline requires (rules.ts); presets may narrow a mixed feed. */
+  includeKeywords?: string[];
 }
 
 /** The value at `a.b.c`, or at `a.0.b` in an array. */
@@ -71,9 +77,14 @@ export function fillTemplate(template: string, item: unknown): string {
 
 const REMOTE = /удал[её]нн|remote/i;
 
-function payText(min: unknown, max: unknown, currency: string): string | undefined {
+function payText(min: unknown, max: unknown, currency: string, period?: unknown): string | undefined {
   if (!min && !max) return undefined;
   const range = min && max ? `${min}–${max}` : min ? `от ${min}` : `до ${max}`;
+  // The board names the period itself (Dreamwork: annual USD). Only an explicit marker changes
+  // the wording — everything else keeps the monthly default Russian boards publish.
+  const p = String(period ?? '').toLowerCase();
+  if (/^(?:year|yr|annual|yearly|per[- ]?year|год|годовая|ежегодн)/.test(p)) return `${range} ${currency} per year`;
+  if (/^(?:hour|hr|hourly|per[- ]?hour|час|почасов)/.test(p)) return `${range} ${currency} per hour`;
   return `${range} ${currency} в месяц`;
 }
 
@@ -86,6 +97,10 @@ export function leadFromItem(source: SourceRecord, config: JsonBoardConfig, item
   const remote = config.format ? REMOTE.test(textOf(valueAt(item, config.format))) : false;
   const min = config.salaryMin ? valueAt(item, config.salaryMin) : undefined;
   const max = config.salaryMax ? valueAt(item, config.salaryMax) : undefined;
+  const period = config.salaryPeriod ? valueAt(item, config.salaryPeriod) : undefined;
+  // A board that publishes pay as one string («$20 – $30/hr») keeps it verbatim: hourly rates
+  // under 100 must not be dropped by the numeric range parser.
+  const publishedPay = config.salary ? textOf(valueAt(item, config.salary)) : '';
   const published = config.published ? valueAt(item, config.published) : undefined;
   return {
     sourceId: source.id,
@@ -97,7 +112,10 @@ export function leadFromItem(source: SourceRecord, config: JsonBoardConfig, item
     author: config.company,
     city: remote ? 'Онлайн' : city || undefined,
     isRemote: remote,
-    rawSalary: payText(min, max, config.currency ?? 'RUB'),
+    // A board that states its currency (Dreamwork: USD) says so on the lead itself;
+    // without it the pipeline detects the currency from the text as before.
+    ...(config.currency ? { currency: config.currency } : {}),
+    rawSalary: publishedPay || payText(min, max, config.currency ?? 'RUB', period),
     publishedAt: typeof published === 'string' ? published : undefined,
     raw: { json: true },
   };

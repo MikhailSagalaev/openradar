@@ -282,11 +282,20 @@ export async function ingestRawLead(
     await deps.store.initLeadDeliveries(lead.id, registeredSinks);
   }
 
+  // Claim this lead's rows before sending so the background outbox worker cannot
+  // pick them up mid-flight (duplicate Telegram/webhook messages). Older custom
+  // stores without the claim API keep the previous behavior.
+  let sinksToDeliver = registeredSinks;
+  if (deps.store.claimLeadDeliveries && registeredSinks.length > 0) {
+    const claimed = await deps.store.claimLeadDeliveries(lead.id, 120_000);
+    sinksToDeliver = claimed.map((d) => d.sink);
+  }
+
   const deliveries = await deps.sinks.deliver(lead, {
     env: deps.env,
     logger: deps.logger,
     fetchImpl: deps.fetchImpl ?? fetch,
-  }, registeredSinks);
+  }, sinksToDeliver);
 
   for (const delivery of deliveries) {
     await deps.store.recordDelivery(

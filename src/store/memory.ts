@@ -35,6 +35,7 @@ import { normalizeSalary } from '../core/salary.ts';
 import { MIN_CONFIDENCE, type ModelFacts } from '../research/model.ts';
 import { countFailedInRow } from '../core/source-health.ts';
 import type { SubscriptionRecord } from '../core/subscriptions.ts';
+import type { VisaSponsorNote } from '../research/visa-sponsors.ts';
 import type {
   Contact,
   Lead,
@@ -129,7 +130,8 @@ export class MemoryStore implements Store {
       .filter((lead) => {
         if (lead.titleKey !== titleKey) return false;
         if (city && lead.city !== city) return false;
-        if (!city && lead.city !== null && lead.city !== undefined) return false;
+        // Without a city, match any city (Postgres parity): ingest's employer
+        // check already guards cross-company merges.
         return lead.createdAt >= sinceIso;
       })
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -423,6 +425,12 @@ export class MemoryStore implements Store {
     lead.metadata = { ...lead.metadata, enrichedAt: new Date().toISOString() };
   }
 
+  async saveLeadVisaSponsor(id: string, note: VisaSponsorNote): Promise<void> {
+    const lead = this.leads.get(id);
+    if (!lead) return;
+    lead.metadata = { ...(lead.metadata ?? {}), visaSponsor: note };
+  }
+
   private reviews = new Map<string, Map<number, LeadReview>>();
 
   async nextLeadToReview(userId: number, options: { direction?: string; bucket: ReviewBucket }): Promise<Lead | null> {
@@ -660,6 +668,17 @@ export class MemoryStore implements Store {
     }
   }
 
+  async listBoardLeads(options: { sourceId: string; externalIdPrefix: string; createdAfter: string; limit: number }): Promise<Array<Pick<Lead, 'id' | 'externalId' | 'state'>>> {
+    const out: Array<Pick<Lead, 'id' | 'externalId' | 'state'>> = [];
+    for (const lead of this.leads.values()) {
+      if (lead.sourceId !== options.sourceId || !lead.externalId?.startsWith(options.externalIdPrefix)) continue;
+      if (lead.createdAt < options.createdAfter) continue;
+      out.push({ id: lead.id, externalId: lead.externalId, state: lead.state ?? 'active' });
+      if (out.length >= options.limit) break;
+    }
+    return out;
+  }
+
   async saveLeadFacts(id: string, facts: PageFacts, fill: LeadFactsFill): Promise<void> {
     const lead = this.leads.get(id);
     if (!lead) return;
@@ -870,7 +889,7 @@ export class MemoryStore implements Store {
     return this.queryLeads(options);
   }
 
-  private queryLeads(options: FeedOptions, feedOnly = false): Lead[] {
+  private queryLeads(options: FeedOptions, feedOnly = false, countOnly = false): Lead[] {
     let result = Array.from(this.leads.values());
     if (options.createdBefore) {
       const cutoff = options.createdBefore;
@@ -942,6 +961,10 @@ export class MemoryStore implements Store {
       });
     }
 
+    const limit = Math.max(1, Math.min(options.limit ?? 50, 5000));
+    const offset = Math.max(0, Math.min(Math.floor(options.offset ?? 0), 10_000));
+    // A count needs no ordering and no per-lead copies: the same filters, less work.
+    if (countOnly) return result.slice(offset, offset + limit);
     const ascending = feedOnly && Boolean(options.after);
     const usd = (l: Lead): number => l.normalizedUsdMax ?? l.normalizedUsdMin ?? -1;
     const now = Date.now();
@@ -955,8 +978,6 @@ export class MemoryStore implements Store {
       if (options.sort === 'budget' && usd(a) !== usd(b)) return usd(b) - usd(a);
       return -order;
     });
-    const limit = Math.max(1, Math.min(options.limit ?? 50, 5000));
-    const offset = Math.max(0, Math.min(Math.floor(options.offset ?? 0), 10_000));
     return result.slice(offset, offset + limit).map((l) => ({
       ...l,
       votes_up: l.votes_up ?? 0,
@@ -1105,6 +1126,7 @@ export class MemoryStore implements Store {
       current.attempts += 1;
       current.lastError = error;
       current.nextAttemptAt = nextAttemptAt ?? now;
+      current.leasedUntil = undefined;
       current.updatedAt = now;
     } else {
       this.leadDeliveries.set(key, {
@@ -1123,9 +1145,29 @@ export class MemoryStore implements Store {
   async getPendingDeliveries(limit = 50): Promise<LeadDeliveryRecord[]> {
     const now = new Date().toISOString();
     const pending = Array.from(this.leadDeliveries.values())
-      .filter((d) => d.status !== 'sent' && d.attempts < 5 && d.nextAttemptAt <= now)
+      .filter((d) => d.status !== 'sent' && d.attempts < 5 && d.nextAttemptAt <= now && (!d.leasedUntil || d.leasedUntil <= now))
       .sort((a, b) => a.nextAttemptAt.localeCompare(b.nextAttemptAt));
-    return pending.slice(0, limit);
+    return pending.slice(0, limit).map((d) => ({ ...d }));
+  }
+
+  async claimPendingDeliveries(limit: number, leaseMs: number): Promise<LeadDeliveryRecord[]> {
+    const now = new Date().toISOString();
+    const leaseEnd = new Date(Date.now() + leaseMs).toISOString();
+    const due = Array.from(this.leadDeliveries.values())
+      .filter((d) => d.status !== 'sent' && d.attempts < 5 && d.nextAttemptAt <= now && (!d.leasedUntil || d.leasedUntil <= now))
+      .sort((a, b) => a.nextAttemptAt.localeCompare(b.nextAttemptAt))
+      .slice(0, limit);
+    for (const d of due) d.leasedUntil = leaseEnd;
+    return due.map((d) => ({ ...d }));
+  }
+
+  async claimLeadDeliveries(leadId: string, leaseMs: number): Promise<LeadDeliveryRecord[]> {
+    const now = new Date().toISOString();
+    const leaseEnd = new Date(Date.now() + leaseMs).toISOString();
+    const due = Array.from(this.leadDeliveries.values())
+      .filter((d) => d.leadId === leadId && d.status !== 'sent' && (!d.leasedUntil || d.leasedUntil <= now));
+    for (const d of due) d.leasedUntil = leaseEnd;
+    return due.map((d) => ({ ...d }));
   }
 
   async getLeadDeliveries(leadId: string): Promise<LeadDeliveryRecord[]> {
@@ -1430,6 +1472,10 @@ export class MemoryStore implements Store {
 
   async getLeadsForFeed(options: FeedOptions = {}): Promise<Lead[]> {
     return this.queryLeads(options, true);
+  }
+
+  async countLeads(options: FeedOptions & { feedOnly?: boolean } = {}): Promise<number> {
+    return this.queryLeads(options, options.feedOnly === true, true).length;
   }
 
   // --- radar/2 hub ---

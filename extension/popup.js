@@ -390,7 +390,11 @@ function renderAccount(account) {
 async function signIn() {
   const base = normalizeBase(fields.marketBase.value) || DEFAULT_MARKET_BASE;
   const back = chrome.runtime.getURL('connected.html');
-  await chrome.tabs.create({ url: `${base}/extension/connect?redirect_uri=${encodeURIComponent(back)}` });
+  // One-time flow nonce: connected.html is web-accessible, so the account write
+  // must be bound to a connect flow this popup actually started.
+  const state = crypto.randomUUID();
+  await chrome.storage.local.set({ radarConnectState: state });
+  await chrome.tabs.create({ url: `${base}/extension/connect?redirect_uri=${encodeURIComponent(back)}&state=${state}` });
   window.close();
 }
 

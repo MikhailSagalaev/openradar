@@ -8,6 +8,7 @@ import { formatLeadText } from './format.ts';
 import { activeFilterCount, budgetStepsFor, type FeedFilters, hasActiveFilters, rankedWindowApplies } from './filters.ts';
 import { SEO_CATALOG, localizeCatalogEntry } from './seo.ts';
 import { qualityFlagsOf } from '../core/quality.ts';
+import { explainLead } from '../core/explain.ts';
 import { BROKEN_AFTER, sourceState, type SourceState } from '../core/source-health.ts';
 import { feedQuery, type SubscriptionRecord } from '../core/subscriptions.ts';
 import type { SourceRobots } from '../pipeline/robots-audit.ts';
@@ -136,6 +137,14 @@ export interface SourceFormValues {
   maxAgeDays: string;
   /** Sitemap: regex that picks vacancy pages. */
   pattern: string;
+  /** Alexandria: job titles to include, comma-separated. */
+  titles: string;
+  /** Alexandria: ISO country codes, comma-separated. */
+  countries: string;
+  /** Alexandria: only postings of the last N days (1–90). */
+  lastDays: string;
+  /** Alexandria: records per poll (1–100, credit guard). */
+  maxResults: string;
   /** Send leads of this source to the hub. */
   share?: boolean;
 }
@@ -188,6 +197,7 @@ const KIND_LABELS: Record<string, string> = {
   hn: 'Hacker News — Who is hiring',
   ats: 'Карьерные страницы компаний',
   sitemap: 'Карта сайта (JobPosting)',
+  alexandria: 'Alexandria (Firecrawl)',
 };
 
 /**
@@ -197,6 +207,7 @@ const KIND_LABELS: Record<string, string> = {
 export const KIND_ACCESS: Record<string, AccessKind> = {
   rss: 'official',
   adzuna: 'official',
+  alexandria: 'auth-required',
   telegram: 'public',
   'telegram-account': 'user-provided',
   kwork: 'public',
@@ -269,10 +280,11 @@ const KIND_HINTS: Record<string, string> = {
   hn: 'Ежемесячный тред «Who is hiring?»',
   ats: 'Компании на Greenhouse, Lever, Ashby, Workable, Recruitee или SmartRecruiters',
   sitemap: 'Страницы вакансий с разметкой JobPosting',
+  alexandria: 'Международные вакансии BlitzAPI через Firecrawl; нужен свой ключ, кредиты за запись',
 };
 const KIND_GROUPS: Array<{ title: string; kinds: string[] }> = [
   { title: 'Ленты и каналы', kinds: ['rss', 'telegram', 'telegram-account', 'imap', 'webhook'] },
-  { title: 'Биржи и сайты вакансий', kinds: ['kwork', 'hh', 'trudvsem', 'remoteok', 'remotive', 'workingnomads', 'arbeitnow', 'hn'] },
+  { title: 'Биржи и сайты вакансий', kinds: ['kwork', 'hh', 'trudvsem', 'remoteok', 'remotive', 'workingnomads', 'arbeitnow', 'hn', 'alexandria'] },
   { title: 'Сайты компаний', kinds: ['ats', 'sitemap'] },
 ];
 
@@ -567,6 +579,20 @@ main {
   color: #ef4444;
 }
 .user-menu-link.danger:hover {
+  background: rgba(239, 68, 68, 0.08);
+}
+.user-menu-logout {
+  margin: 0;
+}
+.user-menu-logout .user-menu-link {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.user-menu-logout .user-menu-link:hover {
   background: rgba(239, 68, 68, 0.08);
 }
 .auth-signin-btn {
@@ -1433,6 +1459,20 @@ a:focus-visible, button:focus-visible, summary:focus-visible, input[type=checkbo
   align-items: center;
   gap: 8px;
 }
+.verdict {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.verdict-ok { background: var(--green-soft, rgba(34,197,94,.14)); color: var(--green, #16a34a); }
+.verdict-warn { background: rgba(234,179,8,.14); color: var(--amber, #b45309); }
+.verdict-bad { background: rgba(244,63,94,.12); color: var(--rose); }
+.explain-line { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 6px; }
+.explain-item { font-size: 12px; cursor: help; white-space: nowrap; }
+.explain-item.pass { color: var(--green, #16a34a); }
+.explain-item.fail { color: var(--rose); }
 .btn {
   display: inline-flex;
   align-items: center;
@@ -2296,7 +2336,9 @@ export function layout(input: {
           <a class="user-menu-link" href="/submit">${escapeHtml(lang === 'ru' ? 'Добавить по ссылке' : 'Submit by URL')}</a>
           <a class="user-menu-link" href="/extension">${escapeHtml(lang === 'ru' ? 'Браузерное расширение' : 'Browser Extension')}</a>
           <div class="user-menu-sep"></div>
-          <a class="user-menu-link danger" href="/logout">${escapeHtml(t.signOut)}</a>
+          <form method="post" action="/logout" class="user-menu-logout">
+            <button type="submit" class="user-menu-link danger">${escapeHtml(t.signOut)}</button>
+          </form>
         </div>
       </div>
     `
@@ -3370,6 +3412,26 @@ document.getElementById('share-lead')?.addEventListener('click', async (event) =
 
   const cleanUrl = safeHttpUrl(lead.url);
 
+  // Visa sponsorship: a fact from the UK public register, never a promise about the role.
+  const visaNote = (lead.metadata as Record<string, unknown> | undefined)?.visaSponsor as
+    { register?: string; name?: string; route?: string; city?: string; registerDate?: string; matched?: string } | undefined;
+  const visaRow = lead.type === 'job' && visaNote?.register === 'uk' && typeof visaNote.name === 'string'
+    ? `<div><dt>${escapeHtml(t.visaSponsorLabel)}</dt><dd><b>${escapeHtml(visaNote.name)}</b>${visaNote.route ? ` · ${escapeHtml(visaNote.route)}` : ''}${visaNote.city ? ` · ${escapeHtml(visaNote.city)}` : ''}<div class="muted small" style="margin-top:4px">${escapeHtml(t.visaSponsorHint)}${visaNote.registerDate ? ` (${escapeHtml(visaNote.registerDate)})` : ''} <a href="https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers" rel="noopener" target="_blank">gov.uk</a></div></dd></div>`
+    : '';
+
+  // Explainable scoring (plan 021A): named checks, binary gates and the verdict they imply.
+  const explanation = explainLead(lead);
+  const verdictLabel = t.verdict[explanation.verdict];
+  const verdictClass = explanation.verdict === 'strong' ? 'ok' : explanation.verdict === 'stretch' ? 'warn' : 'bad';
+  const gateRows = explanation.gates.map((g) => `<span class="explain-item ${g.pass ? 'pass' : 'fail'}" title="${escapeHtml(g.note)}">${g.pass ? '✓' : '✗'} ${escapeHtml(t.gateName[g.name] ?? g.name)}</span>`).join('');
+  const checkRows = explanation.checks.map((ch) => `<span class="explain-item ${ch.pass ? 'pass' : 'fail'}" title="${escapeHtml(ch.note)}">${ch.pass ? '✓' : '✗'} ${escapeHtml(t.checkName[ch.name] ?? ch.name)}</span>`).join('');
+  const explainRow = `<div><dt>${escapeHtml(t.explainLabel)}</dt><dd>
+    <span class="verdict verdict-${verdictClass}">${escapeHtml(verdictLabel)}</span>
+    <div class="explain-line">${gateRows}</div>
+    <div class="explain-line muted small">${checkRows}</div>
+    <div class="muted small" style="margin-top:4px">${escapeHtml(t.explainHint)}</div>
+  </dd></div>`;
+
   const cautionBanner = ((lead.votes_scam ?? 0) >= 1 && lead.status !== 'rejected')
     ? `<div class="caution-banner">
         ${escapeHtml(t.cautionFlag)}
@@ -3464,6 +3526,8 @@ ${cautionBanner}
       <div><dt>${escapeHtml(t.published)}</dt><dd>${formatDate(lead.publishedAt, lang)}</dd></div>
       ${Math.abs(Date.parse(lead.createdAt) - Date.parse(lead.publishedAt ?? lead.createdAt)) > 30 * 60_000 ? `<div><dt>${escapeHtml(t.added)}</dt><dd>${formatDate(lead.createdAt, lang)}</dd></div>` : ''}
       ${lead.author ? `<div><dt>${escapeHtml(t.author)}</dt><dd>${lead.companyKey ? `<a href="/employers/${escapeHtml(encodeURIComponent(lead.companyKey))}">${escapeHtml(lead.author)}</a>` : escapeHtml(lead.author)}</dd></div>` : ''}
+      ${visaRow}
+      ${explainRow}
       ${alsoPublished(data.sightings, t.alsoPublished)}
       ${lead.sourceRef ? `<div><dt>${escapeHtml(t.channel)}</dt><dd>${escapeHtml(lead.sourceRef.channelTitle || lead.sourceRef.channel)}${lead.sourceRef.visibility !== 'public' ? ` (${escapeHtml(t.privateChannel)})` : ''}</dd></div>` : ''}
       ${data.contactsHidden
@@ -3956,6 +4020,19 @@ ${error ? `<div class="error-box" style="margin-bottom:16px">${escapeHtml(error)
   <div data-kind="sitemap">
     ${textField('url', 'Адрес карты сайта', values.url, 'https://example.com/sitemap.xml', 'url', 'sitemap.xml площадки; вложенные карты читаются тоже.')}
     ${textField('pattern', 'Шаблон страниц вакансий', values.pattern, '/vacancies/(\\d+)', 'text', 'Регулярное выражение для адресов вакансий; группа в скобках — номер вакансии. Новые страницы читаются с паузой, разметка JobPosting даёт зарплату и компанию.')}
+  </div>
+
+  <div data-kind="alexandria">
+    <fieldset>
+      <legend>Alexandria (Firecrawl)</legend>
+      <p class="hint">Международные вакансии BlitzAPI через официальный API Firecrawl. Ключ FIRECRAWL_API_KEY задаётся в переменных окружения узла (не здесь); кредиты Firecrawl списываются за запись, пустые ответы бесплатны. Ключ получить на firecrawl.dev.</p>
+      ${textField('titles', 'Должности', values.titles, 'Product Manager, Data Scientist', 'text', 'Через запятую. Пусто — все должности.')}
+      ${textField('countries', 'Страны', values.countries, 'US, GB, DE', 'text', 'ISO-коды через запятую. Пусто — все страны.')}
+      <div class="grid">
+        ${textField('lastDays', 'Свежесть, дней', values.lastDays || '30', '30', 'number', 'От 1 до 90.')}
+        ${textField('maxResults', 'Записей за опрос', values.maxResults || '20', '20', 'number', 'От 1 до 100: каждая запись тратит кредиты.')}
+      </div>
+    </fieldset>
   </div>
 
   <div data-kind="webhook">
@@ -4563,6 +4640,7 @@ export function renderExtensionConnectPage(data: {
   auth?: AuthDisplay;
   handle: string;
   redirectUri: string;
+  state: string;
 }): string {
   const lang = data.lang ?? 'ru';
   const ru = lang === 'ru';
@@ -4575,6 +4653,7 @@ export function renderExtensionConnectPage(data: {
   <p class="muted small">${ru ? 'Отключить можно в самом расширении кнопкой «Выйти».' : 'Disconnect it in the extension with «Выйти».'}</p>
   <form method="post" action="/extension/connect">
     <input type="hidden" name="redirect_uri" value="${escapeHtml(data.redirectUri)}">
+    <input type="hidden" name="state" value="${escapeHtml(data.state)}">
     <button class="btn" type="submit">${ru ? 'Разрешить' : 'Allow'}</button>
   </form>
 </div>`;

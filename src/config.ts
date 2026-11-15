@@ -55,6 +55,10 @@ const envSchema = z.object({
   RADAR_DECIDE_APPLY: booleanFromEnv(false),
   // Pages read per hour for short posts of boards with thin feeds; 0 stops it.
   RADAR_ENRICH_PER_HOUR: z.coerce.number().int().nonnegative().default(120),
+  // Visa sponsorship notes from the UK public register (src/research/visa-sponsors.ts).
+  RADAR_VISA_SPONSORS: booleanFromEnv(true),
+  // ATS board-diff: a job removed from its board is soft-closed, a returned one reopened.
+  RADAR_ATS_GHOST_CHECK: booleanFromEnv(true),
   SUBQ_API_KEY: optionalString,
   RADAR_EXTRACT_PROVIDER: z.enum(['openai', 'gigachat']).default('openai'),
   GIGACHAT_AUTH_KEY: optionalString,
@@ -71,6 +75,8 @@ const envSchema = z.object({
   GITHUB_CLIENT_ID: optionalString,
   GITHUB_CLIENT_SECRET: optionalString,
   RADAR_PUBLIC_URL: optionalString,
+  // Forwarded headers count only behind a proxy that APPENDS the real client IP.
+  RADAR_TRUSTED_PROXY: booleanFromEnv(false),
   RADAR_ADMIN_GITHUB: optionalString,
   RADAR_YANDEX_METRIKA_ID: optionalString,
   RADAR_GA_ID: optionalString,

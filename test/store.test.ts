@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Lead } from '../src/core/types.ts';
 import { MemoryStore } from '../src/store/memory.ts';
-import { TEST_NOW } from './helpers.ts';
+import { PostgresStore } from '../src/store/postgres.ts';
+import { createTestStore, TEST_NOW } from './helpers.ts';
 
 function makeLead(overrides: Partial<Lead> = {}): Lead {
   return {
@@ -346,4 +347,90 @@ describe('store', () => {
 
     await store.close();
   });
+
+  it('title-key dedup without a city matches a lead that has one (memory/postgres parity)', async () => {
+    const store = createTestStore();
+    const source = await store.createSource({ kind: 'rss', title: 'Feed' });
+    await store.insertLead(makeLead({ sourceId: source.id, id: 'lead-city', city: 'Ставрополь' }));
+
+    const recent = await store.findRecentByTitleKey(
+      'нужен сантехник в ставрополе',
+      undefined,
+      new Date(TEST_NOW.getTime() - 24 * 3600 * 1000).toISOString(),
+    );
+    expect(recent?.id).toBe('lead-city');
+
+    await store.close();
+  });
+
+  it('updateLeadStatus without deliveredAt keeps the recorded delivery time (memory/postgres parity)', async () => {
+    const store = createTestStore();
+    const source = await store.createSource({ kind: 'rss', title: 'Feed' });
+    await store.insertLead(makeLead({ sourceId: source.id, id: 'lead-delivered' }));
+    const deliveredAt = TEST_NOW.toISOString();
+    await store.updateLeadStatus('lead-delivered', 'delivered', deliveredAt);
+
+    await store.updateLeadStatus('lead-delivered', 'failed');
+    const lead = await store.getLead('lead-delivered');
+    expect(lead?.status).toBe('failed');
+    expect(lead?.deliveredAt).toBe(deliveredAt);
+
+    await store.close();
+  });
+
+  it('countLeads counts exactly what the listings return (memory/postgres parity)', async () => {
+    const store = createTestStore();
+    const source = await store.createSource({ kind: 'rss', title: 'Feed' });
+    const now = new Date();
+    const iso = (msAgo: number): string => new Date(now.getTime() - msAgo).toISOString();
+    await store.insertLead(makeLead({ sourceId: source.id, id: 'count-a', createdAt: iso(3600_000), publishedAt: iso(3600_000) }));
+    await store.insertLead(makeLead({
+      sourceId: source.id, id: 'count-b', externalId: 'external-b', fingerprint: 'fingerprint-b',
+      titleKey: 'второй пост', createdAt: iso(7200_000), publishedAt: iso(7200_000), type: 'job',
+    }));
+    await store.insertLead(makeLead({
+      sourceId: source.id, id: 'count-rejected', externalId: 'external-r', fingerprint: 'fingerprint-r',
+      titleKey: 'отклонённый пост', createdAt: iso(1800_000), publishedAt: iso(1800_000), status: 'rejected',
+    }));
+
+    const since = iso(24 * 3600_000);
+    // The whole store, with and without the listing's cap.
+    expect(await store.countLeads!({ limit: 5000 })).toBe(3);
+    expect(await store.countLeads!({ limit: 2 })).toBe(2);
+    expect(await store.countLeads!({ limit: 5000, status: 'rejected' })).toBe(1);
+    expect(await store.countLeads!({ limit: 5000, type: 'job' })).toBe(1);
+    expect(await store.countLeads!({ limit: 5000, createdAfter: since })).toBe(3);
+    // The feed view: rejected posts stay out, exactly as getLeadsForFeed lists them.
+    const feedOptions = { limit: 5000, createdAfter: since, feedOnly: true };
+    expect(await store.countLeads!(feedOptions)).toBe((await store.getLeadsForFeed({ limit: 5000, createdAfter: since })).length);
+    expect(await store.countLeads!(feedOptions)).toBe(2);
+
+    await store.close();
+  });
+
+  // Postgres-only: an idle client whose connection drops emits 'error' on the pool. Without a
+  // listener that is an unhandled 'error' event and crashes the process (the prod restart loop).
+  it.skipIf(process.env.RADAR_TEST_STORE !== 'postgres')(
+    'survives a dropped idle connection instead of crashing the process',
+    async () => {
+      const url = process.env.DATABASE_URL || 'postgres://radar:radar@127.0.0.1:5432/radar_test';
+      const store = new PostgresStore(url);
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        // Open a connection and return it to the pool as an idle client.
+        await store.getStats();
+        const pool = (store as unknown as { pool: { on: (e: string, cb: (err: Error) => void) => void; emit: (e: string, err: Error) => boolean } }).pool;
+        // The pool must have an 'error' listener; emitting what a dropped idle client emits
+        // must be handled (return true), not thrown as an unhandled 'error' event.
+        expect(pool.emit('error', new Error('Connection terminated unexpectedly'))).toBe(true);
+        expect(errSpy).toHaveBeenCalled();
+        // The dead client is gone; the next query opens a fresh connection and works.
+        const stats = await store.getStats();
+        expect(stats).toHaveProperty('leads');
+      } finally {
+        errSpy.mockRestore();
+        await store.close();
+      }
+    },
+  );
 });
