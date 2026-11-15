@@ -858,11 +858,12 @@ export class PostgresStore implements Store {
 
   async saveLeadReview(r: LeadReview): Promise<void> {
     await this.pool.query(
-      `INSERT INTO lead_reviews (lead_id, user_id, verdict, type_fix, direction_fix, issues, note, shown_type, shown_direction, bucket)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `INSERT INTO lead_reviews (lead_id, user_id, verdict, type_fix, direction_fix, issues, note, shown_type, shown_direction, bucket, title_key, source_id, title_snapshot)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        ON CONFLICT (lead_id, user_id) DO UPDATE SET verdict = EXCLUDED.verdict, type_fix = EXCLUDED.type_fix,
          direction_fix = EXCLUDED.direction_fix, issues = EXCLUDED.issues, note = EXCLUDED.note, reviewed_at = now()`,
-      [r.leadId, r.userId, r.verdict, r.typeFix ?? null, r.directionFix ?? null, r.issues, r.note ?? null, r.shownType ?? null, r.shownDirection ?? null, r.bucket ?? null],
+      // Snapshots are only written on insert: the first seen title/source is the honest one.
+      [r.leadId, r.userId, r.verdict, r.typeFix ?? null, r.directionFix ?? null, r.issues, r.note ?? null, r.shownType ?? null, r.shownDirection ?? null, r.bucket ?? null, r.titleKey ?? null, r.sourceId ?? null, r.titleSnapshot ?? null],
     );
   }
 
@@ -911,17 +912,21 @@ export class PostgresStore implements Store {
   }
 
   async reviewIssuesBySource(): Promise<Map<string, number>> {
+    // Reviews outlive their lead row (migration 040), so the source comes from
+    // the snapshot when the lead is already gone.
     const res = await this.pool.query(
-      `SELECT l.source_id, count(*)::int AS total FROM lead_reviews r JOIN leads l ON l.id = r.lead_id
-        WHERE cardinality(r.issues) > 0 GROUP BY l.source_id`,
+      `SELECT COALESCE(l.source_id, r.source_id) AS sid, count(*)::int AS total FROM lead_reviews r LEFT JOIN leads l ON l.id = r.lead_id
+        WHERE cardinality(r.issues) > 0 GROUP BY 1`,
     );
-    return new Map(res.rows.map((r) => [String(r.source_id), Number(r.total)]));
+    return new Map(res.rows.map((r) => [String(r.sid), Number(r.total)]));
   }
 
   async listReviewNotes(limit: number): Promise<Array<{ leadId: string; title: string; source: string; issues: string[]; note?: string }>> {
     const res = await this.pool.query(
-      `SELECT r.lead_id, r.issues, r.note, l.title, s.title AS source
-         FROM lead_reviews r JOIN leads l ON l.id = r.lead_id JOIN sources s ON s.id = l.source_id
+      `SELECT r.lead_id, r.issues, r.note, COALESCE(l.title, r.title_snapshot) AS title, s.title AS source
+         FROM lead_reviews r
+         LEFT JOIN leads l ON l.id = r.lead_id
+         LEFT JOIN sources s ON s.id = COALESCE(l.source_id, r.source_id)
         WHERE cardinality(r.issues) > 0 OR r.note IS NOT NULL ORDER BY r.reviewed_at DESC LIMIT $1`,
       [limit],
     );

@@ -461,7 +461,8 @@ export class MemoryStore implements Store {
   async reviewIssuesBySource(): Promise<Map<string, number>> {
     const counts = new Map<string, number>();
     for (const [id, votes] of this.reviews) {
-      const source = this.leads.get(id)?.sourceId;
+      // Reviews outlive their lead row; the snapshot carries the source then.
+      const source = this.leads.get(id)?.sourceId ?? [...votes.values()].find((v) => v.sourceId)?.sourceId;
       if (!source) continue;
       const flagged = [...votes.values()].filter((v) => v.issues.length).length;
       if (flagged) counts.set(source, (counts.get(source) ?? 0) + flagged);
@@ -472,7 +473,13 @@ export class MemoryStore implements Store {
   async listReviewNotes(limit: number): Promise<Array<{ leadId: string; title: string; source: string; issues: string[]; note?: string }>> {
     return [...this.reviews.values()].flatMap((votes) => [...votes.values()]).filter((v) => v.issues.length || v.note).slice(0, limit).map((v) => {
       const lead = this.leads.get(v.leadId);
-      return { leadId: v.leadId, title: lead?.title ?? '', source: (lead && this.sources.get(lead.sourceId)?.title) ?? '', issues: v.issues, note: v.note };
+      return {
+        leadId: v.leadId,
+        title: lead?.title ?? v.titleSnapshot ?? '',
+        source: (lead && this.sources.get(lead.sourceId)?.title) ?? (v.sourceId ? this.sources.get(v.sourceId)?.title : undefined) ?? '',
+        issues: v.issues,
+        note: v.note,
+      };
     });
   }
 

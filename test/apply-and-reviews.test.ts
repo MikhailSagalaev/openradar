@@ -189,4 +189,35 @@ describe('reader reviews', () => {
     expect((await runtime.store.getLead('a'))?.direction).toBe('backend');
     expect((await fillDirections(runtime.store)).updated).toBe(0);
   });
+
+  it('keeps a model direction the rules would call other', async () => {
+    const { runtime, insert } = await setup();
+    // A vague title the rules read as other, but the decision model named design.
+    await insert('a', { title: 'Нужен человек', direction: 'other' });
+    await runtime.store.saveModelDecision!({ ...decision, leadId: 'a', direction: 'design', directionConfidence: 0.95 });
+    await runtime.store.applyLeadDirection!('a', 'design');
+    expect((await runtime.store.getLead('a'))?.direction).toBe('design');
+    // Startup hygiene runs the rules again: it must not wipe the model answer back to other.
+    expect((await fillDirections(runtime.store)).updated).toBe(0);
+    expect((await runtime.store.getLead('a'))?.direction).toBe('design');
+  });
+
+  it('keeps the review and its snapshot after the lead row is deleted', async () => {
+    const { runtime, insert } = await setup();
+    await insert('x', { title: 'Нужен повар' });
+    const lead = (await runtime.store.getLead('x'))!;
+    await runtime.store.saveLeadReview!({
+      leadId: 'x', userId: 7, verdict: 'suspicious', issues: ['no_pay'], note: 'серая схема',
+      titleKey: lead.titleKey, sourceId: lead.sourceId, titleSnapshot: lead.title,
+    });
+    expect((await runtime.store.reviewStats!(7)).total).toBe(1);
+    // Cleanup deletes the lead row; the label is the training data and stays.
+    await runtime.store.deleteLead!('x');
+    expect((await runtime.store.reviewStats!(7)).total).toBe(1);
+    // The snapshot keeps the verdict interpretable and still scores the source.
+    const notes = await runtime.store.listReviewNotes!(10);
+    expect(notes.some((n) => n.leadId === 'x' && n.title === 'Нужен повар')).toBe(true);
+    const flagged = await runtime.store.reviewIssuesBySource!();
+    expect([...flagged.values()].reduce((a, b) => a + b, 0)).toBe(1);
+  });
 });

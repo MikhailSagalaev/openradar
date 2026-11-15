@@ -1565,6 +1565,8 @@ export function createApp(runtime: Runtime): Hono {
       issues: ([] as unknown[]).concat(form.issues ?? []).filter((issue): issue is ReviewIssue => (REVIEW_ISSUES as readonly unknown[]).includes(issue)),
       note: one(form.note)?.slice(0, 300),
       shownType: lead.type, shownDirection: lead.direction,
+      // Snapshots let the review stay interpretable after the lead row is deleted.
+      titleKey: lead.titleKey, sourceId: lead.sourceId, titleSnapshot: lead.title,
       bucket: bucket === 'random' || bucket === 'doubt' || bucket === 'control' ? bucket : undefined,
     });
     const voteSignal: VoteSignal | undefined =

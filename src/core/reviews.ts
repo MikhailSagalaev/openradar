@@ -24,6 +24,10 @@ export interface LeadReview {
   shownType?: string;
   shownDirection?: string;
   bucket?: ReviewBucket;
+  /** Snapshots kept so the verdict stays interpretable when the lead row is deleted. */
+  titleKey?: string;
+  sourceId?: string;
+  titleSnapshot?: string;
 }
 
 export function isReviewVerdict(value: unknown): value is ReviewVerdict {
