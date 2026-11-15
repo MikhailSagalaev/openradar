@@ -219,10 +219,10 @@ function quantile(sorted: number[], q: number): number {
 /** Pay is rounded to a thousand roubles: finer digits would only suggest false precision. */
 const round = (value: number): number => (value >= 10_000 ? Math.round(value / 1000) * 1000 : Math.round(value / 10) * 10);
 
-export function dist(values: number[]): Dist {
+export function dist(values: number[], minMedian: number = MIN_MEDIAN): Dist {
   const sorted = values.filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
   const n = sorted.length;
-  if (n < MIN_MEDIAN) return { n };
+  if (n < minMedian) return { n };
   const out: Dist = { n, median: round(quantile(sorted, 0.5)) };
   // Order statistics give the interval of a median with no assumption about the distribution.
   const reach = 0.98 * Math.sqrt(n);

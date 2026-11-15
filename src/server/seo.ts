@@ -797,7 +797,7 @@ export function renderCatalogIndex(options: { baseUrl: string; version: string; 
   const ru = (options.lang ?? 'ru') !== 'en';
   const card = (rawEntry: CatalogEntry): string => {
     const entry = localizeCatalogEntry(rawEntry, options.lang);
-    return `<a class="catalog-card" href="/catalog/${escapeHtml(entry.slug)}"><b>${escapeHtml(entry.h1)}</b><span>${escapeHtml(entry.intro)}</span></a>`;
+    return `<a class="catalog-card" href="/catalog/${escapeHtml(entry.slug)}"><span class="catalog-card-title">${escapeHtml(entry.h1)}</span><span class="catalog-card-desc">${escapeHtml(entry.intro)}</span></a>`;
   };
   const gigs = SEO_CATALOG.filter((entry) => entry.type !== 'job');
   const jobs = SEO_CATALOG.filter((entry) => entry.type === 'job');

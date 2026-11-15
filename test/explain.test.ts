@@ -104,6 +104,29 @@ describe('explainability in the public projection and UI', () => {
     expect(html).toContain('Сильное совпадение');
     expect(html).toContain('explain-item');
     expect(html).toContain('Оценка и проверки');
+    // The explanation is a full-width card, not a squeezed right-aligned dl row.
+    expect(html).toContain('explain-card');
+    expect(html).not.toContain('<dt>Оценка и проверки</dt>');
+    // Grouped, labelled sections with a pass counter and per-check reasons.
+    expect(html).toContain('Обязательные условия');
+    expect(html).toContain('Проверки');
+    expect(html).toContain('5 из 5');
+    expect(html).toContain('data-tip="');
+    expect(html).toContain('tabindex="0"');
+    await runtime.store.close();
+  });
+
+  it('a gated lead renders the skip verdict card with a failed gate', async () => {
+    const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true });
+    const app = createApp(runtime);
+    const source = await runtime.store.createSource({ kind: 'ats', title: 'Acme', config: {} });
+    await runtime.store.insertLead(lead({ id: 'gated-page', sourceId: source.id, score: 95, fingerprint: 'fp-gp', titleKey: 'tk-gp', url: 'https://jobs.ashbyhq.com/acme/9', metadata: { qualityFlags: ['mlm'] } }));
+    const res = await app.request('/leads/gated-page');
+    const html = await res.text();
+    expect(html).toContain('explain-card explain-bad');
+    expect(html).toContain('verdict-bad');
+    expect(html).toContain('Пропустить');
+    expect(html).toContain('explain-item fail');
     await runtime.store.close();
   });
 });

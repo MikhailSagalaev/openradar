@@ -80,6 +80,11 @@ describe('SEO catalog pages', () => {
     const index = renderCatalogIndex({ baseUrl: 'https://openradar.fun', version: 'test' });
     for (const item of SEO_CATALOG) expect(index).toContain(`/catalog/${item.slug}`);
     expect(index).toContain('rel="canonical" href="https://openradar.fun/catalog"');
+    // Cards stack the title above the description (scoped .catalog-grid rules),
+    // never the old <b>/<span> pair that the sources flex layout overrode.
+    expect(index).toContain('class="catalog-card-title"');
+    expect(index).toContain('class="catalog-card-desc"');
+    expect(index).not.toMatch(/<a class="catalog-card"[^>]*><b>/);
 
     const about = renderAboutPage({ baseUrl: 'https://openradar.fun', version: 'test' });
     expect(about).toContain('<h1>О проекте openradar</h1>');
