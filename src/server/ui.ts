@@ -3420,7 +3420,7 @@ document.getElementById('share-lead')?.addEventListener('click', async (event) =
     : '';
 
   // Explainable scoring (plan 021A): named checks, binary gates and the verdict they imply.
-  const explanation = explainLead(lead);
+  const explanation = explainLead(lead, lang);
   const verdictLabel = t.verdict[explanation.verdict];
   const verdictClass = explanation.verdict === 'strong' ? 'ok' : explanation.verdict === 'stretch' ? 'warn' : 'bad';
   const gateRows = explanation.gates.map((g) => `<span class="explain-item ${g.pass ? 'pass' : 'fail'}" title="${escapeHtml(g.note)}">${g.pass ? '✓' : '✗'} ${escapeHtml(t.gateName[g.name] ?? g.name)}</span>`).join('');

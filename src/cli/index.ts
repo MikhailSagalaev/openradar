@@ -735,8 +735,31 @@ function buildProgram(): Command {
             () => deliverDueSubscriptions(subscriptionDeps(runtime)),
             userTelegram ? () => pollUserTelegramSources(userTelegram) : undefined,
           );
-      runner?.start();
       if (!options.noScheduler) {
+        // Warm /research and /api/index caches on an idle DB pool before 164 source polls start,
+        // preventing cold-start 504 timeouts right after container deploy.
+        const useModel = runtime.env.RADAR_EXTRACT_APPLY;
+        const warmup = (async () => {
+          try {
+            const { liveReport } = await import('../research/service.ts');
+            const { openradarIndex } = await import('../research/index.ts');
+            await liveReport(runtime.store, new Date(), { useModel });
+            await openradarIndex(runtime.store, new Date(), { useModel });
+            runtime.logger.info('startup research cache warmed');
+          } catch (err) {
+            runtime.logger.warn('startup research cache warmup failed', {
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        })();
+        const startGuard = new Promise<void>((resolve) => {
+          const t = setTimeout(resolve, 12_000);
+          t.unref?.();
+        });
+        void Promise.race([warmup, startGuard]).finally(() => {
+          runner?.start();
+        });
+
         const healTimer = setTimeout(() => {
           void (async () => {
             try {
@@ -755,8 +778,10 @@ function buildProgram(): Command {
               });
             }
           })();
-        }, 15_000);
+        }, 45_000);
         healTimer.unref?.();
+      } else {
+        runner?.start();
       }
       // Closure events: a lead leaving the active feed (closed, hidden as junk or scam)
       // is pushed to matching subscriptions the moment it happens, never replayed.

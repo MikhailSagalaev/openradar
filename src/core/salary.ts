@@ -49,7 +49,7 @@ const BIG_FOREIGN_MONEY = /[$€£]\s?\d+(?:[.,]\d+)?\s?(?:m|mn|mln|b|bn|million
  * profit of a launch, a market statistic. Every figure in it is out: «бюджетах от $20 тыс.,
  * желательно от $50 тыс.» names two.
  */
-const NOT_PAY_SENTENCE = /реклам[а-я]*\s+бюджет|бюджет[а-я]*\s+(?:на\s+)?(?:реклам|трафик|маркетинг|продвижен)|ad\s*spend|(?:ad|ads|media|marketing|paid)\s+budgets?|facebook\s+ads|спенд|открут|(?:управлени[а-я]*|управлял[а-я]*|вед[её]т[а-я]*|вел[а-я]*)\s+бюджет|manag[a-z]*\s+(?:[a-z$]+\s+){0,2}budgets?|чист[а-я]*\s+прибыл|net\s+profit|запуск[а-я]*\s+(?:на|от)\s+\d|запускаем\s+ежемесячно|опыт[а-я]*\s+(?:[а-я]+\s+)?запуск|проект\S{0,6}\s+с\s+бюджетом|клиентск\S{0,6}\s+бюджет|\d\s*(?:млн|тыс)?[\s.]*(?:₽|руб[а-я.]*)?\s*[-–—]\s*запуск|средн[а-я]*\s+зарплат[а-я]*\s+(?:в|по|на\s+рынке)|average\s+salary\s+(?:in|for)/iu;
+const NOT_PAY_SENTENCE = /реклам[а-я]*\s+бюджет|бюджет[а-я]*\s+(?:на\s+)?(?:реклам|трафик|маркетинг|продвижен)|ad\s*spend|(?:ad|ads|media|marketing|paid)\s+budgets?|(?:monthly|aggregate|annual|client|media|paid)\s+(?:aggregate\s+|monthly\s+)?spends?(?![\p{L}])|spending\s+over\s+[$€£\d]|scaling\s+accounts\s+(?:often\s+)?exceeding|facebook\s+ads|спенд|открут|(?:управлени[а-я]*|управлял[а-я]*|вед[её]т[а-я]*|вел[а-я]*)\s+бюджет|manag[a-z]*\s+(?:[a-z$]+\s+){0,2}budgets?|чист[а-я]*\s+прибыл|net\s+profit|запуск[а-я]*\s+(?:на|от)\s+\d|запускаем\s+ежемесячно|опыт[а-я]*\s+(?:[а-я]+\s+)?запуск|проект\S{0,6}\s+с\s+бюджетом|клиентск\S{0,6}\s+бюджет|\d\s*(?:млн|тыс)?[\s.]*(?:₽|руб[а-я.]*)?\s*[-–—]\s*запуск|средн[а-я]*\s+зарплат[а-я]*\s+(?:в|по|на\s+рынке)|average\s+salary\s+(?:in|for)/iu;
 
 function maskNotPaySentences(text: string): string {
   if (!NOT_PAY_SENTENCE.test(text)) return text;
@@ -61,7 +61,8 @@ function maskNotPaySentences(text: string): string {
 
 /** Figures that are not pay turn to #, so no parser reads them. */
 export function maskNotPay(text: string): string {
-  return maskNotPaySentences(text.replace(BIG_FOREIGN_MONEY, (m) => m.replace(/\d/g, '#')))
+  const withoutUrls = text.replace(/https?:\/\/\S+/gi, (m) => m.replace(/[\d$€£₸₴₹]/g, '#'));
+  return maskNotPaySentences(withoutUrls.replace(BIG_FOREIGN_MONEY, (m) => m.replace(/\d/g, '#')))
     .replace(NOT_PAY_BEFORE, (m) => m.replace(/\d/g, '#'))
     .replace(NOT_PAY_AFTER, (m) => m.replace(/\d/g, '#'));
 }
@@ -114,6 +115,17 @@ export function detectPaymentPeriod(text: string, defaultType: 'job' | 'gig' = '
     lower.includes('/hr') ||
     lower.includes('$/h') ||
     lower.includes('hourly') ||
+    lower.includes('per uur') ||
+    lower.includes('/uur') ||
+    lower.includes('pro stunde') ||
+    lower.includes('/std') ||
+    lower.includes('stundenlohn') ||
+    lower.includes('par heure') ||
+    lower.includes('/heure') ||
+    lower.includes('por hora') ||
+    lower.includes('/hora') ||
+    lower.includes('za godzin') ||
+    lower.includes('/godz') ||
     /(?:pln|zł|zl|eur|usd|gbp|руб|₽|€|\$)\s*\/\s*h(?:r|our)?\b/.test(lower) ||
     /(?:per|\/)\s*(?:visit|session|consultation|appointment|lesson|class|call)\b/.test(lower) ||
     /за\s+(?:визит|сеанс|консультаци[юи]|при[её]м|урок|занятие)\b/.test(lower)
@@ -176,6 +188,15 @@ export function detectCurrency(text: string): string {
   return 'RUB';
 }
 
+function reconcileRange(min: number, max: number): { min: number; max: number } | undefined {
+  if (max >= min) return { min, max };
+  // E.g. "$85k – $105kfrom" where 85k expanded to 85 000 and 105k stayed 105 due to glued word
+  if (max < 1000 && min >= 10_000 && max * 1000 >= min && max * 1000 <= min * 5) {
+    return { min, max: max * 1000 };
+  }
+  return undefined;
+}
+
 export function parseSalaryRange(text: string): { min?: number; max?: number } {
   // Strip currency symbols in front of digits, e.g. $3000 -> 3000
   const clean = normalizeMoneyText(text).replace(/zł|[$€₽£₸₴₹]/gi, ' ').replace(/\s+/g, ' ');
@@ -188,7 +209,8 @@ export function parseSalaryRange(text: string): { min?: number; max?: number } {
     const min = parseFloat(rawMin);
     const max = parseFloat(rawMax);
     if (!Number.isNaN(min) && !Number.isNaN(max)) {
-      return { min, max };
+      const reconciled = reconcileRange(min, max);
+      if (reconciled) return reconciled;
     }
   }
 
@@ -244,16 +266,22 @@ export function extractAnchoredSalary(text: string): { min?: number; max?: numbe
   if (range?.[1] && range[2]) {
     const min = parseAmount(range[1]);
     const max = parseAmount(range[2]);
-    if (min !== undefined && max !== undefined) return { min, max };
+    if (min !== undefined && max !== undefined) {
+      const reconciled = reconcileRange(min, max);
+      if (reconciled) return reconciled;
+    }
   }
 
   // "$3000 - $5000", "$259,300 - $350,800". Levels of one vacancy overlap and make one range:
   // "Engineer: $184,800 - $250,000, Sr. Engineer: $223,600 - $302,500"; a bonus does not join.
   let tiers: { min: number; max: number } | undefined;
-  for (const m of source.matchAll(new RegExp(`([$€₸₴])\\s*(${AMOUNT_PATTERN})\\s*(?:-|—|–)\\s*[$€₸₴]?\\s*(${AMOUNT_PATTERN})`, 'gi'))) {
-    const min = parseAmount(m[2]);
-    const max = parseAmount(m[3]);
-    if (min === undefined || max === undefined) continue;
+  for (const m of source.matchAll(new RegExp(`(?<![\\p{L}\\d/$])([$€₸₴£])\\s*(${AMOUNT_PATTERN})\\s*(?:-|—|–)\\s*[$€₸₴£]?\\s*(${AMOUNT_PATTERN})`, 'giu'))) {
+    const rawMin = parseAmount(m[2]);
+    const rawMax = parseAmount(m[3]);
+    if (rawMin === undefined || rawMax === undefined) continue;
+    const pair = reconcileRange(rawMin, rawMax);
+    if (!pair) continue;
+    const { min, max } = pair;
     if (!tiers) tiers = { min, max };
     else if (min <= tiers.max && max >= tiers.min) tiers = { min: Math.min(tiers.min, min), max: Math.max(tiers.max, max) };
   }
@@ -274,7 +302,7 @@ export function extractAnchoredSalary(text: string): { min?: number; max?: numbe
   }
 
   // Symbol before the amount: "$5000", "€3000", "$350,800"
-  const unitBefore = new RegExp(`([$€₸₴])\\s*(${AMOUNT_PATTERN})`, 'i').exec(source);
+  const unitBefore = new RegExp(`(?<![\\p{L}\\d/$])([$€₸₴£])\\s*(${AMOUNT_PATTERN})`, 'iu').exec(source);
   if (unitBefore?.[2]) {
     const value = parseAmount(unitBefore[2]);
     if (value !== undefined) return { min: value, max: value };
@@ -353,6 +381,10 @@ export function normalizeSalary(input: {
   // Bounds by period (the JobSpy rule): an «hourly» rate of $500+ is a monthly or yearly figure
   // under a wrong label, and a day rate over $1500 is not one.
   if (period === 'hourly' && top > 500) period = input.type === 'job' ? 'monthly' : 'fixed';
+  const rawTop = max ?? min ?? 0;
+  if (input.type === 'job' && period === 'monthly' && !daily && rawTop >= 8 && rawTop <= 95 && /^(?:USD|EUR|GBP|CAD|AUD|CHF)$/.test(currency)) {
+    period = 'hourly';
+  }
   // «5/2 – 119 600 ₽, в день – 5200 ₽»: the sum read is the month's, only the other one is per day.
   const perDay = daily && top > 0 && top <= 1500 && dayAmounts(combinedText).some((amount) => amount === max || amount === min);
   if (perDay) {

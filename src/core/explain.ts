@@ -43,12 +43,21 @@ export const STRETCH_AT = 45;
 export type ExplainableLead = Pick<Lead, 'score' | 'state' | 'metadata'> &
   Partial<Pick<Lead, 'type' | 'skills' | 'rawSalary' | 'normalizedUsdMin' | 'normalizedUsdMax' | 'budget' | 'direction' | 'text'>>;
 
-const GATE_NOTE: Record<QualityFlag, string> = {
-  channel_ad: 'реклама/курс канала, а не вакансия',
-  mlm: 'признаки сетевой схемы («обучение, затем доход»)',
-  digest: 'подборка нескольких вакансий, нет единого предложения',
-  outstaff: 'аутстафф: наём через посредника',
-  mystery_shopper: 'платная проверка («тайный покупатель»), не работа',
+const GATE_NOTE: Record<'ru' | 'en', Record<QualityFlag, string>> = {
+  ru: {
+    channel_ad: 'реклама/курс канала, а не вакансия',
+    mlm: 'признаки сетевой схемы («обучение, затем доход»)',
+    digest: 'подборка нескольких вакансий, нет единого предложения',
+    outstaff: 'аутстафф: наём через посредника',
+    mystery_shopper: 'платная проверка («тайный покупатель»), не работа',
+  },
+  en: {
+    channel_ad: 'channel ad or course, not a vacancy',
+    mlm: 'network marketing scheme ("training, then income")',
+    digest: 'digest of multiple vacancies, not a single offer',
+    outstaff: 'outstaffing: hiring through an intermediary',
+    mystery_shopper: 'paid check ("mystery shopper"), not a job',
+  },
 };
 
 function hasPay(lead: ExplainableLead): boolean {
@@ -56,7 +65,9 @@ function hasPay(lead: ExplainableLead): boolean {
 }
 
 /** Builds the explanation: gates first, then checks, then the verdict they imply. */
-export function explainLead(lead: ExplainableLead): LeadExplanation {
+export function explainLead(lead: ExplainableLead, lang: 'ru' | 'en' = 'ru'): LeadExplanation {
+  const en = lang === 'en';
+  const gateNote = GATE_NOTE[en ? 'en' : 'ru'];
   const state = lead.state ?? 'active';
   const flags = qualityFlagsOf(lead);
   const score = Math.max(0, Math.min(100, lead.score ?? 0));
@@ -66,23 +77,23 @@ export function explainLead(lead: ExplainableLead): LeadExplanation {
     {
       name: 'live',
       pass: state === 'active',
-      note: state === 'active' ? 'вакансия активна' : `состояние: ${state}`,
+      note: state === 'active' ? (en ? 'listing is active' : 'вакансия активна') : (en ? `state: ${state}` : `состояние: ${state}`),
     },
     {
       name: 'real-offer',
       pass: !flags.some((f) => f === 'channel_ad' || f === 'mlm' || f === 'digest' || f === 'mystery_shopper'),
-      note: flags.length ? flags.map((f) => GATE_NOTE[f]).join('; ') : 'единое предложение работы',
+      note: flags.length ? flags.map((f) => gateNote[f]).join('; ') : (en ? 'single direct offer' : 'единое предложение работы'),
     },
   ];
 
   // Checks: named, softer signals that explain the score.
   const skills = lead.skills ?? [];
   const checks: ScoreCheck[] = [
-    { name: 'score', pass: score >= STRETCH_AT, note: `оценка ${score}/100` },
-    { name: 'pay', pass: hasPay(lead), note: hasPay(lead) ? 'оплата указана' : 'оплата не указана' },
-    { name: 'requirements', pass: skills.length > 0, note: skills.length ? `навыки: ${skills.slice(0, 6).join(', ')}` : 'навыки не перечислены' },
-    { name: 'direction', pass: Boolean(lead.direction && lead.direction !== 'other'), note: lead.direction ? `направление: ${lead.direction}` : 'направление не определено' },
-    { name: 'detail', pass: (lead.text?.length ?? 0) >= 300, note: (lead.text?.length ?? 0) >= 300 ? 'подробное описание' : 'короткое описание' },
+    { name: 'score', pass: score >= STRETCH_AT, note: en ? `score ${score}/100` : `оценка ${score}/100` },
+    { name: 'pay', pass: hasPay(lead), note: hasPay(lead) ? (en ? 'pay stated' : 'оплата указана') : (en ? 'pay not stated' : 'оплата не указана') },
+    { name: 'requirements', pass: skills.length > 0, note: skills.length ? (en ? `skills: ${skills.slice(0, 6).join(', ')}` : `навыки: ${skills.slice(0, 6).join(', ')}`) : (en ? 'skills not listed' : 'навыки не перечислены') },
+    { name: 'direction', pass: Boolean(lead.direction && lead.direction !== 'other'), note: lead.direction ? (en ? `direction: ${lead.direction}` : `направление: ${lead.direction}`) : (en ? 'direction not identified' : 'направление не определено') },
+    { name: 'detail', pass: (lead.text?.length ?? 0) >= 300, note: (lead.text?.length ?? 0) >= 300 ? (en ? 'detailed description' : 'подробное описание') : (en ? 'short description' : 'короткое описание') },
   ];
 
   const gated = gates.some((g) => !g.pass);

@@ -44,7 +44,7 @@ function moneyOf(lead: Lead, type: LeadType, flags: QualityFlag[], source: Sourc
   if (offersNoPay(flags)) return { skills };
 
   // A Telegram post has no budget field: whatever it holds came from its text. A webhook may send one.
-  const fromText = lead.budget !== undefined && (source.kind.startsWith('telegram') || extractBudgetAndCurrency(post, { keepNotPay: true }).budget === lead.budget);
+  const fromText = lead.budget !== undefined && (source.kind.startsWith('telegram') || extractBudgetAndCurrency(post, { keepNotPay: true }).budget === lead.budget || (/https?:\/\/\S*[$€£]\d+/i.test(post) && extractBudgetAndCurrency(post).budget !== lead.budget));
   const read = fromText ? extractBudgetAndCurrency(post) : undefined;
   const budget = fromText ? read!.budget : lead.budget;
   const model = modelFactsOf(lead);
@@ -153,8 +153,10 @@ export async function rescoreLeads(
       await store.updateLeadQuality(lead.id, quality.type, quality.flags);
       requalified += 1;
     }
-    if (options.money && store.updateLeadTitle && (/&[a-z]+;/i.test(lead.title) || /\s+(?:Вакансия компании|Создана|Регион|Company|Location):/i.test(lead.title))) {
-      const cleaned = decodeHtmlEntities(lead.title).replace(/\s+(?:Вакансия компании|Создана|Регион|Company|Location):[\s\S]*$/i, '').trim();
+    if (options.money && store.updateLeadTitle && (/&[a-z]+;/i.test(lead.title) || /\*\*|__/.test(lead.title) || /\s+(?:Вакансия компании|Создана|Регион|Company|Location):/i.test(lead.title))) {
+      const cleaned = /\*\*|__/.test(lead.title)
+        ? cleanTitle(lead.title, lead.text)
+        : decodeHtmlEntities(lead.title).replace(/\s+(?:Вакансия компании|Создана|Регион|Company|Location):[\s\S]*$/i, '').trim();
       const title = cleaned || decodeHtmlEntities(lead.title);
       if (title !== lead.title) await store.updateLeadTitle(lead.id, title, titleKeyOf(title), lead.title);
     }

@@ -129,14 +129,14 @@ export class PollRunner {
       // month is retried on the next check, not on every background minute.
       const useModel = this.deps.env.RADAR_EXTRACT_APPLY;
       const fxCheckDue = Date.now() - this.lastFxCheckAt >= FX_RATES_CHECK_MS;
-      if (fxCheckDue) this.lastFxCheckAt = Date.now();
-      void (fxCheckDue
-        ? ensureFxRates(this.deps.store).catch((error: unknown) => {
-            // The reference rates stand in until the Bank of Russia answers.
-            this.logger.warn('Bank of Russia rates not saved', { error: error instanceof Error ? error.message : String(error) });
-          })
-        : Promise.resolve())
-        .then(() => liveReport(this.deps.store, new Date(), { useModel }))
+      if (fxCheckDue) {
+        this.lastFxCheckAt = Date.now();
+        void ensureFxRates(this.deps.store).catch((error: unknown) => {
+          // The reference rates stand in until the Bank of Russia answers.
+          this.logger.warn('Bank of Russia rates not saved', { error: error instanceof Error ? error.message : String(error) });
+        });
+      }
+      void liveReport(this.deps.store, new Date(), { useModel })
         .then(() => openradarIndex(this.deps.store, new Date(), { useModel }))
         .catch((error: unknown) => {
           this.logger.warn('research report build failed', { error: error instanceof Error ? error.message : String(error) });

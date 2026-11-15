@@ -133,7 +133,7 @@ export function extractBudgetAndCurrency(text: string, options: { keepNotPay?: b
   const candidates: Array<{ amount: number; currency: string; priority: number }> = [];
 
   // 1. Symbol before amount, e.g. "$3500", "€ 2,500", "£1000", "zł 1500"
-  const prefixRe = /([$€£₸₴₹])\s*(\d{1,3}(?:[ \u00a0,]\d{3})+|\d{2,7})(?!\d)/gu;
+  const prefixRe = /(?<![\p{L}\d/$])([$€£₸₴₹])\s*(\d{1,3}(?:[ \u00a0,]\d{3})+|\d{2,7})(?!\d)/gu;
   for (const m of source.matchAll(prefixRe)) {
     const curr = identifyCurrency(m[1] ?? '');
     const num = Number.parseInt((m[2] ?? '').replace(/[ \u00a0,]/g, ''), 10);
@@ -209,6 +209,16 @@ export function stripTitleNoiseAndBudget(title: string): string {
  * Expands degenerate one-word or too-short titles (e.g. "Радуга", "Сайт")
  * using the first actionable sentence from the description.
  */
+const SECTION_HEADING_PREFIX = /^(?:company\s+description|about\s+(?:the\s+role|us|the\s+job|the\s+company)|job\s+(?:description|summary)|role\s+(?:overview|summary)|main\s+function|overview|working\s+pattern|responsibilities|qualifications|requirements)\s*[:\-–—]*\s*/i;
+
+function stripMarkdownAndHeading(text: string): string {
+  return text
+    .replace(/^\s*#{1,6}\s+/, '')
+    .replace(/\*\*|__/g, '')
+    .replace(SECTION_HEADING_PREFIX, '')
+    .trim();
+}
+
 function augmentShortTitle(title: string, fallbackText: string): string {
   const words = title.trim().split(/\s+/).filter(Boolean);
   if (title.length >= 10 && words.length >= 2) return title;
@@ -216,14 +226,14 @@ function augmentShortTitle(title: string, fallbackText: string): string {
 
   const sentences = fallbackText
     .split(/\r?\n+/)
-    .map((line) => line.trim())
+    .map((line) => stripMarkdownAndHeading(line))
     .filter((line) => line && !isTagOnlyLine(line) && !isLocationOrMetadataLine(line))
     .flatMap((line) => line.split(/(?<=[.!?])\s+/))
-    .map((s) => s.trim().replace(/^[\s«"„“]+|[\s»"”\.…]+$/g, ''))
+    .map((s) => stripMarkdownAndHeading(s).replace(/^[\s«"„“]+|[\s»"”\.…]+$/g, ''))
     .filter((s) => {
       if (s.length < 8) return false;
       if (s.toLowerCase() === title.trim().toLowerCase()) return false;
-      if (/^(?:кратко|всем привет|привет|здравствуйте|добрый день|добрый вечер|описание|суть|внимание|тз|требования|обязанности|условия)\b/i.test(s)) {
+      if (/^(?:кратко|всем привет|привет|здравствуйте|добрый день|добрый вечер|описание|суть|внимание|тз|требования|обязанности|условия|company description|about the role|about us|job description|main function|working pattern)\b/i.test(s)) {
         return false;
       }
       return true;
@@ -267,7 +277,10 @@ function stripEdgeHashtags(title: string): string {
 
 /** The first line of the text that is not a hashtag row or pure city/location marker — the real title of channel posts. */
 function firstContentLine(text: string): string {
-  const parts = text.split('\n').map((part) => part.trim()).filter((part) => part && !isTagOnlyLine(part));
+  const parts = text
+    .split('\n')
+    .map((part) => stripMarkdownAndHeading(part))
+    .filter((part) => part && !isTagOnlyLine(part));
   if (!parts.length) return '';
   const meaningful = parts.find((part) => !isLocationOrMetadataLine(part));
   return meaningful ?? parts[0] ?? '';
@@ -294,6 +307,8 @@ export function cleanTitle(rawTitle: string, fallbackText = ''): string {
   candidate = candidate.replace(/(?:\s*[-–—|·]\s*)?Вакансия\s+компании\s*:[\s\S]*$/iu, '').replace(/(?<=\s|[a-zа-яё0-9\)])(?:Компания|Город|Регион|Работодатель|Создана|Company|City|Location|Формат\s+работы|Формат|Локация|Уровень|Занятость|Вилка|ЗП|Зарплата)\s*:[^·\n]*/iu, '');
 
   let title = stripEmoji(toPlainText(candidate))
+    .replace(/\*\*|__/g, '')
+    .replace(/\s+—\s+(?:company\s+description|about\s+(?:the\s+role|us|the\s+job|the\s+company)|job\s+(?:description|summary)|role\s+(?:overview|summary)|main\s+function|overview|working\s+pattern)\s*[:\-–—]*\s*/iu, ' — ')
     .replace(/^[\s«"„“—–·•|*:-]+|[\s»"”\.…—–·•|*:-]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
@@ -304,8 +319,8 @@ export function cleanTitle(rawTitle: string, fallbackText = ''): string {
   // Strip trailing budget suffixes and platform tags
   title = stripTitleNoiseAndBudget(title);
 
-  // If title was empty or too small, fall back to the first content line
-  if (title.length < 6 && fallbackText) {
+  // If title was empty or had no word letters, fall back to the first content line
+  if ((title.length < 3 || !/[a-zа-яё]{2,}/iu.test(title)) && fallbackText) {
     title = stripTitleNoiseAndBudget(truncate(firstContentLine(fallbackText) || firstLine(fallbackText, 140), 120));
   }
 

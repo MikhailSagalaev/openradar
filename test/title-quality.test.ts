@@ -45,4 +45,13 @@ describe('channel-post titles: hashtag rows are tags, not titles', () => {
     expect(cleanTitle('Дизайнер Формат: удалённо')).toContain('Дизайнер');
     expect(cleanTitle('Разработчик Компания: Acme')).toBe('Разработчик');
   });
+
+  it('strips Markdown bold markers and boilerplate section headings when augmenting short titles', () => {
+    expect(
+      cleanTitle('Rgm', '**Company Description** Staab Management is an insurance company operating across the Midwest.'),
+    ).toBe('Rgm — Staab Management is an insurance company operating across the Midwest');
+    expect(
+      cleanTitle('Caretaker', '**About The Role:**\nMaintain school premises and facilities in safe condition.'),
+    ).toBe('Caretaker — Maintain school premises and facilities in safe condition');
+  });
 });

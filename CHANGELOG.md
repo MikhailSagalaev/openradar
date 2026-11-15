@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.69.1 — 2026-11-15
+
+### Fixed
+- **Workday URL path parameters (`1422$130`, `3001$14`) and client ad-spend sentences (`$400k+ monthly aggregate spend`)**: `maskNotPay` now masks digits and currency symbols inside `http(s)://` URLs and filters out aggregate/monthly client media spend sentences; `extractBudgetAndCurrency` and `extractAnchoredSalary` require a non-alphanumeric boundary before currency symbols (`src/core/salary.ts`, `src/core/extract.ts`, `src/pipeline/rescore.ts`).
+- **Glued range multiplier (`$85k – $105kfrom`) and European/US hourly wages (`per uur`, `pro Stunde`, `par heure`, `$26.00 to $28.50`)**: `reconcileRange` expands truncated upper bounds (`85000–105` → `85000–105000`), `detectPaymentPeriod` recognises European hourly markers (`per uur`, `pro Stunde`, `par heure`, `por hora`, `za godzinę`), and `normalizeSalary` treats `8–95` USD/EUR/GBP/CAD/AUD/CHF job figures as hourly wages rather than monthly salaries (`src/core/salary.ts`).
+- **Markdown and section headers in augmented short titles (`Rgm`, `Caretaker`)**: `augmentShortTitle`, `firstContentLine`, and `cleanTitle` strip `**` / `__` Markdown and boilerplate section headings (`Company Description`, `About the Role:`, `Job Description`, `Main Function`, `Working Pattern`) before expanding short titles (`src/core/extract.ts`, `src/pipeline/rescore.ts`).
+- **Bilingual explainable-scoring tooltips on `/leads/:id?lang=en`**: `explainLead(lead, lang)` now supports English gate and check notes (`listing is active`, `single direct offer`, `pay stated`, etc.) when rendering English lead cards (`src/core/explain.ts`, `src/server/ui.ts`).
+- **Cold-start `/research` cache warmup on container boot**: `serve` warms `liveReport` and `openradarIndex` on an idle database pool before launching background source polling and startup data hygiene, and `PollRunner` no longer blocks `liveReport` behind external `cbr.ru` FX checks (`src/cli/index.ts`, `src/pipeline/runner.ts`).
+
 ## 0.69.0 — 2026-11-15
 
 ### Added

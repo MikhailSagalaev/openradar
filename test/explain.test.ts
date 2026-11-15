@@ -63,6 +63,13 @@ describe('explainable scoring (plan 021A)', () => {
     expect(explainLead(lead({ score: 250 })).checks.find((c) => c.name === 'score')?.note).toContain('100/100');
     expect(explainLead(lead({ score: -5 })).verdict).toBe('skip');
   });
+
+  it('renders English gate and check notes when lang is en', () => {
+    const en = explainLead(lead({ score: 85 }), 'en');
+    expect(en.gates.find((g) => g.name === 'live')?.note).toBe('listing is active');
+    expect(en.gates.find((g) => g.name === 'real-offer')?.note).toBe('single direct offer');
+    expect(en.checks.find((c) => c.name === 'pay')?.note).toBe('pay stated');
+  });
 });
 
 describe('explainability in the public projection and UI', () => {

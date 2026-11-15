@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { RUB_PER } from '../src/core/fx.ts';
 import { extractBudgetAndCurrency } from '../src/core/extract.ts';
-import { normalizeMoneyText, normalizeSalary, parseSalaryRange } from '../src/core/salary.ts';
+import { extractAnchoredSalary, normalizeMoneyText, normalizeSalary, parseSalaryRange } from '../src/core/salary.ts';
 
 describe('shorthand amounts', () => {
   it('expands к, k, тыс and млн', () => {
@@ -89,5 +89,41 @@ describe('payment period bounds', () => {
       type: 'job',
     });
     expect(visit.paymentPeriod).toBe('hourly');
+  });
+
+  it('ignores Workday URL path parameters ($130, $14) and client ad spend ($400k+ monthly aggregate spend)', () => {
+    const workday = 'Strategic Planning Manager. [Find Jobs](https://wd5.myworkday.com/alcon/d/inst/1422$130/rel-task/3001$14.htmld)';
+    expect(extractBudgetAndCurrency(workday)).toEqual({});
+    expect(extractAnchoredSalary(workday)).toEqual({});
+
+    const adSpend = 'Manage 5-10 accounts with aggregate monthly spends ranging between $80,000 - $3M and spending over $400k+ minimum monthly aggregate spend.';
+    expect(extractBudgetAndCurrency(adSpend)).toEqual({});
+    expect(extractAnchoredSalary(adSpend)).toEqual({});
+  });
+
+  it('reconciles glued range multiplier ($85k – $105kfrom) and detects European/sub-$95 hourly wages', () => {
+    const glued = normalizeSalary({
+      text: 'Composites Manufacturing Engineer II. Salary: $85k – $105kfrom the posting',
+      type: 'job',
+    });
+    expect(glued.rawSalary).toBe('85000–105000 USD per year');
+    expect(glued.normalizedUsdMin).toBe(Math.round(85000 / 12));
+    expect(glued.normalizedUsdMax).toBe(Math.round(105000 / 12));
+
+    const dutchHourly = normalizeSalary({
+      text: 'Frontofficemedewerker parttime. Salaris €18,88 bruto per uur.',
+      budget: 18,
+      currency: 'EUR',
+      type: 'job',
+    });
+    expect(dutchHourly.paymentPeriod).toBe('hourly');
+
+    const usHourly = normalizeSalary({
+      text: 'The base pay range for this position is $26.00 to $28.50.',
+      budget: 28,
+      currency: 'USD',
+      type: 'job',
+    });
+    expect(usHourly.paymentPeriod).toBe('hourly');
   });
 });
