@@ -1,6 +1,7 @@
 import pg from 'pg';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { guardCheckedOutClient } from './pg-client-guard.ts';
 
 const { Pool } = pg;
 const ADVISORY_LOCK_ID = 8791001;
@@ -29,6 +30,7 @@ export async function runMigrations(target: pg.Pool | string): Promise<Migration
   const shouldClosePool = typeof target === 'string';
 
   const client = await pool.connect();
+  const unguard = guardCheckedOutClient(client);
   const applied: string[] = [];
 
   try {
@@ -87,6 +89,7 @@ export async function runMigrations(target: pg.Pool | string): Promise<Migration
     } catch {
       // ignore unlock error
     }
+    unguard();
     client.release();
     if (shouldClosePool) {
       await pool.end();
@@ -96,6 +99,7 @@ export async function runMigrations(target: pg.Pool | string): Promise<Migration
 
 export async function checkMigrations(pool: pg.Pool): Promise<{ ok: boolean; pending: string[] }> {
   const client = await pool.connect();
+  const unguard = guardCheckedOutClient(client);
   try {
     const tableCheck = await client.query(`
       SELECT EXISTS (
@@ -121,6 +125,7 @@ export async function checkMigrations(pool: pg.Pool): Promise<{ ok: boolean; pen
     const pending = files.filter((f) => !existing.has(f));
     return { ok: pending.length === 0, pending };
   } finally {
+    unguard();
     client.release();
   }
 }
