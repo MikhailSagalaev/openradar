@@ -1459,20 +1459,117 @@ a:focus-visible, button:focus-visible, summary:focus-visible, input[type=checkbo
   align-items: center;
   gap: 8px;
 }
+/* Explainable scoring: a full-width card under the facts list. Semantic tones are
+   defined once here (light + dark) so every pass/fail mark keeps readable contrast. */
+:root {
+  --ok-ink: #15803d;
+  --ok-soft: rgba(34, 197, 94, .12);
+  --ok-line: rgba(34, 197, 94, .38);
+  --warn-ink: #b45309;
+  --warn-soft: rgba(245, 158, 11, .14);
+  --warn-line: rgba(245, 158, 11, .42);
+  --bad-ink: #dc2626;
+  --bad-soft: rgba(239, 68, 68, .10);
+  --bad-line: rgba(239, 68, 68, .38);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ok-ink: #4ade80;
+    --ok-soft: rgba(52, 211, 153, .14);
+    --ok-line: rgba(52, 211, 153, .40);
+    --warn-ink: #fbbf24;
+    --warn-soft: rgba(251, 191, 36, .14);
+    --warn-line: rgba(251, 191, 36, .42);
+    --bad-ink: #f87171;
+    --bad-soft: rgba(248, 113, 113, .13);
+    --bad-line: rgba(248, 113, 113, .40);
+  }
+}
 .verdict {
-  display: inline-block;
-  padding: 2px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 11px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
 }
-.verdict-ok { background: var(--green-soft, rgba(34,197,94,.14)); color: var(--green, #16a34a); }
-.verdict-warn { background: rgba(234,179,8,.14); color: var(--amber, #b45309); }
-.verdict-bad { background: rgba(244,63,94,.12); color: var(--rose); }
-.explain-line { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 6px; }
-.explain-item { font-size: 12px; cursor: help; white-space: nowrap; }
-.explain-item.pass { color: var(--green, #16a34a); }
-.explain-item.fail { color: var(--rose); }
+.verdict-ok { background: var(--ok-soft); color: var(--ok-ink); }
+.verdict-warn { background: var(--warn-soft); color: var(--warn-ink); }
+.verdict-bad { background: var(--bad-soft); color: var(--bad-ink); }
+.explain-card {
+  margin: 16px 0 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.explain-card.explain-ok { border-color: var(--ok-line); background: linear-gradient(180deg, var(--ok-soft), var(--surface) 72%); }
+.explain-card.explain-warn { border-color: var(--warn-line); background: linear-gradient(180deg, var(--warn-soft), var(--surface) 72%); }
+.explain-card.explain-bad { border-color: var(--bad-line); background: linear-gradient(180deg, var(--bad-soft), var(--surface) 72%); }
+.explain-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.explain-head h2 { margin: 0; font-size: 13px; letter-spacing: .02em; }
+.explain-group { margin-top: 12px; }
+.explain-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.explain-count { font-weight: 500; letter-spacing: .02em; text-transform: none; }
+.explain-line { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.explain-item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  font-size: 12px;
+  color: var(--ink);
+  cursor: help;
+  white-space: nowrap;
+}
+.explain-item.pass { border-color: var(--ok-line); }
+.explain-item.fail { border-color: var(--bad-line); }
+.explain-mark { font-weight: 700; }
+.explain-item.pass .explain-mark { color: var(--ok-ink); }
+.explain-item.fail .explain-mark { color: var(--bad-ink); }
+.explain-item:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* Reason tooltip: hover and keyboard focus; the note also lives in data-tip for AT. */
+.explain-item::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 7px);
+  z-index: 40;
+  width: max-content;
+  max-width: 230px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.45;
+  white-space: normal;
+  text-align: left;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .18);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(3px);
+  transition: opacity .12s ease, transform .12s ease, visibility .12s;
+  pointer-events: none;
+}
+.explain-item:hover::after, .explain-item:focus::after { opacity: 1; visibility: visible; transform: translateY(0); }
+.explain-hint { margin: 12px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--muted); }
 .btn {
   display: inline-flex;
   align-items: center;
@@ -1560,11 +1657,31 @@ a:focus-visible, button:focus-visible, summary:focus-visible, input[type=checkbo
 .chip-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .chip-links a { border: 1px solid var(--line); border-radius: 9999px; padding: 5px 12px; font-size: 13px; color: var(--ink); text-decoration: none; }
 .chip-links a:hover { background: var(--surface-hover); }
+/* SEO catalog index (/catalog): title stacked ABOVE the description. Scoped to
+   .catalog-grid so the sources catalog (which reuses .catalog-card as a flex row
+   with a side action) keeps its own layout — the two used to collide. */
 .catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-top: 12px; }
-.catalog-card { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; color: var(--ink); text-decoration: none; display: block; }
-.catalog-card:hover { background: var(--surface-hover); }
-.catalog-card b { display: block; font-size: 14px; margin-bottom: 4px; }
-.catalog-card span { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.catalog-grid .catalog-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.catalog-grid .catalog-card:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(9, 9, 11, .06);
+}
+.catalog-grid .catalog-card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.catalog-card-title { display: block; font-size: 14px; font-weight: 600; line-height: 1.35; }
+.catalog-card-desc { display: block; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
 .rs-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 8px 0 8px; }
 .rs-kpi { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
 .rs-kpi b { display: block; font-size: 22px; letter-spacing: -0.02em; color: var(--ink); }
@@ -1795,13 +1912,15 @@ legend {
 .confirm-dialog p { margin: 0 0 16px; font-size: 13px; color: var(--muted); }
 .confirm-dialog .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .notice-inline { color: var(--muted); margin-top: 2px; }
-.catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
-.catalog-card { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
-.catalog-card-body { min-width: 0; }
-.catalog-card-title { font-weight: 600; }
-.catalog-card-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.catalog-card-desc { font-size: 13px; color: var(--muted); margin: 6px 0 0; line-height: 1.45; }
-.catalog-card-side { flex: none; }
+/* Sources catalog (/sources/catalog): a row with a side action. Scoped away from
+   the SEO .catalog-grid cards so the shared class names never override each other. */
+.sources-catalog .catalog-grid { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+.sources-catalog .catalog-card { display: flex; flex-direction: row; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.sources-catalog .catalog-card-body { min-width: 0; }
+.sources-catalog .catalog-card-title { font-weight: 600; font-size: 14px; }
+.sources-catalog .catalog-card-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.sources-catalog .catalog-card-desc { font-size: 13px; color: var(--muted); margin: 6px 0 0; line-height: 1.45; }
+.sources-catalog .catalog-card-side { flex: none; }
 .kind-group-title { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
 .kind-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
 .kind-card { position: relative; display: grid; gap: 3px; padding: 10px 12px 10px 34px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); cursor: pointer; }
@@ -3420,17 +3539,33 @@ document.getElementById('share-lead')?.addEventListener('click', async (event) =
     : '';
 
   // Explainable scoring (plan 021A): named checks, binary gates and the verdict they imply.
+  // Rendered as a full-width card under the facts list — a right-aligned dl row squeezed the
+  // verdict, the chips and the hint into one narrow column. Each chip carries its reason in a
+  // CSS tooltip (hover AND keyboard focus), so the explanation is readable on touch too.
   const explanation = explainLead(lead, lang);
   const verdictLabel = t.verdict[explanation.verdict];
   const verdictClass = explanation.verdict === 'strong' ? 'ok' : explanation.verdict === 'stretch' ? 'warn' : 'bad';
-  const gateRows = explanation.gates.map((g) => `<span class="explain-item ${g.pass ? 'pass' : 'fail'}" title="${escapeHtml(g.note)}">${g.pass ? '✓' : '✗'} ${escapeHtml(t.gateName[g.name] ?? g.name)}</span>`).join('');
-  const checkRows = explanation.checks.map((ch) => `<span class="explain-item ${ch.pass ? 'pass' : 'fail'}" title="${escapeHtml(ch.note)}">${ch.pass ? '✓' : '✗'} ${escapeHtml(t.checkName[ch.name] ?? ch.name)}</span>`).join('');
-  const explainRow = `<div><dt>${escapeHtml(t.explainLabel)}</dt><dd>
-    <span class="verdict verdict-${verdictClass}">${escapeHtml(verdictLabel)}</span>
-    <div class="explain-line">${gateRows}</div>
-    <div class="explain-line muted small">${checkRows}</div>
-    <div class="muted small" style="margin-top:4px">${escapeHtml(t.explainHint)}</div>
-  </dd></div>`;
+  const verdictIcon = explanation.verdict === 'strong' ? '✓' : explanation.verdict === 'stretch' ? '!' : '✗';
+  const explainItem = (item: { name: string; pass: boolean; note: string }, label: string): string =>
+    `<span class="explain-item ${item.pass ? 'pass' : 'fail'}" tabindex="0" data-tip="${escapeHtml(item.note)}"><span class="explain-mark" aria-hidden="true">${item.pass ? '✓' : '✗'}</span>${escapeHtml(label)}</span>`;
+  const gateRows = explanation.gates.map((g) => explainItem(g, t.gateName[g.name] ?? g.name)).join('');
+  const checkRows = explanation.checks.map((ch) => explainItem(ch, t.checkName[ch.name] ?? ch.name)).join('');
+  const checksPassed = explanation.checks.filter((ch) => ch.pass).length;
+  const explainCard = `<section class="explain-card explain-${verdictClass}" aria-label="${escapeHtml(t.explainLabel)}">
+    <div class="explain-head">
+      <h2>${escapeHtml(t.explainLabel)}</h2>
+      <span class="verdict verdict-${verdictClass}"><span aria-hidden="true">${verdictIcon}</span>${escapeHtml(verdictLabel)}</span>
+    </div>
+    <div class="explain-group">
+      <div class="explain-label">${escapeHtml(t.explainGates)}</div>
+      <div class="explain-line">${gateRows}</div>
+    </div>
+    <div class="explain-group">
+      <div class="explain-label">${escapeHtml(t.explainChecks)} <span class="explain-count">${escapeHtml(t.explainPassed(checksPassed, explanation.checks.length))}</span></div>
+      <div class="explain-line">${checkRows}</div>
+    </div>
+    <p class="explain-hint">${escapeHtml(t.explainHint)}</p>
+  </section>`;
 
   const cautionBanner = ((lead.votes_scam ?? 0) >= 1 && lead.status !== 'rejected')
     ? `<div class="caution-banner">
@@ -3527,7 +3662,6 @@ ${cautionBanner}
       ${Math.abs(Date.parse(lead.createdAt) - Date.parse(lead.publishedAt ?? lead.createdAt)) > 30 * 60_000 ? `<div><dt>${escapeHtml(t.added)}</dt><dd>${formatDate(lead.createdAt, lang)}</dd></div>` : ''}
       ${lead.author ? `<div><dt>${escapeHtml(t.author)}</dt><dd>${lead.companyKey ? `<a href="/employers/${escapeHtml(encodeURIComponent(lead.companyKey))}">${escapeHtml(lead.author)}</a>` : escapeHtml(lead.author)}</dd></div>` : ''}
       ${visaRow}
-      ${explainRow}
       ${alsoPublished(data.sightings, t.alsoPublished)}
       ${lead.sourceRef ? `<div><dt>${escapeHtml(t.channel)}</dt><dd>${escapeHtml(lead.sourceRef.channelTitle || lead.sourceRef.channel)}${lead.sourceRef.visibility !== 'public' ? ` (${escapeHtml(t.privateChannel)})` : ''}</dd></div>` : ''}
       ${data.contactsHidden
@@ -3537,6 +3671,7 @@ ${cautionBanner}
           : ''}
     </dl>
     <details class="score-help" style="margin-top:10px"><summary>${escapeHtml(t.scoreWhat)}</summary><p>${escapeHtml(t.scoreHint)}</p></details>
+    ${explainCard}
     ${lead.skills?.length ? `
       <h2 style="margin-top:20px">${escapeHtml(t.skills)}</h2>
       <div style="margin-top:8px;line-height:1.6">
@@ -3731,7 +3866,7 @@ export function renderSourceCatalogPage(data: SourceCatalogPageData): string {
   </div>
   ${missing ? `<div class="actions"><form method="post" action="/sources/presets"><button class="btn ghost" type="submit">${ru ? `Подключить все (${missing})` : `Connect all (${missing})`}</button></form></div>` : ''}
 </div>
-${groups.map((group) => `<section><h2>${escapeHtml(group.title)}</h2><div class="catalog-grid">${group.items.map(card).join('')}</div></section>`).join('')}`;
+<div class="sources-catalog">${groups.map((group) => `<section><h2>${escapeHtml(group.title)}</h2><div class="catalog-grid">${group.items.map(card).join('')}</div></section>`).join('')}</div>`;
   return layout({ title: ru ? 'Каталог площадок' : 'Platform catalog', version: data.version, active: 'sources', body, auth: data.auth, lang: data.lang });
 }
 

@@ -335,14 +335,17 @@ export function detectGrade(title: string, text: string, boardGrade?: string, ro
 
 // ---------- Employer ----------
 
-export function detectCompany(lead: Pick<Lead, 'author' | 'text' | 'type' | 'sourceRef'>, facts?: PageFacts): string | undefined {
+export function detectCompany(lead: Pick<Lead, 'author' | 'text' | 'type' | 'sourceRef' | 'company'>, facts?: PageFacts): string | undefined {
   const fromText =
     lead.text.match(/Вакансия компании:\s*([^\n]{2,80})/u)?.[1] ??
     lead.text.match(/Компания «(.{2,80}?)» ищет/u)?.[1] ??
     lead.text.match(/Компания «([^»]{2,80})»/u)?.[1] ??
     lead.text.match(/Компания\s+([^\n«»]{2,60}?)\s+ищет\s+(?:хорошего\s+)?специалиста\s+на\s+вакансию/u)?.[1] ??
     lead.text.match(/^(?:Компания|Company):\s*([^\n]{2,80})/mu)?.[1];
-  const named = [facts?.company, fromText, lead.type === 'job' ? lead.author : undefined];
+  // Page markup and explicit text patterns first, then the structured employer field the
+  // adapters already fill (lead.company), then the author of a vacancy. Without lead.company
+  // an English board post that names its employer only in the structured field had no company.
+  const named = [facts?.company, fromText, lead.company, lead.type === 'job' ? lead.author : undefined];
   return named.map((name) => name?.replace(/\s+/g, ' ').trim()).find((name) => name && !isOutletName(name, lead.sourceRef?.channelTitle));
 }
 
