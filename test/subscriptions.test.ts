@@ -126,6 +126,29 @@ describe('subscription delivery', () => {
     expect((await runtime.store.getSubscription!('sub1'))!.cursorAt).toBe(minutes(10).toISOString());
   });
 
+  it('delivers a GitHub administrator\'s subscription without the member delay', async () => {
+    // The feed shows an admin every lead at once; the digest must not hold them back for 3 hours.
+    const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true, RADAR_MODE: 'hub', RADAR_ADMIN_GITHUB: '583231' });
+    const app = createApp(runtime);
+    const session = await makeUserSession(runtime); // GitHub id 583231
+    const user = (await runtime.store.getUserBySession!(session))!;
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed' });
+    const fresh = new Date(Date.now() - 60_000).toISOString();
+    await runtime.store.insertLead({
+      id: 'admin-fresh', sourceId: source.id, externalId: 'admin-fresh', titleKey: 'admin-fresh', fingerprint: 'fp-admin-fresh',
+      title: 'Свежая вакансия Go', text: 'Свежая вакансия Go', type: 'job', status: 'new', score: 60, reasons: [], createdAt: fresh,
+    });
+    const deps = subscriptionDeps(runtime);
+    const adminView = await deps.leadsForUser(user.id, { type: 'job' }, new Date(Date.now() - 3600_000).toISOString(), 10);
+    expect(adminView.leads.map((l) => l.id)).toContain('admin-fresh');
+
+    // The same lead through an ordinary member's saved search is still behind the tier delay.
+    const member = await runtime.store.upsertGitHubUser!({ githubId: 900_001, handle: 'member' });
+    const memberView = await deps.leadsForUser(member.id, { type: 'job' }, new Date(Date.now() - 3600_000).toISOString(), 10);
+    expect(memberView.leads.map((l) => l.id)).not.toContain('admin-fresh');
+    await runtime.store.close();
+  });
+
   it('keeps the cursor on a failed send and pauses after repeated failures', async () => {
     const { runtime, deps, setNow } = world({ leads: [lead('a', minutes(5))], status: 500 });
     await addSubscription(runtime.store, { failures: MAX_DELIVERY_FAILURES - 2 });
