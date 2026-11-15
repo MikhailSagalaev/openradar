@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.69.3 — 2026-11-15
+
+### Fixed
+- **Process crash on a connection terminated mid-transaction** (`src/store/pg-client-guard.ts`): pg-pool removes its idle-error listener while a client is checked out, so a server-side termination during a `BEGIN…COMMIT` window — the new `idle_in_transaction_session_timeout=60s` does exactly this when a request stalls between queries — emitted a FATAL `'error'` (SQLSTATE 25P03) with no listener and crashed `radar_app` (observed in production right after the v0.69.2 deploy). Every checked-out client now carries a crash-guard error listener for the duration of the checkout (all 13 `PostgresStore` transaction sites + `webQuery` + the migrator), removed before release so the pool's own idle listener takes over. The in-flight query still rejects and rolls back; the process survives and the next read opens a fresh connection. PostgreSQL regression test reproduces the termination through `webQuery`.
+
 ## 0.69.2 — 2026-11-15
 
 ### Fixed

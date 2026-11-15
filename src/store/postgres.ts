@@ -53,6 +53,7 @@ import type { VisaSponsorNote } from '../research/visa-sponsors.ts';
 import { normalizeSalary } from '../core/salary.ts';
 import { MIN_CONFIDENCE, type ModelFacts } from '../research/model.ts';
 import { checkMigrations } from './migrator.ts';
+import { guardCheckedOutClient } from './pg-client-guard.ts';
 
 const { Pool } = pg;
 
@@ -117,6 +118,7 @@ export class PostgresStore implements Store {
    */
   private async webQuery<T extends pg.QueryResultRow = any>(query: string, params: unknown[] = []): Promise<pg.QueryResult<T>> {
     const client = await this.pool.connect();
+    const unguard = guardCheckedOutClient(client);
     const meta = this.connMeta.get(client);
     if (meta) meta.uses += 1;
     try {
@@ -134,6 +136,7 @@ export class PostgresStore implements Store {
     } finally {
       // release(true) destroys the connection instead of pooling it; the pool opens a
       // fresh one on the next query. Errors are logged by the pool's 'error' listener.
+      unguard();
       client.release(this.connExpired(client));
     }
   }
@@ -384,6 +387,7 @@ export class PostgresStore implements Store {
 
   async updateSource(id: string, patch: UpdateSourceInput): Promise<SourceRecord | null> {
     const client = await this.pool.connect();
+    const unguard = guardCheckedOutClient(client);
     try {
       await client.query('BEGIN');
       const res = await client.query<{
@@ -441,6 +445,7 @@ export class PostgresStore implements Store {
       await client.query('ROLLBACK');
       throw err;
     } finally {
+      unguard();
       client.release();
     }
   }
@@ -471,6 +476,7 @@ export class PostgresStore implements Store {
 
   async insertLead(lead: Lead): Promise<boolean> {
     const client = await this.pool.connect();
+    const unguard = guardCheckedOutClient(client);
     try {
       await client.query('BEGIN');
 
@@ -562,6 +568,7 @@ export class PostgresStore implements Store {
       await client.query('ROLLBACK');
       throw err;
     } finally {
+      unguard();
       client.release();
     }
   }
@@ -1017,6 +1024,7 @@ export class PostgresStore implements Store {
   async updateLeadScore(id: string, baseScore: number): Promise<number | undefined> {
     // The row is locked: a vote committed between the read and the write must not be erased.
     const client = await this.pool.connect();
+    const unguard = guardCheckedOutClient(client);
     try {
       await client.query('BEGIN');
       const res = await client.query(
@@ -1041,12 +1049,14 @@ export class PostgresStore implements Store {
       await client.query('ROLLBACK');
       throw err;
     } finally {
+      unguard();
       client.release();
     }
   }
 
   async updateLeadStatus(id: string, status: LeadStatus, deliveredAt?: string, scoreDelta?: number): Promise<void> {
     const client = await this.pool.connect();
+    const unguard = guardCheckedOutClient(client);
     try {
       await client.query('BEGIN');
       if (typeof scoreDelta === 'number') {
@@ -1065,6 +1075,7 @@ export class PostgresStore implements Store {
       await client.query('ROLLBACK');
       throw err;
     } finally {
+      unguard();
       client.release();
     }
   }
@@ -1082,6 +1093,7 @@ export class PostgresStore implements Store {
     score: number;
   }> {
     const client = await this.pool.connect();
+    const unguard = guardCheckedOutClient(client);
     try {
       await client.query('BEGIN');
       const res = await client.query('SELECT * FROM leads WHERE id = $1 FOR UPDATE', [leadId]);
@@ -1166,6 +1178,7 @@ export class PostgresStore implements Store {
       await client.query('ROLLBACK');
       throw err;
     } finally {
+      unguard();
       client.release();
     }
   }
@@ -1627,6 +1640,7 @@ export class PostgresStore implements Store {
   async mergeLeadContacts(leadId: string, contacts: Contact[]): Promise<void> {
     if (!contacts.length) return;
     const client = await this.pool.connect();
+    const unguard = guardCheckedOutClient(client);
     try {
       await client.query('BEGIN');
       const res = await client.query(`SELECT contacts_json FROM leads WHERE id = $1 FOR UPDATE`, [leadId]);
@@ -1647,6 +1661,7 @@ export class PostgresStore implements Store {
       await client.query('ROLLBACK');
       throw err;
     } finally {
+      unguard();
       client.release();
     }
   }
@@ -2162,6 +2177,7 @@ export class PostgresStore implements Store {
     signal: LeadVoteSignal,
   ): Promise<UserVoteResult> {
     const client = await this.pool.connect();
+    const unguard = guardCheckedOutClient(client);
     try {
       await client.query('BEGIN');
       const res = await client.query('SELECT * FROM leads WHERE id = $1 FOR UPDATE', [leadId]);
@@ -2256,6 +2272,7 @@ export class PostgresStore implements Store {
       await client.query('ROLLBACK');
       throw err;
     } finally {
+      unguard();
       client.release();
     }
   }
@@ -2396,6 +2413,7 @@ export class PostgresStore implements Store {
 
   async linkParticipantGithub(pubkey: string, userId: number): Promise<void> {
     const client = await this.pool.connect();
+    const unguard = guardCheckedOutClient(client);
     try {
       await client.query('BEGIN');
       await client.query(`UPDATE participants SET github_user_id = NULL WHERE github_user_id = $1 AND pubkey <> $2`, [userId, pubkey]);
@@ -2409,6 +2427,7 @@ export class PostgresStore implements Store {
       await client.query('ROLLBACK');
       throw err;
     } finally {
+      unguard();
       client.release();
     }
   }
@@ -2428,6 +2447,7 @@ export class PostgresStore implements Store {
 
   async setParticipantRatings(ratings: Map<string, number>): Promise<void> {
     const client = await this.pool.connect();
+    const unguard = guardCheckedOutClient(client);
     try {
       await client.query('BEGIN');
       await client.query(`UPDATE participants SET rating = 0, rating_updated_at = NOW() WHERE rating <> 0`);
@@ -2444,6 +2464,7 @@ export class PostgresStore implements Store {
       await client.query('ROLLBACK');
       throw err;
     } finally {
+      unguard();
       client.release();
     }
   }
@@ -2458,6 +2479,7 @@ export class PostgresStore implements Store {
 
   async replaceLedger(leadIds: string[], entries: LedgerEntry[]): Promise<void> {
     const client = await this.pool.connect();
+    const unguard = guardCheckedOutClient(client);
     try {
       await client.query('BEGIN');
       if (leadIds.length) await client.query(`DELETE FROM rating_ledger WHERE lead_id = ANY($1::text[])`, [leadIds]);
@@ -2480,6 +2502,7 @@ export class PostgresStore implements Store {
       await client.query('ROLLBACK');
       throw err;
     } finally {
+      unguard();
       client.release();
     }
   }
@@ -2750,6 +2773,7 @@ export class PostgresStore implements Store {
 
   private async applyLeadModelEnrichment(id: string, facts: ModelFacts): Promise<void> {
     const client = await this.pool.connect();
+    const unguard = guardCheckedOutClient(client);
     try {
       await client.query('BEGIN');
 
@@ -2856,6 +2880,7 @@ export class PostgresStore implements Store {
       await client.query('ROLLBACK');
       throw err;
     } finally {
+      unguard();
       client.release();
     }
   }
@@ -2876,6 +2901,7 @@ export class PostgresStore implements Store {
 
   async saveResearchDaily(day: string, rows: ResearchDailyRow[]): Promise<void> {
     const client = await this.pool.connect();
+    const unguard = guardCheckedOutClient(client);
     try {
       await client.query('BEGIN');
       await client.query('DELETE FROM research_daily WHERE day = $1::date', [day]);
@@ -2892,6 +2918,7 @@ export class PostgresStore implements Store {
       await client.query('ROLLBACK');
       throw error;
     } finally {
+      unguard();
       client.release();
     }
   }

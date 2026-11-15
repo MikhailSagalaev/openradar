@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Lead } from '../src/core/types.ts';
 import { MemoryStore } from '../src/store/memory.ts';
 import { PostgresStore } from '../src/store/postgres.ts';
+import { guardCheckedOutClient } from '../src/store/pg-client-guard.ts';
+import type pg from 'pg';
 import { createTestStore, TEST_NOW } from './helpers.ts';
 
 function makeLead(overrides: Partial<Lead> = {}): Lead {
@@ -482,6 +484,49 @@ describe('store', () => {
         expect(agedConnects).toBe(2);
       } finally {
         await aged.close();
+      }
+    },
+  );
+
+  // Postgres-only: pg-pool strips its idle-error listener while a client is checked out, so a
+  // server-side termination while the client is idle-in-transaction emits a FATAL 'error' with
+  // no active query and no listener — an unhandled 'error' that crashes the process (the prod
+  // crash). The checkout guard must absorb that emit. We reproduce it deterministically: BEGIN
+  // leaves the client idle-in-transaction (activeQuery null), then terminate it from another
+  // connection so the FATAL lands on the exact pg _handleErrorEvent → emit('error') path.
+  it.skipIf(process.env.RADAR_TEST_STORE !== 'postgres')(
+    'checkout guard absorbs a mid-transaction termination instead of crashing the process',
+    async () => {
+      const url = process.env.DATABASE_URL || 'postgres://radar:radar@127.0.0.1:5432/radar_test';
+      const store = new PostgresStore(url, { webStatementTimeoutMs: 0 });
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const internals = store as unknown as {
+        pool: {
+          connect: () => Promise<pg.PoolClient>;
+          query: (q: string, p?: unknown[]) => Promise<unknown>;
+        };
+      };
+      const client = await internals.pool.connect();
+      const unguard = guardCheckedOutClient(client);
+      try {
+        // After BEGIN resolves the client is idle-in-transaction with no active query — the
+        // state in which a server termination becomes an unhandled 'error' without the guard.
+        await client.query('BEGIN');
+        const pidRes = await client.query<{ pid: number }>('SELECT pg_backend_pid() AS pid');
+        const pid = pidRes.rows[0]!.pid;
+        // Terminate from a separate connection; the FATAL arrives on the idle checked-out client.
+        await internals.pool.query('SELECT pg_terminate_backend($1)', [pid]);
+        // Give the FATAL time to arrive and the guard to log it (without the guard the process
+        // would already have crashed here).
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        expect(errSpy).toHaveBeenCalled();
+        // The store keeps working on a fresh connection after the terminated one.
+        expect(await store.getLead('missing-after-terminate')).toBeNull();
+      } finally {
+        unguard();
+        client.release(true);
+        errSpy.mockRestore();
+        await store.close();
       }
     },
   );
