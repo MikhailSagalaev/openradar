@@ -1,4 +1,4 @@
-﻿-- Knowledge about a post outlives the lead row. Cleanup, dedup and source
+-- Knowledge about a post outlives the lead row. Cleanup, dedup and source
 -- hygiene delete lead rows, and until now the reader reviews, the model
 -- decisions, the person labels and the votes were cascaded away with them —
 -- the training data burned together with the deleted duplicates. The FK on
