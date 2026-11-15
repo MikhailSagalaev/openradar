@@ -67,6 +67,14 @@ export class PostgresStore implements Store {
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
     });
+    // An idle client whose connection the server (or a network blip) drops emits 'error' on
+    // the pool. Without a listener Node treats it as an unhandled 'error' event and crashes the
+    // whole process; the pool has already removed the dead client, so logging is all that is
+    // needed — the next query opens a fresh connection. This is the documented node-postgres
+    // pattern, and it stops the restart loop a dropped idle connection used to cause.
+    this.pool.on('error', (err) => {
+      console.error('[radar:postgres] idle client error', err.message);
+    });
   }
 
   async init(): Promise<void> {
