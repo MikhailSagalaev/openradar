@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Lead } from '../src/core/types.ts';
 import { MemoryStore } from '../src/store/memory.ts';
 import { PostgresStore } from '../src/store/postgres.ts';
+import { guardCheckedOutClient } from '../src/store/pg-client-guard.ts';
+import type pg from 'pg';
 import { createTestStore, TEST_NOW } from './helpers.ts';
 
 function makeLead(overrides: Partial<Lead> = {}): Lead {
@@ -487,34 +489,42 @@ describe('store', () => {
   );
 
   // Postgres-only: pg-pool strips its idle-error listener while a client is checked out, so a
-  // server-side termination mid-transaction (idle_in_transaction_session_timeout in prod) emits
-  // a FATAL 'error' with no listener and crashes the process. webQuery's checkout guard must
-  // absorb it: the query rejects, the process survives, and the store keeps working.
+  // server-side termination while the client is idle-in-transaction emits a FATAL 'error' with
+  // no active query and no listener — an unhandled 'error' that crashes the process (the prod
+  // crash). The checkout guard must absorb that emit. We reproduce it deterministically: BEGIN
+  // leaves the client idle-in-transaction (activeQuery null), then terminate it from another
+  // connection so the FATAL lands on the exact pg _handleErrorEvent → emit('error') path.
   it.skipIf(process.env.RADAR_TEST_STORE !== 'postgres')(
-    'survives a connection terminated mid-transaction instead of crashing the process',
+    'checkout guard absorbs a mid-transaction termination instead of crashing the process',
     async () => {
       const url = process.env.DATABASE_URL || 'postgres://radar:radar@127.0.0.1:5432/radar_test';
-      // statement_timeout off so the idle-in-transaction timeout is what terminates the backend.
       const store = new PostgresStore(url, { webStatementTimeoutMs: 0 });
       const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const internals = store as unknown as {
-        pool: { query: (q: string) => Promise<unknown> };
-        webQuery: (q: string, p?: unknown[]) => Promise<unknown>;
+        pool: {
+          connect: () => Promise<pg.PoolClient>;
+          query: (q: string, p?: unknown[]) => Promise<unknown>;
+        };
       };
-      // Role-level so the budget applies to the fresh connection webQuery checks out (a plain
-      // SET on a pooled connection would not carry over). Reset in finally.
-      const role = new URL(url).username || 'radar';
-      await internals.pool.query(`ALTER ROLE "${role}" SET idle_in_transaction_session_timeout = '300ms'`);
+      const client = await internals.pool.connect();
+      const unguard = guardCheckedOutClient(client);
       try {
-        // BEGIN, then a 1s query leaves the backend idle in its transaction past the 300ms
-        // budget, so the server terminates it mid-checkout (SQLSTATE 25P03). Without the guard
-        // this FATAL 'error' has no listener (pg-pool strips it on checkout) and crashes.
-        await expect(internals.webQuery('SELECT pg_sleep(1)')).rejects.toThrow();
+        // After BEGIN resolves the client is idle-in-transaction with no active query — the
+        // state in which a server termination becomes an unhandled 'error' without the guard.
+        await client.query('BEGIN');
+        const pidRes = await client.query<{ pid: number }>('SELECT pg_backend_pid() AS pid');
+        const pid = pidRes.rows[0]!.pid;
+        // Terminate from a separate connection; the FATAL arrives on the idle checked-out client.
+        await internals.pool.query('SELECT pg_terminate_backend($1)', [pid]);
+        // Give the FATAL time to arrive and the guard to log it (without the guard the process
+        // would already have crashed here).
+        await new Promise((resolve) => setTimeout(resolve, 300));
         expect(errSpy).toHaveBeenCalled();
-        // The terminated connection is gone; a fresh one serves the next read.
+        // The store keeps working on a fresh connection after the terminated one.
         expect(await store.getLead('missing-after-terminate')).toBeNull();
       } finally {
-        await internals.pool.query(`ALTER ROLE "${role}" RESET idle_in_transaction_session_timeout`).catch(() => {});
+        unguard();
+        client.release(true);
         errSpy.mockRestore();
         await store.close();
       }
