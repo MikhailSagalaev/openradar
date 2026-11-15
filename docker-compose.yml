@@ -6,6 +6,11 @@ services:
     container_name: radar_postgres
     restart: unless-stopped
     mem_limit: ${RADAR_PG_MEM_LIMIT:-1g}
+    # Docker's default /dev/shm is 64 MB. Parallel BM25/pg_search plans allocate
+    # 16 MB DSM segments there; a few concurrent searches exhaust 64 MB and every
+    # such query fails with "could not resize shared memory segment ... No space
+    # left on device" (review writes and the decisions worker included).
+    shm_size: ${RADAR_PG_SHM_SIZE:-512m}
     command: postgres -c shared_preload_libraries=pg_search
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-radar}

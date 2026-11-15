@@ -2293,4 +2293,15 @@ describe('http server', () => {
 
     await runtime.store.close();
   });
+
+  it('gives postgres enough /dev/shm for parallel BM25 search', () => {
+    // Docker defaults /dev/shm to 64 MB; parallel pg_search plans allocate 16 MB
+    // DSM segments there and a few concurrent searches exhaust it ("could not
+    // resize shared memory segment ... No space left on device"). Keep >= 256 MB.
+    const compose = fs.readFileSync('docker-compose.yml', 'utf8');
+    const pg = compose.slice(compose.indexOf('postgres:'), compose.indexOf('  radar:'));
+    const match = /shm_size:\s*\$\{RADAR_PG_SHM_SIZE:-(\d+)m\}/.exec(pg);
+    expect(match).not.toBeNull();
+    expect(Number(match![1])).toBeGreaterThanOrEqual(256);
+  });
 });
