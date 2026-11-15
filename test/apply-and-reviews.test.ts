@@ -220,4 +220,26 @@ describe('reader reviews', () => {
     const flagged = await runtime.store.reviewIssuesBySource!();
     expect([...flagged.values()].reduce((a, b) => a + b, 0)).toBe(1);
   });
+
+  it('backfills sure model directions in batches without touching settled ones', async () => {
+    const { runtime, insert } = await setup();
+    // More rows than one batch (2000) so the loop must run several passes.
+    const n = 2100;
+    for (let i = 0; i < n; i++) {
+      await insert(`b${i}`, { title: `Нужен человек ${i}`, direction: 'other' });
+      await runtime.store.saveModelDecision!({ ...decision, leadId: `b${i}`, direction: 'design', directionConfidence: 0.9 });
+    }
+    // A settled direction and an unsure answer must both stay untouched.
+    await insert('settled', { title: 'Backend-разработчик', direction: 'backend' });
+    await runtime.store.saveModelDecision!({ ...decision, leadId: 'settled', direction: 'design', directionConfidence: 0.99 });
+    await insert('unsure', { title: 'Нужен человек', direction: 'other' });
+    await runtime.store.saveModelDecision!({ ...decision, leadId: 'unsure', direction: 'design', directionConfidence: 0.5 });
+    expect(await runtime.store.applyDirectionsFromDecisions!(0.8)).toBe(n);
+    expect((await runtime.store.getLead('b0'))?.direction).toBe('design');
+    expect((await runtime.store.getLead(`b${n - 1}`))?.direction).toBe('design');
+    expect((await runtime.store.getLead('settled'))?.direction).toBe('backend');
+    expect((await runtime.store.getLead('unsure'))?.direction).toBe('other');
+    // A second pass has nothing left to do.
+    expect(await runtime.store.applyDirectionsFromDecisions!(0.8)).toBe(0);
+  });
 });

@@ -774,18 +774,32 @@ export class PostgresStore implements Store {
 
   /** Writes sure SubQ directions onto leads still stuck on empty/other (catalog backfill). */
   async applyDirectionsFromDecisions(minConfidence = 0.8): Promise<number> {
-    const res = await this.pool.query(
-      `UPDATE leads l
-          SET direction = d.direction
-         FROM model_decisions d
-        WHERE l.id = d.lead_id
-          AND NOT COALESCE(d.overruled, false)
-          AND d.direction IS NOT NULL AND d.direction <> 'other'
-          AND COALESCE(d.direction_confidence, 0) >= $1
-          AND (l.direction IS NULL OR l.direction = '' OR l.direction = 'other')`,
-      [minConfidence],
-    );
-    return res.rowCount ?? 0;
+    // Batched: one giant UPDATE over the whole leads table (2.8 GB, BM25 + HNSW indexes)
+    // ran past the role's 120 s statement_timeout and was cancelled hour after hour, so
+    // the backfill never finished and the steps after it in maintenance never ran. Each
+    // batch is a short PK join; the loop stops when a pass changes nothing.
+    let total = 0;
+    for (;;) {
+      const res = await this.pool.query(
+        `WITH batch AS (
+           SELECT l.id, d.direction
+             FROM leads l
+             JOIN model_decisions d ON d.lead_id = l.id
+            WHERE NOT COALESCE(d.overruled, false)
+              AND d.direction IS NOT NULL AND d.direction <> 'other'
+              AND COALESCE(d.direction_confidence, 0) >= $1
+              AND (l.direction IS NULL OR l.direction = '' OR l.direction = 'other')
+            LIMIT 2000
+         )
+         UPDATE leads l SET direction = batch.direction
+           FROM batch WHERE l.id = batch.id`,
+        [minConfidence],
+      );
+      const n = res.rowCount ?? 0;
+      total += n;
+      if (n < 2000) break;
+    }
+    return total;
   }
 
   async listAppliedDecisions(limit: number): Promise<Array<{ lead: Lead; decision: ModelDecision }>> {
