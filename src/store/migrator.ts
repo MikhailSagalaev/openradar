@@ -32,6 +32,11 @@ export async function runMigrations(target: pg.Pool | string): Promise<Migration
   const applied: string[] = [];
 
   try {
+    // Migrations build indexes over the whole leads table: minutes on a large hub.
+    // The role-level statement_timeout (120s backstop) must not kill them; this is a
+    // trusted operator command, so the session opts out explicitly.
+    await client.query('SET statement_timeout = 0');
+
     // 1. Блокировка на уровне advisory lock для исключения race condition
     await client.query('SELECT pg_advisory_lock($1)', [ADVISORY_LOCK_ID]);
 

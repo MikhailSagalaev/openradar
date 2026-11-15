@@ -179,6 +179,9 @@ async function currentUser(c: Context, runtime: Runtime): Promise<UserRecord | u
   return user ?? undefined;
 }
 
+/** A lead card that does not exist (or is not visible): the cached renderer signals 404 with it. */
+class LeadCardNotFound extends Error {}
+
 
 async function getAuthDisplay(c: Context, runtime: Runtime): Promise<AuthDisplay | undefined> {
   const user = await currentUser(c, runtime);
@@ -1332,6 +1335,30 @@ export function createApp(runtime: Runtime): Hono {
     return value;
   };
 
+  // Anonymous lead cards are the crawlers' favourite URL: every vendor fetches the same
+  // cards, and each render costs a BM25 "similar" query. Guests (no session cookie) get a
+  // short in-process HTML cache; one render per card per TTL, single in-flight render per
+  // key. Logged-in views are never stored — no cross-user content can leak. The nginx
+  // microcache (docs/OPS_BOT_AND_MEMORY.md) does the same at the edge; this protects the
+  // origin when nginx is bypassed (e.g. the nip.io test host).
+  const leadCardTtlMs = runtime.env.RADAR_LEAD_CACHE_SEC * 1000;
+  const leadCardCache = new Map<string, { at: number; html: Promise<string> }>();
+  const cachedLeadCard = (key: string, render: () => Promise<string>): Promise<string> => {
+    const cached = leadCardCache.get(key);
+    if (cached && Date.now() - cached.at < leadCardTtlMs) return cached.html;
+    if (leadCardCache.size > 5000) {
+      const now = Date.now();
+      for (const [k, v] of leadCardCache) if (now - v.at >= leadCardTtlMs) leadCardCache.delete(k);
+      if (leadCardCache.size > 5000) leadCardCache.clear();
+    }
+    const html = render().catch((error) => {
+      leadCardCache.delete(key);
+      throw error;
+    });
+    leadCardCache.set(key, { at: Date.now(), html });
+    return html;
+  };
+
   // «За сутки найдено N»: leads of the last 24 h this viewer can see, refreshed every 10 minutes per tier.
   // A full day of what this tier can see: the 24 hours before its delay ends, so a guest's
   // number is not half a day long. Up to 5000; one count per tier runs at a time.
@@ -2233,29 +2260,33 @@ export function createApp(runtime: Runtime): Hono {
     await refreshSalaryMedians();
     const lang = resolveLang(c);
     const viewer = await viewerFromRequest(c, runtime);
-    const stored = await runtime.store.getLead(c.req.param('id'));
-    // Whoever brought a lead sees it at once, before the tier delay lets others see it.
-    if (!stored || !(viewerCanSeeLead(viewer, stored, runtime.access) || await broughtBy(viewer, stored.id))) {
-      return c.html(renderNotFound(VERSION, lang, await getAuthDisplay(c, runtime)), 404);
-    }
-    const lead = projectContacts(stored, viewer);
-    const source = await runtime.store.getSource(lead.sourceId);
-    const user = await currentUser(c, runtime);
-    const myVote = (user && runtime.store.getUserVote)
-      ? await runtime.store.getUserVote(lead.id, user.id)
-      : null;
-    // Similar: same type and main skill, best of the last week, as this viewer may see them.
-    const similar = (await feedFor(runtime, viewer, {
-      limit: 5,
-      type: lead.type,
-      skill: lead.skills?.[0],
-      ...filterOptions({ sort: 'score', remote: false }),
-      // A Russian card lists Russian work: one shared skill does not make an English post similar.
-      language: /[а-яё]/i.test(lead.title) ? 'ru' : 'en',
-    })).filter((item) => item.id !== lead.id).slice(0, 4);
-    const sightings = ((await runtime.store.listLeadSightings?.(lead.id)) ?? []).filter((s) => s.url !== lead.url);
-    return c.html(
-      renderLeadPage({
+    const id = c.req.param('id');
+    // Guests without any session cookie share one cached render per card+language; everyone
+    // else (members, admins, the lead's author) renders live, so tier content never mixes.
+    const anonymous = viewer.tier === 'guest' && !getCookie(c, 'radar_session');
+    const renderCard = async (): Promise<string> => {
+      const stored = await runtime.store.getLead(id);
+      // Whoever brought a lead sees it at once, before the tier delay lets others see it.
+      if (!stored || !(viewerCanSeeLead(viewer, stored, runtime.access) || await broughtBy(viewer, stored.id))) {
+        throw new LeadCardNotFound();
+      }
+      const lead = projectContacts(stored, viewer);
+      const source = await runtime.store.getSource(lead.sourceId);
+      const user = await currentUser(c, runtime);
+      const myVote = (user && runtime.store.getUserVote)
+        ? await runtime.store.getUserVote(lead.id, user.id)
+        : null;
+      // Similar: same type and main skill, best of the last week, as this viewer may see them.
+      const similar = (await feedFor(runtime, viewer, {
+        limit: 5,
+        type: lead.type,
+        skill: lead.skills?.[0],
+        ...filterOptions({ sort: 'score', remote: false }),
+        // A Russian card lists Russian work: one shared skill does not make an English post similar.
+        language: /[а-яё]/i.test(lead.title) ? 'ru' : 'en',
+      })).filter((item) => item.id !== lead.id).slice(0, 4);
+      const sightings = ((await runtime.store.listLeadSightings?.(lead.id)) ?? []).filter((s) => s.url !== lead.url);
+      return renderLeadPage({
         similar,
         sightings,
         lead,
@@ -2266,8 +2297,20 @@ export function createApp(runtime: Runtime): Hono {
         myVote: myVote ?? undefined,
         contactsHidden: !canSeeContacts(viewer),
         expired: isExpired(lead, runtime.env),
-      }),
-    );
+      });
+    };
+    try {
+      const html = anonymous && leadCardTtlMs > 0
+        ? await cachedLeadCard(`${id}:${lang}`, renderCard)
+        : await renderCard();
+      if (anonymous && leadCardTtlMs > 0) c.header('Cache-Control', `public, max-age=${runtime.env.RADAR_LEAD_CACHE_SEC}`);
+      return c.html(html);
+    } catch (err) {
+      if (err instanceof LeadCardNotFound) {
+        return c.html(renderNotFound(VERSION, lang, await getAuthDisplay(c, runtime)), 404);
+      }
+      throw err;
+    }
   });
 
   app.post('/leads/:id/status', async (c) => {

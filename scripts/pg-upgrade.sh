@@ -40,7 +40,8 @@ DUMP="$BACKUP_DIR/pg$HAVE-to-pg$WANT-$(date +%Y%m%d-%H%M%S).dump"
 echo "pg-upgrade: PostgreSQL $HAVE → $WANT"
 docker compose stop radar </dev/null || true
 # No -t: a TTY turns LF into CRLF and corrupts the custom-format dump.
-docker exec "$CONTAINER" pg_dump -U "$PG_USER" -Fc "$PG_DB" </dev/null > "$DUMP"
+# PGOPTIONS: the role-level statement_timeout backstop must not kill a long COPY/restore.
+docker exec -e PGOPTIONS='-c statement_timeout=0' "$CONTAINER" pg_dump -U "$PG_USER" -Fc "$PG_DB" </dev/null > "$DUMP"
 [ -s "$DUMP" ] || { echo "pg-upgrade: empty dump, stopped" >&2; docker compose start radar </dev/null || true; exit 1; }
 echo "pg-upgrade: dump $DUMP ($(du -h "$DUMP" | cut -f1))"
 
@@ -54,6 +55,6 @@ NEW=$(docker exec "$CONTAINER" sh -c 'cat "$PGDATA/PG_VERSION"' </dev/null | tr 
 TABLES=$(docker exec "$CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -Atc "select count(*) from pg_tables where schemaname='public'" </dev/null)
 [ "$TABLES" = "0" ] || { echo "pg-upgrade: the new volume already has $TABLES tables, not restoring over them" >&2; exit 1; }
 
-docker exec -i "$CONTAINER" pg_restore -U "$PG_USER" -d "$PG_DB" --no-owner --exit-on-error < "$DUMP"
+docker exec -i -e PGOPTIONS='-c statement_timeout=0' "$CONTAINER" pg_restore -U "$PG_USER" -d "$PG_DB" --no-owner --exit-on-error < "$DUMP"
 LEADS=$(docker exec "$CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -Atc "select count(*) from leads" </dev/null)
 echo "pg-upgrade: restored into PostgreSQL $WANT, leads: $LEADS; the old volume is left as it was"

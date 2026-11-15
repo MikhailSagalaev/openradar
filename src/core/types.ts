@@ -103,6 +103,14 @@ export interface Env {
   RADAR_RSS_RATE_PER_MIN: number;
   RADAR_DELTA_RATE_PER_MIN: number;
   RADAR_SITEMAP_RATE_PER_MIN: number;
+  /** Recycle pooled PG connections after this many seconds (0 = never); see PostgresStore. */
+  RADAR_PG_CONN_MAX_AGE_SEC: number;
+  /** Recycle pooled PG connections after this many queries (0 = never). */
+  RADAR_PG_CONN_MAX_USES: number;
+  /** SET LOCAL statement_timeout for web reads, ms (0 = off). */
+  RADAR_WEB_STATEMENT_TIMEOUT_MS: number;
+  /** Anonymous lead-card HTML cache TTL, seconds (0 = off). */
+  RADAR_LEAD_CACHE_SEC: number;
   RADAR_LOG_LEVEL: LogLevel;
   PORT: number;
   RADAR_BIND: string;
