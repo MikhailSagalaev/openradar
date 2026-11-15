@@ -81,6 +81,12 @@ export class PostgresStore implements Store {
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
+      // pg-pool's own budgets (pg 8.23+): a connection is retired after maxUses
+      // checkouts or maxLifetimeSeconds, whichever comes first — the native path
+      // for the recycling this store needs. The WeakMap check in webQuery is the
+      // belt to these suspenders (and covers pools built without the options).
+      maxUses: this.maxConnUses > 0 ? this.maxConnUses : undefined,
+      maxLifetimeSeconds: options.maxConnAgeSec && options.maxConnAgeSec > 0 ? options.maxConnAgeSec : undefined,
     });
     // An idle client whose connection the server (or a network blip) drops emits 'error' on
     // the pool. Without a listener Node treats it as an unhandled 'error' event and crashes the
