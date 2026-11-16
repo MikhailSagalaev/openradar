@@ -2521,6 +2521,7 @@ ${input.body}
         <a href="/employers">${escapeHtml(lang === 'ru' ? 'Работодатели' : 'Employers')}</a>
         <a href="/review">${escapeHtml(lang === 'ru' ? 'Разбор постов' : 'Review posts')}</a>
         <a href="/about">${escapeHtml(lang === 'ru' ? 'О проекте' : 'About')}</a>
+        <a href="/docs">${escapeHtml(lang === 'ru' ? 'HTTP API' : 'HTTP API')}</a>
         <a href="/trust">${escapeHtml(lang === 'ru' ? 'Данные и доверие' : 'Trust & data')}</a>
         <a href="/faq">${escapeHtml(lang === 'ru' ? 'Вопросы и ответы' : 'FAQ')}</a>
         <a href="/extension">${escapeHtml(t.extensionGuide)}</a>

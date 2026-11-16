@@ -56,6 +56,21 @@ describe('OpenAPI description of the public API', () => {
     expect(catalog.spec[0].url).toContain('/openapi.json');
   });
 
+  it('renders a human-readable /docs page with endpoints, parameters and responses', async () => {
+    const { app } = makeRuntime();
+    const res = await app.request('/docs', { headers: { cookie: 'openradar_lang=en' } });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('openradar public API');
+    expect(html).toContain('/api/leads');
+    expect(html).toContain('/api/market');
+    expect(html).toContain('Parameters');
+    expect(html).toContain('Responses');
+    expect(html).toContain('/openapi.json');
+    expect(html).toContain('Lead schema');
+    expect(html).toContain('<code class="api-method">GET</code>');
+  });
+
   it('gives MCP directories a server card', async () => {
     const { app } = makeRuntime();
     for (const path of ['/.well-known/mcp/server-card.json', '/.well-known/mcp.json', '/mcp/server-card']) {

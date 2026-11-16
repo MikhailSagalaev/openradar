@@ -17,7 +17,7 @@ import { resetGigachatToken } from '../src/research/gigachat.ts';
 import { parseModelAnswer, runModelExtraction } from '../src/research/model.ts';
 import { modelQuality } from '../src/research/quality.ts';
 import { MIN_MEDIAN, buildReport, dist, monthPeriod } from '../src/research/report.ts';
-import { renderEmbedPage, renderReportPage } from '../src/research/pages.ts';
+import { renderEmbedPage, renderMethodologyPage, renderReportPage } from '../src/research/pages.ts';
 import { buildMonthReport, datasetCsv, ensureMonthlySnapshot, resetResearchCache } from '../src/research/service.ts';
 import { createApp } from '../src/server/app.ts';
 import { makeTestRuntime } from './helpers.ts';
