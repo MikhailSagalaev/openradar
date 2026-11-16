@@ -1719,8 +1719,8 @@ export function renderNetworkPage(options: {
 <div class="page-head"><div>
   <h1>${ru ? 'Сеть openradar' : 'The openradar network'}</h1>
   <p class="muted small">${ru
-    ? `Участники приносят публикации в общую базу. Очки — рейтинг за ${options.windowDays} дней: кто первый увидел подтверждённый заказ, кто подтвердил, чей сигнал совпал с исходом.`
-    : `Participants bring posts into the shared base. Points are the ${options.windowDays}-day rating: who saw a confirmed lead first, who confirmed it, whose signal matched the outcome.`}</p>
+    ? `Участники пополняют общую базу через расширение браузера, Telegram-каналы и узлы сети. Очки — рейтинг за ${options.windowDays} дней: кто первым обнаружил подтверждённый заказ, подтвердил публикацию или чей сигнал помог очистить ленту.`
+    : `Participants contribute to the shared feed via the browser extension, Telegram channels, and network nodes. Points reflect the ${options.windowDays}-day rating: who discovered a confirmed lead first, confirmed a post, or helped clean the feed.`}</p>
 </div></div>
 
 <div class="detail-grid" style="grid-template-columns: 1.4fr 1fr;">
@@ -1732,8 +1732,8 @@ export function renderNetworkPage(options: {
       <tbody>${participantRows}</tbody>
     </table>
     <p class="muted small">${ru
-      ? 'Ключ участника — hex-подпись; имя появляется, только если участник сам опубликовал профиль (событие kind 30440). Закрытые каналы здесь не раскрываются.'
-      : 'A participant is a signing key; a name appears only when the participant published a profile (kind 30440). Private channels are never listed here.'}</p>`
+      ? 'Для участников с привязанным GitHub отображается @handle; для независимых узлов сети — криптографический ключ (hex-подпись). Закрытые каналы здесь не раскрываются.'
+      : 'Participants with a linked GitHub account appear by their @handle; independent network nodes appear by their cryptographic signing key. Private channels are never disclosed here.'}</p>`
     : `<p class="muted">${ru ? 'Пока никто не получал очков — самые первые подтверждения появятся здесь.' : 'Nobody has earned points yet — the first confirmations will show up here.'}</p>`}
   </section>
   <section>
@@ -1743,12 +1743,12 @@ export function renderNetworkPage(options: {
       <thead><tr><th>${ru ? 'Источник' : 'Source'}</th><th>${ru ? 'Лидов' : 'Leads'}</th></tr></thead>
       <tbody>${sourceRows}</tbody>
     </table>
-    <p class="muted small">${ru ? `Всего за неделю: ${totalLeads.toLocaleString('ru-RU')} публикаций. Полный список с состояниями — на <a href="/sources">странице источников</a>.` : `${totalLeads.toLocaleString('en-US')} posts in total this week. The full list with states lives on the <a href="/sources">sources page</a>.`}</p>`
+    <p class="muted small">${ru ? `Всего за неделю: ${totalLeads.toLocaleString('ru-RU')} публикаций (автоматические парсеры и участники). Полный список с состояниями — на <a href="/sources">странице источников</a>.` : `${totalLeads.toLocaleString('en-US')} posts this week across automated parsers and participants. The full list with states lives on the <a href="/sources">sources page</a>.`}</p>`
     : `<p class="muted">${ru ? 'Пока нет данных за неделю.' : 'No data for the week yet.'}</p>`}
-    <details class="score-help"><summary>${ru ? 'Как попасть в таблицу' : 'How to get on this table'}</summary>
+    <details class="score-help"><summary>${ru ? 'Как попасть в рейтинг' : 'How to get on the leaderboard'}</summary>
       <p>${ru
-        ? `Подключите источник: публичный канал, RSS или свой узел с флагом share. Суммарно участники сети набрали ${totalPoints} очков за ${options.windowDays} дней.`
-        : `Connect a source: a public channel, an RSS feed or your own node with the share flag. The network has earned ${totalPoints} points in ${options.windowDays} days.`}</p>
+        ? `Установите расширение для браузера, отправляйте публикации или подключите источник (публичный канал, RSS или свой узел с флагом share). Суммарно участники сети набрали ${totalPoints} очков за ${options.windowDays} дней.`
+        : `Install the browser extension, submit posts, or connect a source (public channel, RSS, or your own node with the share flag). The network has earned ${totalPoints} points in ${options.windowDays} days.`}</p>
     </details>
   </section>
 </div>`;

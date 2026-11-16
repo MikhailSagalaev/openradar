@@ -115,31 +115,35 @@ RADAR_DIR="$TARGET_DIR" bash scripts/pg-upgrade.sh
 echo "Проверка и запуск PostgreSQL..."
 docker compose up -d postgres
 
-# 6. Резервная копия перед миграциями. Приложение останавливается на время дампа:
-# параллельный BM25-поиск + pg_dump пробивали лимит памяти postgres и OOM-killer
-# убивал бэкенд посреди COPY. Пауза — секунды; контейнер поднимется на шаге 8.
-BACKUP_DIR="${RADAR_BACKUP_DIR:-$TARGET_DIR/backups}"
-mkdir -p "$BACKUP_DIR"
-for i in {1..15}; do
-  docker compose exec -T postgres pg_isready -q </dev/null && break
-  sleep 2
-done
-docker compose stop radar
-PG_USER=$(grep -E "^POSTGRES_USER=" .env | cut -d '=' -f2- | tr -d ' "' || true)
-PG_DB=$(grep -E "^POSTGRES_DB=" .env | cut -d '=' -f2- | tr -d ' "' || true)
-BACKUP_FILE="$BACKUP_DIR/pre-deploy-$(date +%Y%m%d-%H%M%S).dump"
-# PGOPTIONS: the role-level statement_timeout backstop must not kill a long COPY.
-if docker compose exec -T -e PGOPTIONS='-c statement_timeout=0' postgres pg_dump -U "${PG_USER:-radar}" -Fc "${PG_DB:-radar}" </dev/null > "$BACKUP_FILE"; then
-  echo "Резервная копия: $BACKUP_FILE"
+# 6. Резервная копия перед миграциями.
+# По умолчанию пропускаем: регулярные резервные копии базы выполняются по cron (scripts/backup.sh).
+# Чтобы принудительно сделать дамп перед деплоем, запустите с PREDEPLOY_BACKUP=1.
+if [ "${PREDEPLOY_BACKUP:-0}" = "1" ] && [ "${SKIP_BACKUP:-0}" != "1" ] && [ ! -f "$TARGET_DIR/.no-predeploy-backup" ]; then
+  BACKUP_DIR="${RADAR_BACKUP_DIR:-$TARGET_DIR/backups}"
+  mkdir -p "$BACKUP_DIR"
+  for i in {1..15}; do
+    docker compose exec -T postgres pg_isready -q </dev/null && break
+    sleep 2
+  done
+  docker compose stop radar
+  PG_USER=$(grep -E "^POSTGRES_USER=" .env | cut -d '=' -f2- | tr -d ' "' || true)
+  PG_DB=$(grep -E "^POSTGRES_DB=" .env | cut -d '=' -f2- | tr -d ' "' || true)
+  BACKUP_FILE="$BACKUP_DIR/pre-deploy-$(date +%Y%m%d-%H%M%S).dump"
+  # PGOPTIONS: the role-level statement_timeout backstop must not kill a long COPY.
+  if docker compose exec -T -e PGOPTIONS='-c statement_timeout=0' postgres pg_dump -U "${PG_USER:-radar}" -Fc "${PG_DB:-radar}" </dev/null > "$BACKUP_FILE"; then
+    echo "Резервная копия: $BACKUP_FILE"
+  else
+    echo "Не удалось сделать резервную копию, деплой остановлен"
+    rm -f "$BACKUP_FILE"
+    docker compose start radar || true
+    exit 1
+  fi
+  # Ротация pre-deploy дампов: держим 3 свежих (для отката), старше 14 дней — долой.
+  { ls -1t "$BACKUP_DIR"/pre-deploy-*.dump 2>/dev/null || true; } | tail -n +4 | while IFS= read -r stale; do rm -f "$stale"; done
+  find "$BACKUP_DIR" -name 'pre-deploy-*.dump' -mtime +14 -delete 2>/dev/null || true
 else
-  echo "Не удалось сделать резервную копию, деплой остановлен"
-  rm -f "$BACKUP_FILE"
-  docker compose start radar || true
-  exit 1
+  echo "Пропуск создания pre-deploy дампа базы данных (регулярные бэкапы настроены через cron)..."
 fi
-# Ротация pre-deploy дампов: держим 3 свежих (для отката), старше 14 дней — долой.
-{ ls -1t "$BACKUP_DIR"/pre-deploy-*.dump 2>/dev/null || true; } | tail -n +4 | while IFS= read -r stale; do rm -f "$stale"; done
-find "$BACKUP_DIR" -name 'pre-deploy-*.dump' -mtime +14 -delete 2>/dev/null || true
 
 # 7. Запуск миграций базы данных
 echo "Применение миграций базы данных..."

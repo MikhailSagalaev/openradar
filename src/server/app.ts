@@ -3539,28 +3539,44 @@ export function createApp(runtime: Runtime): Hono {
     const lang = resolveLang(c);
     if (!networkCache || Date.now() - networkCache.at >= 10 * 60_000) {
       const since = new Date(Date.now() - RATING_WINDOW_MS).toISOString();
-      const sums = [...(await runtime.store.sumLedger(since)).entries()]
-        .filter(([pubkey, points]) => /^[0-9a-f]{64}$/.test(pubkey) && points > 0)
-        .sort((a, b) => b[1] - a[1])
+      const ledgerSums = await runtime.store.sumLedger(since);
+      const recentObs = await runtime.store.listObservationsSince(since);
+      const obsCounts = new Map<string, number>();
+      for (const o of recentObs) {
+        if (/^[0-9a-f]{64}$/.test(o.pubkey)) {
+          obsCounts.set(o.pubkey, (obsCounts.get(o.pubkey) ?? 0) + 1);
+        }
+      }
+      const allPubkeys = new Set([...ledgerSums.keys(), ...obsCounts.keys()]);
+      const ranked = [...allPubkeys]
+        .filter((pubkey) => /^[0-9a-f]{64}$/.test(pubkey))
+        .map((pubkey) => ({
+          pubkey,
+          points: ledgerSums.get(pubkey) ?? 0,
+          posts: obsCounts.get(pubkey) ?? 0,
+        }))
+        .filter((p) => p.points > 0 || p.posts > 0)
+        .sort((a, b) => b.points - a.points || b.posts - a.posts)
         .slice(0, 30);
       const moderators = parseModerators(runtime.env.RADAR_MODERATORS);
       const participants = [];
       const accounts = await accountsByKey();
-      for (const [pubkey, points] of sums) {
+      for (const item of ranked) {
+        const pubkey = item.pubkey;
         const participant = await runtime.store.getParticipant(pubkey);
         const account = accounts.get(pubkey) ?? (participant?.githubUserId ? await runtime.store.getUserById(participant.githubUserId) ?? undefined : undefined);
         const shown = account && account.publicProfile !== false ? account : undefined;
-        const posts = await runtime.store.countObservationsByPubkey(pubkey);
+        const posts = item.posts || (await runtime.store.countObservationsByPubkey(pubkey));
         const profileName = participant?.profile?.name;
         const profileAbout = participant?.profile?.about;
         participants.push({
           shortPubkey: `${pubkey.slice(0, 8)}…${pubkey.slice(-4)}`,
           name: typeof profileName === 'string' && profileName.trim() ? profileName.trim() : undefined,
           about: typeof profileAbout === 'string' && profileAbout.trim() ? profileAbout.trim() : undefined,
-          points,
+          points: item.points,
           posts,
           handle: shown?.handle,
-          tier: tierFor({ rating: points, moderator: moderators.has(pubkey), githubLinked: Boolean(participant?.githubUserId) }),
+          tier: tierFor({ rating: item.points, moderator: moderators.has(pubkey), githubLinked: Boolean(participant?.githubUserId) }),
         });
       }
       let topSources: Array<{ title: string; leads: number; href?: string }> = [];
