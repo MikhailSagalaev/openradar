@@ -9,7 +9,10 @@ import { layout, type AuthDisplay } from '../server/ui.ts';
 import { translateSkill, translateSourceTitle } from '../server/i18n.ts';
 import type { IndexSeries, OpenradarIndex } from './index.ts';
 import { lineChart, renderIntlIndexSection, renderPlatformIndexTable, renderWeekdayProfileSection } from './index-page.ts';
-import { renderEconometricsSection, renderGigBracketsSection, renderGradeMatrixSection, renderLanguageMatrixSection, renderRegionalComparisonSection } from './pages.ts';
+import { renderEconometricsSection,
+  renderScientificSection,
+  renderAcademicCitations,
+  scholarMetaTags, renderGigBracketsSection, renderGradeMatrixSection, renderLanguageMatrixSection, renderRegionalComparisonSection } from './pages.ts';
 import { MIN_MEDIAN, MIN_QUARTILES, RELIABLE, REPORT_VERSION, rubMonthToUsdYear, type Dist, type Report, type Slice } from './report.ts';
 
 const LICENSE = 'CC BY 4.0';
@@ -238,6 +241,7 @@ ${renderGradeMatrixSection(jobs.gradeMatrix, (slug) => (jobs.roles.some((r) => r
   <p class="small"><b>${pct(jobs.remote.share)}</b> of vacancies allow remote work.${jobs.remote.remote.median && jobs.remote.office.median ? ` Median: ${rub(jobs.remote.remote.median)} remote, ${rub(jobs.remote.office.median)} on site.` : ''}${jobs.remote.adjusted ? ` At the same role and seniority the difference is ${jobs.remote.adjusted.pct > 0 ? '+' : ''}${jobs.remote.adjusted.pct}% (${num(jobs.remote.adjusted.n)} vacancies compared).` : ''}</p></section>
 ${renderRegionalComparisonSection(jobs.regionalComparison, jobs.regionalMatrix, jobs.byCity, (slug) => (jobs.roles.some((r) => r.slug === slug) ? `/en/research/roles/${slug}` : undefined), 'en')}
 ${renderEconometricsSection(jobs.econometrics, 'en')}
+${renderScientificSection(jobs.scientific, 'en')}
 <section class="rs-section"><h2>Skills and pay premium</h2><p class="muted small">Concrete technologies and tools in vacancies with stated pay (excluding umbrella categories), with stratified pay premiums at equal role and seniority.</p>${rangeChart(jobs.skills.map((s) => ({ label: s.premiumPct !== undefined && s.premiumPct !== 0 ? `${translateSkill(s.skill, 'en')} (${s.premiumPct > 0 ? '+' : ''}${s.premiumPct}%)` : translateSkill(s.skill, 'en'), pay: s.pay })))}</section>
 <section class="rs-section"><h2>AI in vacancies</h2>
   <p class="small">Neural networks, LLMs, GPT, Cursor, Copilot or machine learning appear in <b>${pct(jobs.ai.share)}</b> of vacancies.</p>
@@ -263,6 +267,7 @@ ${intlMedian ? `<section class="rs-section" id="international"><h2>International
 <section class="rs-section prose"><h2>How to cite</h2>
   <p>openradar data is open under ${LICENSE}: use it in articles and research with a link to the source.</p>
   <p class="rs-cite"><code>${escapeHtml(cite)}</code> ${quoteButton(cite)}</p>
+  ${renderAcademicCitations(report, baseUrl, 'en')}
   <ul>
     <li><a href="/en/research/methodology">Methodology</a>: sources, how pay is read, what is left out.</li>
     <li><a href="/research/dataset.csv">Vacancies and orders (CSV)</a>, without texts or contacts.</li>
@@ -294,7 +299,8 @@ ${intlMedian ? `<section class="rs-section" id="international"><h2>International
     lang: 'en',
     auth: options.auth,
     script: QUOTE_SCRIPT,
-    head: `${enHead(description, `${baseUrl}${path}`, ruPath, baseUrl)}
+    head: `${scholarMetaTags({ title, baseUrl, path, dateIso: report.generatedAt, lang: 'en' })}
+${enHead(description, `${baseUrl}${path}`, ruPath, baseUrl)}
 <script type="application/ld+json">${jsonForScript(dataset)}</script>`,
   });
 }
@@ -329,8 +335,8 @@ ${renderWeekdayProfileSection(index.weekdayProfile, 'en')}
 ${renderIntlIndexSection(index.intl, 'en', (slug, fallback) => ROLE_EN[slug] ?? fallback)}
 <section class="rs-section prose"><h2>How the index works</h2><ul>
   <li><b>Two independent fixed panels (Russian-language &amp; Global):</b> the Russian-language index tracks 8 constant reference feeds (<code>hh-it</code>, <code>hh-remote-project</code>, <code>habr-career</code>, <code>getmatch</code>, <code>trudvsem-remote</code>, <code>kwork-all</code>, <code>fl-all</code>, <code>freelancehunt</code>), while the International index tracks 10 global job boards and ATS feeds (<code>himalayas</code>, <code>arbeitnow</code>, <code>justjoin.it</code>, <code>jobicy</code>, <code>weworkremotely</code>, <code>remoteworker-uk</code>, <code>cryptojobslist</code>, <code>ats-ashby</code>, <code>ats-greenhouse</code>, <code>ats-lever</code>) plus <code>freelancer.com</code>. Feeds added later never enter either panel.</li>
-  <li><b>Freshness Gate (no bumped vacancies):</b> an old vacancy raised in search is not counted as new. On hh.ru and Habr Career this is verified by the sequential vacancy ID ($\Delta\text{id} \le 230,000$ on hh.ru and $\le 100$ on Habr Career — roughly 7 days of numbering).</li>
-  <li><b>7-day rolling mean & onboarding spike Winsorization:</b> a day's value is the 7-day moving average ($\text{MA}_7$). Pre-base single-day feed onboarding bursts ($> 2.5\times\text{median}$) are Winsorized in the rolling mean so initial feed backfills do not cause artificial drops 7 days later.</li>
+  <li><b>Freshness Gate (no bumped vacancies):</b> an old vacancy raised in search is not counted as new. On hh.ru and Habr Career this is verified by the sequential vacancy ID (<code>Δid ≤ 230,000</code> on hh.ru and <code>≤ 100</code> on Habr Career — roughly 7 days of numbering).</li>
+  <li><b>7-day rolling mean & onboarding spike Winsorization:</b> a day's value is the 7-day moving average (<code>MA_7</code>). Pre-base single-day feed onboarding bursts (<code>&gt; 2.5 × median</code>) are Winsorized in the rolling mean so initial feed backfills do not cause artificial drops 7 days later.</li>
   <li><b>Unadjusted seasonality:</b> holidays and year-end troughs appear as they are. The last two days are recalculated as late posts arrive.</li>
 </ul><p>Details are in the <a href="/en/research/methodology#index">methodology</a>. Open data under ${LICENSE}. Cite as: openradar, “The openradar index”. ${escapeHtml(baseUrl)}/en/research/index</p></section>`;
   return layout({
@@ -387,25 +393,28 @@ export function renderMethodologyPageEn(options: { baseUrl: string; version: str
   <ul>
     <li><b>Priority order:</b> 1) vacancy page structured markup (<code>schema.org/JobPosting</code>); 2) dedicated board budget fields (Kwork, FL.ru, Freelancehunt); 3) contextual free-text pay parser; 4) verified LLM extraction.</li>
     <li><b>Contextual guards:</b> numbers count only alongside currency symbols or explicit compensation keywords. Experience ranges (“3–5 years”), team sizes, advertising budgets, company revenue, referral bonuses, and course tuition fees are rejected.</li>
-    <li><b>Range midpoints & spread:</b> a two-sided range $[y_{\min}, y_{\max}]$ yields its midpoint $y = (y_{\min}+y_{\max})/2$. Reports also publish how sums were stated, the median of two-sided ranges alone, and the typical half-spread $\pm\frac{y_{\max}-y_{\min}}{2y}\times 100\%$.</li>
+    <li><b>Range midpoints &amp; spread:</b> a two-sided range <code>[y_min, y_max]</code> yields its midpoint <code>y = (y_min + y_max) / 2</code>. Reports also publish how sums were stated, the median of two-sided ranges alone, and the typical half-spread <code>±(y_max − y_min) / (2·y) × 100%</code>.</li>
     <li><b>Exchange rates:</b> foreign currencies convert to RUB at the official Bank of Russia rate on the 1st of the publication month.</li>
   </ul>
 
   <h2>6. Statistical methods & Simpson's paradox adjustment</h2>
   <ul>
-    <li><b>Order-statistic 95% confidence interval of the median:</b> for $n$ sorted observations $x_{(0)} \le \dots \le x_{(n-1)}$, the non-parametric 95% confidence interval is $[x_{(k)}, x_{(n-1-k)}]$ where $k = \lfloor \frac{n-1}{2} - 1.96\frac{\sqrt{n}}{2} \rfloor$.</li>
-    <li><b>Stratified Cochran–Mantel–Haenszel adjustment (<code>adjustedGap</code>):</b> raw median gaps between remote and on-site jobs (or AI vs non-AI jobs) are heavily confounded by composition (remote roles skew Senior; non-IT retail roles skew on-site). openradar matches vacancies within homogeneous $c = (\text{role}, \text{grade})$ cells with at least 3 paid posts per side, weighting each cell by $w_c = \min(n_{c,1}, n_{c,0})$:
-      <p><code>adjustedGap = exp( sum_c( w_c * ln(median_{c,1} / median_{c,0}) ) / sum_c(w_c) ) - 1</code></p>
-      Published when total matched weight $\sum w_c \ge 30$.</li>
-    <li><b>Laspeyres fixed-basket weekly salary index (<code>weeklyIndexed</code>):</b> holds role weights $w_r = N_r / \sum N_j$ fixed across weeks so short-term shifts in source mix cannot masquerade as wage inflation.</li>
-    <li><b>Gini coefficient ($G$), quartile dispersion ($\text{QCD}$), and Bowley–Kelley skewness:</b> pay inequality and dispersion are quantified via the $P_{90}/P_{10}$ decile ratio, the non-parametric quartile coefficient of dispersion $\text{QCD} = (P_{75}-P_{25})/(P_{75}+P_{25})$, the Gini index $G = \frac{\sum_{i=1}^n (2i-n-1)x_{(i)}}{n\sum x_{(i)}}$, and quantile skewness indices $S_B$ and $S_K$. Employer demand concentration is measured via the Herfindahl–Hirschman Index ($\text{HHI} = \sum s_i^2 \times 10,000$).</li>
+    <li><b>Order-statistic 95% confidence interval of the median:</b> for <code>n</code> sorted observations <code>x_(1) ≤ … ≤ x_(n)</code>, the non-parametric 95% confidence interval is <code>[x_(r), x_(s)]</code> where <code>r = round(n/2 − 0.98·√n)</code> and <code>s = round(n/2 + 1 + 0.98·√n)</code>.</li>
+    <li><b>Stratified Cochran–Mantel–Haenszel adjustment (<code>adjustedGap</code>):</b> raw median gaps between remote and on-site jobs (or AI vs non-AI jobs) are heavily confounded by composition. openradar matches vacancies within homogeneous <code>c = (role, grade)</code> cells with at least 3 paid posts per side, weighting each cell by <code>w_c = min(n_{c,1}, n_{c,0})</code>:
+      <p><code>adjustedGap = exp( ∑_c ( w_c · ln(median_{c,1} / median_{c,0}) ) / ∑_c w_c ) − 1</code></p>
+      Published when total matched weight <code>∑ w_c ≥ 30</code>.</li>
+    <li><b>Laspeyres fixed-basket weekly salary index (<code>weeklyIndexed</code>):</b> holds role weights <code>w_r = N_r / ∑ N_j</code> fixed across weeks so short-term shifts in source mix cannot masquerade as wage inflation.</li>
+    <li><b>Gini coefficient (G), quartile dispersion (QCD), and Bowley–Kelley skewness:</b> pay inequality and dispersion are quantified via the <code>P90/P10</code> decile ratio, the non-parametric quartile coefficient of dispersion <code>QCD = (P75 − P25) / (P75 + P25)</code>, the Gini index <code>G = ∑_{i=1..n} (2i − n − 1)·x_(i) / (n · ∑ x_(i))</code>, and quantile skewness indices <code>S_B</code> and <code>S_K</code>. Employer demand concentration is measured via the Herfindahl–Hirschman Index (<code>HHI = ∑ s_i² × 10,000</code>).</li>
+    <li><b>Mincerian log-wage regression (OLS with White HC1 robust standard errors) &amp; ANOVA (η²):</b> to isolate the pure ceteris paribus returns to seniority (Middle, Senior, Lead vs Junior/Intern), geography (Moscow, St. Petersburg vs regional offices), all-Russia remote work, and AI skills, openradar estimates a multi-factor OLS regression on <code>ln(W_i)</code> with White heteroskedasticity-consistent standard errors (<code>HC1</code>) and Halvorsen–Palmquist exact percentage effects <code>Δ% = (exp(β_j) − 1) × 100%</code>, alongside one-way ANOVA variance decomposition (<code>η² = SS_between / SS_total</code>) and non-parametric hypothesis tests (Mann–Whitney <code>U</code> with Cliff’s <code>δ</code>, Kruskal–Wallis <code>H</code> with <code>ε²</code>, and Spearman’s <code>ρ_s</code>).</li>
   </ul>
 
   <h2 id="index">7. The openradar index (Russian-language &amp; Global panels)</h2>
-  <p>The index (<a href="/en/research/index">/en/research/index</a>) tracks daily new vacancies and freelance orders against a base of 100 (9 November – 6 December 2026) across two independent fixed panels: the 8-feed Russian-language panel (hh.ru, Habr Career, getmatch, Rabota Rossii, Kwork, FL.ru, Freelancehunt) and the 11-board International Global &amp; Remote panel (Himalayas, Arbeitnow, JustJoin, Jobicy, WeWorkRemotely, RemoteWorker UK, CryptoJobsList, Ashby, Greenhouse, Lever, and Freelancer.com). Sequential vacancy IDs on hh.ru ($\Delta\text{id} \le 230,000$) and Habr Career ($\Delta\text{id} \le 100$) filter out bumped older vacancies. Values are 7-day rolling averages ($\text{MA}_7$) with pre-base onboarding spike Winsorization ($2.5\times\text{median}$), accompanied by IT-vacancies sub-indices, per-board indices, role indices, and Monday–Sunday seasonality profiles.</p>
+  <p>The index (<a href="/en/research/index">/en/research/index</a>) tracks daily new vacancies and freelance orders against a base of 100 (9 November – 6 December 2026) across two independent fixed panels: the 8-feed Russian-language panel (hh.ru, Habr Career, getmatch, Rabota Rossii, Kwork, FL.ru, Freelancehunt) and the 11-board International Global &amp; Remote panel (Himalayas, Arbeitnow, JustJoin, Jobicy, WeWorkRemotely, RemoteWorker UK, CryptoJobsList, Ashby, Greenhouse, Lever, and Freelancer.com). Sequential vacancy IDs on hh.ru (<code>Δid ≤ 230,000</code>) and Habr Career (<code>Δid ≤ 100</code>) filter out bumped older vacancies. Values are 7-day rolling averages (<code>MA_7</code>) with pre-base onboarding spike Winsorization (<code>2.5 × median</code>), accompanied by IT-vacancies sub-indices, per-board indices, role indices, and Monday–Sunday seasonality profiles.</p>
 
-  <h2 id="versions">8. Versions & open data</h2>
-  <p><b>Report version 2 and index version 2 (November 2026).</b> Russian-language order isolation, Bank of Russia monthly FX rates, order-statistic 95% CIs, stratified role-and-seniority gap adjustments, role × seniority salary matrix, skill pay premiums, retail clerk exclusion from IT seniority grades, and panel index freshness gating. Open data under ${LICENSE} (<a href="/research/dataset.csv">CSV</a> and <a href="/research/report.json">JSON</a>).</p>
+    <h2 id="versions">8. Versions, Open Data Codebook &amp; Academic Citation</h2>
+  <p><b>Report version 2 and index version 2 (November 2026).</b> Russian-language order isolation, Bank of Russia monthly FX rates, order-statistic 95% CIs, stratified role-and-seniority gap adjustments, role × seniority salary heatmaps, Mincerian log-wage OLS regression (White HC1), ANOVA variance decomposition (η²), non-parametric hypothesis tests, and panel index freshness gating. Open data under ${LICENSE} (<a href="/research/dataset.csv">/research/dataset.csv</a> and <a href="/research/report.json">/research/report.json</a>).</p>
+  <p><b>CSV Data Dictionary (<code>/research/dataset.csv</code>):</b> each row represents one deduplicated post with 19 standardized columns: <code>id</code>, <code>date</code> (UTC YYYY-MM-DD), <code>type</code> (<code>job</code> | <code>gig</code>), <code>platform</code>, <code>role</code> (25 specializations), <code>grade</code> (<code>intern</code>..<code>lead</code>), <code>language</code>, <code>region</code>, <code>remote</code> (<code>0</code> | <code>1</code>), <code>company</code>, <code>pay_min_rub</code>, <code>pay_max_rub</code>, <code>pay_rub</code> (midpoint in RUB), <code>pay_period</code> (<code>month</code> | <code>project</code> | <code>hour</code> | <code>day</code>), <code>currency</code>, <code>pay_origin</code> (<code>page</code> | <code>board</code> | <code>text</code> | <code>model</code>), <code>ai_mention</code> (<code>0</code> | <code>1</code>), <code>skills</code> (<code>;</code>-separated), and <code>scope</code> (<code>ru</code> | <code>intl</code>).</p>
+  <p><b>Standard Academic Citation (APA 7th):</b> <code>openradar Research. (2026). Methodology of the Russian IT &amp; Freelance Labour Market Study and Panel Index (Version 2). openradar. ${escapeHtml(baseUrl)}/en/research/methodology</code></p>
 </section>`;
   return layout({
     title: 'Methodology of openradar research & index',

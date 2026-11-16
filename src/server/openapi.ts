@@ -132,6 +132,41 @@ export function renderOpenApi(baseUrl: string): Record<string, unknown> {
           responses: { '200': { description: 'Lead changes', content: { 'application/json': { schema: { type: 'object' } }, 'application/x-ndjson': { schema: { type: 'string' } } } } },
         },
       },
+      '/research/report.json': {
+        get: {
+          summary: 'Full empirical labour market research report & econometrics (JSON)',
+          description: 'Live 30-day empirical study (CC BY 4.0): salary medians, 95% CIs, role x seniority heatmap (gradeMatrix), programming language x seniority heatmap (languageMatrix), regional econometrics & remote work premium (regionalComparison, regionalMatrix, byCity), Gini index, decile ratios, Bowley/Kelley skewness, employer HHI (econometrics), Mincerian log-wage OLS regression with White HC1 robust SEs, ANOVA variance decomposition, and non-parametric hypothesis tests (scientific).',
+          responses: {
+            '200': { description: 'Complete research report object', content: { 'application/json': { schema: { type: 'object' } } } },
+          },
+        },
+      },
+      '/research/dataset.csv': {
+        get: {
+          summary: 'Anonymized micro-dataset of vacancies and freelance orders (CSV, CC BY 4.0)',
+          description: '19 standardized columns per deduplicated post: id, date, type, platform, role, grade, language, region, remote, company, pay_min_rub, pay_max_rub, pay_rub, pay_period, currency, pay_origin, ai_mention, skills, scope.',
+          responses: {
+            '200': { description: 'CSV dataset', content: { 'text/csv': { schema: { type: 'string' } } } },
+          },
+        },
+      },
+      '/research/index.json': {
+        get: {
+          summary: 'Daily Russian-language and International (Global & Remote) market activity index (JSON)',
+          description: '7-day moving average index (base 100) across fixed reference panels for Russian-language and Global remote vacancies and freelance orders.',
+          responses: {
+            '200': { description: 'Openradar daily panel index', content: { 'application/json': { schema: { type: 'object' } } } },
+          },
+        },
+      },
+      '/research/index.csv': {
+        get: {
+          summary: 'Daily market activity index time series (CSV)',
+          responses: {
+            '200': { description: 'CSV time series', content: { 'text/csv': { schema: { type: 'string' } } } },
+          },
+        },
+      },
       '/v2/feed': {
         get: {
           summary: 'radar/2 feed with cursor pagination',

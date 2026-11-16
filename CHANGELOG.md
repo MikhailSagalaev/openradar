@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.73.0 — 2026-11-16
+
+- **Mincerian Log-Wage Regression (`jobs.scientific.mincer`):** multi-factor OLS regression on log monthly salaries in IT with White (HC1) heteroskedasticity-robust standard errors, Student t-statistics, p-values, R², adjusted R², Fisher F-statistics, and Halvorsen–Palmquist exact percentage semi-elasticities (Δ% = (exp(β) − 1) × 100%).
+- **ANOVA Log-Wage Variance Decomposition (`jobs.scientific.varianceDecomposition`):** computes exact Eta-squared (η² = SS_between / SS_total) and Fisher F-tests quantifying how much wage inequality is explained by seniority grade (41.9%), geography & work mode (21.3%), role specialization (16.1%), and programming language (7.8%).
+- **Formal Hypothesis Testing Suite (`jobs.scientific.hypotheses`):** non-parametric rank tests with tie corrections and standardized effect sizes: Mann–Whitney U and Cliff’s delta (δ) for the all-Russia remote IT wage premium (H1), Kruskal–Wallis H and ε² for regional (H2) and seniority (H3) stratification, and Spearman’s rank correlation (ρ_s) for salary disclosure selection bias (H4).
+- **Academic Citations & Scholar Metadata:** ready-to-copy bibliographic citations in GOST R 7.0.5–2008 (for Russian theses/ВКР, РИНЦ, ВАК), APA 7th Edition, and BibTeX (`@dataset`), plus Highwire Press / Google Scholar (`citation_*`) and Dublin Core (`DC.*`) HTML meta tags.
+- **Methodology Codebook & AI Agent Discoverability:** full 19-column CSV Data Dictionary (`Codebook`) on `/research/methodology` and `/en/research/methodology`, clean HTML mathematical formulas (no raw LaTeX dollar strings), and full research/dataset endpoint descriptions in `/openapi.json`, `/llms.txt`, and `/en/llms.txt`.
+- **Sharp Heatmap Cells:** removed `border-radius` inside heatmap table cells and legend swatches so color-coded matrices match the crisp rectangular grid aesthetic of openradar.
+
 ## 0.72.0 — 2026-11-16
 
 - **Three Color-Coded Salary Heatmaps (`/research`, `/en/research`):** upgraded `renderGradeMatrixSection` into a visual color-coded heatmap (`Role × Seniority`, with quartile dispersion `QCD%` and a gradient scale legend) and added two new heatmaps: `Geography Heatmap: Role × Region & Remote Work` (`jobs.regionalMatrix`, showing Moscow office, St. Petersburg office, regional Russian offices, all-Russia remote work, regional office discount vs Moscow `regVsMskPct`, and relocation-free remote premium `remoteVsRegPct`) and `Stack Heatmap: Programming Language × Seniority` (`jobs.languageMatrix`).

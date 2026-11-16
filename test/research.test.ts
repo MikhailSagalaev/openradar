@@ -761,5 +761,25 @@ describe('research data consistency & honest visual metrics', () => {
     expect(report.jobs.econometrics?.all.decileRatio).toBeGreaterThan(2.5);
     expect(report.jobs.econometrics?.employerConcentration.hhi).toBeGreaterThan(0);
     expect(report.jobs.econometrics?.gradeTransparency.map((g) => g.grade)).toEqual(['junior', 'senior']);
+    expect(report.jobs.scientific?.mincer).toBeDefined();
+    expect(report.jobs.scientific!.mincer!.r2).toBeGreaterThan(0.5);
+    expect(report.jobs.scientific!.mincer!.coefficients.some((c) => c.key === 'senior' && (c.effectPct ?? 0) > 100)).toBe(true);
+    expect(report.jobs.scientific!.varianceDecomposition.length).toBeGreaterThanOrEqual(2);
+    expect(report.jobs.scientific!.hypotheses.map((h) => h.id)).toEqual(expect.arrayContaining(['H1', 'H2', 'H3']));
+
+    const ruHtml = renderReportPage({ report, baseUrl: 'https://openradar.fun', version: '0.73.0', snapshots: [] });
+    expect(ruHtml).not.toContain('border-radius:4px');
+    expect(ruHtml).toContain('Таблица 1. Оценка уравнения заработной платы Минсера');
+    expect(ruHtml).toContain('Таблица 2. Декомпозиция дисперсии логарифма зарплат');
+    expect(ruHtml).toContain('Таблица 3. Сводка проверки статистических гипотез');
+    expect(ruHtml).toContain('ГОСТ Р 7.0.5–2008');
+    expect(ruHtml).toContain('@dataset{openradar_');
+    expect(ruHtml).toContain('name="citation_title"');
+    expect(ruHtml).not.toContain('капитал');
+
+    const methRu = renderMethodologyPage({ baseUrl: 'https://openradar.fun', version: '0.73.0' });
+    expect(methRu).toContain('Codebook / Data Dictionary');
+    expect(methRu).toContain('pay_min_rub');
+    expect(methRu).not.toMatch(/\$[a-zA-Z\\]/);
   });
 });

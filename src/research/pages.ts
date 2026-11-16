@@ -25,6 +25,7 @@ import {
   type GradeMatrixRow,
   type LanguageMatrixRow,
   type MarketEconometrics,
+  type ScientificAnalysis,
   type RegionalComparisonRow,
   type RegionalMatrixRow,
   type Report,
@@ -423,7 +424,7 @@ function heatmapStyle(value: number | undefined, minVal: number, maxVal: number)
   if (value === undefined || maxVal <= minVal) return "";
   const ratio = Math.max(0, Math.min(1, (value - minVal) / (maxVal - minVal)));
   const alpha = (0.07 + ratio * 0.35).toFixed(2);
-  return ` style="background:rgba(16,185,129,${alpha});font-variant-numeric:tabular-nums;border-radius:4px"`;
+  return ` style="background:rgba(16,185,129,${alpha});font-variant-numeric:tabular-nums"`;
 }
 
 function heatmapLegend(minVal: number, maxVal: number, lang: SupportedLang = "ru"): string {
@@ -432,7 +433,7 @@ function heatmapLegend(minVal: number, maxVal: number, lang: SupportedLang = "ru
   return `<p class="rs-legend" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px">
     <span>${en ? "Heatmap scale:" : "Шкала тепловой карты:"}</span>
     <span>${escapeHtml(fmt(minVal))}</span>
-    <span style="display:inline-block;width:96px;height:8px;border-radius:4px;background:linear-gradient(90deg,rgba(16,185,129,0.08),rgba(16,185,129,0.44));border:1px solid var(--line)"></span>
+    <span style="display:inline-block;width:96px;height:8px;background:linear-gradient(90deg,rgba(16,185,129,0.08),rgba(16,185,129,0.44));border:1px solid var(--line)"></span>
     <span>${escapeHtml(fmt(maxVal))}</span>
     <span class="muted">· ${en ? "QCD = quartile dispersion (P75−P25)/(P75+P25)" : "QCD — квартильная дисперсия (P75−P25)/(P75+P25)"}</span>
   </p>`;
@@ -803,6 +804,241 @@ export function renderEconometricsSection(
 </section>`;
 }
 
+
+export function scholarMetaTags(options: {
+  title: string;
+  baseUrl: string;
+  path: string;
+  dateIso: string;
+  lang: "ru" | "en";
+}): string {
+  const { title, baseUrl, path, dateIso, lang } = options;
+  const pubDate = dateIso.slice(0, 10).replace(/-/g, "/");
+  const keywords =
+    lang === "ru"
+      ? "рынок труда; зарплаты в IT; фриланс; эконометрика; уравнение Минсера; индекс Джини; региональное неравенство; открытые данные"
+      : "labour market; IT salaries; freelance; econometrics; Mincer earnings regression; Gini index; regional wage inequality; open data";
+  return `<meta name="citation_title" content="${escapeHtml(title)}">
+<meta name="citation_author" content="openradar Research">
+<meta name="citation_publication_date" content="${escapeHtml(pubDate)}">
+<meta name="citation_online_date" content="${escapeHtml(pubDate)}">
+<meta name="citation_language" content="${lang}">
+<meta name="citation_public_url" content="${escapeHtml(`${baseUrl}${path}`)}">
+<meta name="citation_keywords" content="${escapeHtml(keywords)}">
+<meta name="DC.title" content="${escapeHtml(title)}">
+<meta name="DC.creator" content="openradar">
+<meta name="DC.type" content="Dataset">
+<meta name="DC.format" content="text/csv">
+<meta name="DC.rights" content="https://creativecommons.org/licenses/by/4.0/">`;
+}
+
+export function renderAcademicCitations(report: Report, baseUrl: string, lang: SupportedLang = "ru"): string {
+  const en = lang === "en";
+  const url = `${baseUrl}${reportUrl(report)}`;
+  const year = report.period.to.slice(0, 4);
+  const accessDate = report.generatedAt.slice(0, 10);
+  const gost = `Рынок труда в IT и фрилансе: эмпирическое исследование и открытый датасет (${report.period.label}) [Электронный ресурс] // openradar: открытая исследовательская сеть рынка труда. — ${year}. — URL: ${url} (дата обращения: ${accessDate}). — Лицензия: CC BY 4.0.`;
+  const apa = `openradar Research. (${year}). Russian IT & Freelance Labour Market Empirical Dataset and Econometric Report (${report.period.label}) [Data set]. openradar. ${url}`;
+  const bibtex = `@dataset{openradar_${year}_${(report.period.slug ?? "live").replace(/[^a-z0-9]/gi, "_")}, author = {{openradar Research}}, title = {{Russian IT and Freelance Labour Market Empirical Dataset (${report.period.label})}}, year = {${year}}, publisher = {openradar}, version = {v${report.version}.0}, url = {${url}}, note = {Open data CC BY 4.0; CSV: ${baseUrl}/research/dataset.csv}}`;
+
+  return `<div style="margin-top:16px">
+  <h3>${en ? "Academic citation formats (GOST / APA 7th / BibTeX)" : "Библиографические ссылки для научных работ и ВКР (ГОСТ / APA / BibTeX)"}</h3>
+  <p class="muted small">${en
+    ? "Ready-to-use bibliographic references for academic papers, bachelor/master theses, and preprints:"
+    : "Готовые библиографические описания для цитирования в научных статьях (РИНЦ, ВАК), аналитических записках, выпускных квалификационных работах (ВКР) и диссертациях:"}</p>
+  <table class="table">
+    <thead>
+      <tr>
+        <th style="width:150px">${en ? "Standard" : "Стандарт"}</th>
+        <th>${en ? "Bibliographic reference" : "Текст библиографической ссылки"}</th>
+        <th style="width:110px"></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>ГОСТ Р 7.0.5–2008</b><br><span class="muted small">${en ? "RU theses & papers" : "ВКР, РИНЦ, ВАК"}</span></td>
+        <td class="small"><code>${escapeHtml(gost)}</code></td>
+        <td>${quoteButton(gost, lang)}</td>
+      </tr>
+      <tr>
+        <td><b>APA (7th ed.)</b><br><span class="muted small">${en ? "International" : "Международный"}</span></td>
+        <td class="small"><code>${escapeHtml(apa)}</code></td>
+        <td>${quoteButton(apa, lang)}</td>
+      </tr>
+      <tr>
+        <td><b>BibTeX</b><br><span class="muted small">LaTeX / Overleaf</span></td>
+        <td class="small"><code>${escapeHtml(bibtex)}</code></td>
+        <td>${quoteButton(bibtex, lang)}</td>
+      </tr>
+    </tbody>
+  </table>
+</div>`;
+}
+
+export function renderScientificSection(scientific: ScientificAnalysis | undefined, lang: SupportedLang = "ru"): string {
+  if (!scientific) return "";
+  const { mincer, varianceDecomposition, hypotheses } = scientific;
+  if (!mincer && !varianceDecomposition.length && !hypotheses.length) return "";
+  const en = lang === "en";
+  const fmt = (v: number): string => (en ? `₽${new Intl.NumberFormat("en-US").format(v)}` : formatRub(v));
+  const mincerLabelEn: Record<string, string> = {
+    intercept: "Intercept β₀ (Junior/Intern, regional office)",
+    middle: "Seniority: Middle (vs Junior/Intern)",
+    senior: "Seniority: Senior (vs Junior/Intern)",
+    lead: "Seniority: Lead / Staff (vs Junior/Intern)",
+    moscow: "Location: Moscow office/hybrid (vs regions)",
+    spb: "Location: St. Petersburg office/hybrid (vs regions)",
+    remote: "Work mode: All-Russia Remote (vs regional office)",
+    ai: "Skill requirement: AI / LLM mentioned",
+  };
+  const anovaLabelEn: Record<string, string> = {
+    grade: "Seniority grade (Intern → Lead in IT)",
+    geo: "Geography & work mode (Moscow, SPb, regions, remote)",
+    role: "Professional specialization (role)",
+    language: "Primary programming language / stack",
+  };
+  const hypTitleEn: Record<string, { title: string; method: string; effectLabel: string }> = {
+    H1: {
+      title: "All-Russia Remote IT wage premium over regional offices",
+      method: "Mann–Whitney U test & Cliff’s delta (δ)",
+      effectLabel: "Cliff’s delta δ",
+    },
+    H2: {
+      title: "Inter-regional IT wage stratification across 4 segments",
+      method: "Kruskal–Wallis H test (rank ANOVA)",
+      effectLabel: "Explained variance ε²",
+    },
+    H3: {
+      title: "Monotonic wage returns to seniority grade (Intern → Lead)",
+      method: "Kruskal–Wallis H test across grades",
+      effectLabel: "Explained variance ε²",
+    },
+    H4: {
+      title: "Salary disclosure selection bias in higher-paid roles",
+      method: "Spearman rank correlation (ρ_s) between median & % stated pay",
+      effectLabel: "Spearman ρ_s",
+    },
+  };
+
+  return `<section class="rs-section" id="scientific-models">
+  <h2>${en ? "Econometric modeling, variance decomposition & hypothesis testing" : "Эконометрическое моделирование, декомпозиция дисперсии и проверка гипотез"}</h2>
+  <p class="muted small">${en
+    ? "Inferential statistical models estimated directly on the empirical micro-dataset: a multi-factor Mincerian log-wage OLS regression with White (HC1) heteroskedasticity-robust standard errors, one-way ANOVA decomposition of log-wage inequality (η²), and non-parametric hypothesis tests."
+    : "Инференциальный статистический анализ по микроданным выборки: оценка многофакторного лог-линейного уравнения заработной платы Якоба Минсера методом МНК (OLS) с гетероскедастично-робастными стандартными ошибками Уайта (HC1), однофакторная декомпозиция дисперсии логарифма зарплат (ANOVA η²) и формальная проверка исследовательских гипотез."}</p>
+  ${mincer ? `<h3 style="margin-top:16px">${en ? "Table 1. Mincerian log-wage regression (OLS with White HC1 robust standard errors)" : "Таблица 1. Оценка уравнения заработной платы Минсера (МНК с робастными ошибками Уайта HC1)"}</h3>
+  <p class="muted small">${en
+    ? "Dependent variable: natural logarithm of monthly pay ln(W_i) in graded IT vacancies. Reference baseline (β₀): Junior/Intern specialist in a regional office without AI requirements. Exact semi-elasticity: Δ% = (exp(β) − 1) × 100%."
+    : "Зависимая переменная — натуральный логарифм месячной оплаты ln(W_i) в IT-вакансиях с указанным грейдом. Базовая категория (константа β₀) — специалист уровня Junior/Intern в региональном офисе. Точный процентный вклад фактора при прочих равных (ceteris paribus) вычисляется по поправке Халворсена — Палмквиста: Δ% = (exp(β) − 1) × 100%."}</p>
+  <div style="overflow-x:auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>${en ? "Explanatory factor (variable)" : "Фактор модели (объясняющая переменная)"}</th>
+          <th>${en ? "Coeff. β (log)" : "Коэффициент β"}</th>
+          <th>${en ? "Robust SE (HC1)" : "Робастная SE (HC1)"}</th>
+          <th>${en ? "t-statistic" : "t-статистика"}</th>
+          <th>p-value</th>
+          <th>${en ? "Pure effect Δ% (ceteris paribus)" : "Чистый эффект Δ% (ceteris paribus)"}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${mincer.coefficients
+          .map((c) => {
+            const eff =
+              c.key === "intercept" && c.baselineRub
+                ? `<b>${escapeHtml(fmt(c.baselineRub))}</b> <span class="muted small">(${en ? "base" : "база"})</span>`
+                : c.effectPct !== undefined
+                  ? `<b style="color:${c.effectPct > 0 ? "var(--emerald)" : "inherit"}">${c.effectPct > 0 ? "+" : ""}${c.effectPct}%</b>`
+                  : "—";
+            return `<tr>
+              <td><b>${escapeHtml(en ? (mincerLabelEn[c.key] ?? c.label) : c.label)}</b></td>
+              <td><code>${c.beta > 0 && c.key !== "intercept" ? "+" : ""}${c.beta.toFixed(3)}${c.stars}</code></td>
+              <td><code>${c.se.toFixed(3)}</code></td>
+              <td><code>${c.tStat.toFixed(2)}</code></td>
+              <td><b>${escapeHtml(c.pValue)}</b></td>
+              <td>${eff}</td>
+            </tr>`;
+          })
+          .join("")}
+      </tbody>
+    </table>
+  </div>
+  <p class="rs-legend">
+    <span><b>${en ? "Model diagnostics:" : "Диагностика модели:"}</b> N = ${num(mincer.n)}</span>
+    <span>· R² = <b>${mincer.r2.toFixed(3)}</b> (${en ? "adj. R²" : "скорр. R²"} = <b>${mincer.adjR2.toFixed(3)}</b>)</span>
+    <span>· ${en ? "Fisher F-statistic" : "F-статистика Фишера"} = <b>${mincer.fStat}</b> (p &lt; 0.001)</span>
+    <span class="muted">· *** p &lt; 0.001, ** p &lt; 0.01, * p &lt; 0.05</span>
+  </p>` : ""}
+  ${varianceDecomposition.length ? `<h3 style="margin-top:20px">${en ? "Table 2. ANOVA decomposition of log-wage variance (η² Eta-squared)" : "Таблица 2. Декомпозиция дисперсии логарифма зарплат (ANOVA η²)"}</h3>
+  <p class="muted small">${en
+    ? "Share of total variance in log-wages ln(W) explained by each institutional dimension (η² = SS_between / SS_total)."
+    : "Какую долю общего разброса логарифма зарплат ln(W) объясняет каждый институциональный фактор в отдельности (коэффициент детерминации η² = SS_between / SS_total)."}</p>
+  <div style="overflow-x:auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>${en ? "Institutional factor" : "Институциональный фактор"}</th>
+          <th>${en ? "Sample (N)" : "Выборка (N)"}</th>
+          <th>${en ? "Categories (G)" : "Групп (G)"}</th>
+          <th>${en ? "Variance explained (η²)" : "Объяснённая дисперсия (η²)"}</th>
+          <th>${en ? "Fisher F-stat" : "F-критерий Фишера"}</th>
+          <th>p-value</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${varianceDecomposition
+          .map(
+            (v) => `<tr>
+              <td><b>${escapeHtml(en ? (anovaLabelEn[v.key] ?? v.label) : v.label)}</b></td>
+              <td>${num(v.n)}</td>
+              <td>${v.groups}</td>
+              <td><b>${en ? `${v.etaSqPct}%` : formatShare(v.etaSqPct)}</b></td>
+              <td><code>F = ${v.fStat}</code></td>
+              <td><b>${escapeHtml(v.pValue)}</b></td>
+            </tr>`,
+          )
+          .join("")}
+      </tbody>
+    </table>
+  </div>` : ""}
+  ${hypotheses.length ? `<h3 style="margin-top:20px">${en ? "Table 3. Formal hypothesis testing summary (H1–H4)" : "Таблица 3. Сводка проверки статистических гипотез (H1–H4)"}</h3>
+  <p class="muted small">${en
+    ? "Distribution-free rank tests (Mann–Whitney U, Kruskal–Wallis H, Spearman ρ_s) and standardized effect sizes."
+    : "Непараметрические ранговые критерии (Манна — Уитни U, Краскела — Уоллиса H, корреляция Спирмена ρ_s), защищённые от правосторонней асимметрии и выбросов."}</p>
+  <div style="overflow-x:auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>${en ? "Research hypothesis" : "Исследовательская гипотеза"}</th>
+          <th>${en ? "Statistical test" : "Статистический критерий"}</th>
+          <th>n</th>
+          <th>${en ? "Test statistic" : "Статистика"}</th>
+          <th>p-value</th>
+          <th>${en ? "Effect size" : "Размер эффекта"}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${hypotheses
+          .map((h) => {
+            const tr = en ? hypTitleEn[h.id] : undefined;
+            return `<tr>
+              <td><b>${h.id}</b></td>
+              <td><b>${escapeHtml(tr?.title ?? h.title)}</b></td>
+              <td class="small">${escapeHtml(tr?.method ?? h.method)}</td>
+              <td>${num(h.n)}</td>
+              <td><code>${escapeHtml(h.statValue)}</code></td>
+              <td><b>${escapeHtml(h.pValue)}</b></td>
+              <td><b>${escapeHtml(tr?.effectLabel ?? h.effectLabel)}: ${escapeHtml(h.effectValue)}</b></td>
+            </tr>`;
+          })
+          .join("")}
+      </tbody>
+    </table>
+  </div>` : ""}
+</section>`;
+}
+
 export function renderGigBracketsSection(brackets: GigBracket[] | undefined, lang: SupportedLang = 'ru'): string {
   const rows = (brackets ?? []).filter((b) => b.n > 0);
   if (rows.length < 2) return '';
@@ -934,6 +1170,8 @@ ${renderRegionalComparisonSection(jobs.regionalComparison, jobs.regionalMatrix, 
 
 ${renderEconometricsSection(jobs.econometrics, 'ru')}
 
+${renderScientificSection(jobs.scientific, 'ru')}
+
 <section class="rs-section">
   <h2>Навыки и зарплатная премия</h2>
   <p class="muted small">Конкретные технологии и инструменты в вакансиях с зарплатой (без общих категорий), отсортированные по медиане. Для частых навыков рассчитана стратифицированная премия при той же роли и грейде.</p>
@@ -993,6 +1231,7 @@ ${intlMedian ? `<section class="rs-section" id="international">
   <h2>Как ссылаться</h2>
   <p>Данные openradar открыты по лицензии ${LICENSE}: их можно использовать в публикациях и исследованиях со ссылкой на источник.</p>
   <p class="rs-cite"><code>${escapeHtml(citeLine(report, baseUrl))}</code> ${quoteButton(citeLine(report, baseUrl))}</p>
+  ${renderAcademicCitations(report, baseUrl, 'ru')}
   <ul>
     <li><a href="/research/methodology">Методика</a>: откуда публикации, как считается зарплата, что не входит в выборку.</li>
     <li><a href="/research/dataset.csv">Данные по вакансиям и заказам (CSV)</a> — без текстов и контактов.</li>
@@ -1045,6 +1284,7 @@ ${intlMedian ? `<section class="rs-section" id="international">
     script: QUOTE_SCRIPT,
     head: `<meta name="description" content="${escapeHtml(description)}">
 <meta property="og:description" content="${escapeHtml(description)}">
+${scholarMetaTags({ title, baseUrl, path: reportUrl(report), dateIso: report.generatedAt, lang: 'ru' })}
 <link rel="canonical" href="${escapeHtml(`${baseUrl}${reportUrl(report)}`)}">
 <link rel="alternate" hreflang="ru" href="${escapeHtml(`${baseUrl}${reportUrl(report)}`)}">
 <link rel="alternate" hreflang="en" href="${escapeHtml(`${baseUrl}/en${reportUrl(report)}`)}">
@@ -1302,7 +1542,7 @@ export function renderMethodologyPage(options: { baseUrl: string; version: strin
   <ul>
     <li><b>Иерархия источников цены:</b> 1) структурированная разметка <code>schema.org/JobPosting</code> со страницы вакансии; 2) специализированное поле бюджета на фриланс-биржах (Kwork, FL.ru, Freelancehunt); 3) парсер денежных выражений в тексте; 4) верифицированная LLM-экстракция.</li>
     <li><b>Защита от ложных срабатываний:</b> парсер текста принимает число только рядом с явным маркером валюты или словами «оклад / зарплата / доход / на руки». Выражения «3–5 лет опыта», «команда до 20 человек», рекламные бюджеты («открутка от 500 000 ₽»), оборот компании, бонусы за рекомендацию и цены курсов отсекаются контекстными фильтрами.</li>
-    <li><b>Точечная оценка вилки:</b> полная вилка $[y_{\min}, y_{\max}]$ приводится к середине $y = (y_{\min} + y_{\max}) / 2$. Если верхняя граница текстовой вилки превышает потолок 1 000 000 ₽ («от 350 000 до 5 000 000 ₽ в продажах»), берётся только консервативная нижняя граница $y_{\min}$. Кроме общей медианы отчёт публикует распределение способов указания оплаты («вилка», только «от», только «до», «одна сумма»), медиану строго по полным вилкам и <b>медианный полуразмах вилки</b> $\pm\frac{y_{\max}-y_{\min}}{2y}\times 100\%$.</li>
+    <li><b>Точечная оценка вилки:</b> полная вилка <code>[y_min, y_max]</code> приводится к середине <code>y = (y_min + y_max) / 2</code>. Если верхняя граница текстовой вилки превышает потолок 1 000 000 ₽ («от 350 000 до 5 000 000 ₽ в продажах»), берётся только консервативная нижняя граница <code>y_min</code>. Кроме общей медианы отчёт публикует распределение способов указания оплаты («вилка», только «от», только «до», «одна сумма»), медиану строго по полным вилкам и <b>медианный полуразмах вилки</b> <code>±(y_max − y_min) / (2·y) × 100%</code>.</li>
     <li><b>Валютная привязка:</b> суммы конвертируются по официальному курсу Банка России на 1-е число месяца публикации, что гарантирует 100% воспроизводимость исторических срезов.</li>
   </ul>
 
@@ -1313,25 +1553,29 @@ export function renderMethodologyPage(options: { baseUrl: string; version: strin
 
   <h2>7. Статистический аппарат и защита от смещений</h2>
   <ul>
-    <li><b>Непараметрический 95% доверительный интервал медианы:</b> зарплатные распределения скошены вправо, поэтому вместо среднего арифметического и стандартного отклонения используется медиана и порядковые статистики. Для выборки объёма $n$, упорядоченной по возрастанию $x_{(0)} \le \dots \le x_{(n-1)}$, ранги границ 95% ДИ вычисляются как:
-      <p><code>k = floor((n - 1)/2 - 1.96 * sqrt(n)/2),  CI_95% = [ x_(k),  x_(n - 1 - k) ]</code></p>
-      Если доверительные интервалы двух направлений пересекаются, отчёт не называет одно направление «самым высокооплачиваемым», а использует аккуратную формулировку «среди самых высоких».</li>
-    <li><b>Стратифицированная поправка Кохрана — Мантеля — Хензеля (борьба с парадоксом Симпсона):</b> прямое сравнение медиан удалённых и офисных вакансий (или вакансий с упоминанием ИИ) даёт ложную разницу, так как на удалёнку чаще нанимают Senior-разработчиков, а в офис — линейный персонал. Поэтому openradar делит выборку на однородные ячейки $c = (\text{role}, \text{grade})$, где в обеих сравниваемых подгруппах есть минимум по 3 вакансии с зарплатой, и вычисляет взвешенный логарифмический сдвиг медиан с весами $w_c = \min(n_{c,1}, n_{c,0})$:
-      <p><code>adjustedGap = exp( sum_c( w_c * ln(median_{c,1} / median_{c,0}) ) / sum_c(w_c) ) - 1</code></p>
-      Показатель публикуется только при суммарном весе сопоставленных ячеек $\sum w_c \ge 30$. По этой же формуле рассчитывается зарплатная премия отдельных технологий и навыков.</li>
-    <li><b>Недельный индекс зарплат с фиксированной корзиной ролей (индекс Ласпейреса):</b> чтобы недельный график зарплат не скакал из-за того, что в одну неделю пришло больше вакансий курьеров или стажёров, в <code>weeklyIndexed</code> фиксируются базовые веса направлений $w_r = N_r / \sum N_j$ (для ролей с $N_r \ge 30$). В каждую неделю средневзвешенная медиана считается в неизменной структуре ролей (база первой недели = 100).</li>
-    <li><b>Индекс концентрации Джини ($G$) и квартильная дисперсия ($\text{QCD}$):</b> для оценки зарплатного расслоения рассчитываются децильный коэффициент фондов $P_{90}/P_{10}$, робастный коэффициент квартильной вариации $\text{QCD} = \frac{P_{75}-P_{25}}{P_{75}+P_{25}}$ и непараметрический индекс Джини по упорядоченному ряду окладов $x_{(1)} \le \dots \le x_{(n)}$:
-      <p><code>G = sum_{i=1..n}( (2*i - n - 1) * x_(i) ) / ( n * sum_{i=1..n}(x_(i)) )</code></p>
+    <li><b>Непараметрический 95% доверительный интервал медианы:</b> зарплатные распределения скошены вправо, поэтому вместо среднего арифметического и стандартного отклонения используются медиана и порядковые статистики. Для выборки объёма <code>n</code>, упорядоченной по возрастанию <code>x_(1) ≤ … ≤ x_(n)</code>, ранги границ 95% доверительного интервала вычисляются по нормальному приближению биномиального распределения:
+      <p><code>r = round(n / 2 − 0.98 · √n),  s = round(n / 2 + 1 + 0.98 · √n),  CI_95% = [ x_(r),  x_(s) ]</code></p>
+      Если доверительные интервалы двух направлений пересекаются, отчёт не называет одно направление «самым высокооплачиваемым», а использует строгую формулировку «среди самых высоких».</li>
+    <li><b>Стратифицированная поправка Кохрана — Мантеля — Хензеля (борьба с парадоксом Симпсона):</b> прямое сравнение медиан удалённых и офисных вакансий (или вакансий с упоминанием ИИ) даёт смещённую разницу, так как на удалёнку чаще нанимают Senior-разработчиков, а в офис — линейный персонал. Поэтому openradar делит выборку на однородные ячейки <code>c = (role, grade)</code>, где в обеих сравниваемых подгруппах есть минимум по 3 вакансии с зарплатой, и вычисляет взвешенный логарифмический сдвиг медиан с весами <code>w_c = min(n_{c,1}, n_{c,0})</code>:
+      <p><code>adjustedGap = exp( ∑_c ( w_c · ln(median_{c,1} / median_{c,0}) ) / ∑_c w_c ) − 1</code></p>
+      Показатель публикуется только при суммарном весе сопоставленных ячеек <code>∑ w_c ≥ 30</code>. По этой же формуле рассчитывается чистая зарплатная премия отдельных технологий и навыков.</li>
+    <li><b>Недельный индекс зарплат с фиксированной корзиной ролей (индекс Ласпейреса):</b> чтобы недельный график зарплат не зависел от колебаний доли массовых вакансий, в <code>weeklyIndexed</code> фиксируются базовые веса направлений <code>w_r = N_r / ∑ N_j</code> (для ролей с <code>N_r ≥ 30</code>). В каждую неделю средневзвешенная медиана считается в неизменной структуре ролей (база первой недели = 100).</li>
+    <li><b>Индекс концентрации Джини (G) и квартильная дисперсия (QCD):</b> для оценки зарплатного расслоения рассчитываются децильный коэффициент фондов <code>P90 / P10</code>, робастный коэффициент квартильной вариации <code>QCD = (P75 − P25) / (P75 + P25)</code> и непараметрический индекс Джини по упорядоченному ряду окладов <code>x_(1) ≤ … ≤ x_(n)</code>:
+      <p><code>G = ∑_{i=1..n} ( (2·i − n − 1) · x_(i) ) / ( n · ∑_{i=1..n} x_(i) )</code></p>
     </li>
-    <li><b>Асимметрия Боули ($S_B$) и Келли ($S_K$) и индекс Херфиндаля — Хиршмана ($\text{HHI}$):</b> правосторонняя скошенность зарплатных распределений измеряется квантильными индексами $S_B = \frac{(P_{75}-P_{50})-(P_{50}-P_{25})}{P_{75}-P_{25}}$ и $S_K = \frac{(P_{90}-P_{50})-(P_{50}-P_{10})}{P_{90}-P_{10}}$, а монополизация спроса со стороны работодателей — индексом $\text{HHI} = \sum s_i^2 \times 10\,000$, где $s_i$ — доля вакансий $i$-го нанимателя.</li>
+    <li><b>Асимметрия Боули (S_B) и Келли (S_K) и индекс Херфиндаля — Хиршмана (HHI):</b> правосторонняя скошенность зарплатных распределений измеряется квантильными индексами <code>S_B = ((P75 − P50) − (P50 − P25)) / (P75 − P25)</code> и <code>S_K = ((P90 − P50) − (P50 − P10)) / (P90 − P10)</code>, а концентрация спроса со стороны работодателей — индексом <code>HHI = ∑ s_i² × 10 000</code>, где <code>s_i</code> — доля вакансий i-го нанимателя.</li>
+    <li><b>Лог-линейное уравнение заработной платы Якоба Минсера (Mincer Earnings Regression, OLS + White HC1):</b> для отделения вклада квалификационного грейда от географического расположения и удалённого формата оценивается многофакторная регрессия методом наименьших квадратов (МНК) по логарифму месячной зарплаты в IT:
+      <p><code>ln(W_i) = β₀ + β₁·Middle_i + β₂·Senior_i + β₃·Lead_i + γ₁·Moscow_i + γ₂·SPb_i + γ₃·Remote_i + δ·AI_i + ε_i</code></p>
+      Стандартные ошибки коэффициентов оцениваются в гетероскедастично-робастной форме Уайта <code>HC1: V_HC1 = (n / (n − k)) · (XᵀX)⁻¹ · (∑ e_i² x_i x_iᵀ) · (XᵀX)⁻¹</code>, а точный процентный вклад бинарного фактора вычисляется по формуле Халворсена — Палмквиста: <code>Δ% = (exp(β_j) − 1) × 100%</code>.</li>
+    <li><b>Дисперсионный анализ (ANOVA η²) и непараметрические ранговые критерии:</b> доля общей дисперсии логарифма зарплат, объясняемая каждым институциональным фактором (грейд, география, направление, язык программирования), рассчитывается как <code>η² = SS_between / SS_total</code>. Проверка статистических гипотез выполняется непараметрическими критериями Манна — Уитни (<code>U</code>-тест с поправкой на связки и рангово-бисериальной дельтой Клиффа <code>δ = 2U / (n₁n₂) − 1</code>), Краскела — Уоллиса (<code>H</code>-тест и <code>ε² = H / (N − 1)</code>) и ранговой корреляцией Спирмена (<code>ρ_s</code>).</li>
   </ul>
 
   <h2 id="index">8. Индекс openradar (панельный индекс рыночной активности)</h2>
   <p>Индекс (<a href="/research/index">/research/index</a>) показывает, сколько новых вакансий и фриланс-заказов появляется на рынке каждый день относительно базового периода (9 ноября — 6 декабря 2026 = 100).</p>
   <ul>
     <li><b>Две независимые фиксированные панели (РФ и Global):</b> русскоязычный индекс строится на постоянной панели из 8 эталонных лент (<code>hh-it</code>, <code>hh-remote-project</code>, <code>habr-career</code>, <code>getmatch</code>, <code>trudvsem-remote</code>, <code>kwork-all</code>, <code>fl-all</code>, <code>freelancehunt</code>), а международный индекс (Global &amp; Remote) — на постоянной панели из 10 англоязычных площадок и ATS-систем (<code>himalayas.app</code>, <code>arbeitnow.com</code>, <code>justjoin.it</code>, <code>jobicy.com</code>, <code>weworkremotely.com</code>, <code>remoteworker.co.uk</code>, <code>cryptojobslist.com</code>, <code>jobs.ashbyhq.com</code>, <code>job-boards.greenhouse.io</code>, <code>jobs.lever.co</code>) и глобальной фриланс-биржи <code>freelancer.com</code>. Подключение новых Telegram-каналов или досок в агрегатор не раздувает ни одну из панелей.</li>
-    <li><b>Отсечение поднятых старых вакансий (Freshness Gate):</b> на hh.ru и Хабр Карьере вакансии нумеруются последовательно. Если номер вакансии отстаёт от максимального замеченного за окно более чем на $230\,000$ (на hh.ru генерируется ~32 тыс. номеров в сутки) или на $100$ (на Хабр Карьере), это старая вакансия, поднятая работодателем в поиске — в индекс новых публикаций она не входит.</li>
-    <li><b>Скользящее 7-дневное окно и виндзоризация технических всплесков:</b> поскольку в субботу и воскресенье поток вакансий падает в 4–6 раз, значение дня рассчитывается как среднее за последние 7 суток $\text{MA}_7(t) = \frac{1}{7}\sum_{i=0}^6 C_{t-i}$. Если до начала базового периода при первичном подключении ленты произошла разовая выгрузка архива за несколько дней ($C_t > 2{,}5 \times \text{median}(C)$), при расчёте $\text{MA}_7$ этот день ограничивается порогом $2{,}5 \times \text{median}(C)$, чтобы через 7 суток выход пика из окна не создавал искусственного обвала индекса.</li>
+    <li><b>Отсечение поднятых старых вакансий (Freshness Gate):</b> на hh.ru и Хабр Карьере вакансии нумеруются последовательно. Если номер вакансии отстаёт от максимального замеченного за окно более чем на <code>230 000</code> (на hh.ru генерируется ~32 тыс. номеров в сутки) или на <code>100</code> (на Хабр Карьере), это старая вакансия, поднятая работодателем в поиске — в индекс новых публикаций она не входит.</li>
+    <li><b>Скользящее 7-дневное окно и виндзоризация технических всплесков:</b> поскольку в субботу и воскресенье поток вакансий падает в 4–6 раз, значение дня рассчитывается как среднее за последние 7 суток <code>MA_7(t) = (1/7) · ∑_{i=0..6} C_{t−i}</code>. Если до начала базового периода при первичном подключении ленты произошла разовая выгрузка архива за несколько дней (<code>C_t &gt; 2,5 × median(C)</code>), при расчёте <code>MA_7</code> этот день ограничивается порогом <code>2,5 × median(C)</code>, чтобы через 7 суток выход пика из окна не создавал искусственного обвала индекса.</li>
     <li><b>Субиндексы и недельный профиль:</b> помимо сводных индексов вакансий и фриланс-заказов рассчитываются субиндексы по IT-вакансиям, по каждой площадке панели, по направлениям (от 3 вакансий в день в базе) и профиль внутринедельной сезонности (Пн–Вс).</li>
   </ul>
 
@@ -1348,8 +1592,46 @@ export function renderMethodologyPage(options: { baseUrl: string; version: strin
   <h2 id="versions">11. История версий методики</h2>
   <p><b>Отчёт, версия 2, и индекс, версия 2 (ноябрь 2026).</b> Заказы считаются только по русскоязычному рынку (исключение англоязычных заказов убрало смещение медианы на +40%). Сравнение объёма бюджетов и AI-задач изолировано внутри проектных заказов. Введены курсы Банка России, непараметрические 95% ДИ медиан, стратифицированная поправка Кохрана — Мантеля — Хензеля на состав ролей и грейдов, матрица «Направление × Грейд», расчёт зарплатных премий навыков и очистка лестницы грейдов от не-IT розницы. В индексе введена фиксированная панель лент, фильтр поднятых вакансий по номеру публикации и защита 7-дневного среднего от залповых выгрузок при старте лент. Отчёт за октябрь 2026 сохранён в версии 1 для неизменности цитат.</p>
 
-  <h2>12. Открытые данные</h2>
-  <p>Данные публикуются по открытой лицензии ${LICENSE}. Ежедневная выгрузка <a href="/research/dataset.csv">/research/dataset.csv</a> содержит по одной строке на публикацию со всеми производными полями (дата, площадка, направление, грейд, язык программирования, регион, удалёнка, работодатель, нормализованная вилка в рублях, источник цены, теги навыков) без персональных данных и исходных текстов.</p>
+    <h2>12. Открытые данные и словарь переменных (Codebook / Data Dictionary)</h2>
+  <p>Данные публикуются по открытой лицензии ${LICENSE}. Ежедневная выгрузка <a href="/research/dataset.csv">/research/dataset.csv</a> содержит по одной строке на публикацию со всеми производными полями без персональных данных и исходных текстов, что позволяет напрямую загружать массив в Python (<code>pandas</code>, <code>statsmodels</code>), R или Stata для воспроизведения расчётов, написания научных статей и выпускных квалификационных работ (ВКР).</p>
+  <div style="overflow-x:auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Поле CSV</th>
+          <th>Тип</th>
+          <th>Описание и кодировка значений в датасете</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><code>id</code></td><td>string</td><td>Уникальный детерминированный идентификатор записи после 3-уровневой дедупликации</td></tr>
+        <tr><td><code>date</code></td><td>YYYY-MM-DD</td><td>Дата публикации вакансии или заказа (UTC)</td></tr>
+        <tr><td><code>type</code></td><td>enum</td><td>Тип публикации: <code>job</code> (вакансия в штат) или <code>gig</code> (проектный фриланс-заказ)</td></tr>
+        <tr><td><code>platform</code></td><td>string</td><td>Код площадки или источника (например, <code>hh.ru</code>, <code>career.habr.com</code>, <code>kwork.ru</code>, <code>telegram</code>)</td></tr>
+        <tr><td><code>role</code></td><td>enum</td><td>Код специализации (25 направлений: <code>backend</code>, <code>frontend</code>, <code>devops</code>, <code>data</code>, <code>qa</code> и др.)</td></tr>
+        <tr><td><code>grade</code></td><td>enum</td><td>Квалификационный грейд: <code>intern</code>, <code>junior</code>, <code>middle</code>, <code>senior</code>, <code>lead</code> (пусто, если не указан)</td></tr>
+        <tr><td><code>language</code></td><td>string</td><td>Основной язык программирования для разработчиков (<code>Go</code>, <code>Python</code>, <code>TypeScript</code>, <code>Rust</code>, <code>1С</code> и др.)</td></tr>
+        <tr><td><code>region</code></td><td>enum</td><td>Макрорегион РФ: <code>Москва</code>, <code>Санкт-Петербург</code>, <code>Другие города</code>, <code>Не указан</code></td></tr>
+        <tr><td><code>remote</code></td><td>0 | 1</td><td>Индикатор удалённого формата работы (<code>1</code> — удалёнка / remote, <code>0</code> — офис или гибрид)</td></tr>
+        <tr><td><code>company</code></td><td>string</td><td>Нормализованное название работодателя (для вакансий)</td></tr>
+        <tr><td><code>pay_min_rub</code> / <code>pay_max_rub</code></td><td>integer</td><td>Нижняя и верхняя границы заявленной вилки в рублях (по курсу Банка России на месяц публикации)</td></tr>
+        <tr><td><code>pay_rub</code></td><td>integer</td><td>Точечная оценка оплаты в рублях (середина полной вилки или единственная указанная граница)</td></tr>
+        <tr><td><code>pay_period</code></td><td>enum</td><td>Расчётный период: <code>month</code> (в месяц), <code>project</code> (за проект), <code>hour</code> (в час), <code>day</code> (в смену)</td></tr>
+        <tr><td><code>currency</code></td><td>ISO 4217</td><td>Исходная валюта публикации (<code>RUB</code>, <code>USD</code>, <code>EUR</code>, <code>KZT</code>, <code>BYN</code>)</td></tr>
+        <tr><td><code>pay_origin</code></td><td>enum</td><td>Источник извлечения цены: <code>page</code> (schema.org), <code>board</code> (поле биржи), <code>text</code> (парсер), <code>model</code> (LLM)</td></tr>
+        <tr><td><code>ai_mention</code></td><td>0 | 1</td><td>Индикатор упоминания технологий ИИ / LLM / RAG / ML в требованиях (<code>1</code> — да, <code>0</code> — нет)</td></tr>
+        <tr><td><code>skills</code></td><td>string</td><td>Список нормализованных технологических навыков и инструментов через точку с запятой (<code>;</code>)</td></tr>
+        <tr><td><code>scope</code></td><td>enum</td><td>Языковой контур рынка: <code>ru</code> (русскоязычный рынок) или <code>intl</code> (международный англоязычный рынок)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h2 id="citation">13. Как цитировать методику и датасет в научных работах</h2>
+  <p>При использовании данных, таблиц, индекса или эконометрических моделей в научных публикациях (РИНЦ, ВАК, Scopus), аналитических докладах и выпускных квалификационных работах (ВКР) рекомендуем приводить библиографическую ссылку по ГОСТ Р 7.0.5–2008 или APA 7th:</p>
+  <ul>
+    <li><b>По ГОСТ Р 7.0.5–2008:</b> <code>Методика эмпирических исследований и панельного индекса рынка труда в IT и фрилансе [Электронный ресурс] // openradar: открытая исследовательская сеть рынка труда. — 2026. — URL: ${escapeHtml(baseUrl)}/research/methodology (Лицензия CC BY 4.0).</code></li>
+    <li><b>В формате APA (7th ed.):</b> <code>openradar Research. (2026). Methodology of the Russian IT &amp; Freelance Labour Market Study and Panel Index (Version 2). openradar. ${escapeHtml(baseUrl)}/research/methodology</code></li>
+    <li><b>Машиночитаемые потоки для исследователей и AI-агентов:</b> <a href="/research/report.json">/research/report.json</a> (полный JSON-отчёт с матрицами и регрессией Минсера), <a href="/research/dataset.csv">/research/dataset.csv</a> (обезличенные микроданные), <a href="/research/index.json">/research/index.json</a> (временные ряды индекса), <a href="/openapi.json">/openapi.json</a> (OpenAPI 3.1) и <a href="/llms.txt">/llms.txt</a>.</li>
+  </ul>
 </section>`;
   return layout({
     auth: options.auth,
@@ -1358,6 +1640,7 @@ export function renderMethodologyPage(options: { baseUrl: string; version: strin
     active: 'research',
     body,
     head: `<meta name="description" content="Полная методика исследований и индекса openradar: источники, нормализация зарплатных вилок, 95% доверительные интервалы, поправка на парадокс Симпсона и формула индекса.">
+${scholarMetaTags({ title: "Методика исследований и индекса openradar", baseUrl, path: "/research/methodology", dateIso: new Date().toISOString(), lang: "ru" })}
 <link rel="canonical" href="${escapeHtml(baseUrl)}/research/methodology">
 <link rel="alternate" hreflang="en" href="${escapeHtml(baseUrl)}/en/research/methodology">`,
   });

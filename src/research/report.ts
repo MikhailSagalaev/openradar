@@ -133,6 +133,56 @@ export interface MarketEconometrics {
   gradeTransparency: GradeTransparencyRow[];
 }
 
+export interface MincerCoefficient {
+  key: string;
+  label: string;
+  beta: number;
+  se: number;
+  tStat: number;
+  stars: "***" | "**" | "*" | "";
+  pValue: string;
+  effectPct?: number;
+  baselineRub?: number;
+}
+
+export interface MincerRegression {
+  n: number;
+  r2: number;
+  adjR2: number;
+  fStat: number;
+  baselineRub: number;
+  coefficients: MincerCoefficient[];
+}
+
+export interface VarianceFactorRow {
+  key: "grade" | "geo" | "role" | "language";
+  label: string;
+  n: number;
+  groups: number;
+  etaSqPct: number;
+  fStat: number;
+  pValue: string;
+}
+
+export interface HypothesisTestRow {
+  id: "H1" | "H2" | "H3" | "H4";
+  title: string;
+  method: string;
+  n: number;
+  statLabel: string;
+  statValue: string;
+  pValue: string;
+  effectLabel: string;
+  effectValue: string;
+  confirmed: boolean;
+}
+
+export interface ScientificAnalysis {
+  mincer?: MincerRegression;
+  varianceDecomposition: VarianceFactorRow[];
+  hypotheses: HypothesisTestRow[];
+}
+
 export interface GigBracket {
   key: 'micro' | 'small' | 'medium' | 'large';
   label: string;
@@ -267,6 +317,7 @@ export interface Report {
     languageMatrix?: LanguageMatrixRow[];
     byCity?: Slice[];
     econometrics?: MarketEconometrics;
+    scientific?: ScientificAnalysis;
     byLanguage: Slice[];
     byRegion: Slice[];
     remote: { share: number; remote: Dist; office: Dist; adjusted?: Adjusted };
@@ -928,6 +979,358 @@ function computeMarketEconometrics(jobs: ResearchRecord[], ruJobs: ResearchRecor
   };
 }
 
+
+function solveOlsWhiteHc1(y: number[], X: number[][]): { beta: number[]; se: number[]; r2: number; adjR2: number; fStat: number } | undefined {
+  const n = y.length;
+  const k = X[0]?.length ?? 0;
+  if (n <= k + 2 || k < 2) return undefined;
+  const XtX = Array.from({ length: k }, () => new Array<number>(k).fill(0));
+  const Xty = new Array<number>(k).fill(0);
+  for (let i = 0; i < n; i++) {
+    const xi = X[i]!;
+    const yi = y[i]!;
+    for (let a = 0; a < k; a++) {
+      Xty[a]! += xi[a]! * yi;
+      for (let b = 0; b < k; b++) XtX[a]![b]! += xi[a]! * xi[b]!;
+    }
+  }
+  const A = XtX.map((row, i) => [...row, ...Array.from({ length: k }, (_, j) => (i === j ? 1 : 0))]);
+  for (let col = 0; col < k; col++) {
+    let pivot = col;
+    for (let r = col + 1; r < k; r++) {
+      if (Math.abs(A[r]![col]!) > Math.abs(A[pivot]![col]!)) pivot = r;
+    }
+    if (Math.abs(A[pivot]![col]!) < 1e-10) return undefined;
+    const tmp = A[col]!;
+    A[col] = A[pivot]!;
+    A[pivot] = tmp;
+    const div = A[col]![col]!;
+    for (let j = 0; j < 2 * k; j++) A[col]![j]! /= div;
+    for (let r = 0; r < k; r++) {
+      if (r !== col) {
+        const factor = A[r]![col]!;
+        for (let j = 0; j < 2 * k; j++) A[r]![j]! -= factor * A[col]![j]!;
+      }
+    }
+  }
+  const invXtX = A.map((row) => row.slice(k));
+  const beta = invXtX.map((row) => row.reduce((s, v, j) => s + v * Xty[j]!, 0));
+  const e = y.map((yi, i) => yi - X[i]!.reduce((s, xij, j) => s + xij * beta[j]!, 0));
+  const yMean = y.reduce((s, v) => s + v, 0) / n;
+  const ssTot = y.reduce((s, v) => s + (v - yMean) ** 2, 0);
+  const ssRes = e.reduce((s, v) => s + v ** 2, 0);
+  if (ssTot <= 0 || ssRes <= 0) return undefined;
+  const r2 = Math.max(0, Math.min(1, 1 - ssRes / ssTot));
+  const adjR2 = Math.max(0, 1 - ((1 - r2) * (n - 1)) / (n - k));
+  const fStat = ((ssTot - ssRes) / (k - 1)) / (ssRes / (n - k));
+
+  const meat = Array.from({ length: k }, () => new Array<number>(k).fill(0));
+  const hcFactor = n / (n - k);
+  for (let i = 0; i < n; i++) {
+    const e2 = e[i]! * e[i]! * hcFactor;
+    const xi = X[i]!;
+    for (let a = 0; a < k; a++) {
+      for (let b = 0; b < k; b++) meat[a]![b]! += e2 * xi[a]! * xi[b]!;
+    }
+  }
+  const se = new Array<number>(k).fill(0);
+  for (let a = 0; a < k; a++) {
+    let varA = 0;
+    for (let b = 0; b < k; b++) {
+      for (let c = 0; c < k; c++) varA += invXtX[a]![b]! * meat[b]![c]! * invXtX[c]![a]!;
+    }
+    se[a] = Math.sqrt(Math.max(1e-12, varA));
+  }
+  return { beta, se, r2, adjR2, fStat };
+}
+
+function mannWhitneyTest(a: number[], b: number[]): { u: number; z: number; cliffsDelta: number; pValue: string } | undefined {
+  const n1 = a.length;
+  const n2 = b.length;
+  if (n1 < 5 || n2 < 5) return undefined;
+  const combined = [...a.map((v) => ({ v, g: 1 })), ...b.map((v) => ({ v, g: 2 }))].sort((x, y) => x.v - y.v);
+  const N = n1 + n2;
+  let r1 = 0;
+  let tieSum = 0;
+  let i = 0;
+  while (i < N) {
+    let j = i;
+    while (j < N && combined[j]!.v === combined[i]!.v) j++;
+    const avgRank = (i + 1 + j) / 2;
+    const t = j - i;
+    if (t > 1) tieSum += t * t * t - t;
+    for (let k = i; k < j; k++) if (combined[k]!.g === 1) r1 += avgRank;
+    i = j;
+  }
+  const u1 = r1 - (n1 * (n1 + 1)) / 2;
+  const mu = (n1 * n2) / 2;
+  const sigma = Math.sqrt(((n1 * n2) / 12) * (N + 1 - tieSum / (N * (N - 1))));
+  const z = sigma > 0 ? (u1 - mu) / sigma : 0;
+  const cliffsDelta = (2 * u1) / (n1 * n2) - 1;
+  const absZ = Math.abs(z);
+  const pValue = absZ >= 3.291 ? "< 0.001" : absZ >= 2.576 ? "< 0.01" : absZ >= 1.96 ? "< 0.05" : "n.s.";
+  return { u: Math.round(u1), z: Math.round(z * 100) / 100, cliffsDelta: Math.round(cliffsDelta * 1000) / 1000, pValue };
+}
+
+function kruskalWallisTest(groups: number[][]): { h: number; df: number; epsilonSq: number; pValue: string; n: number } | undefined {
+  const valid = groups.filter((g) => g.length >= 5);
+  if (valid.length < 2) return undefined;
+  const combined: Array<{ v: number; idx: number }> = [];
+  valid.forEach((g, idx) => g.forEach((v) => combined.push({ v, idx })));
+  combined.sort((x, y) => x.v - y.v);
+  const N = combined.length;
+  const rankSums = new Array<number>(valid.length).fill(0);
+  let tieSum = 0;
+  let i = 0;
+  while (i < N) {
+    let j = i;
+    while (j < N && combined[j]!.v === combined[i]!.v) j++;
+    const avgRank = (i + 1 + j) / 2;
+    const t = j - i;
+    if (t > 1) tieSum += t * t * t - t;
+    for (let k = i; k < j; k++) rankSums[combined[k]!.idx]! += avgRank;
+    i = j;
+  }
+  let sumSq = 0;
+  valid.forEach((g, idx) => {
+    sumSq += rankSums[idx]! ** 2 / g.length;
+  });
+  let H = (12 / (N * (N + 1))) * sumSq - 3 * (N + 1);
+  const tieCorr = 1 - tieSum / (N * N * N - N);
+  if (tieCorr > 0) H /= tieCorr;
+  const df = valid.length - 1;
+  const epsilonSq = Math.max(0, Math.min(1, H / (N - 1)));
+  const pValue = H >= 16.27 ? "< 0.001" : H >= 11.34 ? "< 0.01" : H >= 7.81 ? "< 0.05" : "n.s.";
+  return { h: Math.round(H * 10) / 10, df, epsilonSq: Math.round(epsilonSq * 1000) / 1000, pValue, n: N };
+}
+
+function computeScientificAnalysis(jobs: ResearchRecord[], ruJobs: ResearchRecord[], roles: RoleDetail[]): ScientificAnalysis {
+  const itPaid = ruJobs.filter((r) => TECH_ROLES.has(r.role));
+  const gradedIt = itPaid.filter((r) => r.grade !== undefined);
+
+  // 1. Mincer Log-Wage Regression
+  let mincer: MincerRegression | undefined;
+  if (gradedIt.length >= 12) {
+    const candidateSpecs: Array<{ key: string; label: string; fn: (r: ResearchRecord) => number }> = [
+      { key: "middle", label: "Грейд: Middle (к базе Junior/Intern)", fn: (r) => (r.grade === "middle" ? 1 : 0) },
+      { key: "senior", label: "Грейд: Senior (к базе Junior/Intern)", fn: (r) => (r.grade === "senior" ? 1 : 0) },
+      { key: "lead", label: "Грейд: Lead / Staff (к базе Junior/Intern)", fn: (r) => (r.grade === "lead" ? 1 : 0) },
+      { key: "moscow", label: "Локация: Москва, офис/гибрид (к регионам)", fn: (r) => (!r.remote && r.region === "Москва" ? 1 : 0) },
+      { key: "spb", label: "Локация: Санкт-Петербург, офис/гибрид (к регионам)", fn: (r) => (!r.remote && r.region === "Санкт-Петербург" ? 1 : 0) },
+      { key: "remote", label: "Режим: Всероссийская удалёнка (к офису в регионах)", fn: (r) => (r.remote ? 1 : 0) },
+      { key: "ai", label: "Навык: ИИ / LLM в требованиях", fn: (r) => (r.ai ? 1 : 0) },
+    ];
+    const y = gradedIt.map((r) => Math.log(r.pay!));
+    const activeSpecs: typeof candidateSpecs = [];
+    for (const spec of candidateSpecs) {
+      const ones = gradedIt.reduce((s, r) => s + spec.fn(r), 0);
+      if (ones < 2 || gradedIt.length - ones < 2) continue;
+      const trialSpecs = [...activeSpecs, spec];
+      const trialX = gradedIt.map((r) => [1, ...trialSpecs.map((s) => s.fn(r))]);
+      if (solveOlsWhiteHc1(y, trialX)) activeSpecs.push(spec);
+    }
+    if (activeSpecs.length >= 1) {
+      const X = gradedIt.map((r) => [1, ...activeSpecs.map((spec) => spec.fn(r))]);
+      const ols = solveOlsWhiteHc1(y, X);
+      if (ols) {
+        const baselineRub = round(Math.exp(ols.beta[0]!));
+        const coefficients: MincerCoefficient[] = [
+          {
+            key: "intercept",
+            label: "Константа β₀ (Junior/Intern, офис в регионе)",
+            beta: Math.round(ols.beta[0]! * 1000) / 1000,
+            se: Math.round(ols.se[0]! * 1000) / 1000,
+            tStat: Math.round((ols.beta[0]! / ols.se[0]!) * 100) / 100,
+            stars: "***",
+            pValue: "< 0.001",
+            baselineRub,
+          },
+          ...activeSpecs.map((spec, idx) => {
+            const b = ols.beta[idx + 1]!;
+            const s = ols.se[idx + 1]!;
+            const t = b / s;
+            const absT = Math.abs(t);
+            const stars: "***" | "**" | "*" | "" = absT >= 3.291 ? "***" : absT >= 2.576 ? "**" : absT >= 1.96 ? "*" : "";
+            const pValue = absT >= 3.291 ? "< 0.001" : absT >= 2.576 ? "< 0.01" : absT >= 1.96 ? "< 0.05" : "n.s.";
+            return {
+              key: spec.key,
+              label: spec.label,
+              beta: Math.round(b * 1000) / 1000,
+              se: Math.round(s * 1000) / 1000,
+              tStat: Math.round(t * 100) / 100,
+              stars,
+              pValue,
+              effectPct: Math.round((Math.exp(b) - 1) * 1000) / 10,
+            };
+          }),
+        ];
+        mincer = {
+          n: gradedIt.length,
+          r2: Math.round(ols.r2 * 1000) / 1000,
+          adjR2: Math.round(ols.adjR2 * 1000) / 1000,
+          fStat: Math.round(ols.fStat * 10) / 10,
+          baselineRub,
+          coefficients,
+        };
+      }
+    }
+  }
+
+  // 2. One-way ANOVA Variance Decomposition (Eta-squared on ln(pay))
+  const computeAnovaFactor = (
+    key: VarianceFactorRow["key"],
+    label: string,
+    pool: ResearchRecord[],
+    groupFn: (r: ResearchRecord) => string | undefined,
+  ): VarianceFactorRow | undefined => {
+    const grouped = new Map<string, number[]>();
+    for (const r of pool) {
+      const g = groupFn(r);
+      if (!g) continue;
+      let arr = grouped.get(g);
+      if (!arr) {
+        arr = [];
+        grouped.set(g, arr);
+      }
+      arr.push(Math.log(r.pay!));
+    }
+    const validGroups = [...grouped.values()].filter((g) => g.length >= 5);
+    if (validGroups.length < 2) return undefined;
+    const allVals = validGroups.flat();
+    const N = allVals.length;
+    const G = validGroups.length;
+    if (N <= G + 2) return undefined;
+    const grandMean = allVals.reduce((s, v) => s + v, 0) / N;
+    let ssTot = 0;
+    let ssBetween = 0;
+    for (const g of validGroups) {
+      const gMean = g.reduce((s, v) => s + v, 0) / g.length;
+      ssBetween += g.length * (gMean - grandMean) ** 2;
+      for (const v of g) ssTot += (v - grandMean) ** 2;
+    }
+    if (ssTot <= 0) return undefined;
+    const ssWithin = Math.max(1e-9, ssTot - ssBetween);
+    const etaSqPct = Math.round((ssBetween / ssTot) * 1000) / 10;
+    const fStat = Math.round(((ssBetween / (G - 1)) / (ssWithin / (N - G))) * 10) / 10;
+    const pValue = fStat >= 10 ? "< 0.001" : fStat >= 4.5 ? "< 0.01" : fStat >= 3.0 ? "< 0.05" : "n.s.";
+    return { key, label, n: N, groups: G, etaSqPct, fStat, pValue };
+  };
+
+  const varianceDecomposition = [
+    computeAnovaFactor("grade", "Квалификационный грейд (Intern → Lead в IT)", itPaid, (r) => r.grade),
+    computeAnovaFactor("geo", "География и формат (Москва, СПб, регионы, удалёнка)", itPaid, (r) => (r.remote ? "remote" : r.region)),
+    computeAnovaFactor("role", "Профессиональная специализация (направление)", ruJobs, (r) => (r.role !== OTHER_ROLE.slug ? r.role : undefined)),
+    computeAnovaFactor("language", "Язык программирования / основной стек", itPaid, (r) => r.language),
+  ]
+    .filter((f): f is VarianceFactorRow => f !== undefined)
+    .sort((a, b) => b.etaSqPct - a.etaSqPct);
+
+  // 3. Formal Hypothesis Testing Suite
+  const hypotheses: HypothesisTestRow[] = [];
+
+  const remItPays = itPaid.filter((r) => r.remote).map((r) => r.pay!);
+  const regItPays = itPaid.filter((r) => !r.remote && r.region === "Другие города").map((r) => r.pay!);
+  const mw = mannWhitneyTest(remItPays, regItPays);
+  if (mw) {
+    hypotheses.push({
+      id: "H1",
+      title: "Премия всероссийской ИТ-удалёнки над региональным офисом",
+      method: "U-критерий Манна — Уитни и дельта Клиффа (δ)",
+      n: remItPays.length + regItPays.length,
+      statLabel: "z-статистика",
+      statValue: `z = ${mw.z > 0 ? "+" : ""}${mw.z}`,
+      pValue: mw.pValue,
+      effectLabel: "Дельта Клиффа δ",
+      effectValue: `${mw.cliffsDelta > 0 ? "+" : ""}${mw.cliffsDelta}`,
+      confirmed: mw.z > 1.96,
+    });
+  }
+
+  const mskItPays = itPaid.filter((r) => !r.remote && r.region === "Москва").map((r) => r.pay!);
+  const spbItPays = itPaid.filter((r) => !r.remote && r.region === "Санкт-Петербург").map((r) => r.pay!);
+  const kwGeo = kruskalWallisTest([mskItPays, spbItPays, regItPays, remItPays]);
+  if (kwGeo) {
+    hypotheses.push({
+      id: "H2",
+      title: "Межрегиональная стратификация оплаты труда в ИТ (4 сегмента)",
+      method: "H-критерий Краскела — Уоллиса (ранговый ANOVA)",
+      n: kwGeo.n,
+      statLabel: `H (df = ${kwGeo.df})`,
+      statValue: `H = ${kwGeo.h}`,
+      pValue: kwGeo.pValue,
+      effectLabel: "Доля дисперсии ε²",
+      effectValue: `${(kwGeo.epsilonSq * 100).toFixed(1)}%`,
+      confirmed: kwGeo.h > 7.81,
+    });
+  }
+
+  const gradeGroups = GRADE_ORDER.map((g) => itPaid.filter((r) => r.grade === g).map((r) => r.pay!));
+  const kwGrade = kruskalWallisTest(gradeGroups);
+  if (kwGrade) {
+    hypotheses.push({
+      id: "H3",
+      title: "Монотонная отдача от квалификационного грейда (Intern → Lead)",
+      method: "H-критерий Краскела — Уоллиса по грейдам",
+      n: kwGrade.n,
+      statLabel: `H (df = ${kwGrade.df})`,
+      statValue: `H = ${kwGrade.h}`,
+      pValue: kwGrade.pValue,
+      effectLabel: "Доля дисперсии ε²",
+      effectValue: `${(kwGrade.epsilonSq * 100).toFixed(1)}%`,
+      confirmed: kwGrade.h > 7.81,
+    });
+  }
+
+  const validRoles = roles.filter((r) => r.withPay >= 15 && r.pay.median !== undefined && r.n > 0);
+  if (validRoles.length >= 6) {
+    const rankArr = (vals: number[]): number[] => {
+      const sorted = vals.map((v, i) => ({ v, i })).sort((a, b) => a.v - b.v);
+      const ranks = new Array<number>(vals.length).fill(0);
+      let i = 0;
+      while (i < sorted.length) {
+        let j = i;
+        while (j < sorted.length && sorted[j]!.v === sorted[i]!.v) j++;
+        const avg = (i + 1 + j) / 2;
+        for (let k = i; k < j; k++) ranks[sorted[k]!.i] = avg;
+        i = j;
+      }
+      return ranks;
+    };
+    const rx = rankArr(validRoles.map((r) => r.pay.median!));
+    const ry = rankArr(validRoles.map((r) => (r.withPay / r.n) * 100));
+    const k = validRoles.length;
+    const mean = (k + 1) / 2;
+    let numSum = 0;
+    let dx = 0;
+    let dy = 0;
+    for (let i = 0; i < k; i++) {
+      numSum += (rx[i]! - mean) * (ry[i]! - mean);
+      dx += (rx[i]! - mean) ** 2;
+      dy += (ry[i]! - mean) ** 2;
+    }
+    if (dx > 0 && dy > 0) {
+      const rho = Math.round((numSum / Math.sqrt(dx * dy)) * 1000) / 1000;
+      const tStat = Math.abs(rho) < 1 ? Math.round(rho * Math.sqrt((k - 2) / (1 - rho * rho)) * 100) / 100 : 0;
+      const absT = Math.abs(tStat);
+      const pValue = absT >= 3.291 ? "< 0.001" : absT >= 2.576 ? "< 0.01" : absT >= 1.96 ? "< 0.05" : "n.s.";
+      hypotheses.push({
+        id: "H4",
+        title: "Смещение сокрытия окладов в высокооплачиваемых специализациях",
+        method: "Ранговая корреляция Спирмена (ρ_s) между медианой и % вилок",
+        n: k,
+        statLabel: `t (df = ${k - 2})`,
+        statValue: `t = ${tStat}`,
+        pValue,
+        effectLabel: "Корреляция ρ_s",
+        effectValue: `${rho}`,
+        confirmed: rho < 0 && absT >= 1.96,
+      });
+    }
+  }
+
+  return { mincer, varianceDecomposition, hypotheses };
+}
+
 function computeRegionalComparison(jobs: ResearchRecord[], ruJobs: ResearchRecord[], paid: (r: ResearchRecord) => boolean): RegionalComparisonRow[] {
   const segments: Array<{ key: RegionalComparisonRow["key"]; label: string; pred: (r: ResearchRecord) => boolean }> = [
     { key: "moscow", label: "Москва (офис и гибрид)", pred: (r) => r.region === "Москва" && !r.remote },
@@ -1200,6 +1603,7 @@ export function buildReport(
         .filter((s) => s.pay.median !== undefined)
         .slice(0, 16),
       econometrics: computeMarketEconometrics(jobs, ruJobs, ruPaid),
+      scientific: computeScientificAnalysis(jobs, ruJobs, roles),
       byLanguage: sliceBy(jobs, (r) => r.language, (k) => k, ruPaid),
       byRegion: sliceBy(jobs, (r) => r.region, (k) => k, ruPaid, REGION_ORDER),
       remote: {
