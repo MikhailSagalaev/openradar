@@ -95,7 +95,11 @@ describe('employer pages', () => {
 
   it('puts employers with several vacancies into the sitemap', async () => {
     const { app } = await setup();
-    const xml = await (await app.request('/sitemap.xml')).text();
+    const index = await (await app.request('/sitemap.xml')).text();
+    expect(index).toContain('<sitemapindex');
+    const loc = index.match(/<loc>([^<]*\/sitemaps\/static\.xml)<\/loc>/)?.[1];
+    expect(loc).toBeTruthy();
+    const xml = await (await app.request(new URL(loc!).pathname)).text();
     expect(xml).toContain('/employers/riotgames');
     expect(xml).not.toContain('/employers/tiny');
   });

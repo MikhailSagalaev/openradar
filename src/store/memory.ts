@@ -14,6 +14,7 @@ import type {
   FeedOptions,
   LeadDeliveryRecord,
   ListLeadsOptions,
+  SitemapLeadRef,
   Store,
   UpdateSourceInput,
   UpsertGitHubUserInput,
@@ -895,6 +896,20 @@ export class MemoryStore implements Store {
 
   async listLeads(options: ListLeadsOptions = {}): Promise<Lead[]> {
     return this.queryLeads(options);
+  }
+
+  async listLeadsForSitemap(options: { createdAfter?: string } = {}): Promise<SitemapLeadRef[]> {
+    const after = options.createdAfter;
+    return [...this.leads.values()]
+      .filter((lead) => lead.state !== 'closed' && (!after || lead.createdAt >= after))
+      .map((lead) => ({
+        id: lead.id,
+        createdAt: lead.createdAt,
+        updatedAt: lead.updatedAt,
+        type: lead.type,
+        state: lead.state,
+        score: lead.score,
+      }));
   }
 
   private queryLeads(options: FeedOptions, feedOnly = false, countOnly = false): Lead[] {

@@ -20,6 +20,7 @@ import { renderSVG } from 'uqr';
 import { fetchSafeHttp } from '../pipeline/preview.ts';
 import type { VisaSponsorNote } from '../research/visa-sponsors.ts';
 import { feedMaxAge } from '../pipeline/liveness.ts';
+import { indexableCreatedAfter, isExpired } from '../core/indexable.ts';
 import type { Runtime } from '../runtime.ts';
 import { SOURCE_PRESETS, presetSource } from '../sources/presets.ts';
 import { IMAP_PASSWORD_ENV_RE } from '../sources/imap.ts';
@@ -104,7 +105,8 @@ import {
   renderFaqPage,
   renderLlmsTxt,
   renderRobotsTxt,
-  renderSitemapXml,
+  assembleSitemaps,
+  type SitemapBundle,
 } from './seo.ts';
 import { renderApiCatalog, renderOpenApi } from './openapi.ts';
 import { datasetCsv, liveReport, monthSnapshot } from '../research/service.ts';
@@ -417,13 +419,6 @@ function projectContacts(lead: Lead, viewer: Viewer): Lead {
 }
 
 /** The public feed for a viewer (active leads only, after the viewer's delay), contacts projected. */
-/** Older than the feed keeps leads of its type (RADAR_GIG_TTL_DAYS / RADAR_JOB_TTL_DAYS). */
-function isExpired(lead: Lead, env: Runtime['env']): boolean {
-  const maxAge = feedMaxAge(env);
-  if (!maxAge) return false;
-  return Date.now() - Date.parse(lead.createdAt) > (lead.type === 'job' ? maxAge.job : maxAge.gig) * 86_400_000;
-}
-
 async function feedFor(runtime: Runtime, viewer: Viewer, options: ListLeadsOptions): Promise<Lead[]> {
   const leads = await runtime.store.getLeadsForFeed({ maxAgeDays: feedMaxAge(runtime.env), ...options, createdBefore: visibleBefore(viewer, runtime.access) });
   return leads.map((lead) => projectContacts(lead, viewer));
@@ -2323,6 +2318,7 @@ export function createApp(runtime: Runtime): Hono {
         myVote: myVote ?? undefined,
         contactsHidden: !canSeeContacts(viewer),
         expired: isExpired(lead, runtime.env),
+        indexEnv: runtime.env,
       });
     };
     try {
@@ -3364,19 +3360,59 @@ export function createApp(runtime: Runtime): Hono {
     });
   });
 
-  app.get('/sitemap.xml', sitemapLimit, async (c) => {
-    // Only what a guest may open: delayed, active, not rejected.
-    const leads = runtime.env.RADAR_PUBLIC_READ ? await feedFor(runtime, { tier: 'guest' }, { limit: 1000 }) : [];
+  // Crawlers re-fetch sitemaps often. A few minutes at the edge, and the same window
+  // in process so a burst does not rebuild every weekly file.
+  const SITEMAP_CACHE_MS = 120_000;
+  const SITEMAP_CACHE_CONTROL = 'public, max-age=120, s-maxage=300';
+  const sitemapCache = new WeakMap<object, { baseUrl: string; at: number; bundle: SitemapBundle }>();
+  const leadFileName = /^leads-\d{4}-W\d{2}(?:-\d+)?\.xml$/;
+
+  const loadSitemap = async (baseUrl: string): Promise<SitemapBundle> => {
+    const cached = sitemapCache.get(runtime.store);
+    const nowMs = Date.now();
+    if (cached && cached.baseUrl === baseUrl && nowMs - cached.at < SITEMAP_CACHE_MS) return cached.bundle;
+    const now = new Date(nowMs);
+    const leads = runtime.env.RADAR_PUBLIC_READ
+      ? await (runtime.store.listLeadsForSitemap?.({ createdAfter: indexableCreatedAfter(runtime.env, nowMs) }) ?? Promise.resolve([]))
+      : [];
     const roles = runtime.env.RADAR_PUBLIC_READ
-      ? ['/research/index', '/en/research', '/en/research/index', '/en/research/methodology', ...(await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY })).report.jobs.roles.map((r) => `/research/roles/${r.slug}`)]
+      ? ['/research/index', '/en/research', '/en/research/index', '/en/research/methodology', ...(await liveReport(runtime.store, now, { useModel: runtime.env.RADAR_EXTRACT_APPLY })).report.jobs.roles.map((r) => `/research/roles/${r.slug}`)]
       : [];
     const employers = runtime.env.RADAR_PUBLIC_READ ? ((await runtime.store.listEmployers?.({ limit: 500, minPosts: 3 })) ?? []) : [];
     const employerPaths = runtime.env.RADAR_PUBLIC_READ ? ['/employers', ...employers.map((e) => employerPath(e.key))] : [];
-    return c.text(renderSitemapXml(seoBaseUrl(c), leads, new Date(), [...roles, ...employerPaths]), 200, {
-      'content-type': 'application/xml; charset=utf-8',
-      // Crawlers re-fetch sitemaps often; the contents move on the feed's own cadence.
-      'cache-control': 'public, max-age=600',
+    const bundle = assembleSitemaps({
+      baseUrl,
+      leads,
+      extraPaths: [...roles, ...employerPaths],
+      env: runtime.env,
+      now,
     });
+    sitemapCache.set(runtime.store, { baseUrl, at: nowMs, bundle });
+    return bundle;
+  };
+
+  const sitemapXml = (c: Context, body: string, status: 200 | 404 = 200) => c.text(body, status, {
+    'content-type': 'application/xml; charset=utf-8',
+    'cache-control': SITEMAP_CACHE_CONTROL,
+  });
+
+  app.get('/sitemap.xml', sitemapLimit, async (c) => {
+    const bundle = await loadSitemap(seoBaseUrl(c));
+    return sitemapXml(c, bundle.indexXml);
+  });
+
+  app.get('/sitemaps/static.xml', sitemapLimit, async (c) => {
+    const bundle = await loadSitemap(seoBaseUrl(c));
+    return sitemapXml(c, bundle.staticXml);
+  });
+
+  app.get('/sitemaps/:name', sitemapLimit, async (c) => {
+    const name = c.req.param('name') ?? '';
+    if (!leadFileName.test(name)) return c.text('Not found', 404);
+    const bundle = await loadSitemap(seoBaseUrl(c));
+    const xml = bundle.files.get(name);
+    if (!xml) return c.text('Not found', 404);
+    return sitemapXml(c, xml);
   });
 
   // Market research: the live report, frozen monthly reports, role pages, methodology and data.

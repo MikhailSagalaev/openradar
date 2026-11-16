@@ -13,6 +13,7 @@ import {
   isCatalogLeadRelevant,
   localizeCatalogEntry,
   renderSitemapXml,
+  renderLeadSitemapXml,
 } from '../src/server/seo.ts';
 import { translateCity, translateSkill, translateSourceTitle } from '../src/server/i18n.ts';
 import { renderLeadPage, renderLeadsPage } from '../src/server/ui.ts';
@@ -166,10 +167,12 @@ describe('SEO catalog pages', () => {
     expect(robots).toContain('Disallow: /sources/*/edit');
     expect(robots).not.toMatch(/^Disallow: \/sources$/m);
 
-    const withLeads = renderSitemapXml('https://openradar.fun', [{ id: 'abc', createdAt: '2026-10-26T06:48:19.000Z' }]);
-    expect(withLeads).toContain('<loc>https://openradar.fun/leads/abc</loc><lastmod>2026-10-26</lastmod>');
-    expect(withLeads).toContain('<loc>https://openradar.fun/sources</loc>');
-    expect(withLeads).not.toContain('/sources/new');
+    const leads = renderLeadSitemapXml('https://openradar.fun', [{ id: 'abc', createdAt: '2026-10-26T06:48:19.000Z' }]);
+    expect(leads).toContain('<loc>https://openradar.fun/leads/abc</loc><lastmod>2026-10-26T06:48:19Z</lastmod>');
+    expect(leads).not.toContain('/review');
+    expect(sitemap).toContain('<loc>https://openradar.fun/sources</loc>');
+    expect(sitemap).not.toContain('/sources/new');
+    expect(sitemap).not.toContain('/leads/');
   });
 
   it('keeps the review page out of the index', () => {
@@ -205,7 +208,7 @@ describe('SEO catalog pages', () => {
       score: 75,
       budget: 80000,
       currency: 'RUB',
-      createdAt: '2026-11-01T10:00:00.000Z',
+      createdAt: new Date().toISOString(),
       fingerprint: 'fp-123',
       titleKey: 'разработчик frontend',
       reasons: [],
