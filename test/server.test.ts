@@ -1065,6 +1065,9 @@ describe('http server', () => {
     expect(html).toContain('id="confirm-dialog"');
     // The two Telegram actions are told apart: the bot for subscriptions, the account for reading.
     expect(html).toContain('Подключить аккаунт Telegram');
+    // The read-only promise is worded clearly: the server never writes into the account.
+    expect(html).toContain('В сам аккаунт сервер ничего не пишет');
+    expect(html).not.toContain('Пишет он ничего не будет');
   });
 
   it('shows the signed-in account on research and catalog pages, in both languages', async () => {

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.71.6 — 2026-11-16
+
+### Fixed
+- **Garbled Russian sentence in the Telegram collector disclosure (`src/server/ui.ts`)**: «Пишет он ничего не будет.» read like a broken machine translation and undermined trust in the read-only promise. Reworded to «В сам аккаунт сервер ничего не пишет: не отправляет сообщений и не отмечает чаты прочитанными.» (English: "It never writes anything to the account: no messages sent, no chats marked as read."). The claim is true: the reader only imports the session, connects, lists dialogs and fetches history.
+
+## 0.71.5 — 2026-11-15
+
+### Fixed
+- **Green "Strong fit" verdict on rejected vacancies (`src/core/explain.ts`)**: the explainable-scoring `live` gate read only `lead.state`, but rejection is a *status*, not a state. Production carried 4 156 rows with `status=rejected`, `state=active`, `score>=70` and no quality flags, so the Score & checks card showed a green verdict on rejected listings (visible to the admin). The gate now also fails on `rejected` / `duplicate` / `failed` with a human-readable note; reader funnel statuses (`interesting` / `applied` / `in_work`) stay live.
+- **Hourly maintenance backfill timed out (`src/store/postgres.ts`, `src/pipeline/runner.ts`)**: `applyDirectionsFromDecisions` ran one monolithic `UPDATE` over the 187k-row `leads` table (BM25 + HNSW indexes) and exceeded the 120s `statement_timeout`, aborting maintenance and the research snapshot steps after it. The backfill now runs in 2 000-row CTE batches, and the backfill and research steps have separate error handling so one slow step cannot block the other.
+
+### Changed
+- **Removed the long explanatory hint under the Score & checks card (`src/server/ui.ts`, `src/server/i18n.ts`)**: the paragraph took most of the card height; each check chip already carries its reason in a hover/tap tooltip.
+
 ## 0.71.0 — 2026-11-15
 
 - **International (Global & Remote) Index (`/research/index`, `/en/research/index`):** extended `OpenradarIndex` with `intl` (`MarketSubIndex`), tracking daily new vacancies and freelance orders across the fixed 11-board global panel (`himalayas.app`, `arbeitnow.com`, `justjoin.it`, `jobicy.com`, `weworkremotely.com`, `remoteworker.co.uk`, `cryptojobslist.com`, `jobs.ashbyhq.com`, `job-boards.greenhouse.io`, `jobs.lever.co`, and `freelancer.com`), with 7-day rolling averages, IT-vacancies sub-index, per-board breakdown, role indices, and CSV export (`intl-job`, `intl-gig`).
