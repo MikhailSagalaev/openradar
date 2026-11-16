@@ -152,7 +152,15 @@ describe('sitemap index', () => {
     expect(fileRes.status).toBe(200);
     const xml = await fileRes.text();
     expect(xml).toContain('/leads/keep');
-    expect(xml).toContain(`<lastmod>${updated.replace('.000Z', 'Z')}</lastmod>`);
+    const lastmod = xml.match(/<loc>[^<]*\/leads\/keep<\/loc><lastmod>([^<]+)<\/lastmod>/)?.[1];
+    expect(lastmod).toMatch(W3C_LASTMOD);
+    // The memory store keeps the updatedAt passed with the lead. PostgreSQL has no such
+    // column: lastmod is last_seen, and only when that is later than created_at.
+    if (process.env.RADAR_TEST_STORE === 'postgres') {
+      expect(Date.parse(lastmod!)).toBeGreaterThanOrEqual(Date.parse(created));
+    } else {
+      expect(lastmod).toBe(updated.replace('.000Z', 'Z'));
+    }
     expect(xml).not.toContain('/leads/shut');
     expect(xml).not.toContain('/leads/stale');
     expect(xml).not.toContain('/review');
