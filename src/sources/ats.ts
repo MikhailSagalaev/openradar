@@ -528,6 +528,8 @@ const BROKEN_ANSWER = /abort|terminated|timed? ?out|fetch failed|socket|ECONNRES
 const vendorLastCall = new Map<string, number>();
 const vendorFails = new Map<string, number>();
 const vendorParked = new Map<string, number>();
+/** True while the vendor answers: pacing waits only after a good call, a failure storm fails fast. */
+const vendorOk = new Map<string, boolean>();
 /** Greenhouse light-read cache: `${sourceId}:${slug}` -> job id -> last update timestamp. */
 const boardLight = new Map<string, Map<string, string>>();
 
@@ -576,10 +578,12 @@ async function greenhouseLight(
   const leads: RawLead[] = [];
   for (const j of changed) {
     try {
-      await vendorWait(vendorKey, paceMs);
+      if (vendorOk.get(vendorKey) !== false) await vendorWait(vendorKey, paceMs);
       const detail = JSON.parse(await fetchBoard(ctx, `${boardUrl}/jobs/${j.id}?questions=false`)) as GreenhouseJob;
       leads.push(...fromGreenhouse(source, slug, name, JSON.stringify({ jobs: [detail] })));
+      vendorOk.set(vendorKey, true);
     } catch (error) {
+      vendorOk.set(vendorKey, false);
       next.delete(String(j.id)); // retry on the next rotation
       ctx.logger.warn('Greenhouse job detail failed, will retry next rotation', {
         provider: 'greenhouse', slug, id: j.id, error: error instanceof Error ? error.message : String(error),
@@ -701,7 +705,7 @@ export const atsSource: SourceAdapter = {
       const parkKey = `${provider}:${slug}`;
       const parkedUntil = vendorParked.get(parkKey);
       if (parkedUntil !== undefined && parkedUntil > Date.now()) continue;
-      await vendorWait(vendorKey, paceMs);
+      if (vendorOk.get(vendorKey) !== false) await vendorWait(vendorKey, paceMs);
       try {
         // Greenhouse reads light by default: the full read is ~16× the bytes, and the store
         // does not need the text of a job it already has (config.lightPoll: false opts out).
@@ -728,8 +732,10 @@ export const atsSource: SourceAdapter = {
           .sort((a, b) => (b.publishedAt ?? '').localeCompare(a.publishedAt ?? ''))
           .slice(0, perCompany);
         leads.push(...found);
+        vendorOk.set(vendorKey, true);
         vendorFails.delete(parkKey);
       } catch (error) {
+        vendorOk.set(vendorKey, false);
         // One company that left the system must not stop the others. A board that failed
         // three rotations in a row parks for a day: dead links must not cost fetches forever.
         const fails = (vendorFails.get(parkKey) ?? 0) + 1;

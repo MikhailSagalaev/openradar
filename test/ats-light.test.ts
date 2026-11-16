@@ -3,6 +3,9 @@ import { atsSource } from '../src/sources/ats.ts';
 import type { PollContext } from '../src/core/types.ts';
 import { makeSource, makeTestRuntime } from './helpers.ts';
 
+if (!atsSource.poll) throw new Error('ats adapter has no poll');
+const poll = atsSource.poll;
+
 const NOW = new Date('2026-11-13T12:00:00.000Z');
 const FRESH = '2026-11-10T12:00:00.000Z';
 const FRESH2 = '2026-11-12T12:00:00.000Z';
@@ -41,7 +44,7 @@ const ghSource = () => makeSource({
 describe('greenhouse light poll', () => {
   it('reads the light listing, fetches details only for fresh-window jobs, skips the old one', async () => {
     const calls: string[] = [];
-    const leads = await atsSource.poll(ghSource(), ghCtx(calls));
+    const leads = await poll(ghSource(), ghCtx(calls));
     expect(calls.filter((u) => u.includes('content=false'))).toHaveLength(1);
     expect(calls.filter((u) => u.includes('/jobs/1?'))).toHaveLength(1);
     expect(calls.filter((u) => u.includes('/jobs/2?'))).toHaveLength(1);
@@ -52,23 +55,23 @@ describe('greenhouse light poll', () => {
   it('emits nothing and spends one listing when the board has not changed', async () => {
     const calls: string[] = [];
     const ctx = ghCtx(calls);
-    await atsSource.poll(ghSource(), ctx);
+    await poll(ghSource(), ctx);
     const before = calls.length;
-    const leads = await atsSource.poll(ghSource(), ctx);
+    const leads = await poll(ghSource(), ctx);
     expect(leads).toEqual([]);
     expect(calls.length).toBe(before + 1); // the light listing only
   });
 
   it('fetches a detail only for the job whose timestamp changed', async () => {
     const calls: string[] = [];
-    let job2 = FRESH2;
-    const ctx = ghCtx(calls, { job2Updated: job2 });
-    const src = ghSource();
-    await atsSource.poll(src, ctx);
-    job2 = '2026-11-13T09:00:00.000Z';
-    const leads = await atsSource.poll(src, ghCtx(calls, { job2Updated: job2 }));
+    const src = makeSource({
+      kind: 'ats', title: 'Change GH', id: 'source-change',
+      config: { provider: 'greenhouse', companies: ['acme=Acme'], perPoll: 5, perCompany: 10, vendorPaceMs: 0 },
+    });
+    await poll(src, ghCtx(calls)); // cold: fresh window jobs
+    const leads = await poll(src, ghCtx(calls, { job2Updated: '2026-11-13T09:00:00.000Z' }));
     expect(leads.map((l) => l.externalId)).toEqual(['greenhouse:acme:2']);
-    expect(calls.filter((u) => u.includes('/jobs/2?'))).toHaveLength(2); // once per rotation that saw the change
+    expect(calls.filter((u) => u.includes('/jobs/2?'))).toHaveLength(2); // cold start + the change
   });
 
   it('feeds the exact board id set to ghost-job diffing', async () => {
@@ -85,7 +88,7 @@ describe('greenhouse light poll', () => {
     } as never);
     // The listing mock always shows jobs 1, 2, 3: job 9 is gone from the board.
     const calls: string[] = [];
-    await atsSource.poll(source, { ...ghCtx(calls), ghostCheck: true, store: runtime.store });
+    await poll(source, { ...ghCtx(calls), ghostCheck: true, store: runtime.store });
     const nine = await runtime.store.getLead('lead-9');
     expect(nine?.state).toBe('closed');
   });
@@ -99,10 +102,10 @@ describe('ATS board parking', () => {
       kind: 'ats', title: 'Dead GH',
       config: { provider: 'greenhouse', companies: ['deadco=Dead', 'zeta=Zeta'], perPoll: 2, perCompany: 10, vendorPaceMs: 0, lightPoll: false, ghostCheck: false },
     });
-    for (let i = 0; i < 3; i++) await atsSource.poll(src, ctx);
+    for (let i = 0; i < 3; i++) await poll(src, ctx);
     const after3 = calls.length;
     expect(after3).toBeGreaterThan(0);
-    await atsSource.poll(src, ctx);
+    await poll(src, ctx);
     expect(calls.length).toBe(after3); // parked: no fetches
   });
 });
