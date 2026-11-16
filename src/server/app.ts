@@ -3037,7 +3037,10 @@ export function createApp(runtime: Runtime): Hono {
   app.get('/extension/connect', async (c) => {
     const redirectUri = c.req.query('redirect_uri') ?? '';
     if (!EXTENSION_REDIRECT_RE.test(redirectUri)) return c.text('Bad redirect_uri', 400);
-    const state = c.req.query('state') ?? '';
+    let state = c.req.query('state') ?? '';
+    if (!state && redirectUri.startsWith('chrome-extension://')) {
+      state = randomUUID();
+    }
     if (!EXTENSION_STATE_RE.test(state)) return c.text('Bad state', 400);
     if (!githubOAuthConfigured(runtime) || !runtime.store.saveExtensionToken) return c.text('GitHub sign-in is not configured on this server', 501);
     const user = await currentUser(c, runtime);
@@ -3530,6 +3533,7 @@ export function createApp(runtime: Runtime): Hono {
     at: number;
     participants: Array<{ shortPubkey: string; name?: string; about?: string; handle?: string; posts: number; points: number; tier: string }>;
     topSources: Array<{ title: string; leads: number; href?: string }>;
+    totalWeekLeads: number;
   } | undefined;
   app.get('/network', rateLimit({ windowMs: 60_000, max: 60 }), async (c) => {
     const lang = resolveLang(c);
@@ -3559,26 +3563,42 @@ export function createApp(runtime: Runtime): Hono {
           tier: tierFor({ rating: points, moderator: moderators.has(pubkey), githubLinked: Boolean(participant?.githubUserId) }),
         });
       }
-      const weekLeads = await feedFor(runtime, { tier: 'guest' }, { limit: 3000, createdAfter: new Date(Date.now() - 7 * 24 * 3600_000).toISOString() });
-      const bySource = new Map<string, number>();
-      for (const lead of weekLeads) {
-        const id = lead.sourceRef ? `${lead.sourceRef.platform}:${lead.sourceRef.channel}` : lead.sourceId;
-        bySource.set(id, (bySource.get(id) ?? 0) + 1);
+      let topSources: Array<{ title: string; leads: number; href?: string }> = [];
+      let totalWeekLeads = 0;
+      if (runtime.store.getAdminStats) {
+        const adminStats = await runtime.store.getAdminStats(7);
+        totalWeekLeads = adminStats.days.reduce((sum, d) => sum + d.gigs + d.jobs, 0);
+        topSources = adminStats.sources
+          .filter((s) => s.inserted7d > 0)
+          .slice(0, 7)
+          .map((s) => ({
+            title: s.title,
+            leads: s.inserted7d,
+            href: `/sources/${s.sourceId}`,
+          }));
+      } else {
+        const weekLeads = await feedFor(runtime, { tier: 'guest' }, { limit: 10_000, createdAfter: new Date(Date.now() - 7 * 24 * 3600_000).toISOString() });
+        totalWeekLeads = weekLeads.length;
+        const bySource = new Map<string, number>();
+        for (const lead of weekLeads) {
+          const id = lead.sourceRef ? `${lead.sourceRef.platform}:${lead.sourceRef.channel}` : lead.sourceId;
+          bySource.set(id, (bySource.get(id) ?? 0) + 1);
+        }
+        const sources = await runtime.store.listSources();
+        const titleById = new Map(sources.map((s) => [s.id, s]));
+        topSources = [...bySource.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 7)
+          .map(([key, leads]) => {
+            const source = titleById.get(key) ?? sources.find((s) => `${s.kind}:${s.id}` === key);
+            return {
+              title: source?.title ?? sources.find((s) => s.id === key)?.title ?? key,
+              leads,
+              href: source ? `/sources/${source.id}` : undefined,
+            };
+          });
       }
-      const sources = await runtime.store.listSources();
-      const titleById = new Map(sources.map((s) => [s.id, s]));
-      const topSources = [...bySource.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 7)
-        .map(([key, leads]) => {
-          const source = titleById.get(key) ?? sources.find((s) => `${s.kind}:${s.id}` === key);
-          return {
-            title: source?.title ?? sources.find((s) => s.id === key)?.title ?? key,
-            leads,
-            href: source ? `/sources/${source.id}` : undefined,
-          };
-        });
-      networkCache = { at: Date.now(), participants, topSources };
+      networkCache = { at: Date.now(), participants, topSources, totalWeekLeads };
     }
     const body = renderNetworkPage({
       baseUrl: seoBaseUrl(c),
@@ -3587,6 +3607,7 @@ export function createApp(runtime: Runtime): Hono {
       lang,
       participants: networkCache.participants,
       sources: networkCache.topSources,
+      totalWeekLeads: networkCache.totalWeekLeads,
       windowDays: RATING_WINDOW_MS / 86_400_000,
     });
     c.header('Cache-Control', 'private, no-cache');

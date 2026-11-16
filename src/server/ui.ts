@@ -1188,6 +1188,7 @@ dialog::backdrop {
 .admin-tile-value { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-top: 2px; }
 .admin-tile-hint { font-size: 12px; color: var(--muted); }
 .admin-section { margin-top: 32px; }
+.admin-nav { margin: 12px 0 20px; }
 .admin-section h2 { font-size: 15px; margin: 0 0 10px; }
 .admin-chart { display: flex; align-items: flex-end; gap: 6px; height: 180px; padding-top: 8px; border-bottom: 1px solid var(--line); }
 .admin-bar { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; }

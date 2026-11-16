@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.73.2 — 2026-11-16
+
+- **Extension connect compatibility**: `/extension/connect` auto-assigns a server state nonce when legacy installed browser extensions connect without a `state` parameter, resolving the `Bad state` 400 error on sign-in.
+- **Network statistics accuracy**: `/network` now uses real 7-day source volume from `getAdminStats` rather than an arbitrary 3,000-lead guest feed slice, and accurately displays total weekly platform publications (~78,000) rather than the sum of the visible top 7 rows.
+- **Admin UI subnavigation**: added persistent tab navigation across `/admin`, `/admin/users`, `/admin/decisions`, `/admin/labels`, and `/sources/quality` for seamless operator navigation.
+
 ## 0.73.1 — 2026-11-16
 
 - **Public API docs page (/docs)**: human-readable endpoint reference generated from the OpenAPI 3.1 schema — methods, parameters, responses and the Lead field table. Linked from the footer, sitemap, `/llms.txt` and Trust page so API catalogs can verify a self-serve docs URL.

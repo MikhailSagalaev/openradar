@@ -7,6 +7,7 @@ import { translateCity, translateSkill, translateSourceTitle, type SupportedLang
 import type { SourceQuality, SourceQualityInput } from '../core/source-quality.ts';
 import type { DecisionScore, FlagScore, ModelDecision } from '../core/decisions.ts';
 import { renderOpenApi } from './openapi.ts';
+import { renderAdminTabs } from './admin.ts';
 
 export interface CatalogEntry {
   slug: string;
@@ -1151,6 +1152,7 @@ export function renderLabelPage(options: {
   <h1>${ru ? 'Ручная проверка постов' : 'Checking posts by hand'}</h1>
   <p class="muted small">${ru ? `Проверено: ${total} из 300. ` : `Checked: ${total} of 300. `}${counts}</p>
 </div></div>
+${renderAdminTabs('labels', !ru)}
 <section class="profile">
   ${lead ? `
   <p class="muted small">${escapeHtml(options.sourceTitle ?? '')} · ${lead.type === 'job' ? (ru ? 'вакансия' : 'vacancy') : (ru ? 'заказ' : 'order')}${lead.url ? ` · <a href="${escapeHtml(lead.url)}" target="_blank" rel="noopener noreferrer">${ru ? 'Открыть оригинал' : 'Open the original'}</a>` : ''}</p>
@@ -1196,9 +1198,10 @@ export function renderDecisionsPage(options: {
   const cost = (stats.tokens * 0.04) / 1_000_000;
   const body = `
 <div class="page-head"><div>
-  <h1>Решения модели</h1>
-  <p class="muted small">Уверенные ответы убирают посты и меняют оценку. Любое действие можно вернуть. <a href="/admin/labels">Проверить посты вручную</a></p>
+  <h1>${ru ? 'Решения модели' : 'Model decisions'}</h1>
+  <p class="muted small">${ru ? 'Уверенные ответы убирают посты и меняют оценку. Любое действие можно вернуть.' : 'Sure answers hide posts and move scores. Any action can be overruled.'}</p>
 </div></div>
+${renderAdminTabs('decisions', !ru)}
 <section class="profile">
   <p>Отвечено постов: <strong>${stats.total}</strong> · токенов: ${stats.tokens} · примерно $${cost.toFixed(3)} · закрытых: ${stats.closed} · мошенничество: ${stats.scam}</p>
   <p class="muted small">${Object.entries(stats.byKind).map(([kind, total]) => `${escapeHtml(kind)}: ${total}`).join(' · ')}</p>
@@ -1691,12 +1694,13 @@ export function renderNetworkPage(options: {
   lang?: SupportedLang;
   participants: Array<{ shortPubkey: string; name?: string; about?: string; handle?: string; posts: number; points: number; tier: string }>;
   sources: Array<{ title: string; leads: number; href?: string }>;
+  totalWeekLeads?: number;
   windowDays: number;
 }): string {
   const { baseUrl, version } = options;
   const ru = options.lang !== 'en';
   const totalPoints = Math.round(options.participants.reduce((sum, p) => sum + p.points, 0) * 10);
-  const totalLeads = options.sources.reduce((sum, s) => sum + s.leads, 0);
+  const totalLeads = options.totalWeekLeads ?? options.sources.reduce((sum, s) => sum + s.leads, 0);
 
   const participantRows = options.participants.map((p, index) => {
     const name = p.handle ? `@${escapeHtml(p.handle)}` : p.name ? escapeHtml(p.name) : `<code>${escapeHtml(p.shortPubkey)}</code>`;
@@ -1739,7 +1743,7 @@ export function renderNetworkPage(options: {
       <thead><tr><th>${ru ? 'Источник' : 'Source'}</th><th>${ru ? 'Лидов' : 'Leads'}</th></tr></thead>
       <tbody>${sourceRows}</tbody>
     </table>
-    <p class="muted small">${ru ? `Всего за неделю: ${totalLeads} публикаций. Полный список с состояниями — на <a href="/sources">странице источников</a>.` : `${totalLeads} posts in total this week. The full list with states lives on the <a href="/sources">sources page</a>.`}</p>`
+    <p class="muted small">${ru ? `Всего за неделю: ${totalLeads.toLocaleString('ru-RU')} публикаций. Полный список с состояниями — на <a href="/sources">странице источников</a>.` : `${totalLeads.toLocaleString('en-US')} posts in total this week. The full list with states lives on the <a href="/sources">sources page</a>.`}</p>`
     : `<p class="muted">${ru ? 'Пока нет данных за неделю.' : 'No data for the week yet.'}</p>`}
     <details class="score-help"><summary>${ru ? 'Как попасть в таблицу' : 'How to get on this table'}</summary>
       <p>${ru

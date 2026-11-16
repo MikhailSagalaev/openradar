@@ -21,6 +21,21 @@ const number = (value: number, lang: SupportedLang = 'ru'): string =>
   new Intl.NumberFormat(lang === 'en' ? 'en-US' : 'ru-RU').format(value);
 
 /** Operator dashboard: volume by day, sources, people, links to the analytics consoles. */
+export type AdminTab = 'overview' | 'users' | 'decisions' | 'labels' | 'sources';
+
+export function renderAdminTabs(active: AdminTab, isEn: boolean): string {
+  const tabs = [
+    { key: 'overview', href: '/admin', label: isEn ? 'Overview' : 'Обзор' },
+    { key: 'users', href: '/admin/users', label: isEn ? 'Users' : 'Пользователи' },
+    { key: 'decisions', href: '/admin/decisions', label: isEn ? 'Decisions' : 'Решения модели' },
+    { key: 'labels', href: '/admin/labels', label: isEn ? 'Labels' : 'Ручная разметка' },
+    { key: 'sources', href: '/sources/quality', label: isEn ? 'Source Quality' : 'Качество источников' },
+  ];
+  return `<nav class="type-tabs admin-nav" aria-label="${isEn ? 'Admin navigation' : 'Навигация админки'}">${tabs
+    .map((t) => `<a class="type-tab${active === t.key ? ' active' : ''}" href="${t.href}">${escapeHtml(t.label)}</a>`)
+    .join('')}</nav>`;
+}
+
 export function renderAdminPage(data: AdminPageData): string {
   const { stats, admin, health, analytics } = data;
   const lang = data.lang ?? 'ru';
@@ -109,6 +124,7 @@ export function renderAdminPage(data: AdminPageData): string {
 
   const body = `<div class="page-head"><div><h1>${isEn ? 'Admin Dashboard' : 'Админка'}</h1>
   <p class="muted small">${isEn ? 'Hub summary. Traffic analytics are in external consoles.' : 'Сводка по хабу. Посещаемость — в системах аналитики.'}</p></div></div>
+${renderAdminTabs('overview', isEn)}
 <div class="admin-tiles">
   ${tiles.map(([label, value, hint]) => `<div class="admin-tile"><div class="admin-tile-label">${escapeHtml(label)}</div><div class="admin-tile-value">${value}</div>${hint ? `<div class="admin-tile-hint">${escapeHtml(hint)}</div>` : ''}</div>`).join('')}
 </div>
@@ -130,6 +146,10 @@ ${servicesRows ? `<section class="admin-section">
 <section class="admin-section">
   <h2>${isEn ? 'Links' : 'Ссылки'}</h2>
   <div class="admin-links">
+    <a class="btn ghost" href="/admin/users">${isEn ? 'Users' : 'Пользователи'}</a>
+    <a class="btn ghost" href="/admin/decisions">${isEn ? 'Decisions' : 'Решения модели'}</a>
+    <a class="btn ghost" href="/admin/labels">${isEn ? 'Labels' : 'Ручная разметка'}</a>
+    <a class="btn ghost" href="/sources/quality">${isEn ? 'Source quality' : 'Качество источников'}</a>
     <a class="btn ghost" href="/sources">${isEn ? 'Sources' : 'Источники'}</a>
     <a class="btn ghost" href="/?status=rejected">${isEn ? 'Rejected leads' : 'Отклонённые заказы'}</a>
     <a class="btn ghost" href="/api/runs?limit=50">${isEn ? 'Poll log (JSON)' : 'Журнал опросов (JSON)'}</a>
@@ -194,6 +214,7 @@ export function renderAdminUsersPage(data: AdminUsersPageData): string {
 
   const body = `<div class="page-head"><div><h1>${isEn ? 'Service Users' : 'Пользователи сервиса'}</h1>
   <p class="muted small">${isEn ? 'Sign-ups, their activity, and the delivery consumers. Full detail in the database.' : 'Регистрации, их активность и потребители доставок. Полные данные — в базе.'}</p></div></div>
+${renderAdminTabs('users', isEn)}
 <div class="admin-tiles">
   ${tiles.map(([label, value, hint]) => `<div class="admin-tile"><div class="admin-tile-label">${escapeHtml(label)}</div><div class="admin-tile-value">${value}</div>${hint ? `<div class="admin-tile-hint">${escapeHtml(hint)}</div>` : ''}</div>`).join('')}
 </div>
@@ -210,7 +231,12 @@ export function renderAdminUsersPage(data: AdminUsersPageData): string {
   <tbody>${subRows}</tbody></table>
 </section>
 <section class="admin-section">
-  <div class="admin-links"><a class="btn ghost" href="/admin">${isEn ? 'Back to dashboard' : 'Назад в админку'}</a></div>
+  <div class="admin-links">
+    <a class="btn ghost" href="/admin">${isEn ? 'Overview' : 'Обзор админки'}</a>
+    <a class="btn ghost" href="/admin/decisions">${isEn ? 'Decisions' : 'Решения модели'}</a>
+    <a class="btn ghost" href="/admin/labels">${isEn ? 'Labels' : 'Ручная разметка'}</a>
+    <a class="btn ghost" href="/sources/quality">${isEn ? 'Source quality' : 'Качество источников'}</a>
+  </div>
 </section>`;
 
   return layout({ title: isEn ? 'Service Users' : 'Пользователи сервиса', version: data.version, body, auth: data.auth, lang });

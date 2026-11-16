@@ -1109,6 +1109,11 @@ describe('http server', () => {
     expect(consent).toContain(`name="redirect_uri" value="${redirect}"`);
     expect(consent).toContain(`name="state" value="${state}"`);
 
+    // Legacy installed extensions that omit the state param are auto-assigned a nonce.
+    const legacyTabFlow = `/extension/connect?redirect_uri=${encodeURIComponent('chrome-extension://abcdefghijklmnopabcdefghijklmnop/connected.html')}`;
+    const legacyConsent = await (await app.request(legacyTabFlow, { headers: cookie })).text();
+    expect(legacyConsent).toContain('name="state"');
+
     const evil = await app.request('/extension/connect', {
       method: 'POST',
       headers: { ...cookie, origin: 'http://localhost', 'content-type': 'application/x-www-form-urlencoded' },
