@@ -723,6 +723,98 @@ function ldScripts(...blocks: Array<Record<string, unknown>>): string {
   return blocks.map((block) => `<script type="application/ld+json">\n${jsonForScript(block)}\n</script>`).join('\n');
 }
 
+/** The count query stops here. A result equal to the cap is "at least this many", not an exact total. */
+export const CATALOG_COUNT_CAP = 5000;
+
+export interface CatalogFacts {
+  /** Open leads matching the section filters. */
+  openCount: number;
+  /** True when `openCount` is the query cap, so the real number may be higher. */
+  capped?: boolean;
+  /** Leads the skills and budgets were counted on. */
+  sample: Lead[];
+}
+
+function topSkills(leads: Lead[]): Array<[string, number]> {
+  const counts = new Map<string, number>();
+  for (const lead of leads) {
+    for (const skill of lead.skills ?? []) {
+      const name = skill.trim();
+      if (!name) continue;
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .filter(([, count]) => count >= 2)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 3);
+}
+
+function percentile(sorted: number[], p: number): number {
+  const index = (sorted.length - 1) * p;
+  const low = Math.floor(index);
+  const high = Math.ceil(index);
+  if (low === high) return sorted[low] ?? 0;
+  const left = sorted[low] ?? 0;
+  const right = sorted[high] ?? left;
+  return left + (right - left) * (index - low);
+}
+
+/** p10–p90 per currency that has at least five stated budgets. No currency is assumed. */
+function budgetSpans(leads: Lead[]): Array<{ currency: string; low: number; high: number; count: number }> {
+  const byCurrency = new Map<string, number[]>();
+  for (const lead of leads) {
+    if (typeof lead.budget !== 'number' || !(lead.budget > 0)) continue;
+    const currency = lead.currency?.trim().toUpperCase();
+    if (!currency) continue;
+    const values = byCurrency.get(currency) ?? [];
+    values.push(lead.budget);
+    byCurrency.set(currency, values);
+  }
+  return [...byCurrency.entries()]
+    .filter(([, values]) => values.length >= 5)
+    .map(([currency, values]) => {
+      const sorted = [...values].sort((a, b) => a - b);
+      return { currency, low: percentile(sorted, 0.1), high: percentile(sorted, 0.9), count: values.length };
+    })
+    .sort((a, b) => b.count - a.count || a.currency.localeCompare(b.currency));
+}
+
+/**
+ * Intro built only from counted fields. No sentence is returned when there is nothing to count.
+ * Skill and budget sentences describe `sample`, and they say so when that sample is not the whole count.
+ */
+export function catalogFactsParagraph(facts: CatalogFacts, entry: CatalogEntry, lang?: SupportedLang): string {
+  if (facts.openCount <= 0) return '';
+  const ru = (lang ?? 'ru') !== 'en';
+  const what = entry.type === 'job'
+    ? (ru ? 'вакансий' : 'vacancies')
+    : (ru ? 'заказов' : 'gigs');
+  const countText = facts.capped
+    ? (ru ? `не меньше ${facts.openCount}` : `at least ${facts.openCount}`)
+    : String(facts.openCount);
+  const sentences = [
+    ru ? `Сейчас открыто ${countText} ${what}.` : `${countText} open ${what} right now.`,
+  ];
+  const skills = topSkills(facts.sample);
+  if (skills.length) {
+    const list = skills.map(([name, count]) => `${escapeHtml(translateSkill(name, lang))} (${count})`).join(', ');
+    const partial = facts.sample.length > 0 && facts.sample.length < facts.openCount;
+    sentences.push(partial
+      ? (ru ? `Среди ${facts.sample.length} свежих карточек чаще всего: ${list}.` : `Among ${facts.sample.length} fresh cards, most often: ${list}.`)
+      : (ru ? `Чаще всего: ${list}.` : `Most often: ${list}.`));
+  }
+  for (const pay of budgetSpans(facts.sample)) {
+    const low = formatBudget(Math.round(pay.low), pay.currency);
+    const high = formatBudget(Math.round(pay.high), pay.currency);
+    const range = low === high ? low : `${low}–${high}`;
+    sentences.push(ru
+      ? `Бюджет ${pay.currency} в этих карточках (середина 80%): ${range} (${pay.count}).`
+      : `${pay.currency} budget on these cards (middle 80%): ${range} (${pay.count}).`);
+  }
+  return sentences.join(' ');
+}
+
 export function renderCatalogPage(options: {
   entry: CatalogEntry;
   leads: Lead[];
@@ -730,15 +822,19 @@ export function renderCatalogPage(options: {
   version: string;
   auth?: AuthDisplay;
   lang?: SupportedLang;
+  facts?: CatalogFacts;
 }): string {
   const { leads, baseUrl, version } = options;
   const entry = localizeCatalogEntry(options.entry, options.lang);
   const ru = (options.lang ?? 'ru') !== 'en';
   const canonical = `${baseUrl}/catalog/${entry.slug}`;
   const feedHref = feedHrefOf(entry);
+  const factsHtml = options.facts ? catalogFactsParagraph(options.facts, options.entry, options.lang) : '';
   const list = leads.length
     ? leads.map((lead) => leadRow(lead, baseUrl, options.lang)).join('')
-    : `<div class="empty"><h2>${ru ? 'Пока пусто' : 'No posts yet'}</h2><p>${ru ? 'Новые публикации появятся здесь в течение нескольких минут — источники опрашиваются автоматически.' : 'New listings will appear here within a few minutes — sources are polled automatically.'}</p></div>`;
+    : factsHtml
+      ? ''
+      : `<div class="empty"><h2>${ru ? 'Пока пусто' : 'No posts yet'}</h2><p>${ru ? 'Новые публикации появятся здесь в течение нескольких минут — источники опрашиваются автоматически.' : 'New listings will appear here within a few minutes — sources are polled automatically.'}</p></div>`;
   const faq = catalogFaq(entry, options.lang);
   // Same kind first, so a page on orders links to other orders before vacancies.
   const related = SEO_CATALOG.filter((other) => other.slug !== entry.slug)
@@ -751,6 +847,7 @@ export function renderCatalogPage(options: {
 <div class="page-head">
   <div>
     <h1>${escapeHtml(entry.h1)}</h1>
+    ${factsHtml ? `<p class="catalog-facts">${factsHtml}</p>` : ''}
     <p class="muted small">${escapeHtml(entry.intro)}</p>
   </div>
   <div class="actions">
@@ -803,9 +900,30 @@ ${ldScripts(
 }
 
 /** Index of every landing page, grouped into orders and vacancies. */
-export function renderCatalogIndex(options: { baseUrl: string; version: string; auth?: AuthDisplay; lang?: SupportedLang }): string {
+export function renderCatalogIndex(options: {
+  baseUrl: string;
+  version: string;
+  auth?: AuthDisplay;
+  lang?: SupportedLang;
+  /** Open leads a guest can see, when the page was able to count them. */
+  openCount?: number;
+  openCountCapped?: boolean;
+  /** Fresh guest-visible indexable leads. */
+  fresh?: Lead[];
+}): string {
   const { baseUrl, version } = options;
   const ru = (options.lang ?? 'ru') !== 'en';
+  const fresh = options.fresh ?? [];
+  const countLine = options.openCount === undefined
+    ? ''
+    : options.openCount <= 0
+      ? ''
+      : `<p class="catalog-facts">${escapeHtml(options.openCountCapped
+        ? (ru ? `Сейчас открыто не меньше ${options.openCount} публикаций.` : `At least ${options.openCount} open posts right now.`)
+        : (ru ? `Сейчас открыто ${options.openCount} публикаций.` : `${options.openCount} open posts right now.`))}</p>`;
+  const freshList = fresh.length
+    ? `<h2>${ru ? 'Свежие публикации' : 'Fresh posts'}</h2><ul class="similar-links">${fresh.map((lead) => `<li><a href="/leads/${escapeHtml(lead.id)}">${escapeHtml(leadTitle(lead))}</a></li>`).join('')}</ul>`
+    : '';
   const card = (rawEntry: CatalogEntry): string => {
     const entry = localizeCatalogEntry(rawEntry, options.lang);
     return `<a class="catalog-card" href="/catalog/${escapeHtml(entry.slug)}"><span class="catalog-card-title">${escapeHtml(entry.h1)}</span><span class="catalog-card-desc">${escapeHtml(entry.intro)}</span></a>`;
@@ -820,7 +938,9 @@ export function renderCatalogIndex(options: { baseUrl: string; version: string; 
 <div class="page-head"><div>
   <h1>${ru ? 'Категории заказов и вакансий' : 'Categories of orders and vacancies'}</h1>
   <p class="muted small">${escapeHtml(description)}</p>
+  ${countLine}
 </div></div>
+${freshList}
 <h2>${ru ? 'Заказы для фрилансеров' : 'Freelance gigs'}</h2>
 <div class="catalog-grid">${gigs.map(card).join('')}</div>
 <h2 style="margin-top:32px">${ru ? 'Вакансии' : 'Vacancies'}</h2>

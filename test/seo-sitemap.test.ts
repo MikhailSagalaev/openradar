@@ -23,6 +23,8 @@ import { createApp } from '../src/server/app.ts';
 import { makeSource, makeTestRuntime } from './helpers.ts';
 
 const env: TtlEnv = { ...DEFAULT_TTL_ENV };
+/** JobPosting cases that name no employer still have to be indexable, or the skip reason collapses into the quality gate. */
+const postingEnv: TtlEnv = { ...DEFAULT_TTL_ENV, RADAR_INDEXABLE_MIN_QUALITY: 0 };
 const NOW = Date.parse('2026-11-16T12:00:00.000Z');
 
 function lead(id: string, over: Partial<Lead> = {}): Lead {
@@ -295,12 +297,12 @@ describe('JobPosting', () => {
       createdAt: new Date(NOW).toISOString(),
       text: 'Ищем фронтенд без названия компании.',
     });
-    expect(explainJobPosting(channel, { env, now: NOW, sourceKind: 'telegram' }).skip).toBe('no-organization');
+    expect(explainJobPosting(channel, { env: postingEnv, now: NOW, sourceKind: 'telegram' }).skip).toBe('no-organization');
     const named = makeSource({
       kind: 'ats',
       config: { companies: ['board=Вакансии Frontend | Удалёнка'] },
     });
-    const ats = explainJobPosting(channel, { env, now: NOW, source: named }).posting;
+    const ats = explainJobPosting(channel, { env: postingEnv, now: NOW, source: named }).posting;
     expect(ats?.hiringOrganization).toEqual({ '@type': 'Organization', name: 'Вакансии Frontend | Удалёнка' });
     const slugOnly = makeSource({ kind: 'ats', config: { companies: ['acme'] } });
     const slugLead = lead('slug', {
@@ -310,7 +312,7 @@ describe('JobPosting', () => {
       createdAt: new Date(NOW).toISOString(),
       text: 'Company: acme\nИщем инженера.',
     });
-    expect(explainJobPosting(slugLead, { env, now: NOW, source: slugOnly }).skip).toBe('no-organization');
+    expect(explainJobPosting(slugLead, { env: postingEnv, now: NOW, source: slugOnly }).skip).toBe('no-organization');
     const stored = lead('stored-slug', {
       company: 'acme',
       author: 'acme',
@@ -319,7 +321,7 @@ describe('JobPosting', () => {
       text: 'Ищем инженера.',
       metadata: { facts: { company: 'acme' } },
     });
-    const decided = explainJobPosting(stored, { env, now: NOW, source: slugOnly });
+    const decided = explainJobPosting(stored, { env: postingEnv, now: NOW, source: slugOnly });
     expect(decided.skip).toBe('no-organization');
     expect(JSON.stringify(decided.posting ?? {})).not.toContain('"acme"');
   });
@@ -330,8 +332,8 @@ describe('JobPosting', () => {
       isRemote: false,
       createdAt: new Date(NOW).toISOString(),
     });
-    expect(explainJobPosting(bare, { env, now: NOW }).skip).toBe('no-location');
-    const html = renderLeadPage({ lead: bare, version: 'test', indexEnv: env });
+    expect(explainJobPosting(bare, { env: postingEnv, now: NOW }).skip).toBe('no-location');
+    const html = renderLeadPage({ lead: bare, version: 'test', indexEnv: postingEnv });
     expect(html).not.toContain('JobPosting');
     expect(html).not.toContain('FULL_TIME');
   });
@@ -357,12 +359,29 @@ describe('JobPosting', () => {
     ];
     const cards: Lead[] = [
       lead('job-city', { createdAt: fresh }),
-      lead('gig-text', { type: 'gig', company: undefined, city: 'Москва', createdAt: fresh, text: 'Компания: Яндекс Лавка\nНужен фронтенд.' }),
+      lead('gig-text', {
+        type: 'gig',
+        company: undefined,
+        city: 'Москва',
+        createdAt: fresh,
+        text: 'Компания: Яндекс Лавка\nНужен фронтенд.',
+      }),
       lead('closed', { state: 'closed', createdAt: fresh }),
       lead('expired-gig', { type: 'gig', createdAt: new Date(NOW - 15 * 86_400_000).toISOString() }),
       lead('expired-job', { createdAt: new Date(NOW - 40 * 86_400_000).toISOString() }),
-      lead('no-org', { company: undefined, author: undefined, city: 'Москва', text: 'Ищем человека, компания не названа.', createdAt: fresh }),
-      lead('placeholder-org', { company: 'Unknown', author: 'openradar', text: 'Вакансия без имени.', createdAt: fresh }),
+      lead('no-org', {
+        company: undefined,
+        author: undefined,
+        city: 'Москва',
+        text: 'Ищем человека, компания не названа.',
+        createdAt: fresh,
+      }),
+      lead('placeholder-org', {
+        company: 'Unknown',
+        author: 'openradar',
+        text: 'Вакансия без имени.',
+        createdAt: fresh,
+      }),
       lead('remote-bare', { isRemote: true, city: undefined, createdAt: fresh }),
       lead('remote-online', { isRemote: true, city: 'Онлайн', createdAt: fresh }),
       lead('remote-country', { isRemote: true, city: undefined, metadata: { country: 'DE' }, createdAt: fresh }),
@@ -383,7 +402,7 @@ describe('JobPosting', () => {
     for (const card of cards) {
       const expected = fixtures.find((item) => item.id === card.id);
       const decision = explainJobPosting(card, {
-        env,
+        env: postingEnv,
         now: NOW,
         sourceKind: expected?.sourceKind,
         source: card.id === 'ats-author' ? atsNamed : undefined,

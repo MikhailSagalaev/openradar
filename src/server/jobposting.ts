@@ -8,6 +8,7 @@
  */
 import type { AccessPolicy } from '../core/access.ts';
 import type { Lead, SourceRecord } from '../core/types.ts';
+import { atsCompaniesFromConfig } from '../core/lead-quality.ts';
 import { isIndexable, NODE_INDEX_POLICY, validThrough, w3cDateTime, type TtlEnv } from '../core/indexable.ts';
 import { companiesOf } from '../sources/ats.ts';
 
@@ -157,7 +158,12 @@ export function explainJobPosting(
   options: { env: TtlEnv; policy?: AccessPolicy; baseUrl?: string; title?: string; now?: number; source?: SourceRecord; sourceKind?: string },
 ): JobPostingDecision {
   const now = options.now ?? Date.now();
-  if (!isIndexable(lead, options.env, options.policy ?? NODE_INDEX_POLICY, now)) return { skip: 'not-indexable' };
+  const sourceKind = options.source?.kind ?? options.sourceKind;
+  if (!isIndexable({
+    ...lead,
+    sourceKind,
+    atsCompanies: atsCompaniesFromConfig(sourceKind, options.source?.config),
+  }, options.env, options.policy ?? NODE_INDEX_POLICY, now)) return { skip: 'not-indexable' };
   const hiringName = organizationOf(lead, options.source, options.sourceKind);
   if (!hiringName) return { skip: 'no-organization' };
 

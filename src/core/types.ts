@@ -99,6 +99,11 @@ export interface Env {
   RADAR_SUBSCRIPTION_BOT: boolean;
   RADAR_GIG_TTL_DAYS: number;
   RADAR_JOB_TTL_DAYS: number;
+  /**
+   * How many `leadQuality` checks (0–4) a lead must pass before it is indexed.
+   * `0` turns the quality gate off. Closed and expired leads stay out either way.
+   */
+  RADAR_INDEXABLE_MIN_QUALITY: number;
   RADAR_FEED_RATE_PER_MIN: number;
   RADAR_RSS_RATE_PER_MIN: number;
   RADAR_DELTA_RATE_PER_MIN: number;

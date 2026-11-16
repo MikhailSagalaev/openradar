@@ -20,7 +20,8 @@ import { renderSVG } from 'uqr';
 import { fetchSafeHttp } from '../pipeline/preview.ts';
 import type { VisaSponsorNote } from '../research/visa-sponsors.ts';
 import { feedMaxAge } from '../pipeline/liveness.ts';
-import { indexableCreatedAfter, isExpired } from '../core/indexable.ts';
+import { indexableCreatedAfter, isExpired, isIndexable } from '../core/indexable.ts';
+import { atsCompaniesFromConfig } from '../core/lead-quality.ts';
 import type { Runtime } from '../runtime.ts';
 import { SOURCE_PRESETS, presetSource } from '../sources/presets.ts';
 import { IMAP_PASSWORD_ENV_RE } from '../sources/imap.ts';
@@ -2297,15 +2298,29 @@ export function createApp(runtime: Runtime): Hono {
       const myVote = (user && runtime.store.getUserVote)
         ? await runtime.store.getUserVote(lead.id, user.id)
         : null;
-      // Similar: same type and main skill, best of the last week, as this viewer may see them.
-      const similar = (await feedFor(runtime, viewer, {
-        limit: 5,
+      // One query, this viewer's feed. Guests drop cards isIndexable would noindex; members keep their own feed.
+      const similarPool = await feedFor(runtime, viewer, {
+        limit: 8,
         type: lead.type,
         skill: lead.skills?.[0],
         ...filterOptions({ sort: 'score', remote: false }),
-        // A Russian card lists Russian work: one shared skill does not make an English post similar.
         language: /[а-яё]/i.test(lead.title) ? 'ru' : 'en',
-      })).filter((item) => item.id !== lead.id).slice(0, 4);
+      });
+      const similarSources = viewer.tier === 'guest'
+        ? new Map((await runtime.store.listSources()).map((item) => [item.id, item]))
+        : undefined;
+      const similar = similarPool
+        .filter((item) => item.id !== lead.id)
+        .filter((item) => {
+          if (viewer.tier !== 'guest' || !similarSources) return true;
+          const itemSource = similarSources.get(item.sourceId);
+          return isIndexable({
+            ...item,
+            sourceKind: itemSource?.kind,
+            atsCompanies: atsCompaniesFromConfig(itemSource?.kind, itemSource?.config),
+          }, runtime.env, runtime.access);
+        })
+        .slice(0, 6);
       const sightings = ((await runtime.store.listLeadSightings?.(lead.id)) ?? []).filter((s) => s.url !== lead.url);
       return renderLeadPage({
         similar,
@@ -3756,15 +3771,54 @@ export function createApp(runtime: Runtime): Hono {
   });
 
   app.get('/faq', async (c) => c.html(renderFaqPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c) })));
-  app.get('/catalog', async (c) => c.html(renderCatalogIndex({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c) })));
+  // Same window as the sitemap data cache. The count is isIndexable on this viewer's feed, not a second definition.
+  const CATALOG_CACHE_MS = 120_000;
+  const CATALOG_SAMPLE = 200;
+  const catalogCache = new Map<string, { at: number; leads: Lead[]; capped: boolean }>();
+  const catalogIndexable = async (viewer: Viewer, filters: ListLeadsOptions): Promise<{ leads: Lead[]; capped: boolean }> => {
+    const key = `${viewer.tier}:${JSON.stringify(filters)}`;
+    const hit = catalogCache.get(key);
+    if (hit && Date.now() - hit.at < CATALOG_CACHE_MS) return { leads: hit.leads, capped: hit.capped };
+    const sources = new Map((await runtime.store.listSources()).map((item) => [item.id, item]));
+    const fetched = await feedFor(runtime, viewer, { ...filters, limit: CATALOG_SAMPLE });
+    const leads = fetched.filter((lead) => {
+      const itemSource = sources.get(lead.sourceId);
+      return isIndexable({
+        ...lead,
+        sourceKind: itemSource?.kind,
+        atsCompanies: atsCompaniesFromConfig(itemSource?.kind, itemSource?.config),
+      }, runtime.env, runtime.access);
+    });
+    const capped = fetched.length >= CATALOG_SAMPLE;
+    if (catalogCache.size > 40) catalogCache.clear();
+    catalogCache.set(key, { at: Date.now(), leads, capped });
+    return { leads, capped };
+  };
+
+  app.get('/catalog', async (c) => {
+    const lang = resolveLang(c);
+    const viewer = await viewerFromRequest(c, runtime);
+    const readable = runtime.env.RADAR_PUBLIC_READ || await canRead(c, runtime);
+    const counted = readable ? await catalogIndexable(viewer, { sort: 'new' }) : undefined;
+    return c.html(renderCatalogIndex({
+      baseUrl: seoBaseUrl(c),
+      version: VERSION,
+      auth: await getAuthDisplay(c, runtime),
+      lang,
+      openCount: counted?.leads.length,
+      openCountCapped: counted?.capped,
+      fresh: counted?.leads.slice(0, 6) ?? [],
+    }));
+  });
 
   // Search-driven landing pages: indexable, each one doubles as an RSS subscription.
   app.get('/catalog/:slug', async (c) => {
     const entry = findCatalogEntry(c.req.param('slug') as string);
     if (!entry) return c.html(renderNotFound(VERSION, resolveLang(c), await getAuthDisplay(c, runtime)), 404);
 
-    const leads = (await feedFor(runtime, await viewerFromRequest(c, runtime), {
-      limit: 30,
+    const readable = await canRead(c, runtime);
+    const viewer = await viewerFromRequest(c, runtime);
+    const sectionFilters: ListLeadsOptions = {
       query: entry.q,
       skill: entry.skill,
       type: entry.type,
@@ -3774,16 +3828,19 @@ export function createApp(runtime: Runtime): Hono {
       remote: entry.remote || undefined,
       // These pages are Russian: an English post is on them only by a shared word.
       language: 'ru',
-    })).filter((lead) => lead.status !== 'rejected' && lead.status !== 'failed' && isCatalogLeadRelevant(lead, entry)).slice(0, 20);
+    };
+    const counted = readable ? await catalogIndexable(viewer, sectionFilters) : undefined;
+    const sample = (counted?.leads ?? []).filter((lead) => lead.status !== 'failed' && isCatalogLeadRelevant(lead, entry));
 
     return c.html(
       renderCatalogPage({
         entry,
-        leads: await canRead(c, runtime) ? leads : [],
+        leads: sample.slice(0, 20),
         baseUrl: seoBaseUrl(c),
         version: VERSION,
         auth: await getAuthDisplay(c, runtime),
         lang: resolveLang(c),
+        facts: counted ? { openCount: sample.length, capped: counted.capped, sample } : undefined,
       }),
     );
   });

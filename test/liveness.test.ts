@@ -47,6 +47,8 @@ function lead(id: string, url: string, overrides: Partial<Lead> = {}): Lead {
     canonicalUrl: url,
     title: `Заказ ${id}`,
     text: 'Нужно сделать лендинг по макету, бюджет 20 000 ₽',
+    budget: 20000,
+    city: 'Москва',
     publishedAt: now,
     fingerprint: `fingerprint-${id}`,
     titleKey: `заказ ${id}`,

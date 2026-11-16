@@ -767,6 +767,7 @@ describe('http server', () => {
       await runtime.store.insertLead({
         id: `l${i}`, sourceId: source.id, externalId: `l${i}`, titleKey: `l${i}`, fingerprint: `fp-${i}`,
         title: english ? `Python developer ${i}` : `Бот на Python ${i}`, text: 'Подробности задачи', skills: ['Python'],
+        budget: 20000, city: english ? 'Berlin' : 'Москва',
         status: 'new', score: 60, reasons: [], createdAt: new Date(base + i * 1000).toISOString(),
       });
     }

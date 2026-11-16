@@ -10,6 +10,7 @@ import { SEO_CATALOG, localizeCatalogEntry } from './seo.ts';
 import { qualityFlagsOf } from '../core/quality.ts';
 import type { AccessPolicy } from '../core/access.ts';
 import { DEFAULT_TTL_ENV, isIndexable, NODE_INDEX_POLICY, type TtlEnv } from '../core/indexable.ts';
+import { atsCompaniesFromConfig, employerLabel, statedDeadline } from '../core/lead-quality.ts';
 import { buildJobPosting } from './jobposting.ts';
 import { explainLead } from '../core/explain.ts';
 import { BROKEN_AFTER, sourceState, type SourceState } from '../core/source-health.ts';
@@ -99,7 +100,7 @@ export interface LeadPageData {
   expired?: boolean;
   /** Feed age limits. Omitted renders use the same defaults as the process (14 / 30 days). */
   indexEnv?: TtlEnv;
-  /** Guest delay. Omitted renders use node mode (no delay). */
+  /** Guest visibility, including the delay. Omitted renders use node mode (no delay). */
   access?: AccessPolicy;
   /** Other addresses where the same post was seen (migration 027). */
   sightings?: Array<{ url: string }>;
@@ -1217,6 +1218,22 @@ dialog::backdrop {
 .connect-card p { margin: 0; line-height: 1.6; }
 .similar { margin-top: 40px; }
 .similar h2 { font-size: 15px; margin: 0 0 4px; }
+.lead-facts, .lead-origin { margin: 0 0 22px; }
+.lead-facts h2, .lead-origin h2 { font-size: 15px; margin: 0 0 8px; }
+.fact-list { margin: 0; }
+.fact-list > div {
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr);
+  gap: 8px 16px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13.5px;
+}
+.fact-list dt { color: var(--muted); margin: 0; }
+.fact-list dd { margin: 0; overflow-wrap: anywhere; }
+.similar-links { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 8px; }
+.similar-links a { color: var(--ink); }
+.catalog-facts { margin: 8px 0 0; line-height: 1.55; max-width: 68ch; }
 .load-more a.loading { opacity: 0.5; pointer-events: none; }
 .load-more { display: flex; justify-content: center; padding: 20px 0 8px; }
 .btn-plus { display: none; }
@@ -3478,6 +3495,88 @@ function alsoPublished(sightings: Array<{ url: string }> | undefined, label: str
   return `<div><dt>${escapeHtml(label)}</dt><dd>${links.join(', ')}</dd></div>`;
 }
 
+function factRow(label: string, value: string): string {
+  return `<div><dt>${escapeHtml(label)}</dt><dd>${value}</dd></div>`;
+}
+
+/** Structured fields the lead already has. A row with nothing to say is left out. */
+function renderLeadFacts(lead: Lead, lang: SupportedLang): string {
+  const t = getTranslations(lang);
+  const rows: string[] = [];
+  if (lead.type === 'job' || lead.type === 'gig') {
+    rows.push(factRow(t.type, escapeHtml(lead.type === 'job' ? t.jobType : t.gigType)));
+  }
+  const money = salaryRange(lead, lang)
+    ?? (typeof lead.budget === 'number' ? formatBudget(lead.budget, lead.currency) : '');
+  const rawPay = !money && lead.rawSalary ? escapeHtml(lead.rawSalary) : '';
+  if (money || rawPay) rows.push(factRow(t.budget, money || rawPay));
+  const deadline = statedDeadline(lead);
+  if (deadline) rows.push(factRow(t.deadline, escapeHtml(deadline)));
+  if (lead.skills?.length) {
+    rows.push(factRow(t.skills, escapeHtml(lead.skills.map((skill) => translateSkill(skill, lang)).join(', '))));
+  }
+  const city = translateCity(lead.city, lang);
+  const place = city ?? (lead.isRemote ? t.remote : undefined);
+  if (place) rows.push(factRow(t.location, escapeHtml(place)));
+  const when = lead.publishedAt || lead.createdAt;
+  if (when && !Number.isNaN(Date.parse(when))) rows.push(factRow(t.published, escapeHtml(formatDate(when, lang))));
+  if (!rows.length) return '';
+  return `<section class="lead-facts">
+  <h2>${escapeHtml(t.atAGlance)}</h2>
+  <dl class="fact-list">${rows.join('')}</dl>
+</section>`;
+}
+
+/** Platform, original link, and the client or employer when the lead names one. */
+function renderLeadOrigin(lead: Lead, source: SourceRecord | undefined, lang: SupportedLang): string {
+  const t = getTranslations(lang);
+  const rows: string[] = [];
+  const platform = source
+    ? translateSourceTitle(source.title, lang)
+    : (lead.sourceRef?.channelTitle || lead.sourceRef?.platform || lead.sourceRef?.channel || (lead.sourceId?.trim() ? lead.sourceId : ''));
+  if (platform) {
+    const name = escapeHtml(platform);
+    const linked = source ? `<a href="/sources/${escapeHtml(source.id)}">${name}</a>` : name;
+    rows.push(factRow(t.platform, linked));
+  }
+  const original = safeHttpUrl(lead.url);
+  if (original) {
+    rows.push(factRow(
+      t.original,
+      `<a href="${escapeHtml(original)}" target="_blank" rel="noopener noreferrer">${escapeHtml(original)}</a>`,
+    ));
+  }
+  const employer = employerLabel({
+    ...lead,
+    sourceKind: source?.kind,
+    atsCompanies: atsCompaniesFromConfig(source?.kind, source?.config),
+  });
+  if (employer) rows.push(factRow(lead.type === 'job' ? t.employer : t.client, escapeHtml(employer)));
+  if (!rows.length) return '';
+  return `<section class="lead-origin">
+  <h2>${escapeHtml(t.originHeading)}</h2>
+  <dl class="fact-list">${rows.join('')}</dl>
+</section>`;
+}
+
+function renderSimilarLinks(leads: Lead[], lang: SupportedLang): string {
+  if (!leads.length) return '';
+  const t = getTranslations(lang);
+  const items = leads.map((item) => {
+    const bits = [
+      item.type === 'job' ? t.jobType : item.type === 'gig' ? t.gigType : '',
+      typeof item.budget === 'number' ? formatBudget(item.budget, item.currency) : '',
+      translateCity(item.city, lang) ?? (item.isRemote ? t.remote : ''),
+    ].filter(Boolean);
+    const meta = bits.length ? ` <span class="muted">· ${escapeHtml(bits.join(' · '))}</span>` : '';
+    return `<li><a href="/leads/${escapeHtml(item.id)}">${escapeHtml(leadTitle(item))}</a>${meta}</li>`;
+  }).join('');
+  return `<section class="similar">
+  <h2>${escapeHtml(t.similarLeads)}</h2>
+  <ul class="similar-links">${items}</ul>
+</section>`;
+}
+
 export function renderLeadPage(data: LeadPageData): string {
   const { lead, source, version, auth, lang = 'ru' } = data;
   const t = getTranslations(lang);
@@ -3605,6 +3704,11 @@ document.getElementById('share-lead')?.addEventListener('click', async (event) =
   const formatted = formatLeadText(lead.text, lang, lead.title);
   const myVote = data.myVote;
   const undoVoteTitle = lang === 'en' ? 'Click to undo your vote' : 'Нажмите, чтобы отменить свой голос';
+  const facts = renderLeadFacts(lead, lang);
+  const origin = renderLeadOrigin(lead, source, lang);
+  // The route already chose these for the current viewer. Do not narrow them to the guest feed here.
+  const similar = (data.similar ?? []).filter((item) => item.id !== lead.id).slice(0, 6);
+
   const voteControls = isUser
     ? `<form method="post" action="/leads/${escapeHtml(lead.id)}/vote" class="community-votes">
     <button name="signal" value="useful" class="vote-btn ${myVote === 'useful' ? 'active' : ''}" type="submit" title="${myVote === 'useful' ? undoVoteTitle : ''}">${escapeHtml(t.useful)} <span class="vote-count">${lead.votes_up ?? 0}</span></button>
@@ -3648,6 +3752,8 @@ ${cautionBanner}
 
 <div class="detail-grid">
   <section>
+    ${facts}
+    ${origin}
     ${aiBox}
     <h2>${escapeHtml(t.leadDescription)}</h2>
     <div class="lead-text" id="lead-text">${formatted.html}</div>
@@ -3685,10 +3791,7 @@ ${cautionBanner}
       </div>` : ''}
   </aside>
 </div>
-${data.similar?.length ? `<section class="similar">
-  <h2>${escapeHtml(t.similarLeads)}</h2>
-  <div class="list">${data.similar.map((item) => leadRow(item, undefined, lang, false)).join('')}</div>
-</section>` : ''}`;
+${renderSimilarLinks(similar, lang)}`;
 
   const textWithoutTags = (lead.text || '').replace(/^(?:\s*#[\wа-яё_-]+)+/giu, '').trim();
   const cleanText = textWithoutTags.replace(/\s+/g, ' ').trim().slice(0, 160);
@@ -3696,7 +3799,11 @@ ${data.similar?.length ? `<section class="similar">
   // isIndexable decision drops JobPosting, so the markup cannot outlive the page.
   const ttlEnv = data.indexEnv ?? DEFAULT_TTL_ENV;
   const access = data.access ?? NODE_INDEX_POLICY;
-  const indexable = isIndexable(lead, ttlEnv, access) && !data.expired;
+  const indexable = isIndexable({
+    ...lead,
+    sourceKind: source?.kind,
+    atsCompanies: atsCompaniesFromConfig(source?.kind, source?.config),
+  }, ttlEnv, access) && !data.expired;
   const posting = indexable
     ? buildJobPosting(lead, {
       env: ttlEnv,
