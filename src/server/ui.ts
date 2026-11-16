@@ -3703,7 +3703,7 @@ ${data.similar?.length ? `<section class="similar">
       policy: access,
       baseUrl: publicBaseUrl,
       title: leadTitle(lead) || lead.title,
-      sourceKind: source?.kind,
+      source,
     })
     : undefined;
   const headExtra = `

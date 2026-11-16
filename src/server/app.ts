@@ -3361,58 +3361,60 @@ export function createApp(runtime: Runtime): Hono {
     });
   });
 
-  // Crawlers re-fetch sitemaps often. A few minutes at the edge, and the same window
-  // in process so a burst does not rebuild every weekly file. Parallel misses share
-  // one in-flight build. Without RADAR_PUBLIC_URL the key ignores Host, so two hosts
-  // cannot each force a rebuild.
+  // Crawlers re-fetch sitemaps often. The expensive part (leads, roles, employers) is
+  // cached and shared by parallel requests. The XML is built per request from that
+  // request's own base URL, so a Host header cannot poison the cache with foreign links.
   const SITEMAP_CACHE_MS = 120_000;
   const SITEMAP_CACHE_CONTROL = 'public, max-age=120, s-maxage=300';
-  const sitemapCache = new WeakMap<object, { key: string; at: number; bundle: SitemapBundle }>();
-  let sitemapInflight: { key: string; promise: Promise<SitemapBundle> } | null = null;
+  interface SitemapData {
+    at: number;
+    now: Date;
+    leads: Awaited<ReturnType<NonNullable<Runtime['store']['listLeadsForSitemap']>>>;
+    extraPaths: string[];
+  }
+  const sitemapCache = new WeakMap<object, SitemapData>();
+  let sitemapInflight: Promise<SitemapData> | null = null;
   const leadFileName = /^leads-\d{4}-W\d{2}(?:-\d+)?\.xml$/;
 
-  const sitemapIdentity = (c: Context): { key: string; baseUrl: string } => {
-    const configured = runtime.env.RADAR_PUBLIC_URL?.replace(/\/+$/, '');
-    if (configured) return { key: configured, baseUrl: configured };
-    return { key: 'local', baseUrl: publicBaseUrl(c, runtime) };
+  const loadSitemapData = (): Promise<SitemapData> => {
+    const cached = sitemapCache.get(runtime.store);
+    if (cached && Date.now() - cached.at < SITEMAP_CACHE_MS) return Promise.resolve(cached);
+    if (sitemapInflight) return sitemapInflight;
+    const promise = (async (): Promise<SitemapData> => {
+      const nowMs = Date.now();
+      const now = new Date(nowMs);
+      const createdBefore = visibleBefore({ tier: 'guest' }, runtime.access, now);
+      const leads = runtime.env.RADAR_PUBLIC_READ
+        ? await (runtime.store.listLeadsForSitemap?.({
+          createdAfter: indexableCreatedAfter(runtime.env, nowMs),
+          createdBefore,
+        }) ?? Promise.resolve([]))
+        : [];
+      const roles = runtime.env.RADAR_PUBLIC_READ
+        ? ['/research/index', '/en/research', '/en/research/index', '/en/research/methodology', ...(await liveReport(runtime.store, now, { useModel: runtime.env.RADAR_EXTRACT_APPLY })).report.jobs.roles.map((r) => `/research/roles/${r.slug}`)]
+        : [];
+      const employers = runtime.env.RADAR_PUBLIC_READ ? ((await runtime.store.listEmployers?.({ limit: 500, minPosts: 3 })) ?? []) : [];
+      const employerPaths = runtime.env.RADAR_PUBLIC_READ ? ['/employers', ...employers.map((e) => employerPath(e.key))] : [];
+      const data: SitemapData = { at: Date.now(), now, leads, extraPaths: [...roles, ...employerPaths] };
+      sitemapCache.set(runtime.store, data);
+      return data;
+    })().finally(() => {
+      if (sitemapInflight === promise) sitemapInflight = null;
+    });
+    sitemapInflight = promise;
+    return promise;
   };
 
-  const buildSitemap = async (baseUrl: string, key: string): Promise<SitemapBundle> => {
-    const nowMs = Date.now();
-    const now = new Date(nowMs);
-    const createdBefore = visibleBefore({ tier: 'guest' }, runtime.access, now);
-    const leads = runtime.env.RADAR_PUBLIC_READ
-      ? await (runtime.store.listLeadsForSitemap?.({
-        createdAfter: indexableCreatedAfter(runtime.env, nowMs),
-        createdBefore,
-      }) ?? Promise.resolve([]))
-      : [];
-    const roles = runtime.env.RADAR_PUBLIC_READ
-      ? ['/research/index', '/en/research', '/en/research/index', '/en/research/methodology', ...(await liveReport(runtime.store, now, { useModel: runtime.env.RADAR_EXTRACT_APPLY })).report.jobs.roles.map((r) => `/research/roles/${r.slug}`)]
-      : [];
-    const employers = runtime.env.RADAR_PUBLIC_READ ? ((await runtime.store.listEmployers?.({ limit: 500, minPosts: 3 })) ?? []) : [];
-    const employerPaths = runtime.env.RADAR_PUBLIC_READ ? ['/employers', ...employers.map((e) => employerPath(e.key))] : [];
-    const bundle = assembleSitemaps({
+  const sitemapFor = async (baseUrl: string): Promise<SitemapBundle> => {
+    const data = await loadSitemapData();
+    return assembleSitemaps({
       baseUrl,
-      leads,
-      extraPaths: [...roles, ...employerPaths],
+      leads: data.leads,
+      extraPaths: data.extraPaths,
       env: runtime.env,
       policy: runtime.access,
-      now,
+      now: data.now,
     });
-    sitemapCache.set(runtime.store, { key, at: Date.now(), bundle });
-    return bundle;
-  };
-
-  const loadSitemap = (baseUrl: string, key: string): Promise<SitemapBundle> => {
-    const cached = sitemapCache.get(runtime.store);
-    if (cached && cached.key === key && Date.now() - cached.at < SITEMAP_CACHE_MS) return Promise.resolve(cached.bundle);
-    if (sitemapInflight?.key === key) return sitemapInflight.promise;
-    const promise = buildSitemap(baseUrl, key).finally(() => {
-      if (sitemapInflight?.promise === promise) sitemapInflight = null;
-    });
-    sitemapInflight = { key, promise };
-    return promise;
   };
 
   const sitemapXml = (c: Context, body: string, status: 200 | 404 = 200) => c.text(body, status, {
@@ -3421,22 +3423,19 @@ export function createApp(runtime: Runtime): Hono {
   });
 
   app.get('/sitemap.xml', sitemapLimit, async (c) => {
-    const { key, baseUrl } = sitemapIdentity(c);
-    const bundle = await loadSitemap(baseUrl, key);
+    const bundle = await sitemapFor(seoBaseUrl(c));
     return sitemapXml(c, bundle.indexXml);
   });
 
   app.get('/sitemaps/static.xml', sitemapLimit, async (c) => {
-    const { key, baseUrl } = sitemapIdentity(c);
-    const bundle = await loadSitemap(baseUrl, key);
+    const bundle = await sitemapFor(seoBaseUrl(c));
     return sitemapXml(c, bundle.staticXml);
   });
 
   app.get('/sitemaps/:name', sitemapLimit, async (c) => {
     const name = c.req.param('name') ?? '';
     if (!leadFileName.test(name)) return c.text('Not found', 404);
-    const { key, baseUrl } = sitemapIdentity(c);
-    const bundle = await loadSitemap(baseUrl, key);
+    const bundle = await sitemapFor(seoBaseUrl(c));
     const xml = bundle.files.get(name);
     if (!xml) return c.text('Not found', 404);
     return sitemapXml(c, xml);

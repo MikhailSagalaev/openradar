@@ -224,8 +224,7 @@ describe('SEO catalog pages', () => {
     expect(html).toContain('"@type": "JobPosting"');
     expect(html).not.toContain('"employmentType"');
     expect(html).not.toContain('"FULL_TIME"');
-    expect(html).not.toContain('"unitText"');
-    expect(html).toContain('"currency": "RUB"');
+    expect(html).not.toContain('"baseSalary"');
     expect(html).toContain('"name": "Яндекс Лавка"');
     // Leading hashtags are stripped from meta description
     expect(html).not.toMatch(/content="#вакансия/);

@@ -20,7 +20,7 @@ import {
 import { explainJobPosting, type JobPostingSkipReason } from '../src/server/jobposting.ts';
 import { renderLeadPage } from '../src/server/ui.ts';
 import { createApp } from '../src/server/app.ts';
-import { makeTestRuntime } from './helpers.ts';
+import { makeSource, makeTestRuntime } from './helpers.ts';
 
 const env: TtlEnv = { ...DEFAULT_TTL_ENV };
 const NOW = Date.parse('2026-11-16T12:00:00.000Z');
@@ -217,7 +217,12 @@ describe('sitemap index', () => {
       app.request('/sitemap.xml', { headers: { host: 'b.example' } }),
     ]);
     expect(calls).toBe(1);
-    expect(await first.text()).toBe(await second.text());
+    const a = await first.text();
+    const b = await second.text();
+    expect(a).toContain('http://a.example/');
+    expect(b).toContain('http://b.example/');
+    expect(a).not.toContain('b.example');
+    expect(b).not.toContain('a.example');
     await runtime.store.close();
   });
 });
@@ -291,8 +296,21 @@ describe('JobPosting', () => {
       text: 'Ищем фронтенд без названия компании.',
     });
     expect(explainJobPosting(channel, { env, now: NOW, sourceKind: 'telegram' }).skip).toBe('no-organization');
-    const ats = explainJobPosting(channel, { env, now: NOW, sourceKind: 'ats' }).posting;
+    const named = makeSource({
+      kind: 'ats',
+      config: { companies: ['board=Вакансии Frontend | Удалёнка'] },
+    });
+    const ats = explainJobPosting(channel, { env, now: NOW, source: named }).posting;
     expect(ats?.hiringOrganization).toEqual({ '@type': 'Organization', name: 'Вакансии Frontend | Удалёнка' });
+    const slugOnly = makeSource({ kind: 'ats', config: { companies: ['acme'] } });
+    const slugLead = lead('slug', {
+      company: undefined,
+      author: 'acme',
+      city: 'Берлин',
+      createdAt: new Date(NOW).toISOString(),
+      text: 'Company: acme\nИщем инженера.',
+    });
+    expect(explainJobPosting(slugLead, { env, now: NOW, source: slugOnly }).skip).toBe('no-organization');
   });
 
   it('omits JobPosting when there is no place and the lead is not remote', () => {
@@ -350,9 +368,15 @@ describe('JobPosting', () => {
       'no-location': 0,
       kept: 0,
     };
+    const atsNamed = makeSource({ kind: 'ats', config: { companies: ['acme=Acme GmbH'] } });
     for (const card of cards) {
       const expected = fixtures.find((item) => item.id === card.id);
-      const decision = explainJobPosting(card, { env, now: NOW, sourceKind: expected?.sourceKind });
+      const decision = explainJobPosting(card, {
+        env,
+        now: NOW,
+        sourceKind: expected?.sourceKind,
+        source: card.id === 'ats-author' ? atsNamed : undefined,
+      });
       expect(decision.skip, card.id).toBe(expected?.skip);
       if (decision.skip) counts[decision.skip] += 1;
       else counts.kept += 1;

@@ -7,8 +7,9 @@
  * posting with no location requirement, is omitted rather than filled with a placeholder.
  */
 import type { AccessPolicy } from '../core/access.ts';
-import type { Lead } from '../core/types.ts';
+import type { Lead, SourceRecord } from '../core/types.ts';
 import { isIndexable, NODE_INDEX_POLICY, validThrough, w3cDateTime, type TtlEnv } from '../core/indexable.ts';
+import { companiesOf } from '../sources/ats.ts';
 
 /** Names that are not an employer. «openradar» is the old page-level fallback. */
 const PLACEHOLDER_ORG = /^(?:unknown|n\/?a|none|null|undefined|openradar|confidential|не\s*указан(?:о|а)?|неизвестно|нет(?:\s+данных)?|—|–|-|\.+)$/i;
@@ -115,21 +116,39 @@ function employmentTypeOf(lead: Lead): string | undefined {
   return EMPLOYMENT_TYPES.has(token) ? token : undefined;
 }
 
-function organizationOf(lead: Lead, sourceKind: string | undefined): string | undefined {
+/** An ATS author that is only the board slug (`acme`), not `acme=Acme` or a name the board sent. */
+function atsSlugAuthor(source: SourceRecord, author: string): boolean {
+  return companiesOf(source).some((company) => !company.name && company.slug === author);
+}
+
+function authorEmployer(lead: Lead, source: SourceRecord | undefined, sourceKind: string | undefined): string | undefined {
   const author = lead.author?.trim();
-  const authorOrg = sourceKind && EMPLOYER_AUTHOR_KINDS.has(sourceKind) && author && !author.startsWith('@')
-    ? cleanName(author)
-    : undefined;
-  return cleanName(lead.company) || factsCompany(lead) || companyFromText(lead.text) || authorOrg;
+  if (!author || author.startsWith('@')) return undefined;
+  const kind = source?.kind ?? sourceKind;
+  if (!kind || !EMPLOYER_AUTHOR_KINDS.has(kind)) return undefined;
+  if (kind === 'ats' && source && atsSlugAuthor(source, author)) return undefined;
+  if (kind === 'ats' && !source) return undefined;
+  return cleanName(author);
+}
+
+function textEmployer(lead: Lead, source: SourceRecord | undefined): string | undefined {
+  const found = companyFromText(lead.text);
+  if (!found) return undefined;
+  if (source?.kind === 'ats' && atsSlugAuthor(source, found)) return undefined;
+  return found;
+}
+
+function organizationOf(lead: Lead, source: SourceRecord | undefined, sourceKind: string | undefined): string | undefined {
+  return cleanName(lead.company) || factsCompany(lead) || textEmployer(lead, source) || authorEmployer(lead, source, sourceKind);
 }
 
 export function explainJobPosting(
   lead: Lead,
-  options: { env: TtlEnv; policy?: AccessPolicy; baseUrl?: string; title?: string; now?: number; sourceKind?: string },
+  options: { env: TtlEnv; policy?: AccessPolicy; baseUrl?: string; title?: string; now?: number; source?: SourceRecord; sourceKind?: string },
 ): JobPostingDecision {
   const now = options.now ?? Date.now();
   if (!isIndexable(lead, options.env, options.policy ?? NODE_INDEX_POLICY, now)) return { skip: 'not-indexable' };
-  const hiringName = organizationOf(lead, options.sourceKind);
+  const hiringName = organizationOf(lead, options.source, options.sourceKind);
   if (!hiringName) return { skip: 'no-organization' };
 
   const city = cityOf(lead);
@@ -170,15 +189,12 @@ export function explainJobPosting(
     };
   }
   const unit = lead.paymentPeriod ? SALARY_UNIT[lead.paymentPeriod] : undefined;
-  if (typeof lead.budget === 'number' && lead.currency) {
+  // A sum without a period (a fixed gig budget, or pay we could not classify) is not a salary.
+  if (typeof lead.budget === 'number' && lead.currency && unit) {
     posting.baseSalary = {
       '@type': 'MonetaryAmount',
       currency: lead.currency,
-      value: {
-        '@type': 'QuantitativeValue',
-        value: lead.budget,
-        ...(unit ? { unitText: unit } : {}),
-      },
+      value: { '@type': 'QuantitativeValue', value: lead.budget, unitText: unit },
     };
   }
   return { posting };
@@ -186,7 +202,7 @@ export function explainJobPosting(
 
 export function buildJobPosting(
   lead: Lead,
-  options: { env: TtlEnv; policy?: AccessPolicy; baseUrl?: string; title?: string; now?: number; sourceKind?: string },
+  options: { env: TtlEnv; policy?: AccessPolicy; baseUrl?: string; title?: string; now?: number; source?: SourceRecord; sourceKind?: string },
 ): Record<string, unknown> | undefined {
   return explainJobPosting(lead, options).posting;
 }
