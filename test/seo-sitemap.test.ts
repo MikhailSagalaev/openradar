@@ -311,6 +311,17 @@ describe('JobPosting', () => {
       text: 'Company: acme\nИщем инженера.',
     });
     expect(explainJobPosting(slugLead, { env, now: NOW, source: slugOnly }).skip).toBe('no-organization');
+    const stored = lead('stored-slug', {
+      company: 'acme',
+      author: 'acme',
+      city: 'Берлин',
+      createdAt: new Date(NOW).toISOString(),
+      text: 'Ищем инженера.',
+      metadata: { facts: { company: 'acme' } },
+    });
+    const decided = explainJobPosting(stored, { env, now: NOW, source: slugOnly });
+    expect(decided.skip).toBe('no-organization');
+    expect(JSON.stringify(decided.posting ?? {})).not.toContain('"acme"');
   });
 
   it('omits JobPosting when there is no place and the lead is not remote', () => {

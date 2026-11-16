@@ -138,8 +138,18 @@ function textEmployer(lead: Lead, source: SourceRecord | undefined): string | un
   return found;
 }
 
+/** A stored ATS slug (`company` or page facts) is not an employer. */
+function notAtsSlug(source: SourceRecord | undefined, name: string | undefined): string | undefined {
+  if (!name) return undefined;
+  if (source?.kind === 'ats' && atsSlugAuthor(source, name)) return undefined;
+  return name;
+}
+
 function organizationOf(lead: Lead, source: SourceRecord | undefined, sourceKind: string | undefined): string | undefined {
-  return cleanName(lead.company) || factsCompany(lead) || textEmployer(lead, source) || authorEmployer(lead, source, sourceKind);
+  return notAtsSlug(source, cleanName(lead.company))
+    || notAtsSlug(source, factsCompany(lead))
+    || textEmployer(lead, source)
+    || authorEmployer(lead, source, sourceKind);
 }
 
 export function explainJobPosting(

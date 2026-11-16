@@ -18,15 +18,6 @@ export const ATS_LABELS: Record<AtsProvider, string> = {
 const PROVIDERS = ATS_PROVIDERS;
 const MAX_TEXT = 8000;
 
-/**
- * The name to show as the employer. A board slug is not one: Lever, Ashby, Pinpoint and
- * BambooHR have no company field, so without `slug=Name` in the source config there is no name.
- */
-function employerOf(configured: string | undefined, fromBoard: string | undefined): string | undefined {
-  const name = configured?.trim() || fromBoard?.trim();
-  return name || undefined;
-}
-
 /** "gitlab" or "gitlab=GitLab": the board slug and, optionally, the name to show. */
 export function companiesOf(source: SourceRecord): Array<{ slug: string; name?: string }> {
   const raw = source.config.companies;
@@ -131,7 +122,7 @@ function fromLever(source: SourceRecord, slug: string, name: string | undefined,
   if (!Array.isArray(postings)) return [];
   return postings.filter((p) => p.id && p.text?.trim()).map((p) => {
     const title = p.text!.trim();
-    const company = employerOf(name, undefined);
+    const company = name ?? slug;
     const location = p.categories?.location?.trim() ?? '';
     const remote = p.workplaceType === 'remote' || REMOTE.test(location);
     const lists = (p.lists ?? []).map((l) => `${l.text ?? ''}\n${stripHtml(l.content ?? '')}`.trim());
@@ -147,7 +138,7 @@ function fromLever(source: SourceRecord, slug: string, name: string | undefined,
       externalId: `lever:${slug}:${p.id}`,
       url: p.hostedUrl,
       title,
-      text: text(title, [company && `Company: ${company}`, location && `Location: ${location}`, p.categories?.team && `Team: ${p.categories.team}`, p.categories?.commitment && `Type: ${p.categories.commitment}`], body),
+      text: text(title, [`Company: ${company}`, location && `Location: ${location}`, p.categories?.team && `Team: ${p.categories.team}`, p.categories?.commitment && `Type: ${p.categories.commitment}`], body),
       author: company,
       city: cityFor(location, company, remote),
       isRemote: remote,
@@ -185,7 +176,7 @@ function fromAshby(source: SourceRecord, slug: string, name: string | undefined,
   const jobs = (JSON.parse(json) as { jobs?: AshbyJob[] }).jobs ?? [];
   return jobs.filter((j) => j.id && j.title?.trim() && j.isListed !== false).map((j) => {
     const title = j.title!.trim();
-    const company = employerOf(name, undefined);
+    const company = name ?? slug;
     const location = j.location?.trim() ?? '';
     const remote = Boolean(j.isRemote) || j.workplaceType === 'Remote';
     const salary = j.compensation?.compensationTiers?.flatMap((t) => t.components ?? [])
@@ -197,7 +188,7 @@ function fromAshby(source: SourceRecord, slug: string, name: string | undefined,
       externalId: `ashby:${slug}:${j.id}`,
       url: j.jobUrl,
       title,
-      text: text(title, [company && `Company: ${company}`, location && `Location: ${location}`, j.department && `Department: ${j.department}`, j.employmentType && `Type: ${j.employmentType}`], j.descriptionPlain?.trim() ?? ''),
+      text: text(title, [`Company: ${company}`, location && `Location: ${location}`, j.department && `Department: ${j.department}`, j.employmentType && `Type: ${j.employmentType}`], j.descriptionPlain?.trim() ?? ''),
       author: company,
       city: cityFor(location, company, remote),
       isRemote: remote,
@@ -225,7 +216,7 @@ function fromWorkable(source: SourceRecord, slug: string, name: string | undefin
   const data = JSON.parse(json) as { name?: string; jobs?: WorkableJob[] };
   return (data.jobs ?? []).filter((j) => j.shortcode && j.title?.trim()).map((j) => {
     const title = j.title!.trim();
-    const company = employerOf(name, data.name);
+    const company = name ?? data.name?.trim() ?? slug;
     const location = [j.city, j.country].filter(Boolean).join(', ');
     const remote = Boolean(j.telecommuting) || REMOTE.test(title);
     return {
@@ -235,7 +226,7 @@ function fromWorkable(source: SourceRecord, slug: string, name: string | undefin
       // The board address names the company, so copies on aggregators join it (core/company.ts).
       url: `https://apply.workable.com/${slug}/j/${j.shortcode}/`,
       title,
-      text: text(title, [company && `Company: ${company}`, location && `Location: ${location}`, j.department && `Department: ${j.department}`, j.employment_type && `Type: ${j.employment_type}`], stripHtml(j.description ?? '').trim()),
+      text: text(title, [`Company: ${company}`, location && `Location: ${location}`, j.department && `Department: ${j.department}`, j.employment_type && `Type: ${j.employment_type}`], stripHtml(j.description ?? '').trim()),
       author: company,
       city: remote ? 'Онлайн' : j.city?.trim().toLowerCase() === company?.toLowerCase() ? undefined : j.city?.trim() || undefined,
       isRemote: remote,
@@ -266,7 +257,7 @@ function fromRecruitee(source: SourceRecord, slug: string, name: string | undefi
   const offers = (JSON.parse(json) as { offers?: RecruiteeOffer[] }).offers ?? [];
   return offers.filter((o) => o.id && o.title?.trim()).map((o) => {
     const title = o.title!.trim();
-    const company = employerOf(name, o.company_name);
+    const company = name ?? o.company_name?.trim() ?? slug;
     const location = o.location?.trim() || [o.city, o.country].filter(Boolean).join(', ');
     const remote = o.remote === true || REMOTE.test(location);
     const s = o.salary;
@@ -279,7 +270,7 @@ function fromRecruitee(source: SourceRecord, slug: string, name: string | undefi
       // careers_url may be the company's own domain; the Recruitee address names the company.
       url: `https://${slug}.recruitee.com/o/${String(o.careers_url ?? '').split('/o/')[1] ?? o.id}`,
       title,
-      text: text(title, [company && `Company: ${company}`, location && `Location: ${location}`, o.employment_type_code && `Type: ${o.employment_type_code}`], body),
+      text: text(title, [`Company: ${company}`, location && `Location: ${location}`, o.employment_type_code && `Type: ${o.employment_type_code}`], body),
       author: company,
       city: cityFor(o.city?.trim() || location, company, remote),
       isRemote: remote,
@@ -307,7 +298,7 @@ function fromSmartRecruiters(source: SourceRecord, slug: string, name: string | 
   const postings = (JSON.parse(json) as { content?: SmartRecruitersPosting[] }).content ?? [];
   return postings.filter((p) => p.id && p.name?.trim()).map((p) => {
     const title = p.name!.trim();
-    const company = employerOf(name, p.company?.name);
+    const company = name ?? p.company?.name?.trim() ?? slug;
     const location = p.location?.fullLocation?.trim() || [p.location?.city, p.location?.country?.toUpperCase()].filter(Boolean).join(', ');
     const remote = p.location?.remote === true || REMOTE.test(location);
     return {
@@ -317,7 +308,7 @@ function fromSmartRecruiters(source: SourceRecord, slug: string, name: string | 
       url: `https://jobs.smartrecruiters.com/${encodeURIComponent(p.company?.identifier ?? slug)}/${p.id}`,
       title,
       text: text(title, [
-        company && `Company: ${company}`, location && `Location: ${location}`, p.function?.label && `Function: ${p.function.label}`,
+        `Company: ${company}`, location && `Location: ${location}`, p.function?.label && `Function: ${p.function.label}`,
         p.experienceLevel?.label && `Level: ${p.experienceLevel.label}`, p.typeOfEmployment?.label && `Type: ${p.typeOfEmployment.label}`,
       ], ''),
       author: company,
@@ -351,7 +342,7 @@ function fromPinpoint(source: SourceRecord, slug: string, name: string | undefin
   const postings = (JSON.parse(json) as { data?: PinpointPosting[] }).data ?? [];
   return postings.filter((p) => p.id && p.title?.trim() && p.url).map((p) => {
     const title = p.title!.trim();
-    const company = employerOf(name, undefined);
+    const company = name ?? slug;
     const location = [p.location?.city, p.location?.name].filter(Boolean).join(', ');
     const remote = p.workplace_type === 'remote' || REMOTE.test(location);
     const body = [p.description, p.key_responsibilities, p.skills_knowledge_expertise, p.benefits].map((part) => stripHtml(part ?? '').trim()).filter(Boolean).join('\n\n');
@@ -363,7 +354,7 @@ function fromPinpoint(source: SourceRecord, slug: string, name: string | undefin
       externalId: `pinpoint:${slug}:${p.id}`,
       url: p.url!,
       title,
-      text: text(title, [company && `Company: ${company}`, location && `Location: ${location}`, p.employment_type_text && `Type: ${p.employment_type_text}`], body),
+      text: text(title, [`Company: ${company}`, location && `Location: ${location}`, p.employment_type_text && `Type: ${p.employment_type_text}`], body),
       author: company,
       city: remote ? 'Онлайн' : p.location?.city?.trim() || undefined,
       isRemote: remote,
@@ -387,7 +378,7 @@ function fromBambooHr(source: SourceRecord, slug: string, name: string | undefin
   const openings = (JSON.parse(json) as { result?: BambooOpening[] }).result ?? [];
   return openings.filter((o) => o.id && o.jobOpeningName?.trim()).map((o) => {
     const title = o.jobOpeningName!.trim();
-    const company = employerOf(name, undefined);
+    const company = name ?? slug;
     const location = [o.location?.city, o.location?.state].filter(Boolean).join(', ');
     const remote = o.isRemote === true || REMOTE.test(location);
     return {
@@ -397,7 +388,7 @@ function fromBambooHr(source: SourceRecord, slug: string, name: string | undefin
       url: `https://${slug}.bamboohr.com/careers/${o.id}`,
       title,
       text: text(title, [
-        company && `Company: ${company}`, location && `Location: ${location}`, o.departmentLabel ? `Department: ${o.departmentLabel}` : undefined,
+        `Company: ${company}`, location && `Location: ${location}`, o.departmentLabel ? `Department: ${o.departmentLabel}` : undefined,
         o.employmentStatusLabel ? `Type: ${o.employmentStatusLabel}` : undefined,
       ], ''),
       author: company,
@@ -421,7 +412,7 @@ function fromPersonio(source: SourceRecord, slug: string, name: string | undefin
       const id = xmlTag(pos, 'id');
       const title = xmlTag(pos, 'name');
       if (!id || !title) return undefined;
-      const company = employerOf(name, xmlTag(pos, 'subcompany'));
+      const company = name ?? xmlTag(pos, 'subcompany') ?? slug;
       const office = xmlTag(pos, 'office');
       const department = xmlTag(pos, 'department') ?? xmlTag(pos, 'recruitingCategory');
       const schedule = xmlTag(pos, 'schedule') ?? xmlTag(pos, 'employmentType');
@@ -442,7 +433,7 @@ function fromPersonio(source: SourceRecord, slug: string, name: string | undefin
         text: text(
           title,
           [
-            company && `Company: ${company}`,
+            `Company: ${company}`,
             office ? `Location: ${office}` : undefined,
             department ? `Department: ${department}` : undefined,
             schedule ? `Type: ${schedule}` : undefined,
@@ -479,7 +470,7 @@ function fromTeamtailor(source: SourceRecord, slug: string, name: string | undef
   return items.filter((it) => it.id && it.title?.trim() && it.url).map((it) => {
     const title = it.title!.trim();
     const posting = it._jobposting ?? {};
-    const company = employerOf(name, posting.hiringOrganization?.name);
+    const company = name ?? posting.hiringOrganization?.name?.trim() ?? slug;
     const places = Array.isArray(posting.jobLocation) ? posting.jobLocation : posting.jobLocation ? [posting.jobLocation] : [];
     const location = places.map((p) => [p.address?.addressLocality, p.address?.addressCountry].filter(Boolean).join(', ')).filter(Boolean).join('; ');
     const remote = REMOTE.test(`${title} ${location}`);
@@ -491,7 +482,7 @@ function fromTeamtailor(source: SourceRecord, slug: string, name: string | undef
       externalId: `teamtailor:${slug}:${it.id}`,
       url: it.url,
       title,
-      text: text(title, [company && `Company: ${company}`, location && `Location: ${location}`, employment && `Type: ${employment}`], body),
+      text: text(title, [`Company: ${company}`, location && `Location: ${location}`, employment && `Type: ${employment}`], body),
       author: company,
       city: cityFor(location, company, remote),
       isRemote: remote,
