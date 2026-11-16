@@ -12,7 +12,7 @@ describe('inline scripts', () => {
     const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true });
     const app = createApp(runtime);
     const session = await makeUserSession(runtime);
-    const pages = ['/', '/submit', '/me', '/sources', '/sources/new', '/extension', '/network', '/research', '/about', '/faq'];
+    const pages = ['/', '/submit', '/me', '/sources', '/sources/new', '/extension', '/network', '/research', '/about', '/docs', '/faq'];
     let checked = 0;
     for (const path of pages) {
       const response = await app.request(path, { headers: { cookie: `radar_session=${session}` } });

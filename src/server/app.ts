@@ -87,6 +87,7 @@ import {
   findCatalogEntry,
   isCatalogLeadRelevant,
   renderAboutPage,
+  renderApiDocsPage,
   renderNetworkPage,
   renderParticipantPage,
   renderCatalogIndex,
@@ -3516,6 +3517,8 @@ export function createApp(runtime: Runtime): Hono {
     c.json(renderApiCatalog(seoBaseUrl(c)), 200, { 'cache-control': 'public, max-age=86400' }),
   );
   app.get('/about', async (c) => c.html(renderAboutPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c) })));
+  app.get('/docs', async (c) =>
+    c.html(renderApiDocsPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c) })));
   app.get('/contribute', async (c) =>
     c.html(renderContributePage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c) })));
   app.get('/trust', async (c) =>

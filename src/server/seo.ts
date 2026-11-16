@@ -6,6 +6,7 @@ import { formatLeadText } from './format.ts';
 import { translateCity, translateSkill, translateSourceTitle, type SupportedLang } from './i18n.ts';
 import type { SourceQuality, SourceQualityInput } from '../core/source-quality.ts';
 import type { DecisionScore, FlagScore, ModelDecision } from '../core/decisions.ts';
+import { renderOpenApi } from './openapi.ts';
 
 export interface CatalogEntry {
   slug: string;
@@ -1854,6 +1855,122 @@ export function renderContributePage(options: {
 }
 
 /** What we collect, what we never collect, how to get data removed. */
+/** Human-readable public API docs generated from the OpenAPI 3.1 description. */
+export function renderApiDocsPage(options: {
+  baseUrl: string;
+  version: string;
+  auth?: AuthDisplay;
+  lang?: SupportedLang;
+}): string {
+  const { baseUrl, version } = options;
+  const ru = options.lang !== 'en';
+  const spec = renderOpenApi(baseUrl) as {
+    info: { title: string; description: string };
+    paths: Record<string, Record<string, {
+      summary?: string;
+      description?: string;
+      parameters?: Array<{ name: string; in: string; required?: boolean; description?: string; schema?: Record<string, unknown> }>;
+      requestBody?: { description?: string };
+      responses?: Record<string, { description?: string }>;
+    }>>;
+    components?: { schemas?: Record<string, { description?: string; properties?: Record<string, { type?: string; description?: string; enum?: unknown[]; format?: string }> }> };
+  };
+
+  const schemaType = (schema?: Record<string, unknown>): string => {
+    if (!schema) return '';
+    if (Array.isArray(schema.enum)) return `enum: ${(schema.enum as unknown[]).map(String).join(' | ')}`;
+    const parts = [schema.type, schema.format].filter(Boolean).map(String);
+    if (schema.minimum != null) parts.push(`min ${schema.minimum}`);
+    if (schema.maximum != null) parts.push(`max ${schema.maximum}`);
+    if (schema.default != null) parts.push(`default ${schema.default}`);
+    return parts.join(', ');
+  };
+
+  const endpoints = Object.entries(spec.paths).flatMap(([path, methods]) =>
+    Object.entries(methods).map(([method, op]) => {
+      const params = (op.parameters ?? [])
+        .map((param) => {
+          const req = param.required ? (ru ? 'обязательный' : 'required') : (ru ? 'опциональный' : 'optional');
+          const type = schemaType(param.schema);
+          return `<tr><td><code>${escapeHtml(param.name)}</code></td><td>${escapeHtml(param.in)}</td><td>${escapeHtml(req)}</td><td>${escapeHtml(type)}</td><td>${escapeHtml(param.description ?? '')}</td></tr>`;
+        })
+        .join('');
+      const responses = Object.entries(op.responses ?? {})
+        .map(([code, response]) => `<li><code>${escapeHtml(code)}</code> — ${escapeHtml(response.description ?? '')}</li>`)
+        .join('');
+      const anchor = `${method}-${path.replace(/[^\w]+/g, '-')}`;
+      return `
+<article class="api-endpoint" id="${escapeHtml(anchor)}">
+  <h2><code class="api-method">${escapeHtml(method.toUpperCase())}</code> <code>${escapeHtml(path)}</code></h2>
+  <p>${escapeHtml(op.summary ?? '')}</p>
+  ${op.description ? `<p class="muted">${escapeHtml(op.description)}</p>` : ''}
+  ${params ? `<h3>${ru ? 'Параметры' : 'Parameters'}</h3>
+  <div class="table-wrap"><table class="api-params">
+    <thead><tr><th>${ru ? 'Имя' : 'Name'}</th><th>${ru ? 'Где' : 'In'}</th><th>${ru ? 'Обязательность' : 'Required'}</th><th>${ru ? 'Тип' : 'Type'}</th><th>${ru ? 'Описание' : 'Description'}</th></tr></thead>
+    <tbody>${params}</tbody>
+  </table></div>` : ''}
+  ${op.requestBody?.description ? `<p><strong>${ru ? 'Тело запроса:' : 'Request body:'}</strong> ${escapeHtml(op.requestBody.description)}</p>` : ''}
+  ${responses ? `<h3>${ru ? 'Ответы' : 'Responses'}</h3><ul>${responses}</ul>` : ''}
+  <p class="muted small"><a href="${escapeHtml(baseUrl)}${escapeHtml(path.split('{')[0]!)}">${ru ? 'Открыть на сайте' : 'Try on the live site'}</a></p>
+</article>`;
+    }),
+  ).join('\n');
+
+  const leadProps = Object.entries(spec.components?.schemas?.Lead?.properties ?? {})
+    .map(([name, prop]) => {
+      const type = [prop.type, prop.format].filter(Boolean).join(', ');
+      const enumText = Array.isArray(prop.enum) ? ` (${prop.enum.map(String).join(' | ')})` : '';
+      return `<tr><td><code>${escapeHtml(name)}</code></td><td>${escapeHtml(type + enumText)}</td><td>${escapeHtml(prop.description ?? '')}</td></tr>`;
+    })
+    .join('');
+
+  const title = ru ? 'HTTP API' : 'HTTP API';
+  const description = ru
+    ? 'Публичный REST API openradar: эндпоинты, параметры и ответы. Без ключа. OpenAPI 3.1: /openapi.json.'
+    : 'openradar public REST API: endpoints, parameters and responses. No API key. OpenAPI 3.1 at /openapi.json.';
+  const body = `
+<nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/">openradar</a> / API</nav>
+<div class="page-head"><div>
+  <h1>${escapeHtml(spec.info.title)}</h1>
+  <p class="muted small">${escapeHtml(spec.info.description)}</p>
+</div></div>
+<section class="prose" style="margin-top:0">
+  <p>${ru
+    ? 'Ключ не нужен. Гости видят ленту с задержкой и без контактов — та же проекция, что на сайте. Машиночитаемая схема: '
+    : 'No API key. Guests see the feed with a delay and without contacts — the same projection as the website. Machine-readable schema: '}<a href="/openapi.json"><code>/openapi.json</code></a>${ru ? '; каталог RFC 9727: ' : '; RFC 9727 catalog: '}<a href="/.well-known/api-catalog"><code>/.well-known/api-catalog</code></a>; MCP: <a href="/mcp"><code>/mcp</code></a>.</p>
+  <h2>${ru ? 'Быстрый старт' : 'Quick start'}</h2>
+  <pre><code>curl "${escapeHtml(baseUrl)}/api/leads?q=python&amp;type=gig&amp;limit=5"
+curl "${escapeHtml(baseUrl)}/api/market?title=python%20backend&amp;type=job"
+curl "${escapeHtml(baseUrl)}/v2/feed?limit=20"</code></pre>
+  <h2>${ru ? 'Эндпоинты' : 'Endpoints'}</h2>
+  ${endpoints}
+  <h2>${ru ? 'Схема Lead' : 'Lead schema'}</h2>
+  <p>${escapeHtml(spec.components?.schemas?.Lead?.description ?? '')}</p>
+  <div class="table-wrap"><table class="api-params">
+    <thead><tr><th>${ru ? 'Поле' : 'Field'}</th><th>${ru ? 'Тип' : 'Type'}</th><th>${ru ? 'Описание' : 'Description'}</th></tr></thead>
+    <tbody>${leadProps}</tbody>
+  </table></div>
+</section>
+<style>
+.api-endpoint { margin: 28px 0; padding-top: 8px; border-top: 1px solid var(--line, #ddd); }
+.api-method { display: inline-block; min-width: 3.5rem; font-weight: 700; }
+.table-wrap { overflow-x: auto; }
+.api-params { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.api-params th, .api-params td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid var(--line, #ddd); }
+.api-params code { font-size: 0.9em; }
+</style>`;
+
+  return layout({
+    auth: options.auth,
+    lang: options.lang,
+    title,
+    version,
+    body,
+    head: `<meta name="description" content="${escapeHtml(description)}">
+<link rel="canonical" href="${escapeHtml(baseUrl)}/docs">`,
+  });
+}
+
 export function renderTrustPage(options: {
   baseUrl: string;
   version: string;
@@ -1888,7 +2005,7 @@ export function renderTrustPage(options: {
   <p>${ru
     ? 'Площадка может потребовать убрать свой источник — он отключается из конфигурации, посты канала скрываются модератором. Участник удаляет свои посты событием kind 4042. По вопросам: '
     : 'A board can ask to remove its source: it is disabled in the configuration and its posts are hidden by a moderator. A participant deletes their posts with a kind 4042 event. Questions: '}${'<a href="' + REPO_URL + '/issues" target="_blank" rel="noopener">GitHub issues</a>.'}</p>
-  <p class="muted small">${ru ? 'Статус сервиса: ' : 'Service status: '}<a href="/health">/health</a> · ${ru ? 'Описание API: ' : 'API description: '}<a href="/openapi.json">/openapi.json</a></p>
+  <p class="muted small">${ru ? 'Статус сервиса: ' : 'Service status: '}<a href="/health">/health</a> · ${ru ? 'Документация API: ' : 'API docs: '}<a href="/docs">/docs</a> · <a href="/openapi.json">/openapi.json</a></p>
 </section>`;
 
   const description = ru
@@ -1912,7 +2029,7 @@ export function renderLlmsTxt(baseUrl: string, lang: SupportedLang = 'ru'): stri
       const entry = localizeCatalogEntry(raw, 'en');
       return `- [${entry.h1}](${baseUrl}/catalog/${entry.slug}): ${entry.description}`;
     };
-    return `# openradar\n\n> Open-source aggregator of freelance gigs and IT vacancies. Collects listings from freelance boards (FL.ru, Kwork, Freelancehunt), job boards (hh.ru, Habr Career, Rabota Rossii, We Work Remotely, Jobicy, RemoteOK), company ATS pages and Telegram channels into one deduplicated feed. Free, no paid tiers, open source (AGPL-3.0).\n\n## Sections\n\n- [Gigs and jobs feed](${baseUrl}/?lang=en): search, filters by skills, budget, direction and remote work.\n- [Labour market research & econometrics](${baseUrl}/en/research): empirical study of salaries and freelance budgets — role x seniority heatmaps, programming language x seniority heatmaps, regional comparisons (Moscow, St. Petersburg, regions, all-Russia remote), Mincerian log-wage OLS regression (White HC1 robust SEs), ANOVA variance decomposition (eta-squared), Mann-Whitney U / Kruskal-Wallis H / Spearman rho hypothesis tests, Gini index, decile ratios, and employer HHI concentration. Open data (CC BY 4.0): [Dataset CSV](${baseUrl}/research/dataset.csv), [Report JSON](${baseUrl}/research/report.json), [Daily Panel Index JSON](${baseUrl}/research/index.json), [Index CSV](${baseUrl}/research/index.csv), [Methodology & Codebook](${baseUrl}/en/research/methodology). Standard academic citation (APA 7th): openradar Research. (2026). Russian IT & Freelance Labour Market Empirical Dataset and Econometric Report [Data set]. ${baseUrl}/en/research\n- [About](${baseUrl}/about?lang=en): how openradar works and where listings come from.\n- [Sources](${baseUrl}/sources?lang=en): public list of connected boards and channels.\n- [FAQ](${baseUrl}/faq?lang=en)\n- [Browser extension](${baseUrl}/extension?lang=en): submit vacancies from any site and estimate market pay.\n- [RSS feed](${baseUrl}/feed.rss): query parameters q (search) and type (gig or job).\n- [HTTP API and MCP](${baseUrl}/openapi.json): OpenAPI 3.1 schema; API catalog — ${baseUrl}/.well-known/api-catalog; MCP server — ${baseUrl}/mcp (tools: search_leads, get_lead_details, get_market_analytics, estimate_compensation).\n\n## Freelance Gigs\n\n${SEO_CATALOG.filter((entry) => entry.type !== 'job').map(lineEn).join('\n')}\n\n## Vacancies\n\n${SEO_CATALOG.filter((entry) => entry.type === 'job').map(lineEn).join('\n')}\n\n## For Developers\n\n- [Source code](${REPO_URL})\n- [How to run your own node (EN)](${REPO_URL}/blob/main/docs/GETTING_STARTED_EN.md)\n- [Exchange protocol](${REPO_URL}/blob/main/docs/PROTOCOL.md)\n`;
+    return `# openradar\n\n> Open-source aggregator of freelance gigs and IT vacancies. Collects listings from freelance boards (FL.ru, Kwork, Freelancehunt), job boards (hh.ru, Habr Career, Rabota Rossii, We Work Remotely, Jobicy, RemoteOK), company ATS pages and Telegram channels into one deduplicated feed. Free, no paid tiers, open source (AGPL-3.0).\n\n## Sections\n\n- [Gigs and jobs feed](${baseUrl}/?lang=en): search, filters by skills, budget, direction and remote work.\n- [Labour market research & econometrics](${baseUrl}/en/research): empirical study of salaries and freelance budgets — role x seniority heatmaps, programming language x seniority heatmaps, regional comparisons (Moscow, St. Petersburg, regions, all-Russia remote), Mincerian log-wage OLS regression (White HC1 robust SEs), ANOVA variance decomposition (eta-squared), Mann-Whitney U / Kruskal-Wallis H / Spearman rho hypothesis tests, Gini index, decile ratios, and employer HHI concentration. Open data (CC BY 4.0): [Dataset CSV](${baseUrl}/research/dataset.csv), [Report JSON](${baseUrl}/research/report.json), [Daily Panel Index JSON](${baseUrl}/research/index.json), [Index CSV](${baseUrl}/research/index.csv), [Methodology & Codebook](${baseUrl}/en/research/methodology). Standard academic citation (APA 7th): openradar Research. (2026). Russian IT & Freelance Labour Market Empirical Dataset and Econometric Report [Data set]. ${baseUrl}/en/research\n- [About](${baseUrl}/about?lang=en): how openradar works and where listings come from.\n- [Sources](${baseUrl}/sources?lang=en): public list of connected boards and channels.\n- [FAQ](${baseUrl}/faq?lang=en)\n- [Browser extension](${baseUrl}/extension?lang=en): submit vacancies from any site and estimate market pay.\n- [RSS feed](${baseUrl}/feed.rss): query parameters q (search) and type (gig or job).\n- [HTTP API](${baseUrl}/docs): endpoints, parameters and responses; OpenAPI 3.1 — ${baseUrl}/openapi.json; API catalog — ${baseUrl}/.well-known/api-catalog; MCP server — ${baseUrl}/mcp (tools: search_leads, get_lead_details, get_market_analytics, estimate_compensation).\n\n## Freelance Gigs\n\n${SEO_CATALOG.filter((entry) => entry.type !== 'job').map(lineEn).join('\n')}\n\n## Vacancies\n\n${SEO_CATALOG.filter((entry) => entry.type === 'job').map(lineEn).join('\n')}\n\n## For Developers\n\n- [Source code](${REPO_URL})\n- [How to run your own node (EN)](${REPO_URL}/blob/main/docs/GETTING_STARTED_EN.md)\n- [Exchange protocol](${REPO_URL}/blob/main/docs/PROTOCOL.md)\n`;
   }
   const line = (entry: CatalogEntry): string => `- [${entry.h1}](${baseUrl}/catalog/${entry.slug}): ${entry.description}`;
   return `# openradar
@@ -1928,7 +2045,7 @@ export function renderLlmsTxt(baseUrl: string, lang: SupportedLang = 'ru'): stri
 - [Вопросы и ответы](${baseUrl}/faq)
 - [Расширение для браузера](${baseUrl}/extension): отправка вакансии с любого сайта и оценка рыночной оплаты.
 - [RSS-лента](${baseUrl}/feed.rss): параметры q (поиск) и type (gig — заказы, job — вакансии).
-- [HTTP API и MCP](${baseUrl}/openapi.json): OpenAPI-схема публичного API; каталог — ${baseUrl}/.well-known/api-catalog; MCP-сервер — ${baseUrl}/mcp (tools: search_leads, get_lead_details, estimate_compensation, submit_lead, vote_lead, get_market_analytics, save_search, list_saved_searches, xray_generate_dorks).
+- [HTTP API](${baseUrl}/docs): эндпоинты, параметры и ответы; OpenAPI 3.1 — ${baseUrl}/openapi.json; каталог — ${baseUrl}/.well-known/api-catalog; MCP-сервер — ${baseUrl}/mcp (tools: search_leads, get_lead_details, estimate_compensation, submit_lead, vote_lead, get_market_analytics, save_search, list_saved_searches, xray_generate_dorks).
 
 ## Заказы
 
@@ -1988,6 +2105,7 @@ export function renderSitemapXml(
     // Public list only. Operator routes stay out: /sources/new, /sources/catalog, /sources/*/edit.
     { loc: `${baseUrl}/sources`, priority: '0.6', lastmod: today, changefreq: 'daily' },
     { loc: `${baseUrl}/about`, priority: '0.5' },
+    { loc: `${baseUrl}/docs`, priority: '0.7' },
     { loc: `${baseUrl}/faq`, priority: '0.5' },
     { loc: `${baseUrl}/extension`, priority: '0.5' },
     ...leads.map((lead) => ({

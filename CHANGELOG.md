@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.73.1 — 2026-11-16
+
+- **Public API docs page (/docs)**: human-readable endpoint reference generated from the OpenAPI 3.1 schema — methods, parameters, responses and the Lead field table. Linked from the footer, sitemap, `/llms.txt` and Trust page so API catalogs can verify a self-serve docs URL.
 ## 0.73.0 — 2026-11-16
 
 - **Mincerian Log-Wage Regression (`jobs.scientific.mincer`):** multi-factor OLS regression on log monthly salaries in IT with White (HC1) heteroskedasticity-robust standard errors, Student t-statistics, p-values, R², adjusted R², Fisher F-statistics, and Halvorsen–Palmquist exact percentage semi-elasticities (Δ% = (exp(β) − 1) × 100%).
