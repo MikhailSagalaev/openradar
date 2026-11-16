@@ -38,6 +38,8 @@ const envSchema = z.object({
   OPENAI_API_KEY: optionalString,
   OPENAI_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
   OPENAI_MODEL: z.string().default('gpt-4o-mini'),
+  // Verbatim JSON merged into every classifier/extract request (e.g. Qwen's enable_thinking).
+  OPENAI_EXTRA_BODY: optionalString,
   // Model extraction of pay, role and grade for the research reports (same API as above).
   RADAR_EXTRACT_ENABLED: booleanFromEnv(false),
   RADAR_EXTRACT_MODEL: optionalString,

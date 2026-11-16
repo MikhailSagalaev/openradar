@@ -59,6 +59,7 @@ export interface Env {
   OPENAI_API_KEY?: string;
   OPENAI_BASE_URL: string;
   OPENAI_MODEL: string;
+  OPENAI_EXTRA_BODY?: string;
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_CHAT_ID?: string;
   RADAR_ADMIN_CHAT_ID?: string;
