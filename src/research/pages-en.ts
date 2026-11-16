@@ -9,7 +9,7 @@ import { layout, type AuthDisplay } from '../server/ui.ts';
 import { translateSkill, translateSourceTitle } from '../server/i18n.ts';
 import type { IndexSeries, OpenradarIndex } from './index.ts';
 import { lineChart, renderIntlIndexSection, renderPlatformIndexTable, renderWeekdayProfileSection } from './index-page.ts';
-import { renderGigBracketsSection, renderGradeMatrixSection } from './pages.ts';
+import { renderEconometricsSection, renderGigBracketsSection, renderGradeMatrixSection, renderLanguageMatrixSection, renderRegionalComparisonSection } from './pages.ts';
 import { MIN_MEDIAN, MIN_QUARTILES, RELIABLE, REPORT_VERSION, rubMonthToUsdYear, type Dist, type Report, type Slice } from './report.ts';
 
 const LICENSE = 'CC BY 4.0';
@@ -233,9 +233,11 @@ ${findings.length ? `<section class="rs-section">
   ${rangeChart(translate(jobs.byRole.filter((s) => s.key !== 'other'), ROLE_EN, (key) => `/en/research/roles/${key}`))}</section>
 <section class="rs-section"><h2>By seniority</h2><p class="muted small">Median and interquartile range (25th to 75th percentile) across IT seniority levels.</p>${rangeChart(translate(jobs.itByGrade?.some((s) => s.pay.median !== undefined) ? jobs.itByGrade : jobs.byGrade, GRADE_EN))}</section>
 ${renderGradeMatrixSection(jobs.gradeMatrix, (slug) => (jobs.roles.some((r) => r.slug === slug) ? `/en/research/roles/${slug}` : undefined), 'en')}
-<section class="rs-section"><h2>By programming language</h2>${rangeChart(jobs.byLanguage)}</section>
+<section class="rs-section"><h2>By programming language</h2>${rangeChart(jobs.byLanguage)}${renderLanguageMatrixSection(jobs.languageMatrix, 'en')}</section>
 <section class="rs-section"><h2>Location and remote work</h2>${rangeChart(translate(jobs.byRegion, REGION_EN))}
   <p class="small"><b>${pct(jobs.remote.share)}</b> of vacancies allow remote work.${jobs.remote.remote.median && jobs.remote.office.median ? ` Median: ${rub(jobs.remote.remote.median)} remote, ${rub(jobs.remote.office.median)} on site.` : ''}${jobs.remote.adjusted ? ` At the same role and seniority the difference is ${jobs.remote.adjusted.pct > 0 ? '+' : ''}${jobs.remote.adjusted.pct}% (${num(jobs.remote.adjusted.n)} vacancies compared).` : ''}</p></section>
+${renderRegionalComparisonSection(jobs.regionalComparison, jobs.regionalMatrix, jobs.byCity, (slug) => (jobs.roles.some((r) => r.slug === slug) ? `/en/research/roles/${slug}` : undefined), 'en')}
+${renderEconometricsSection(jobs.econometrics, 'en')}
 <section class="rs-section"><h2>Skills and pay premium</h2><p class="muted small">Concrete technologies and tools in vacancies with stated pay (excluding umbrella categories), with stratified pay premiums at equal role and seniority.</p>${rangeChart(jobs.skills.map((s) => ({ label: s.premiumPct !== undefined && s.premiumPct !== 0 ? `${translateSkill(s.skill, 'en')} (${s.premiumPct > 0 ? '+' : ''}${s.premiumPct}%)` : translateSkill(s.skill, 'en'), pay: s.pay })))}</section>
 <section class="rs-section"><h2>AI in vacancies</h2>
   <p class="small">Neural networks, LLMs, GPT, Cursor, Copilot or machine learning appear in <b>${pct(jobs.ai.share)}</b> of vacancies.</p>
@@ -396,6 +398,7 @@ export function renderMethodologyPageEn(options: { baseUrl: string; version: str
       <p><code>adjustedGap = exp( sum_c( w_c * ln(median_{c,1} / median_{c,0}) ) / sum_c(w_c) ) - 1</code></p>
       Published when total matched weight $\sum w_c \ge 30$.</li>
     <li><b>Laspeyres fixed-basket weekly salary index (<code>weeklyIndexed</code>):</b> holds role weights $w_r = N_r / \sum N_j$ fixed across weeks so short-term shifts in source mix cannot masquerade as wage inflation.</li>
+    <li><b>Gini coefficient ($G$), quartile dispersion ($\text{QCD}$), and Bowley–Kelley skewness:</b> pay inequality and dispersion are quantified via the $P_{90}/P_{10}$ decile ratio, the non-parametric quartile coefficient of dispersion $\text{QCD} = (P_{75}-P_{25})/(P_{75}+P_{25})$, the Gini index $G = \frac{\sum_{i=1}^n (2i-n-1)x_{(i)}}{n\sum x_{(i)}}$, and quantile skewness indices $S_B$ and $S_K$. Employer demand concentration is measured via the Herfindahl–Hirschman Index ($\text{HHI} = \sum s_i^2 \times 10,000$).</li>
   </ul>
 
   <h2 id="index">7. The openradar index (Russian-language &amp; Global panels)</h2>

@@ -5,6 +5,7 @@
  * monthly reports are frozen snapshots and do not move.
  */
 import { isOutletName } from '../core/company.ts';
+import { extractCity } from '../core/extract.ts';
 import { RUB_PER } from '../core/fx.ts';
 import { isGigBoardUrl, isJobBoardUrl } from '../core/prepare.ts';
 import { qualityFlagsOf, offersNoPay } from '../core/quality.ts';
@@ -47,6 +48,7 @@ export interface ResearchRecord {
   grade?: Grade;
   language?: string;
   region: 'Москва' | 'Санкт-Петербург' | 'Другие города' | 'Не указан';
+  city?: string;
   remote: boolean;
   company?: string;
   skills: string[];
@@ -284,6 +286,8 @@ const LANGUAGES: Array<[string, RegExp]> = [
   ['Scala', rx(`${W}scala${E}`)],
   ['TypeScript', rx(`typescript|${W}ts${E}`)],
   ['JavaScript', rx(`javascript|${W}js${E}`)],
+  ['Swift', rx(`${W}swift${E}`)],
+  ['1С', rx(`1[cс]:?\\s*предприят|(?:программист|разработчик)\\s+1[cс]`)],
 ];
 
 /** Main language of a developer vacancy: from the title first, then the listed skills. */
@@ -493,6 +497,17 @@ export function normalizePay(pay: Pay, type: LeadType, rates: Record<string, num
 const AI_MENTION = rx(`нейросет|${W}llm${E}|${W}gpt|chatgpt|openai|langchain|${W}rag${E}|генеративн|prompt|промпт|вайб|vibe|cursor|copilot|${W}ии${E}|${W}ai${E}|machine learning|машинн\\p{L}* обучен`);
 const REMOTE = /удал[её]нн|удал[её]нк|можно\s+удал|дистанц|remote|anywhere/i;
 
+function normalizeCityName(rawCity: string | undefined): string | undefined {
+  if (!rawCity) return undefined;
+  const trimmed = rawCity.trim();
+  if (!trimmed || /^(?:онлайн|удал|не указан|россия|рф|remote|anywhere)/i.test(trimmed)) return undefined;
+  if (/москв|зеленоград/i.test(trimmed)) return 'Москва';
+  if (/петербург|спб|петроград/i.test(trimmed)) return 'Санкт-Петербург';
+  const extracted = extractCity(`Город: ${trimmed}`);
+  if (extracted && extracted !== 'Онлайн') return extracted;
+  return trimmed.length <= 30 ? trimmed : undefined;
+}
+
 function regionOf(city: string | undefined): ResearchRecord['region'] {
   if (!city || /^(?:онлайн|удал)/i.test(city)) return 'Не указан';
   if (/москв/i.test(city)) return 'Москва';
@@ -580,7 +595,7 @@ export function deriveRecord(lead: Lead, options: DeriveOptions = {}): ResearchR
   const reckoned = pay ? normalizePay(pay, type, rates) : undefined;
   const normalized = board && pay?.origin === 'text' && reckoned && reckoned.period === 'project' && reckoned.point > TEXT_ORDER_CEILING ? undefined : reckoned;
   const currency = pay?.currency.toUpperCase();
-  const developer = ['backend', 'fullstack', 'frontend', 'mobile', 'data-engineer', 'ml', 'qa', 'gamedev', 'embedded'].includes(role);
+  const developer = ['backend', 'fullstack', 'frontend', 'mobile', 'data-engineer', 'ml', 'qa', 'gamedev', 'embedded', '1c', 'ai', 'architect'].includes(role);
   const city = lead.city ?? head.match(/Регион:\s*([^\n]{2,40})/u)?.[1] ?? head.match(/\.\s*([А-ЯЁ][а-яё-]+(?: [А-ЯЁ][а-яё-]+)?) \(Россия\)/u)?.[1] ?? model?.city;
 
   return {
@@ -598,6 +613,7 @@ export function deriveRecord(lead: Lead, options: DeriveOptions = {}): ResearchR
         ?? (model?.language ? detectLanguage(model.language, []) : undefined)
       : undefined,
     region: regionOf(city),
+    city: normalizeCityName(city),
     remote: Boolean(facts?.remote) || Boolean(model?.remote) || REMOTE.test(`${lead.title}\n${head}`) || /^(?:онлайн|удал)/i.test(lead.city ?? ''),
     company: detectCompany(lead, facts) ?? model?.company,
     skills,

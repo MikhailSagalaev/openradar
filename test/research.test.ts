@@ -703,4 +703,63 @@ describe('research data consistency & honest visual metrics', () => {
     expect(report.jobs.intlCompanies?.[0]).toEqual({ name: 'Acme Global', n: 12 });
     expect(report.gigs.intlBudget?.median).toBeGreaterThan(0);
   });
+
+  it('computes regional comparisons, geography & language heatmaps, city rankings, and econometric indices', () => {
+    const records: ResearchRecord[] = [];
+    for (let i = 0; i < 12; i++) {
+      records.push(
+        record(1000 + i, {
+          role: 'backend',
+          grade: 'junior',
+          language: 'Python',
+          region: 'Другие города',
+          city: 'Екатеринбург',
+          remote: false,
+          company: `RegCorp-${i % 4}`,
+          pay: 90_000 + i * 2_000,
+          payMin: 80_000 + i * 2_000,
+          payMax: 100_000 + i * 2_000,
+        }),
+        record(2000 + i, {
+          role: 'backend',
+          grade: 'senior',
+          language: 'Python',
+          region: 'Москва',
+          city: 'Москва',
+          remote: false,
+          company: `MskCorp-${i % 5}`,
+          pay: 220_000 + i * 5_000,
+          payMin: 200_000 + i * 5_000,
+          payMax: 240_000 + i * 5_000,
+        }),
+        record(3000 + i, {
+          role: 'backend',
+          grade: 'senior',
+          language: 'Go',
+          region: 'Не указан',
+          remote: true,
+          company: `RemoteCorp-${i % 6}`,
+          pay: 300_000 + i * 5_000,
+          payMin: 270_000 + i * 5_000,
+          payMax: 330_000 + i * 5_000,
+        }),
+      );
+    }
+    const report = buildReport(records, monthPeriod('2026-11'), 'month');
+    expect(report.jobs.regionalComparison?.map((r) => r.key)).toEqual(['moscow', 'regions', 'remote']);
+    const regRow = report.jobs.regionalMatrix?.find((r) => r.slug === 'backend');
+    expect(regRow).toBeDefined();
+    expect(regRow!.moscow).toBeGreaterThan(regRow!.regions!);
+    expect(regRow!.remote).toBeGreaterThan(regRow!.regions!);
+    expect(regRow!.regVsMskPct).toBeLessThan(0);
+    expect(regRow!.remoteVsRegPct).toBeGreaterThan(100);
+    expect(report.jobs.languageMatrix?.map((l) => l.language)).toEqual(['Go', 'Python']);
+    const py = report.jobs.languageMatrix?.find((l) => l.language === 'Python');
+    expect(py?.seniorToJuniorRatio).toBeGreaterThan(2);
+    expect(report.jobs.byCity?.map((c) => c.key)).toEqual(expect.arrayContaining(['Москва', 'Екатеринбург']));
+    expect(report.jobs.econometrics?.all.gini).toBeGreaterThan(0.15);
+    expect(report.jobs.econometrics?.all.decileRatio).toBeGreaterThan(2.5);
+    expect(report.jobs.econometrics?.employerConcentration.hhi).toBeGreaterThan(0);
+    expect(report.jobs.econometrics?.gradeTransparency.map((g) => g.grade)).toEqual(['junior', 'senior']);
+  });
 });

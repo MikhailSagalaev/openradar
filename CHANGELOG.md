@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.72.0 — 2026-11-16
+
+- **Three Color-Coded Salary Heatmaps (`/research`, `/en/research`):** upgraded `renderGradeMatrixSection` into a visual color-coded heatmap (`Role × Seniority`, with quartile dispersion `QCD%` and a gradient scale legend) and added two new heatmaps: `Geography Heatmap: Role × Region & Remote Work` (`jobs.regionalMatrix`, showing Moscow office, St. Petersburg office, regional Russian offices, all-Russia remote work, regional office discount vs Moscow `regVsMskPct`, and relocation-free remote premium `remoteVsRegPct`) and `Stack Heatmap: Programming Language × Seniority` (`jobs.languageMatrix`).
+- **Regional Econometric Decomposition & City Rankings (`jobs.regionalComparison`, `jobs.byCity`):** decomposed the Russian labour market into Moscow on-site, St. Petersburg on-site, regional Russian on-site, and all-Russia remote segments with overall and IT-only medians, Moscow parity (`%`), Cochran–Mantel–Haenszel role-and-seniority adjusted regional gaps (`adjustedVsMoscow`), and added a city-level salary ranking (`byCity`, normalized in `deriveRecord`).
+- **Econometric Profile, Inequality & Market Concentration (`jobs.econometrics`):** added non-parametric distributional diagnostics across all vacancies and the IT sector: decile corridor ($P_{10}\text{–}P_{90}$), 5% trimmed mean vs median shift, $P_{90}/P_{10}$ decile ratio, $P_{75}/P_{25}$ quartile ratio, quartile coefficient of dispersion ($\text{QCD}$), Gini inequality coefficient ($G$), Bowley ($S_B$) and Kelley ($S_K$) skewness indices, Herfindahl–Hirschman employer concentration index ($\text{HHI}$, $CR_5$, $CR_{10}$), and seniority salary transparency gradient (`gradeTransparency`).
+
 ## 0.71.6 — 2026-11-16
 
 ### Fixed

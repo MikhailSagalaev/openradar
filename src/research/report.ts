@@ -39,6 +39,98 @@ export interface GradeMatrixRow {
   lead?: number;
   seniorToJuniorRatio?: number;
   spreadPct?: number;
+  qcdPct?: number;
+}
+
+export interface RegionalMatrixRow {
+  slug: string;
+  label: string;
+  n: number;
+  withPay: number;
+  median?: number;
+  moscow?: number;
+  moscowN: number;
+  spb?: number;
+  spbN: number;
+  regions?: number;
+  regionsN: number;
+  remote?: number;
+  remoteN: number;
+  /** Regional office median vs Moscow office median, in %. */
+  regVsMskPct?: number;
+  /** Remote median vs Regional office median, in % (relocation-free remote premium). */
+  remoteVsRegPct?: number;
+}
+
+export interface RegionalComparisonRow {
+  key: "moscow" | "spb" | "regions" | "remote";
+  label: string;
+  n: number;
+  sharePct: number;
+  withPay: number;
+  payShare: number;
+  remoteShare: number;
+  pay: Dist;
+  itPay: Dist;
+  moscowParityPct?: number;
+  itMoscowParityPct?: number;
+  adjustedVsMoscow?: Adjusted;
+  qcdPct?: number;
+}
+
+export interface LanguageMatrixRow {
+  language: string;
+  n: number;
+  withPay: number;
+  median?: number;
+  p25?: number;
+  p75?: number;
+  junior?: number;
+  middle?: number;
+  senior?: number;
+  lead?: number;
+  seniorToJuniorRatio?: number;
+  qcdPct?: number;
+}
+
+export interface EconometricSlice {
+  n: number;
+  p10?: number;
+  p25?: number;
+  p50?: number;
+  p75?: number;
+  p90?: number;
+  trimmedMean?: number;
+  decileRatio?: number;
+  quartileRatio?: number;
+  gini?: number;
+  qcdPct?: number;
+  bowleySkew?: number;
+  kelleySkew?: number;
+  meanToMedianPct?: number;
+}
+
+export interface GradeTransparencyRow {
+  grade: string;
+  label: string;
+  n: number;
+  withPay: number;
+  payShare: number;
+  median?: number;
+  spreadPct?: number;
+  qcdPct?: number;
+}
+
+export interface MarketEconometrics {
+  all: EconometricSlice;
+  it: EconometricSlice;
+  employerConcentration: {
+    hhi: number;
+    cr5Pct: number;
+    cr10Pct: number;
+    totalEmployers: number;
+  };
+  gradeTransparency: GradeTransparencyRow[];
 }
 
 export interface GigBracket {
@@ -170,6 +262,11 @@ export interface Report {
     itByGrade?: Slice[];
     /** Cross-tabulation of pay by role and seniority grade. */
     gradeMatrix?: GradeMatrixRow[];
+    regionalMatrix?: RegionalMatrixRow[];
+    regionalComparison?: RegionalComparisonRow[];
+    languageMatrix?: LanguageMatrixRow[];
+    byCity?: Slice[];
+    econometrics?: MarketEconometrics;
     byLanguage: Slice[];
     byRegion: Slice[];
     remote: { share: number; remote: Dist; office: Dist; adjusted?: Adjusted };
@@ -726,6 +823,220 @@ function computeGigBrackets(records: ResearchRecord[]): GigBracket[] {
   });
 }
 
+function qcdPctOf(d: Dist): number | undefined {
+  if (d.p25 === undefined || d.p75 === undefined || d.p25 + d.p75 <= 0) return undefined;
+  return Math.round(((d.p75 - d.p25) / (d.p75 + d.p25)) * 1000) / 10;
+}
+
+function giniCoefficient(sorted: number[]): number | undefined {
+  const n = sorted.length;
+  if (n < MIN_QUARTILES) return undefined;
+  let weighted = 0;
+  let total = 0;
+  for (let i = 0; i < n; i++) {
+    weighted += (2 * (i + 1) - n - 1) * sorted[i]!;
+    total += sorted[i]!;
+  }
+  return total > 0 ? Math.round((weighted / (n * total)) * 1000) / 1000 : undefined;
+}
+
+function computeEconometricSlice(records: ResearchRecord[]): EconometricSlice {
+  const sorted = records.map((r) => r.pay!).filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
+  const n = sorted.length;
+  if (n < MIN_QUARTILES) return { n };
+  const p10 = round(quantile(sorted, 0.1));
+  const p25 = round(quantile(sorted, 0.25));
+  const p50 = round(quantile(sorted, 0.5));
+  const p75 = round(quantile(sorted, 0.75));
+  const p90 = round(quantile(sorted, 0.9));
+  const lo = Math.floor(n * 0.05);
+  const hi = Math.ceil(n * 0.95);
+  const trimmedSlice = sorted.slice(lo, hi);
+  const trimmedMean = trimmedSlice.length ? round(trimmedSlice.reduce((a, b) => a + b, 0) / trimmedSlice.length) : undefined;
+  const decileRatio = p10 > 0 ? Math.round((p90 / p10) * 100) / 100 : undefined;
+  const quartileRatio = p25 > 0 ? Math.round((p75 / p25) * 100) / 100 : undefined;
+  const qcdPct = p25 + p75 > 0 ? Math.round(((p75 - p25) / (p75 + p25)) * 1000) / 10 : undefined;
+  const bowleySkew = p75 > p25 ? Math.round((((p75 - p50) - (p50 - p25)) / (p75 - p25)) * 100) / 100 : undefined;
+  const kelleySkew = p90 > p10 ? Math.round((((p90 - p50) - (p50 - p10)) / (p90 - p10)) * 100) / 100 : undefined;
+  const meanToMedianPct = trimmedMean && p50 > 0 ? Math.round(((trimmedMean - p50) / p50) * 1000) / 10 : undefined;
+  return {
+    n,
+    p10,
+    p25,
+    p50,
+    p75,
+    p90,
+    trimmedMean,
+    decileRatio,
+    quartileRatio,
+    gini: giniCoefficient(sorted),
+    qcdPct,
+    bowleySkew,
+    kelleySkew,
+    meanToMedianPct,
+  };
+}
+
+function computeMarketEconometrics(jobs: ResearchRecord[], ruJobs: ResearchRecord[], paid: (r: ResearchRecord) => boolean): MarketEconometrics {
+  const itJobs = jobs.filter((r) => TECH_ROLES.has(r.role));
+  const itPaid = ruJobs.filter((r) => TECH_ROLES.has(r.role));
+
+  const empCounts = new Map<string, number>();
+  let totalWithEmp = 0;
+  for (const r of itJobs) {
+    if (!r.company) continue;
+    totalWithEmp++;
+    empCounts.set(r.company, (empCounts.get(r.company) ?? 0) + 1);
+  }
+  const sortedCounts = [...empCounts.values()].sort((a, b) => b - a);
+  let hhi = 0;
+  if (totalWithEmp > 0) {
+    for (const c of sortedCounts) {
+      const s = c / totalWithEmp;
+      hhi += s * s * 10_000;
+    }
+  }
+  const top5 = sortedCounts.slice(0, 5).reduce((a, b) => a + b, 0);
+  const top10 = sortedCounts.slice(0, 10).reduce((a, b) => a + b, 0);
+
+  const gradeTransparency: GradeTransparencyRow[] = GRADE_ORDER.map((g) => {
+    const gAll = itJobs.filter((r) => r.grade === g);
+    const gPaid = gAll.filter(paid);
+    const d = dist(gPaid.map((r) => r.pay!), 5);
+    return {
+      grade: g,
+      label: GRADE_LABELS[g],
+      n: gAll.length,
+      withPay: gPaid.length,
+      payShare: share(gPaid.length, gAll.length),
+      median: d.median,
+      spreadPct: medianSpreadPctOf(gPaid),
+      qcdPct: qcdPctOf(d),
+    };
+  }).filter((row) => row.n > 0);
+
+  return {
+    all: computeEconometricSlice(ruJobs),
+    it: computeEconometricSlice(itPaid),
+    employerConcentration: {
+      hhi: Math.round(hhi),
+      cr5Pct: share(top5, totalWithEmp),
+      cr10Pct: share(top10, totalWithEmp),
+      totalEmployers: empCounts.size,
+    },
+    gradeTransparency,
+  };
+}
+
+function computeRegionalComparison(jobs: ResearchRecord[], ruJobs: ResearchRecord[], paid: (r: ResearchRecord) => boolean): RegionalComparisonRow[] {
+  const segments: Array<{ key: RegionalComparisonRow["key"]; label: string; pred: (r: ResearchRecord) => boolean }> = [
+    { key: "moscow", label: "Москва (офис и гибрид)", pred: (r) => r.region === "Москва" && !r.remote },
+    { key: "spb", label: "Санкт-Петербург (офис и гибрид)", pred: (r) => r.region === "Санкт-Петербург" && !r.remote },
+    { key: "regions", label: "Другие города РФ (офис и гибрид)", pred: (r) => r.region === "Другие города" && !r.remote },
+    { key: "remote", label: "Всероссийская удалёнка (Remote)", pred: (r) => r.remote },
+  ];
+  const mskPaid = ruJobs.filter((r) => r.region === "Москва" && !r.remote);
+  const mskMed = dist(mskPaid.map((r) => r.pay!)).median;
+  const mskItMed = dist(mskPaid.filter((r) => TECH_ROLES.has(r.role)).map((r) => r.pay!)).median;
+
+  return segments
+    .map((seg) => {
+      const segAll = jobs.filter(seg.pred);
+      const segPaid = segAll.filter(paid);
+      const payDist = dist(segPaid.map((r) => r.pay!));
+      const itDist = dist(segPaid.filter((r) => TECH_ROLES.has(r.role)).map((r) => r.pay!));
+      const adjustedVsMoscow =
+        seg.key === "moscow"
+          ? { pct: 0, n: mskPaid.length }
+          : adjustedGap([...mskPaid, ...segPaid], (r) => seg.pred(r));
+      return {
+        key: seg.key,
+        label: seg.label,
+        n: segAll.length,
+        sharePct: share(segAll.length, jobs.length),
+        withPay: segPaid.length,
+        payShare: share(segPaid.length, segAll.length),
+        remoteShare: share(segAll.filter((r) => r.remote).length, segAll.length),
+        pay: payDist,
+        itPay: itDist,
+        moscowParityPct: mskMed && payDist.median ? Math.round((payDist.median / mskMed) * 100) : undefined,
+        itMoscowParityPct: mskItMed && itDist.median ? Math.round((itDist.median / mskItMed) * 100) : undefined,
+        adjustedVsMoscow,
+        qcdPct: qcdPctOf(payDist),
+      };
+    })
+    .filter((row) => row.n > 0);
+}
+
+function computeRegionalMatrix(roles: RoleDetail[], jobs: ResearchRecord[], paid: (r: ResearchRecord) => boolean): RegionalMatrixRow[] {
+  return roles
+    .filter((r) => r.pay.median !== undefined && r.withPay >= 15)
+    .map((r) => {
+      const rolePaid = jobs.filter((j) => j.role === r.slug && paid(j));
+      const msk = rolePaid.filter((j) => j.region === "Москва" && !j.remote).map((j) => j.pay!);
+      const spb = rolePaid.filter((j) => j.region === "Санкт-Петербург" && !j.remote).map((j) => j.pay!);
+      const reg = rolePaid.filter((j) => j.region === "Другие города" && !j.remote).map((j) => j.pay!);
+      const rem = rolePaid.filter((j) => j.remote).map((j) => j.pay!);
+      const moscow = dist(msk, 5).median;
+      const spbMed = dist(spb, 5).median;
+      const regions = dist(reg, 5).median;
+      const remote = dist(rem, 5).median;
+      const regVsMskPct = moscow && regions ? Math.round(((regions - moscow) / moscow) * 100) : undefined;
+      const remoteVsRegPct = regions && remote ? Math.round(((remote - regions) / regions) * 100) : undefined;
+      return {
+        slug: r.slug,
+        label: r.label,
+        n: r.n,
+        withPay: r.withPay,
+        median: r.pay.median,
+        moscow,
+        moscowN: msk.length,
+        spb: spbMed,
+        spbN: spb.length,
+        regions,
+        regionsN: reg.length,
+        remote,
+        remoteN: rem.length,
+        regVsMskPct,
+        remoteVsRegPct,
+      };
+    })
+    .filter((row) => [row.moscow, row.spb, row.regions, row.remote].filter((v) => v !== undefined).length >= 2)
+    .sort((a, b) => (b.median ?? 0) - (a.median ?? 0));
+}
+
+function computeLanguageMatrix(jobs: ResearchRecord[], paid: (r: ResearchRecord) => boolean): LanguageMatrixRow[] {
+  const langs = [...new Set(jobs.map((r) => r.language).filter((l): l is string => Boolean(l)))];
+  return langs
+    .map((language) => {
+      const all = jobs.filter((r) => r.language === language);
+      const withPay = all.filter(paid);
+      const d = dist(withPay.map((r) => r.pay!), 5);
+      const gMed = (g: string): number | undefined => dist(withPay.filter((r) => r.grade === g).map((r) => r.pay!), 3).median;
+      const junior = gMed("junior");
+      const middle = gMed("middle");
+      const senior = gMed("senior");
+      const lead = gMed("lead");
+      const seniorToJuniorRatio = junior && senior && senior >= junior ? Math.round((senior / junior) * 10) / 10 : undefined;
+      return {
+        language,
+        n: all.length,
+        withPay: withPay.length,
+        median: d.median,
+        p25: d.p25,
+        p75: d.p75,
+        junior,
+        middle,
+        senior,
+        lead,
+        seniorToJuniorRatio,
+        qcdPct: qcdPctOf(d),
+      };
+    })
+    .filter((row) => row.median !== undefined && row.withPay >= 8)
+    .sort((a, b) => (b.median ?? 0) - (a.median ?? 0));
+}
+
 function computeGradeMatrix(roles: RoleDetail[], jobs: ResearchRecord[], paid: (r: ResearchRecord) => boolean): GradeMatrixRow[] {
   return roles
     .filter((r) => r.pay.median !== undefined)
@@ -758,6 +1069,7 @@ function computeGradeMatrix(roles: RoleDetail[], jobs: ResearchRecord[], paid: (
         lead,
         seniorToJuniorRatio,
         spreadPct: r.spreadPct,
+        qcdPct: qcdPctOf(r.pay),
       };
     })
     .sort((a, b) => (b.median ?? 0) - (a.median ?? 0));
@@ -881,6 +1193,13 @@ export function buildReport(
       byGrade: sliceBy(jobs.filter((r) => r.role !== OTHER_ROLE.slug), (r) => r.grade, (k) => GRADE_LABELS[k as keyof typeof GRADE_LABELS], ruPaid, GRADE_ORDER),
       itByGrade: sliceBy(jobs.filter((r) => TECH_ROLES.has(r.role)), (r) => r.grade, (k) => GRADE_LABELS[k as keyof typeof GRADE_LABELS], ruPaid, GRADE_ORDER),
       gradeMatrix: computeGradeMatrix(roles, jobs, ruPaid),
+      regionalMatrix: computeRegionalMatrix(roles, jobs, ruPaid),
+      regionalComparison: computeRegionalComparison(jobs, ruJobs, ruPaid),
+      languageMatrix: computeLanguageMatrix(jobs, ruPaid),
+      byCity: sliceBy(jobs.filter((r) => r.city !== undefined), (r) => r.city, (k) => k, ruPaid)
+        .filter((s) => s.pay.median !== undefined)
+        .slice(0, 16),
+      econometrics: computeMarketEconometrics(jobs, ruJobs, ruPaid),
       byLanguage: sliceBy(jobs, (r) => r.language, (k) => k, ruPaid),
       byRegion: sliceBy(jobs, (r) => r.region, (k) => k, ruPaid, REGION_ORDER),
       remote: {

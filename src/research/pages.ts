@@ -23,6 +23,10 @@ import {
   type Dist,
   type GigBracket,
   type GradeMatrixRow,
+  type LanguageMatrixRow,
+  type MarketEconometrics,
+  type RegionalComparisonRow,
+  type RegionalMatrixRow,
   type Report,
   type RoleDetail,
   type Slice,
@@ -415,34 +419,60 @@ function citeLine(report: Report, baseUrl: string): string {
 }
 
 
+function heatmapStyle(value: number | undefined, minVal: number, maxVal: number): string {
+  if (value === undefined || maxVal <= minVal) return "";
+  const ratio = Math.max(0, Math.min(1, (value - minVal) / (maxVal - minVal)));
+  const alpha = (0.07 + ratio * 0.35).toFixed(2);
+  return ` style="background:rgba(16,185,129,${alpha});font-variant-numeric:tabular-nums;border-radius:4px"`;
+}
+
+function heatmapLegend(minVal: number, maxVal: number, lang: SupportedLang = "ru"): string {
+  const en = lang === "en";
+  const fmt = (v: number): string => (en ? `₽${new Intl.NumberFormat("en-US").format(v)}` : formatRub(v));
+  return `<p class="rs-legend" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px">
+    <span>${en ? "Heatmap scale:" : "Шкала тепловой карты:"}</span>
+    <span>${escapeHtml(fmt(minVal))}</span>
+    <span style="display:inline-block;width:96px;height:8px;border-radius:4px;background:linear-gradient(90deg,rgba(16,185,129,0.08),rgba(16,185,129,0.44));border:1px solid var(--line)"></span>
+    <span>${escapeHtml(fmt(maxVal))}</span>
+    <span class="muted">· ${en ? "QCD = quartile dispersion (P75−P25)/(P75+P25)" : "QCD — квартильная дисперсия (P75−P25)/(P75+P25)"}</span>
+  </p>`;
+}
+
 export function renderGradeMatrixSection(
   matrix: GradeMatrixRow[] | undefined,
   roleHref: (slug: string) => string | undefined,
-  lang: SupportedLang = 'ru',
+  lang: SupportedLang = "ru",
 ): string {
   const rows = (matrix ?? []).filter((r) => r.median !== undefined && (r.junior !== undefined || r.middle !== undefined || r.senior !== undefined || r.lead !== undefined));
-  if (rows.length < 2) return '';
-  const en = lang === 'en';
-  const cell = (v: number | undefined): string => (v !== undefined ? formatRub(v) : '—');
-  return `<section class="rs-section">
-  <h2>${en ? 'Salary matrix: role × seniority' : 'Матрица зарплат: направление × грейд'}</h2>
+  if (!rows.length) return "";
+  const en = lang === "en";
+  const fmt = (v: number): string => (en ? `₽${new Intl.NumberFormat("en-US").format(v)}` : formatRub(v));
+  const allVals = rows.flatMap((r) => [r.junior, r.middle, r.senior, r.lead, r.median].filter((v): v is number => v !== undefined));
+  const minVal = Math.min(...allVals);
+  const maxVal = Math.max(...allVals);
+  const cell = (v: number | undefined): string =>
+    v !== undefined ? `<td${heatmapStyle(v, minVal, maxVal)}>${escapeHtml(fmt(v))}</td>` : `<td class="muted">—</td>`;
+
+  return `<section class="rs-section" id="heatmap-role-grade">
+  <h2>${en ? "Salary heatmap: role × seniority" : "Тепловая карта зарплат: направление × грейд"}</h2>
   <p class="muted small">${en
-    ? 'Median monthly pay (RUB) within each role and seniority cell (shown from 5 vacancies with stated pay per cell), salary disclosure rate, remote share, and typical range spread.'
-    : 'Медианная зарплата в месяц внутри каждой пары «направление × уровень» (показывается от 5 вакансий с оплатой в ячейке), доля вакансий с открытой вилкой, удалёнка и типичный разброс внутри вилки.'}</p>
+    ? "Color-coded median monthly pay (RUB) within each role and seniority cell (from 5 paid vacancies per cell), Senior/Junior career multiplier, quartile dispersion (QCD), salary disclosure rate, and range half-spread (±%)."
+    : "Цветовая тепловая карта медианных зарплат в месяц внутри каждой ячейки «направление × уровень» (от 5 вакансий с оплатой в ячейке), мультипликатор роста Senior/Junior, квартильная дисперсия (QCD), доля открытых вилок и типичный полуразмах вилки (±%)."}</p>
   <div style="overflow-x:auto">
     <table class="table">
       <thead>
         <tr>
-          <th>${en ? 'Role' : 'Направление'}</th>
-          <th>${en ? 'Median' : 'Медиана'}</th>
+          <th>${en ? "Role" : "Направление"}</th>
+          <th>${en ? "Median" : "Медиана"}</th>
           <th>Junior</th>
           <th>Middle</th>
           <th>Senior</th>
           <th>Lead</th>
           <th>Senior / Jr</th>
-          <th>${en ? 'Remote' : 'Удалёнка'}</th>
-          <th>${en ? 'Pay stated' : 'С зарплатой'}</th>
-          <th>${en ? 'Range ±%' : 'Разброс вилки'}</th>
+          <th>QCD</th>
+          <th>${en ? "Remote" : "Удалёнка"}</th>
+          <th>${en ? "Pay stated" : "С зарплатой"}</th>
+          <th>${en ? "Range ±%" : "Разброс вилки"}</th>
         </tr>
       </thead>
       <tbody>
@@ -452,25 +482,324 @@ export function renderGradeMatrixSection(
             const href = roleHref(r.slug);
             const name = escapeHtml(roleLabel(r.slug, lang));
             const link = href ? `<a href="${escapeHtml(href)}">${name}</a>` : name;
-            const ratio = r.seniorToJuniorRatio ? `${String(r.seniorToJuniorRatio).replace('.', en ? '.' : ',')}×` : '—';
-            const spread = r.spreadPct !== undefined ? `±${r.spreadPct}%` : '—';
+            const ratio = r.seniorToJuniorRatio ? `${String(r.seniorToJuniorRatio).replace(".", en ? "." : ",")}×` : "—";
+            const qcd = r.qcdPct !== undefined ? (en ? `${r.qcdPct}%` : formatShare(r.qcdPct)) : "—";
+            const spread = r.spreadPct !== undefined ? `±${r.spreadPct}%` : "—";
             return `<tr>
               <td><b>${link}</b> <span class="muted small">(${num(r.withPay)})</span></td>
-              <td><b>${cell(r.median)}</b></td>
-              <td>${cell(r.junior)}</td>
-              <td>${cell(r.middle)}</td>
-              <td>${cell(r.senior)}</td>
-              <td>${cell(r.lead)}</td>
-              <td>${ratio}</td>
+              <td${heatmapStyle(r.median, minVal, maxVal)}><b>${r.median !== undefined ? escapeHtml(fmt(r.median)) : "—"}</b></td>
+              ${cell(r.junior)}
+              ${cell(r.middle)}
+              ${cell(r.senior)}
+              ${cell(r.lead)}
+              <td><b>${ratio}</b></td>
+              <td>${qcd}</td>
               <td>${en ? `${r.remoteShare}%` : formatShare(r.remoteShare)}</td>
               <td>${en ? `${r.payShare}%` : formatShare(r.payShare)}</td>
               <td>${spread}</td>
             </tr>`;
           })
-          .join('')}
+          .join("")}
       </tbody>
     </table>
   </div>
+  ${heatmapLegend(minVal, maxVal, lang)}
+</section>`;
+}
+
+export function renderLanguageMatrixSection(
+  matrix: LanguageMatrixRow[] | undefined,
+  lang: SupportedLang = "ru",
+): string {
+  const rows = (matrix ?? []).filter((r) => r.median !== undefined && (r.junior !== undefined || r.middle !== undefined || r.senior !== undefined || r.lead !== undefined));
+  if (!rows.length) return "";
+  const en = lang === "en";
+  const fmt = (v: number): string => (en ? `₽${new Intl.NumberFormat("en-US").format(v)}` : formatRub(v));
+  const allVals = rows.flatMap((r) => [r.junior, r.middle, r.senior, r.lead, r.median].filter((v): v is number => v !== undefined));
+  const minVal = Math.min(...allVals);
+  const maxVal = Math.max(...allVals);
+  const cell = (v: number | undefined): string =>
+    v !== undefined ? `<td${heatmapStyle(v, minVal, maxVal)}>${escapeHtml(fmt(v))}</td>` : `<td class="muted">—</td>`;
+
+  return `<div style="margin-top:18px" id="heatmap-language-grade">
+  <h3>${en ? "Stack heatmap: programming language × seniority" : "Тепловая карта стека: язык программирования × грейд"}</h3>
+  <p class="muted small">${en
+    ? "How developer pay scales from Junior to Lead within each language ecosystem (cells shown from 3 paid vacancies)."
+    : "Как меняется медианная зарплата разработчика от Junior до Lead внутри каждого языка программирования (ячейка публикуется от 3 вакансий с оплатой)."}</p>
+  <div style="overflow-x:auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>${en ? "Language" : "Язык"}</th>
+          <th>${en ? "Median (all)" : "Медиана"}</th>
+          <th>Junior</th>
+          <th>Middle</th>
+          <th>Senior</th>
+          <th>Lead</th>
+          <th>Senior / Jr</th>
+          <th>QCD</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows
+          .map((r) => {
+            const ratio = r.seniorToJuniorRatio ? `${String(r.seniorToJuniorRatio).replace(".", en ? "." : ",")}×` : "—";
+            const qcd = r.qcdPct !== undefined ? (en ? `${r.qcdPct}%` : formatShare(r.qcdPct)) : "—";
+            return `<tr>
+              <td><b>${escapeHtml(r.language)}</b> <span class="muted small">(${num(r.withPay)})</span></td>
+              <td${heatmapStyle(r.median, minVal, maxVal)}><b>${r.median !== undefined ? escapeHtml(fmt(r.median)) : "—"}</b></td>
+              ${cell(r.junior)}
+              ${cell(r.middle)}
+              ${cell(r.senior)}
+              ${cell(r.lead)}
+              <td><b>${ratio}</b></td>
+              <td>${qcd}</td>
+            </tr>`;
+          })
+          .join("")}
+      </tbody>
+    </table>
+  </div>
+</div>`;
+}
+
+export function renderRegionalComparisonSection(
+  comparison: RegionalComparisonRow[] | undefined,
+  regionalMatrix: RegionalMatrixRow[] | undefined,
+  byCity: Slice[] | undefined,
+  roleHref: (slug: string) => string | undefined,
+  lang: SupportedLang = "ru",
+): string {
+  const compRows = (comparison ?? []).filter((r) => r.pay.median !== undefined);
+  const matRows = (regionalMatrix ?? []).filter((r) => r.median !== undefined);
+  if (!compRows.length && !matRows.length) return "";
+  const en = lang === "en";
+  const fmt = (v: number): string => (en ? `₽${new Intl.NumberFormat("en-US").format(v)}` : formatRub(v));
+  const segLabelEn: Record<string, string> = {
+    moscow: "Moscow (on-site & hybrid)",
+    spb: "Saint Petersburg (on-site & hybrid)",
+    regions: "Other Russian cities (on-site & hybrid)",
+    remote: "All-Russia Remote (work from anywhere)",
+  };
+  const signPct = (v: number): string => `${v > 0 ? "+" : v < 0 ? (en ? "-" : "−") : ""}${Math.abs(v)}%`;
+
+  const allMatVals = matRows.flatMap((r) => [r.moscow, r.spb, r.regions, r.remote].filter((v): v is number => v !== undefined));
+  const minMat = allMatVals.length ? Math.min(...allMatVals) : 50_000;
+  const maxMat = allMatVals.length ? Math.max(...allMatVals) : 350_000;
+  const matCell = (v: number | undefined, n: number): string =>
+    v !== undefined
+      ? `<td${heatmapStyle(v, minMat, maxMat)} title="n = ${n}"><b>${escapeHtml(fmt(v))}</b> <span class="muted small">(${n})</span></td>`
+      : `<td class="muted">—</td>`;
+
+  const cityRows = (byCity ?? []).map((s) => ({
+    label: en ? (translateCity(s.label, "en") ?? s.label) : s.label,
+    n: s.n,
+    pay: s.pay,
+  }));
+
+  return `<section class="rs-section" id="regional-analysis">
+  <h2>${en ? "Regional econometrics, geography heatmap & cities" : "Сравнение регионов, тепловая карта географии и города"}</h2>
+  <p class="muted small">${en
+    ? "Decomposing the Russian labour market into four structural segments: Moscow on-site, Saint Petersburg on-site, regional on-site markets, and the unified national remote market. In engineering roles, national remote work pays above Moscow on-site (due to senior composition), whereas in support and marketing it pays below Moscow (regional wage arbitrage)."
+    : "Декомпозиция рынка на четыре сегмента: московский офис, петербургский офис, локальный найм в регионах РФ и всероссийский рынок удалёнки. В инженерных и продуктовых ролях удалёнка платит выше московского офиса (за счёт концентрации Senior-вакансий) и даёт +80..+173% к региональному офису без релокации; в линейной поддержке и маркетинге удалёнка, напротив, используется для регионального зарплатного арбитража."}</p>
+  ${compRows.length ? `<div style="overflow-x:auto;margin-top:12px">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>${en ? "Market segment" : "Сегмент рынка"}</th>
+          <th>${en ? "Vacancies" : "Вакансий"}</th>
+          <th>${en ? "Median (all)" : "Медиана (все)"}</th>
+          <th>${en ? "Middle half (P25–P75)" : "Коридор P25–P75"}</th>
+          <th>${en ? "IT median" : "Медиана в IT"}</th>
+          <th>${en ? "Parity vs Moscow (IT)" : "Паритет к Москве (IT)"}</th>
+          <th>${en ? "Adjusted gap vs Moscow (CMH)" : "При той же роли и грейде к Москве"}</th>
+          <th>QCD</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${compRows
+          .map((r) => {
+            const pRange = r.pay.p25 && r.pay.p75 ? `${escapeHtml(fmt(r.pay.p25))} – ${escapeHtml(fmt(r.pay.p75))}` : "—";
+            const parity = r.itMoscowParityPct !== undefined ? `${r.itMoscowParityPct}%` : r.moscowParityPct !== undefined ? `${r.moscowParityPct}%` : "—";
+            const adj =
+              r.key === "moscow"
+                ? (en ? "100% (base)" : "база (0%)")
+                : r.adjustedVsMoscow
+                  ? `<b>${signPct(r.adjustedVsMoscow.pct)}</b> <span class="muted small">(n=${num(r.adjustedVsMoscow.n)})</span>`
+                  : "—";
+            const qcd = r.qcdPct !== undefined ? (en ? `${r.qcdPct}%` : formatShare(r.qcdPct)) : "—";
+            return `<tr>
+              <td><b>${escapeHtml(en ? (segLabelEn[r.key] ?? r.label) : r.label)}</b></td>
+              <td>${num(r.n)} <span class="muted small">(${en ? `${r.sharePct}%` : formatShare(r.sharePct)})</span></td>
+              <td><b>${r.pay.median ? escapeHtml(fmt(r.pay.median)) : "—"}</b></td>
+              <td class="small">${pRange}</td>
+              <td><b>${r.itPay.median ? escapeHtml(fmt(r.itPay.median)) : "—"}</b></td>
+              <td>${parity}</td>
+              <td>${adj}</td>
+              <td>${qcd}</td>
+            </tr>`;
+          })
+          .join("")}
+      </tbody>
+    </table>
+  </div>` : ""}
+  ${matRows.length ? `<h3 style="margin-top:20px">${en ? "Geography heatmap: role × region & remote work" : "Тепловая карта географии: направление × регион и удалёнка"}</h3>
+  <p class="muted small">${en
+    ? "Median monthly pay across Moscow on-site, Saint Petersburg on-site, regional Russian offices, and all-Russia remote work (from 5 paid vacancies per cell). The last two columns show the regional office discount vs Moscow and the remote work premium over a regional office without relocation."
+    : "Медианная зарплата в месяц по четырём гео-сегментам внутри каждого направления (от 5 вакансий с оплатой в ячейке). Два правых столбца показывают дисконт регионального офиса к Москве и премию всероссийской удалёнки к локальному офису в регионе без переезда."}</p>
+  <div style="overflow-x:auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>${en ? "Role" : "Направление"}</th>
+          <th>${en ? "Moscow (office)" : "Москва (офис)"}</th>
+          <th>${en ? "St. Petersburg" : "СПб (офис)"}</th>
+          <th>${en ? "Regions (office)" : "Регионы РФ (офис)"}</th>
+          <th>${en ? "Remote (RU)" : "Удалёнка (РФ)"}</th>
+          <th>${en ? "Regions vs Moscow" : "Регионы к Москве"}</th>
+          <th>${en ? "Remote vs Regions" : "Премия удалёнки к региону"}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${matRows
+          .slice(0, 16)
+          .map((r) => {
+            const href = roleHref(r.slug);
+            const name = escapeHtml(roleLabel(r.slug, lang));
+            const link = href ? `<a href="${escapeHtml(href)}">${name}</a>` : name;
+            const regMsk = r.regVsMskPct !== undefined ? signPct(r.regVsMskPct) : "—";
+            const remReg =
+              r.remoteVsRegPct !== undefined
+                ? `<b style="color:${r.remoteVsRegPct > 0 ? "var(--emerald)" : "inherit"}">${signPct(r.remoteVsRegPct)}</b>`
+                : "—";
+            return `<tr>
+              <td><b>${link}</b></td>
+              ${matCell(r.moscow, r.moscowN)}
+              ${matCell(r.spb, r.spbN)}
+              ${matCell(r.regions, r.regionsN)}
+              ${matCell(r.remote, r.remoteN)}
+              <td>${regMsk}</td>
+              <td>${remReg}</td>
+            </tr>`;
+          })
+          .join("")}
+      </tbody>
+    </table>
+  </div>
+  ${heatmapLegend(minMat, maxMat, lang)}` : ""}
+  ${cityRows.length >= 3 ? `<h3 style="margin-top:20px">${en ? "Pay across major cities & regional IT hubs" : "Зарплаты по крупнейшим городам и ИТ-хабам"}</h3>
+  <p class="muted small">${en
+    ? "Cities with at least 10 paid vacancies over the period: median, 95% confidence interval, and interquartile range."
+    : "Города с не менее чем 10 оплачиваемыми вакансиями за период: медиана, 95% доверительный интервал и межквартильный размах."}</p>
+  ${rangeChart(cityRows, { lang, unit: fmt })}` : ""}
+</section>`;
+}
+
+export function renderEconometricsSection(
+  econ: MarketEconometrics | undefined,
+  lang: SupportedLang = "ru",
+): string {
+  if (!econ || !econ.all.p50) return "";
+  const en = lang === "en";
+  const fmt = (v: number | undefined): string =>
+    v !== undefined ? (en ? `₽${new Intl.NumberFormat("en-US").format(v)}` : formatRub(v)) : "—";
+  const { all, it, employerConcentration, gradeTransparency } = econ;
+  const gradeLabelEn: Record<string, string> = { intern: "Intern", junior: "Junior", middle: "Middle", senior: "Senior", lead: "Lead" };
+
+  return `<section class="rs-section" id="econometrics">
+  <h2>${en ? "Econometric profile, inequality & market concentration" : "Эконометрический профиль, индексы неравенства и концентрация рынка"}</h2>
+  <p class="muted small">${en
+    ? "Non-parametric distributional diagnostics used in labour economics: decile structure (P10–P90), the P90/P10 decile ratio, the Gini coefficient of offered pay, quartile coefficient of dispersion (QCD), Bowley and Kelley skewness indices, and the Herfindahl–Hirschman employer concentration index (HHI)."
+    : "Непараметрическая диагностика распределения зарплатных предложений по стандартам экономики труда: децильный профиль (P10–P90), коэффициент фондов P90/P10, индекс концентрации Джини (G), коэффициент квартильной дисперсии (QCD), индексы правосторонней асимметрии Боули и Келли, а также индекс концентрации нанимателей Херфиндаля — Хиршмана (HHI)."}</p>
+  <div style="overflow-x:auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>${en ? "Econometric metric" : "Показатель"}</th>
+          <th>${en ? "All vacancies (RUB)" : "Весь рынок вакансий"}</th>
+          <th>${en ? "IT & Tech sector" : "IT-сектор"}</th>
+          <th>${en ? "Economic interpretation" : "Экономический смысл"}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>${en ? "Sample size (paid vacancies, n)" : "Выборка вакансий с оплатой (n)"}</b></td>
+          <td>${num(all.n)}</td>
+          <td>${num(it.n)}</td>
+          <td class="small muted">${en ? "Deduplicated monthly RUB offers" : "Дедуплицированные месячные предложения в рублях"}</td>
+        </tr>
+        <tr>
+          <td><b>${en ? "Decile corridor P10 — P90" : "Децильный коридор P10 — P90"}</b></td>
+          <td>${escapeHtml(fmt(all.p10))} — ${escapeHtml(fmt(all.p90))}</td>
+          <td><b>${escapeHtml(fmt(it.p10))} — ${escapeHtml(fmt(it.p90))}</b></td>
+          <td class="small muted">${en ? "80% of all market offers fall within this band" : "Внутри этого коридора находится 80% всех предложений рынка"}</td>
+        </tr>
+        <tr>
+          <td><b>${en ? "Median (P50) vs 5% Trimmed Mean" : "Медиана (P50) и 5% усечённое среднее"}</b></td>
+          <td>${escapeHtml(fmt(all.p50))} / ${escapeHtml(fmt(all.trimmedMean))} ${all.meanToMedianPct !== undefined ? `(+${all.meanToMedianPct}%)` : ""}</td>
+          <td><b>${escapeHtml(fmt(it.p50))} / ${escapeHtml(fmt(it.trimmedMean))}</b> ${it.meanToMedianPct !== undefined ? `(+${it.meanToMedianPct}%)` : ""}</td>
+          <td class="small muted">${en ? "Gap between mean and median reflects right-tail senior salaries" : "Превышение среднего над медианой из-за правого хвоста Senior/Lead вилок"}</td>
+        </tr>
+        <tr>
+          <td><b>${en ? "Decile dispersion ratio (P90 / P10)" : "Децильный коэффициент (P90 / P10)"}</b></td>
+          <td><b>${all.decileRatio !== undefined ? `${all.decileRatio}×` : "—"}</b></td>
+          <td><b>${it.decileRatio !== undefined ? `${it.decileRatio}×` : "—"}</b></td>
+          <td class="small muted">${en ? "Pay ratio between top 10% and bottom 10% of vacancies" : "Во сколько раз порог топ-10% вакансий выше нижних 10%"}</td>
+        </tr>
+        <tr>
+          <td><b>${en ? "Quartile ratio (P75 / P25) & QCD" : "Квартильный размах (P75 / P25) и QCD"}</b></td>
+          <td>${all.quartileRatio !== undefined ? `${all.quartileRatio}×` : "—"} (${all.qcdPct !== undefined ? `${all.qcdPct}%` : "—"})</td>
+          <td><b>${it.quartileRatio !== undefined ? `${it.quartileRatio}×` : "—"} (${it.qcdPct !== undefined ? `${it.qcdPct}%` : "—"})</b></td>
+          <td class="small muted">${en ? "Robust non-parametric relative dispersion (P75−P25)/(P75+P25)" : "Относительный разброс центральной половины рынка без влияния выбросов"}</td>
+        </tr>
+        <tr>
+          <td><b>${en ? "Gini inequality index (G)" : "Индекс неравенства Джини (G)"}</b></td>
+          <td><b>${all.gini !== undefined ? all.gini.toFixed(3) : "—"}</b></td>
+          <td><b>${it.gini !== undefined ? it.gini.toFixed(3) : "—"}</b></td>
+          <td class="small muted">${en ? "0 = uniform pay, 1 = total concentration; IT is wider due to grade progression" : "0 — полное равенство, 1 — максимальная концентрация; в IT выше из-за разрыва Junior–Lead"}</td>
+        </tr>
+        <tr>
+          <td><b>${en ? "Bowley (S_B) / Kelley (S_K) skewness" : "Асимметрия Боули (S_B) / Келли (S_K)"}</b></td>
+          <td>${all.bowleySkew ?? "—"} / ${all.kelleySkew ?? "—"}</td>
+          <td><b>${it.bowleySkew ?? "—"} / ${it.kelleySkew ?? "—"}</b></td>
+          <td class="small muted">${en ? "Positive values (> 0) confirm right-skewed log-normal pay structure" : "Значения > 0 подтверждают правостороннюю скошенность распределения"}</td>
+        </tr>
+        <tr>
+          <td><b>${en ? "Employer concentration (HHI / CR5 / CR10)" : "Концентрация нанимателей (HHI / CR5 / CR10)"}</b></td>
+          <td colspan="2"><b>HHI = ${num(employerConcentration.hhi)}</b> · CR₅ = ${en ? `${employerConcentration.cr5Pct}%` : formatShare(employerConcentration.cr5Pct)} · CR₁₀ = ${en ? `${employerConcentration.cr10Pct}%` : formatShare(employerConcentration.cr10Pct)} <span class="muted small">(${num(employerConcentration.totalEmployers)} ${en ? "IT employers" : "IT-нанимателей"})</span></td>
+          <td class="small muted">${employerConcentration.hhi < 150 ? (en ? "HHI < 150 — highly competitive, non-monopolized demand" : "HHI < 150 — высококонкурентный рынок без доминирования одного нанимателя") : (en ? "Moderate concentration among largest ecosystems" : "Умеренная концентрация спроса у крупнейших экосистем")}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  ${gradeTransparency.length >= 3 ? `<h3 style="margin-top:18px">${en ? "Salary transparency & bargaining range width by seniority" : "Градиент зарплатной прозрачности и ширина вилки по грейдам"}</h3>
+  <p class="muted small">${en
+    ? "Empirical disclosure bias: employers state salary ranges much more often for Junior/Intern positions than for Senior/Lead roles, while internal pay dispersion (QCD) widens at higher grades."
+    : "Эмпирическая проверка смещения раскрытия (Disclosure Bias): на младших грейдах работодатели публикуют вилку открыто в большинстве вакансий, тогда как на уровнях Senior и Lead доля скрытых окладов («по результатам собеседования») растёт."}</p>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>${en ? "Seniority grade" : "Уровень (грейд)"}</th>
+        <th>${en ? "IT vacancies" : "IT-вакансий"}</th>
+        <th>${en ? "Pay stated (%)" : "Раскрытие вилки (%)"}</th>
+        <th>${en ? "Median (RUB)" : "Медиана"}</th>
+        <th>${en ? "Bargaining spread (±%)" : "Полуразмах вилки (±%)"}</th>
+        <th>${en ? "Within-grade QCD" : "Внутригрейдовая дисперсия QCD"}</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${gradeTransparency
+        .map((g) => `<tr>
+          <td><b>${escapeHtml(en ? (gradeLabelEn[g.grade] ?? g.label) : g.label)}</b></td>
+          <td>${num(g.n)}</td>
+          <td><b>${en ? `${g.payShare}%` : formatShare(g.payShare)}</b> <span class="muted small">(${num(g.withPay)})</span></td>
+          <td><b>${fmt(g.median)}</b></td>
+          <td>${g.spreadPct !== undefined ? `±${g.spreadPct}%` : "—"}</td>
+          <td>${g.qcdPct !== undefined ? (en ? `${g.qcdPct}%` : formatShare(g.qcdPct)) : "—"}</td>
+        </tr>`)
+        .join("")}
+    </tbody>
+  </table>` : ""}
 </section>`;
 }
 
@@ -587,6 +916,7 @@ ${renderGradeMatrixSection(jobs.gradeMatrix, roleHref, 'ru')}
   <h2>По языку программирования</h2>
   <p class="muted small">Вакансии разработчиков, где язык назван в заголовке или в навыках.</p>
   ${rangeChart(sliceRows(jobs.byLanguage))}
+  ${renderLanguageMatrixSection(jobs.languageMatrix, 'ru')}
 </section>
 
 <section class="rs-section">
@@ -595,10 +925,14 @@ ${renderGradeMatrixSection(jobs.gradeMatrix, roleHref, 'ru')}
   <p class="small">Удалённую работу допускают <b>${formatShare(jobs.remote.share)}</b> вакансий.${jobs.remote.remote.median && jobs.remote.office.median ? ` Медиана: ${formatRub(jobs.remote.remote.median)} с удалёнкой и ${formatRub(jobs.remote.office.median)} без неё.` : ''}${jobs.remote.adjusted ? ` Вакансии с удалёнкой в среднем старше по уровню, поэтому важнее другое сравнение: при той же роли и уровне разница ${signedPct(jobs.remote.adjusted.pct)} (сравнение по ${num(jobs.remote.adjusted.n)} вакансиям).` : ''}</p>
 </section>
 
+${renderRegionalComparisonSection(jobs.regionalComparison, jobs.regionalMatrix, jobs.byCity, roleHref, 'ru')}
+
 <section class="rs-section">
   <h2>Распределение зарплат</h2>
   ${histogram(jobs.histogram)}
 </section>
+
+${renderEconometricsSection(jobs.econometrics, 'ru')}
 
 <section class="rs-section">
   <h2>Навыки и зарплатная премия</h2>
@@ -986,6 +1320,10 @@ export function renderMethodologyPage(options: { baseUrl: string; version: strin
       <p><code>adjustedGap = exp( sum_c( w_c * ln(median_{c,1} / median_{c,0}) ) / sum_c(w_c) ) - 1</code></p>
       Показатель публикуется только при суммарном весе сопоставленных ячеек $\sum w_c \ge 30$. По этой же формуле рассчитывается зарплатная премия отдельных технологий и навыков.</li>
     <li><b>Недельный индекс зарплат с фиксированной корзиной ролей (индекс Ласпейреса):</b> чтобы недельный график зарплат не скакал из-за того, что в одну неделю пришло больше вакансий курьеров или стажёров, в <code>weeklyIndexed</code> фиксируются базовые веса направлений $w_r = N_r / \sum N_j$ (для ролей с $N_r \ge 30$). В каждую неделю средневзвешенная медиана считается в неизменной структуре ролей (база первой недели = 100).</li>
+    <li><b>Индекс концентрации Джини ($G$) и квартильная дисперсия ($\text{QCD}$):</b> для оценки зарплатного расслоения рассчитываются децильный коэффициент фондов $P_{90}/P_{10}$, робастный коэффициент квартильной вариации $\text{QCD} = \frac{P_{75}-P_{25}}{P_{75}+P_{25}}$ и непараметрический индекс Джини по упорядоченному ряду окладов $x_{(1)} \le \dots \le x_{(n)}$:
+      <p><code>G = sum_{i=1..n}( (2*i - n - 1) * x_(i) ) / ( n * sum_{i=1..n}(x_(i)) )</code></p>
+    </li>
+    <li><b>Асимметрия Боули ($S_B$) и Келли ($S_K$) и индекс Херфиндаля — Хиршмана ($\text{HHI}$):</b> правосторонняя скошенность зарплатных распределений измеряется квантильными индексами $S_B = \frac{(P_{75}-P_{50})-(P_{50}-P_{25})}{P_{75}-P_{25}}$ и $S_K = \frac{(P_{90}-P_{50})-(P_{50}-P_{10})}{P_{90}-P_{10}}$, а монополизация спроса со стороны работодателей — индексом $\text{HHI} = \sum s_i^2 \times 10\,000$, где $s_i$ — доля вакансий $i$-го нанимателя.</li>
   </ul>
 
   <h2 id="index">8. Индекс openradar (панельный индекс рыночной активности)</h2>
