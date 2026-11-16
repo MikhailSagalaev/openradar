@@ -4432,7 +4432,7 @@ function renderUserTelegram(data: NonNullable<ProfilePageData['telegram']>, lang
       : 'Link your Telegram and openradar reads the folder or channels you pick every 15 minutes and adds the orders it finds to the shared feed in your name, for points.'}</p>
     <ul>
       <li>${ru ? 'Читаются <strong>только публичные</strong> каналы и группы — с адресом вида @name. Закрытые чаты и переписка с людьми не читаются никогда.' : 'Only <strong>public</strong> channels and groups (with an @name) are read. Private chats and conversations with people are never read.'}</li>
-      <li>${ru ? 'Сервер получает доступ к аккаунту: сессия хранится зашифрованной (AES-256-GCM) и расшифровывается только на время чтения. Пишет он ничего не будет.' : 'The server gets access to the account: the session is stored encrypted (AES-256-GCM) and decrypted only while reading. It never writes anything.'}</li>
+      <li>${ru ? 'Сервер получает доступ к аккаунту: сессия хранится зашифрованной (AES-256-GCM) и расшифровывается только на время чтения. В сам аккаунт сервер ничего не пишет: не отправляет сообщений и не отмечает чаты прочитанными.' : 'The server gets access to the account: the session is stored encrypted (AES-256-GCM) and decrypted only while reading. It never writes anything to the account: no messages sent, no chats marked as read.'}</li>
       <li>${ru ? '«Отключить» завершает сессию в самом Telegram и удаляет её отсюда. Её же видно и можно закрыть в Telegram: Настройки → Устройства.' : 'Unlink ends the session in Telegram itself and deletes it here. It is also listed in Telegram: Settings → Devices.'}</li>
     </ul>
   </details>
