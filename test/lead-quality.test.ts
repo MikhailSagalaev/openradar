@@ -57,6 +57,8 @@ describe('leadQuality', () => {
     expect(leadQuality(card())).toEqual(leadQuality(card()));
     expect(leadQuality(card(empty)).score).toBe(0);
     expect(leadQuality(card({ ...empty, author: 'Вакансии Frontend', sourceKind: 'telegram' })).checks.employer).toBe(false);
+    expect(leadQuality(card({ ...empty, skills: ['Python'], text: 'Компания: Яндекс' })).checks.employer).toBe(false);
+    expect(leadQuality(card({ ...empty, skills: ['Python'], metadata: { facts: { company: 'Яндекс' } } })).score).toBe(1);
     expect(leadQuality(card({ ...empty, author: 'Acme GmbH', sourceKind: 'hh' })).checks.employer).toBe(true);
     expect(leadQuality(card({ ...empty, company: 'acme', sourceKind: 'ats', atsCompanies: ['acme'] })).checks.employer).toBe(false);
     expect(leadQuality(card({ ...empty, author: 'Acme GmbH', sourceKind: 'ats', atsCompanies: ['acme=Acme GmbH'] })).checks.employer).toBe(true);

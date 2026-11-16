@@ -8,6 +8,7 @@
  */
 import type { AccessPolicy } from '../core/access.ts';
 import type { Lead, SourceRecord } from '../core/types.ts';
+import { EMPLOYER_AUTHOR_KINDS } from '../core/employer-kinds.ts';
 import { atsCompaniesFromConfig } from '../core/lead-quality.ts';
 import { isIndexable, NODE_INDEX_POLICY, validThrough, w3cDateTime, type TtlEnv } from '../core/indexable.ts';
 import { companiesOf } from '../sources/ats.ts';
@@ -19,24 +20,6 @@ const PLACEHOLDER_ORG = /^(?:unknown|n\/?a|none|null|undefined|openradar|confide
 const PLACEHOLDER_CITY = /^(?:online|онлайн|remote|удал[её]нн?(?:о|ая)?|удаленка|anywhere|worldwide|global|не\s*указан(?:о|а)?|n\/?a|—|–|-)$/i;
 
 export type JobPostingSkipReason = 'not-indexable' | 'no-organization' | 'remote-without-location' | 'no-location';
-
-/**
- * Adapters that put the employer in `author`. On every other source the author is a
- * person, a handle or a channel title, and must not become hiringOrganization.
- */
-export const EMPLOYER_AUTHOR_KINDS = new Set([
-  'ats',
-  'adzuna',
-  'arbeitnow',
-  'alexandria',
-  'workingnomads',
-  'hh',
-  'remoteok',
-  'remotive',
-  'trudvsem',
-  'sitemap',
-  'json',
-]);
 
 const EMPLOYMENT_TYPES = new Set([
   'FULL_TIME', 'PART_TIME', 'CONTRACTOR', 'TEMPORARY', 'INTERN', 'VOLUNTEER', 'PER_DIEM', 'OTHER',

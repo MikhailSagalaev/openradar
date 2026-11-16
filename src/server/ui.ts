@@ -3533,7 +3533,7 @@ function renderLeadOrigin(lead: Lead, source: SourceRecord | undefined, lang: Su
   const rows: string[] = [];
   const platform = source
     ? translateSourceTitle(source.title, lang)
-    : (lead.sourceRef?.channelTitle || lead.sourceRef?.platform || lead.sourceRef?.channel || (lead.sourceId?.trim() ? lead.sourceId : ''));
+    : (lead.sourceRef?.channelTitle || lead.sourceRef?.platform || lead.sourceRef?.channel || '');
   if (platform) {
     const name = escapeHtml(platform);
     const linked = source ? `<a href="/sources/${escapeHtml(source.id)}">${name}</a>` : name;

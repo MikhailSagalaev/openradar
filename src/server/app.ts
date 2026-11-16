@@ -3781,14 +3781,18 @@ export function createApp(runtime: Runtime): Hono {
     if (hit && Date.now() - hit.at < CATALOG_CACHE_MS) return { leads: hit.leads, capped: hit.capped };
     const sources = new Map((await runtime.store.listSources()).map((item) => [item.id, item]));
     const fetched = await feedFor(runtime, viewer, { ...filters, limit: CATALOG_SAMPLE });
-    const leads = fetched.filter((lead) => {
-      const itemSource = sources.get(lead.sourceId);
-      return isIndexable({
-        ...lead,
-        sourceKind: itemSource?.kind,
-        atsCompanies: atsCompaniesFromConfig(itemSource?.kind, itemSource?.config),
-      }, runtime.env, runtime.access);
-    });
+    // Guests only see what the index would keep. A member's catalog is their own feed:
+    // fresh leads and leads under the quality threshold stay on the page.
+    const leads = viewer.tier === 'guest'
+      ? fetched.filter((lead) => {
+        const itemSource = sources.get(lead.sourceId);
+        return isIndexable({
+          ...lead,
+          sourceKind: itemSource?.kind,
+          atsCompanies: atsCompaniesFromConfig(itemSource?.kind, itemSource?.config),
+        }, runtime.env, runtime.access);
+      })
+      : fetched;
     const capped = fetched.length >= CATALOG_SAMPLE;
     if (catalogCache.size > 40) catalogCache.clear();
     catalogCache.set(key, { at: Date.now(), leads, capped });

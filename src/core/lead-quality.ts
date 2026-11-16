@@ -9,6 +9,7 @@
  * or the author only for source kinds that put the employer there. A Telegram
  * channel title, a bare contact, and an ATS board slug do not count.
  */
+import { EMPLOYER_AUTHOR_KINDS } from './employer-kinds.ts';
 import type { SourceConfig } from './types.ts';
 
 /** How many checks `leadQuality` scores. */
@@ -20,24 +21,6 @@ export const QUALITY_POINTS = 4;
  * `0` turns the gate off.
  */
 export const DEFAULT_INDEXABLE_MIN_QUALITY = 2;
-
-/**
- * Adapters that put the employer in `author`. Kept in step with
- * `EMPLOYER_AUTHOR_KINDS` in `src/server/jobposting.ts`.
- */
-const EMPLOYER_AUTHOR_KINDS = new Set([
-  'ats',
-  'adzuna',
-  'arbeitnow',
-  'alexandria',
-  'workingnomads',
-  'hh',
-  'remoteok',
-  'remotive',
-  'trudvsem',
-  'sitemap',
-  'json',
-]);
 
 const PLACEHOLDER_NAME =
   /^(?:unknown|n\/?a|none|null|undefined|openradar|confidential|не\s*указан(?:о|а)?|неизвестно|нет(?:\s+данных)?|—|–|-|\.+)$/i;
@@ -98,35 +81,16 @@ function isAtsSlug(name: string, entries: string[] | undefined): boolean {
   return atsBoards(entries).some((company) => !company.name && company.slug === name.toLowerCase());
 }
 
-function companyFromText(text: string | undefined): string | undefined {
-  const match = (text || '').match(
-    /(?:Компания|Работодатель|Company)\s*:\s*([^·\n\r|]{1,60}?)(?=\s*(?:Формат|Локация|ЗП|З\/П|График|Занятость|Вилка|Опыт|Стек|Требования|Обязанности|Условия|О нас|Всем привет|Мы\b|Контакты|$|[·\n\r|]))/iu,
-  );
-  if (!match?.[1]) return undefined;
-  const raw = match[1].trim().replace(/^[\s«"„“]+|[\s»"”.,;]+$/g, '').slice(0, 45).trim();
-  return cleanName(raw, 45);
-}
-
-function factsCompany(metadata: Record<string, unknown> | undefined): string | undefined {
-  const facts = metadata?.facts;
-  if (!facts || typeof facts !== 'object') return undefined;
-  return cleanName((facts as { company?: unknown }).company);
-}
-
 /**
- * Same employer decision as JobPosting `organizationOf`: company, page facts,
- * a «Компания:» line, then the author for allowlisted source kinds.
- * An ATS slug and a channel title (any other kind) are not an employer.
+ * Employer for the index threshold: the stored `company`, or `author` on an allowlisted
+ * source. A «Компания:» line and `metadata.facts.company` are not stored columns, and a
+ * guest never sees facts, so they stay out of this check. JobPosting still reads them
+ * when it builds the organization name.
  */
-/** The employer name JobPosting would use, or undefined when the lead does not name one. */
 export function employerLabel(lead: LeadQualityInput): string | undefined {
-  const entries = lead.atsCompanies;
-  const accept = (name: string | undefined): string | undefined =>
-    name && !(lead.sourceKind === 'ats' && isAtsSlug(name, entries)) ? name : undefined;
-  return accept(cleanName(lead.company))
-    || accept(factsCompany(lead.metadata))
-    || accept(companyFromText(lead.text))
-    || authorEmployer(lead);
+  const company = cleanName(lead.company);
+  if (company && !(lead.sourceKind === 'ats' && isAtsSlug(company, lead.atsCompanies))) return company;
+  return authorEmployer(lead);
 }
 
 function authorEmployer(lead: LeadQualityInput): string | undefined {
