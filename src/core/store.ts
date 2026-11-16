@@ -219,10 +219,9 @@ export interface UserVoteResult {
 export interface SitemapLeadRef {
   id: string;
   createdAt: string;
-  /** Set only when the lead was changed after it was stored. */
-  updatedAt?: string;
   type?: LeadType;
   state?: LeadState;
+  status?: LeadStatus;
   score?: number;
 }
 
@@ -668,7 +667,7 @@ export interface Store extends HubStore {
    * Every lead that is not closed and was created at or after `createdAfter`, without the
    * feed's page size. The sitemap applies `isIndexable` itself (expiry differs by type).
    */
-  listLeadsForSitemap?(options?: { createdAfter?: string }): Promise<SitemapLeadRef[]>;
+  listLeadsForSitemap?(options?: { createdAfter?: string; createdBefore?: string }): Promise<SitemapLeadRef[]>;
 
   /**
    * How many leads match these options, without loading them: the same filters as

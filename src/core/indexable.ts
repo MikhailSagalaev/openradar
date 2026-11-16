@@ -2,9 +2,14 @@
  * Whether a lead may be indexed. Meta robots, the sitemap and JobPosting all ask
  * this function, so a closed or expired lead cannot stay in one surface and leave another.
  *
+ * A guest who would get 404 must not find the URL in the sitemap. `isIndexable` is
+ * therefore `viewerCanSeeLead` for a guest, plus "still in the feed" (not expired)
+ * and `state === 'active'` (a closed lead stays readable by link, but leaves the index).
+ *
  * A quality threshold, once one is chosen, belongs here and nowhere else.
  */
-import type { LeadState, LeadType } from './types.ts';
+import type { Lead, LeadState, LeadStatus, LeadType } from './types.ts';
+import { DEFAULT_TIER_DELAY_MIN, viewerCanSeeLead, type AccessPolicy } from './access.ts';
 import { feedMaxAge } from '../pipeline/liveness.ts';
 
 /** The two feed age limits. `feedMaxAge` is the only reader of these numbers. */
@@ -24,6 +29,11 @@ export function indexableMinScore(): number | undefined {
   return undefined;
 }
 
+/** A self-hosted node: guests have no delay. Hub mode passes the runtime policy instead. */
+export const NODE_INDEX_POLICY: AccessPolicy = { mode: 'node', delays: { ...DEFAULT_TIER_DELAY_MIN } };
+
+const GUEST = { tier: 'guest' } as const;
+
 export function isExpired(
   lead: { type?: LeadType; createdAt: string },
   env: TtlEnv,
@@ -36,11 +46,14 @@ export function isExpired(
 }
 
 export function isIndexable(
-  lead: { state?: LeadState; type?: LeadType; createdAt: string; score?: number },
+  lead: { state?: LeadState; status?: LeadStatus; type?: LeadType; createdAt: string; score?: number },
   env: TtlEnv,
+  policy: AccessPolicy = NODE_INDEX_POLICY,
   now: number = Date.now(),
 ): boolean {
-  if (lead.state === 'closed') return false;
+  const state = lead.state ?? 'active';
+  if (state !== 'active') return false;
+  if (!viewerCanSeeLead(GUEST, lead as Lead, policy, new Date(now))) return false;
   if (isExpired(lead, env, now)) return false;
   const minScore = indexableMinScore();
   if (minScore !== undefined && (lead.score ?? 0) < minScore) return false;
@@ -77,27 +90,12 @@ export function validThrough(lead: { type?: LeadType; createdAt: string }, env: 
 }
 
 /**
- * Sitemap lastmod. `updatedAt` counts only when the lead was actually changed after
- * it was stored; otherwise the date is `createdAt`.
+ * Sitemap lastmod. Leads have no maintained update time (`last_seen` is the insert
+ * default and is not an edit), so the date is `createdAt`.
  */
-export function leadLastmod(lead: { createdAt: string; updatedAt?: string }): string {
-  const created = Date.parse(lead.createdAt);
-  const updated = lead.updatedAt ? Date.parse(lead.updatedAt) : NaN;
-  const ms = Number.isFinite(updated) && updated > created ? updated : created;
-  return w3cDateTime(Number.isFinite(ms) ? ms : Date.now());
-}
-
-/**
- * `last_seen` is filled at insert, a moment after `created_at`. That is not an edit.
- * A later write (more than a minute after creation) is.
- */
-export function updatedAtIfChanged(createdAt: string, candidate: string | null | undefined): string | undefined {
-  if (!candidate) return undefined;
+export function leadLastmod(createdAt: string): string {
   const created = Date.parse(createdAt);
-  const updated = Date.parse(candidate);
-  if (!Number.isFinite(created) || !Number.isFinite(updated)) return undefined;
-  if (updated - created <= 60_000) return undefined;
-  return new Date(updated).toISOString();
+  return w3cDateTime(Number.isFinite(created) ? created : Date.now());
 }
 
 /** ISO week of an instant, in UTC: `2026-W45`. */

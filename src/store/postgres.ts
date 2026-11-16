@@ -52,7 +52,6 @@ import { BROKEN_AFTER, countFailedInRow } from '../core/source-health.ts';
 import type { SubscriptionRecord } from '../core/subscriptions.ts';
 import type { VisaSponsorNote } from '../research/visa-sponsors.ts';
 
-import { updatedAtIfChanged } from '../core/indexable.ts';
 import { normalizeSalary } from '../core/salary.ts';
 import { MIN_CONFIDENCE, type ModelFacts } from '../research/model.ts';
 import { checkMigrations } from './migrator.ts';
@@ -1209,28 +1208,31 @@ export class PostgresStore implements Store {
     return this.queryLeads(options, false);
   }
 
-  async listLeadsForSitemap(options: { createdAfter?: string } = {}): Promise<SitemapLeadRef[]> {
+  async listLeadsForSitemap(options: { createdAfter?: string; createdBefore?: string } = {}): Promise<SitemapLeadRef[]> {
     const params: unknown[] = [];
-    const where = ['(state IS NULL OR state <> \'closed\')'];
-    if (options.createdAfter) {
+    const where = [`state = 'active'`, `status <> 'rejected'`];
+    if (options.createdAfter && options.createdBefore) {
+      params.push(options.createdAfter, options.createdBefore);
+      where.push(`created_at BETWEEN $1::timestamptz AND $2::timestamptz`);
+    } else if (options.createdAfter) {
       params.push(options.createdAfter);
       where.push(`created_at >= $${params.length}::timestamptz`);
+    } else if (options.createdBefore) {
+      params.push(options.createdBefore);
+      where.push(`created_at <= $${params.length}::timestamptz`);
     }
     const res = await this.webQuery(
-      `SELECT id, created_at, last_seen, type, state, score FROM leads WHERE ${where.join(' AND ')} ORDER BY created_at DESC`,
+      `SELECT id, created_at, type, state, status, score FROM leads WHERE ${where.join(' AND ')} ORDER BY created_at DESC`,
       params,
     );
-    return res.rows.map((r) => {
-      const createdAt = new Date(r.created_at).toISOString();
-      return {
-        id: String(r.id),
-        createdAt,
-        updatedAt: updatedAtIfChanged(createdAt, r.last_seen ? new Date(r.last_seen).toISOString() : undefined),
-        type: r.type === 'job' ? 'job' : 'gig',
-        state: (r.state as LeadState) || 'active',
-        score: r.score !== null && r.score !== undefined ? Number(r.score) : undefined,
-      };
-    });
+    return res.rows.map((r) => ({
+      id: String(r.id),
+      createdAt: new Date(r.created_at).toISOString(),
+      type: r.type === 'job' ? 'job' : 'gig',
+      state: (r.state as LeadState) || 'active',
+      status: r.status as LeadStatus,
+      score: r.score !== null && r.score !== undefined ? Number(r.score) : undefined,
+    }));
   }
 
   async getLeadsForFeed(options: FeedOptions = {}): Promise<Lead[]> {
@@ -1700,7 +1702,6 @@ export class PostgresStore implements Store {
       score: r.score,
       reasons: Array.isArray(r.reasons_json) ? r.reasons_json : JSON.parse(r.reasons_json || '[]'),
       createdAt: new Date(r.created_at).toISOString(),
-      updatedAt: updatedAtIfChanged(new Date(r.created_at).toISOString(), r.last_seen ? new Date(r.last_seen).toISOString() : undefined),
       deliveredAt: r.delivered_at ? new Date(r.delivered_at).toISOString() : undefined,
       type: r.type === 'job' ? 'job' : 'gig',
       rawSalary: r.raw_salary || undefined,

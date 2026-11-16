@@ -5,9 +5,11 @@ import {
   isIndexable,
   isoWeekKey,
   leadLastmod,
+  NODE_INDEX_POLICY,
   w3cDateTime,
   type TtlEnv,
 } from '../core/indexable.ts';
+import type { AccessPolicy } from '../core/access.ts';
 import type { SitemapLeadRef } from '../core/store.ts';
 import { layout, type AuthDisplay, formatBudget, salaryRange, safeHttpUrl, leadTitle, formatRelative } from './ui.ts';
 import { formatLeadText } from './format.ts';
@@ -2157,12 +2159,12 @@ ${items}
 
 export function renderLeadSitemapXml(
   baseUrl: string,
-  leads: Array<{ id: string; createdAt: string; updatedAt?: string }>,
+  leads: Array<{ id: string; createdAt: string }>,
 ): string {
   return renderUrlset(leads.map((lead) => ({
     loc: `${baseUrl}/leads/${encodeURIComponent(lead.id)}`,
     priority: '0.5',
-    lastmod: leadLastmod(lead),
+    lastmod: leadLastmod(lead.createdAt),
   })));
 }
 
@@ -2175,9 +2177,9 @@ const URLSET_OVERHEAD = Buffer.byteLength(
   'utf8',
 );
 
-function leadUrlLine(baseUrl: string, lead: { id: string; createdAt: string; updatedAt?: string }): string {
+function leadUrlLine(baseUrl: string, lead: { id: string; createdAt: string }): string {
   const loc = escapeHtml(`${baseUrl}/leads/${encodeURIComponent(lead.id)}`);
-  return `  <url><loc>${loc}</loc><lastmod>${leadLastmod(lead)}</lastmod><priority>0.5</priority></url>`;
+  return `  <url><loc>${loc}</loc><lastmod>${leadLastmod(lead.createdAt)}</lastmod><priority>0.5</priority></url>`;
 }
 
 /** Problems against the sitemaps.org sitemap-index shape. Empty means the document matches. */
@@ -2238,7 +2240,7 @@ export function buildLeadSitemaps(
       files.push({
         file: part === 1 ? `leads-${week}.xml` : `leads-${week}-${part}.xml`,
         xml,
-        lastmod: maxLastmod(batch.map((item) => leadLastmod(item.lead))),
+        lastmod: maxLastmod(batch.map((item) => leadLastmod(item.lead.createdAt))),
       });
       part += 1;
       batch = [];
@@ -2267,12 +2269,13 @@ export function assembleSitemaps(input: {
   leads: SitemapLeadRef[];
   extraPaths?: string[];
   env: TtlEnv;
+  policy?: AccessPolicy;
   now?: Date;
 }): SitemapBundle {
   const now = input.now ?? new Date();
   const staticXml = renderSitemapXml(input.baseUrl, now, input.extraPaths ?? []);
   const staticLastmod = [...staticXml.matchAll(/<lastmod>([^<]+)<\/lastmod>/g)].map((match) => match[1] ?? '');
-  const indexable = input.leads.filter((lead) => isIndexable(lead, input.env, now.getTime()));
+  const indexable = input.leads.filter((lead) => isIndexable(lead, input.env, input.policy ?? NODE_INDEX_POLICY, now.getTime()));
   const leadFiles = buildLeadSitemaps(input.baseUrl, indexable);
   const files = new Map<string, string>([['static.xml', staticXml]]);
   const entries = [{

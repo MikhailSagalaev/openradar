@@ -6,8 +6,9 @@
  * Both come only from fields the lead actually carries. A missing employer, or a remote
  * posting with no location requirement, is omitted rather than filled with a placeholder.
  */
+import type { AccessPolicy } from '../core/access.ts';
 import type { Lead } from '../core/types.ts';
-import { isIndexable, validThrough, w3cDateTime, type TtlEnv } from '../core/indexable.ts';
+import { isIndexable, NODE_INDEX_POLICY, validThrough, w3cDateTime, type TtlEnv } from '../core/indexable.ts';
 
 /** Names that are not an employer. «openradar» is the old page-level fallback. */
 const PLACEHOLDER_ORG = /^(?:unknown|n\/?a|none|null|undefined|openradar|confidential|не\s*указан(?:о|а)?|неизвестно|нет(?:\s+данных)?|—|–|-|\.+)$/i;
@@ -15,7 +16,31 @@ const PLACEHOLDER_ORG = /^(?:unknown|n\/?a|none|null|undefined|openradar|confide
 /** A city field that names no place. */
 const PLACEHOLDER_CITY = /^(?:online|онлайн|remote|удал[её]нн?(?:о|ая)?|удаленка|anywhere|worldwide|global|не\s*указан(?:о|а)?|n\/?a|—|–|-)$/i;
 
-export type JobPostingSkipReason = 'not-indexable' | 'no-organization' | 'remote-without-location';
+export type JobPostingSkipReason = 'not-indexable' | 'no-organization' | 'remote-without-location' | 'no-location';
+
+/**
+ * Adapters that put the employer in `author`. On every other source the author is a
+ * person, a handle or a channel title, and must not become hiringOrganization.
+ */
+export const EMPLOYER_AUTHOR_KINDS = new Set([
+  'ats',
+  'adzuna',
+  'arbeitnow',
+  'alexandria',
+  'workingnomads',
+  'hh',
+  'remoteok',
+  'remotive',
+  'trudvsem',
+  'sitemap',
+  'json',
+]);
+
+const EMPLOYMENT_TYPES = new Set([
+  'FULL_TIME', 'PART_TIME', 'CONTRACTOR', 'TEMPORARY', 'INTERN', 'VOLUNTEER', 'PER_DIEM', 'OTHER',
+]);
+
+const SALARY_UNIT: Record<string, string> = { monthly: 'MONTH', hourly: 'HOUR' };
 
 export interface JobPostingDecision {
   posting?: Record<string, unknown>;
@@ -82,18 +107,29 @@ function cityOf(lead: Lead): string | undefined {
   return city.slice(0, 80);
 }
 
-function organizationOf(lead: Lead): string | undefined {
+function employmentTypeOf(lead: Lead): string | undefined {
+  const facts = lead.metadata?.facts;
+  const raw = facts && typeof facts === 'object' ? (facts as { employmentType?: unknown }).employmentType : undefined;
+  if (typeof raw !== 'string') return undefined;
+  const token = raw.trim().toUpperCase().replace(/[\s-]+/g, '_');
+  return EMPLOYMENT_TYPES.has(token) ? token : undefined;
+}
+
+function organizationOf(lead: Lead, sourceKind: string | undefined): string | undefined {
   const author = lead.author?.trim();
-  const authorOrg = author && !author.startsWith('@') ? cleanName(author) : undefined;
+  const authorOrg = sourceKind && EMPLOYER_AUTHOR_KINDS.has(sourceKind) && author && !author.startsWith('@')
+    ? cleanName(author)
+    : undefined;
   return cleanName(lead.company) || factsCompany(lead) || companyFromText(lead.text) || authorOrg;
 }
 
 export function explainJobPosting(
   lead: Lead,
-  options: { env: TtlEnv; baseUrl?: string; title?: string; now?: number },
+  options: { env: TtlEnv; policy?: AccessPolicy; baseUrl?: string; title?: string; now?: number; sourceKind?: string },
 ): JobPostingDecision {
-  if (!isIndexable(lead, options.env, options.now)) return { skip: 'not-indexable' };
-  const hiringName = organizationOf(lead);
+  const now = options.now ?? Date.now();
+  if (!isIndexable(lead, options.env, options.policy ?? NODE_INDEX_POLICY, now)) return { skip: 'not-indexable' };
+  const hiringName = organizationOf(lead, options.sourceKind);
   if (!hiringName) return { skip: 'no-organization' };
 
   const city = cityOf(lead);
@@ -103,18 +139,21 @@ export function explainJobPosting(
   // and a JobPosting with neither a place nor a requirement does not pass, so it is omitted.
   const telecommute = Boolean(lead.isRemote) && !city;
   if (telecommute && !country) return { skip: 'remote-without-location' };
+  // Google requires jobLocation unless the posting is TELECOMMUTE with a location requirement.
+  if (!telecommute && !city && !country) return { skip: 'no-location' };
 
   const through = validThrough(lead, options.env);
   const postedMs = Date.parse(lead.publishedAt || lead.createdAt);
+  const employmentType = employmentTypeOf(lead);
   const posting: Record<string, unknown> = {
     '@context': 'https://schema.org',
     '@type': 'JobPosting',
     title: options.title || lead.title,
     description: lead.text || lead.title,
     datePosted: Number.isFinite(postedMs) ? w3cDateTime(postedMs) : lead.createdAt,
-    employmentType: lead.type === 'gig' ? 'CONTRACTOR' : 'FULL_TIME',
     hiringOrganization: { '@type': 'Organization', name: hiringName },
   };
+  if (employmentType) posting.employmentType = employmentType;
   if (options.baseUrl) posting.url = `${options.baseUrl}/leads/${lead.id}`;
   if (through) posting.validThrough = through;
   if (telecommute && country) {
@@ -130,11 +169,16 @@ export function explainJobPosting(
       },
     };
   }
-  if (typeof lead.budget === 'number') {
+  const unit = lead.paymentPeriod ? SALARY_UNIT[lead.paymentPeriod] : undefined;
+  if (typeof lead.budget === 'number' && lead.currency) {
     posting.baseSalary = {
       '@type': 'MonetaryAmount',
-      currency: lead.currency || 'RUB',
-      value: { '@type': 'QuantitativeValue', value: lead.budget, unitText: lead.type === 'gig' ? 'PROJECT' : 'MONTH' },
+      currency: lead.currency,
+      value: {
+        '@type': 'QuantitativeValue',
+        value: lead.budget,
+        ...(unit ? { unitText: unit } : {}),
+      },
     };
   }
   return { posting };
@@ -142,7 +186,7 @@ export function explainJobPosting(
 
 export function buildJobPosting(
   lead: Lead,
-  options: { env: TtlEnv; baseUrl?: string; title?: string; now?: number },
+  options: { env: TtlEnv; policy?: AccessPolicy; baseUrl?: string; title?: string; now?: number; sourceKind?: string },
 ): Record<string, unknown> | undefined {
   return explainJobPosting(lead, options).posting;
 }

@@ -224,11 +224,6 @@ export interface Lead extends RawLead {
   score: number;
   reasons: string[];
   createdAt: string;
-  /**
-   * When the lead was last changed. Absent when nothing was written after it was stored
-   * (`last_seen` at insert does not count). Sitemap lastmod falls back to `createdAt`.
-   */
-  updatedAt?: string;
   deliveredAt?: string;
   votes_up?: number;
   votes_down?: number;

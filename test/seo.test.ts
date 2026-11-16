@@ -208,6 +208,8 @@ describe('SEO catalog pages', () => {
       score: 75,
       budget: 80000,
       currency: 'RUB',
+      city: 'Москва',
+      paymentPeriod: 'fixed' as const,
       createdAt: new Date().toISOString(),
       fingerprint: 'fp-123',
       titleKey: 'разработчик frontend',
@@ -220,7 +222,10 @@ describe('SEO catalog pages', () => {
       auth: undefined,
     });
     expect(html).toContain('"@type": "JobPosting"');
-    expect(html).toContain('"employmentType": "CONTRACTOR"');
+    expect(html).not.toContain('"employmentType"');
+    expect(html).not.toContain('"FULL_TIME"');
+    expect(html).not.toContain('"unitText"');
+    expect(html).toContain('"currency": "RUB"');
     expect(html).toContain('"name": "Яндекс Лавка"');
     // Leading hashtags are stripped from meta description
     expect(html).not.toMatch(/content="#вакансия/);

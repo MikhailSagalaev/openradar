@@ -898,16 +898,18 @@ export class MemoryStore implements Store {
     return this.queryLeads(options);
   }
 
-  async listLeadsForSitemap(options: { createdAfter?: string } = {}): Promise<SitemapLeadRef[]> {
-    const after = options.createdAfter;
+  async listLeadsForSitemap(options: { createdAfter?: string; createdBefore?: string } = {}): Promise<SitemapLeadRef[]> {
+    const { createdAfter: after, createdBefore: before } = options;
     return [...this.leads.values()]
-      .filter((lead) => lead.state !== 'closed' && (!after || lead.createdAt >= after))
+      .filter((lead) => (lead.state ?? 'active') === 'active' && lead.status !== 'rejected')
+      .filter((lead) => !after || lead.createdAt >= after)
+      .filter((lead) => !before || lead.createdAt <= before)
       .map((lead) => ({
         id: lead.id,
         createdAt: lead.createdAt,
-        updatedAt: lead.updatedAt,
         type: lead.type,
         state: lead.state,
+        status: lead.status,
         score: lead.score,
       }));
   }

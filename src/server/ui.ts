@@ -8,7 +8,8 @@ import { formatLeadText } from './format.ts';
 import { activeFilterCount, budgetStepsFor, type FeedFilters, hasActiveFilters, rankedWindowApplies } from './filters.ts';
 import { SEO_CATALOG, localizeCatalogEntry } from './seo.ts';
 import { qualityFlagsOf } from '../core/quality.ts';
-import { DEFAULT_TTL_ENV, isIndexable, type TtlEnv } from '../core/indexable.ts';
+import type { AccessPolicy } from '../core/access.ts';
+import { DEFAULT_TTL_ENV, isIndexable, NODE_INDEX_POLICY, type TtlEnv } from '../core/indexable.ts';
 import { buildJobPosting } from './jobposting.ts';
 import { explainLead } from '../core/explain.ts';
 import { BROKEN_AFTER, sourceState, type SourceState } from '../core/source-health.ts';
@@ -98,6 +99,8 @@ export interface LeadPageData {
   expired?: boolean;
   /** Feed age limits. Omitted renders use the same defaults as the process (14 / 30 days). */
   indexEnv?: TtlEnv;
+  /** Guest delay. Omitted renders use node mode (no delay). */
+  access?: AccessPolicy;
   /** Other addresses where the same post was seen (migration 027). */
   sightings?: Array<{ url: string }>;
 }
@@ -3692,9 +3695,16 @@ ${data.similar?.length ? `<section class="similar">
   // Closed and expired leads stay readable by link and leave the index. The same
   // isIndexable decision drops JobPosting, so the markup cannot outlive the page.
   const ttlEnv = data.indexEnv ?? DEFAULT_TTL_ENV;
-  const indexable = isIndexable(lead, ttlEnv) && !data.expired;
+  const access = data.access ?? NODE_INDEX_POLICY;
+  const indexable = isIndexable(lead, ttlEnv, access) && !data.expired;
   const posting = indexable
-    ? buildJobPosting(lead, { env: ttlEnv, baseUrl: publicBaseUrl, title: leadTitle(lead) || lead.title })
+    ? buildJobPosting(lead, {
+      env: ttlEnv,
+      policy: access,
+      baseUrl: publicBaseUrl,
+      title: leadTitle(lead) || lead.title,
+      sourceKind: source?.kind,
+    })
     : undefined;
   const headExtra = `
 <meta name="description" content="${escapeHtml(cleanText)}">

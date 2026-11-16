@@ -5,6 +5,8 @@ import {
   isExpired,
   isIndexable,
   isoWeekKey,
+  NODE_INDEX_POLICY,
+  w3cDateTime,
   type TtlEnv,
 } from '../src/core/indexable.ts';
 import {
@@ -69,29 +71,29 @@ describe('sitemap index', () => {
     expect(xml).not.toContain('/leads/old-gig');
     expect(xml).not.toContain('/leads/old-job');
     expect(xml).not.toContain('/review');
-    expect(isIndexable(lead('ok'), env, NOW)).toBe(true);
-    expect(isIndexable(lead('shut', { state: 'closed' }), env, NOW)).toBe(false);
-    expect(isIndexable(lead('old-gig', { type: 'gig', createdAt: '2026-10-01T00:00:00.000Z' }), env, NOW)).toBe(false);
+    expect(isIndexable(lead('ok'), env, NODE_INDEX_POLICY, NOW)).toBe(true);
+    expect(isIndexable(lead('shut', { state: 'closed' }), env, NODE_INDEX_POLICY, NOW)).toBe(false);
+    expect(isIndexable(lead('old-gig', { type: 'gig', createdAt: '2026-10-01T00:00:00.000Z' }), env, NODE_INDEX_POLICY, NOW)).toBe(false);
   });
 
-  it('uses the real update time, falls back to createdAt, and dates the index file by the newest URL', () => {
+  it('dates every lead URL from createdAt, and the index file from the newest of those', () => {
     expect(isoWeekKey('2026-11-05T12:00:00.000Z')).toBe('2026-W45');
     const files = buildLeadSitemaps('https://openradar.fun', [
-      { id: 'edited', createdAt: '2026-11-05T01:00:00.000Z', updatedAt: '2026-11-06T08:30:00.000Z' },
-      { id: 'fresh', createdAt: '2026-11-05T01:00:00.000Z' },
+      { id: 'early', createdAt: '2026-11-05T01:00:00.000Z' },
+      { id: 'later', createdAt: '2026-11-06T08:30:00.000Z' },
     ]);
     expect(files.map((file) => file.file)).toEqual(['leads-2026-W45.xml']);
     expect(files[0]?.lastmod).toBe('2026-11-06T08:30:00Z');
-    expect(files[0]?.xml).toContain('<loc>https://openradar.fun/leads/edited</loc><lastmod>2026-11-06T08:30:00Z</lastmod>');
-    expect(files[0]?.xml).toContain('<loc>https://openradar.fun/leads/fresh</loc><lastmod>2026-11-05T01:00:00Z</lastmod>');
+    expect(files[0]?.xml).toContain('<loc>https://openradar.fun/leads/early</loc><lastmod>2026-11-05T01:00:00Z</lastmod>');
+    expect(files[0]?.xml).toContain('<loc>https://openradar.fun/leads/later</loc><lastmod>2026-11-06T08:30:00Z</lastmod>');
     expect(files[0]?.lastmod).toMatch(W3C_LASTMOD);
     const bundle = assembleSitemaps({
       baseUrl: 'https://openradar.fun',
       env,
       now: new Date(NOW),
       leads: [
-        lead('edited', { createdAt: '2026-11-05T01:00:00.000Z', updatedAt: '2026-11-06T08:30:00.000Z' }),
-        lead('fresh', { createdAt: '2026-11-05T01:00:00.000Z', updatedAt: undefined }),
+        lead('early', { createdAt: '2026-11-05T01:00:00.000Z' }),
+        lead('later', { createdAt: '2026-11-06T08:30:00.000Z' }),
       ],
     });
     expect(bundle.indexXml).toContain('<loc>https://openradar.fun/sitemaps/leads-2026-W45.xml</loc><lastmod>2026-11-06T08:30:00Z</lastmod>');
@@ -123,11 +125,9 @@ describe('sitemap index', () => {
     const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true, RADAR_TIER_DELAYS: 'guest=0' });
     const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed', config: {} });
     const created = new Date(NOW).toISOString();
-    const updated = new Date(NOW + 2 * 3_600_000).toISOString();
     await runtime.store.insertLead(lead('keep', {
       sourceId: source.id,
       createdAt: created,
-      updatedAt: updated,
       company: 'Acme',
     }));
     await runtime.store.insertLead(lead('shut', { sourceId: source.id, state: 'closed', createdAt: created, company: 'Acme' }));
@@ -153,14 +153,7 @@ describe('sitemap index', () => {
     const xml = await fileRes.text();
     expect(xml).toContain('/leads/keep');
     const lastmod = xml.match(/<loc>[^<]*\/leads\/keep<\/loc><lastmod>([^<]+)<\/lastmod>/)?.[1];
-    expect(lastmod).toMatch(W3C_LASTMOD);
-    // The memory store keeps the updatedAt passed with the lead. PostgreSQL has no such
-    // column: lastmod is last_seen, and only when that is later than created_at.
-    if (process.env.RADAR_TEST_STORE === 'postgres') {
-      expect(Date.parse(lastmod!)).toBeGreaterThanOrEqual(Date.parse(created));
-    } else {
-      expect(lastmod).toBe(updated.replace('.000Z', 'Z'));
-    }
+    expect(lastmod).toBe(w3cDateTime(Date.parse(created)));
     expect(xml).not.toContain('/leads/shut');
     expect(xml).not.toContain('/leads/stale');
     expect(xml).not.toContain('/review');
@@ -169,6 +162,62 @@ describe('sitemap index', () => {
     expect(staticXml).not.toContain('/review');
     expect(staticXml).not.toContain('/leads/');
     expect((await app.request('/sitemaps/leads-1999-W01.xml')).status).toBe(404);
+    await runtime.store.close();
+  });
+
+  it('lists only URLs a guest can open, including the hub delay, on this store', async () => {
+    const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true, RADAR_MODE: 'hub' });
+    expect(runtime.access.mode).toBe('hub');
+    expect(runtime.access.delays.guest).toBe(720);
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed', config: {} });
+    const old = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    const fresh = new Date().toISOString();
+    const hidden = ['suspect', 'hidden_junk', 'hidden_scam'] as const;
+    for (const state of hidden) {
+      await runtime.store.insertLead(lead(state, { sourceId: source.id, state, createdAt: old, company: 'Acme' }));
+    }
+    await runtime.store.insertLead(lead('rejected', { sourceId: source.id, status: 'rejected', createdAt: old, company: 'Acme' }));
+    await runtime.store.insertLead(lead('too-fresh', { sourceId: source.id, createdAt: fresh, company: 'Acme' }));
+    await runtime.store.insertLead(lead('visible', { sourceId: source.id, createdAt: old, company: 'Acme' }));
+    const app = createApp(runtime);
+    const index = await (await app.request('/sitemap.xml')).text();
+    const files = [...index.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => new URL(match[1]!).pathname);
+    const pages: string[] = [];
+    for (const file of files) {
+      const xml = await (await app.request(file)).text();
+      for (const loc of xml.matchAll(/<loc>([^<]+)<\/loc>/g)) pages.push(new URL(loc[1]!).pathname);
+    }
+    expect(pages.some((path) => path.endsWith('/leads/visible'))).toBe(true);
+    for (const id of [...hidden, 'rejected', 'too-fresh']) {
+      expect(pages.some((path) => path.endsWith(`/leads/${id}`))).toBe(false);
+    }
+    for (const path of pages) {
+      const res = await app.request(path);
+      const html = await res.text();
+      expect(res.status, path).toBe(200);
+      expect(html, path).not.toContain('noindex');
+    }
+    await runtime.store.close();
+  });
+
+  it('builds one sitemap for parallel requests and ignores Host when the public URL is unset', async () => {
+    const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true, RADAR_TIER_DELAYS: 'guest=0' });
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed', config: {} });
+    await runtime.store.insertLead(lead('keep', { sourceId: source.id, createdAt: new Date(NOW).toISOString(), company: 'Acme' }));
+    const original = runtime.store.listLeadsForSitemap!.bind(runtime.store);
+    let calls = 0;
+    runtime.store.listLeadsForSitemap = async (options) => {
+      calls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      return original(options);
+    };
+    const app = createApp(runtime);
+    const [first, second] = await Promise.all([
+      app.request('/sitemap.xml', { headers: { host: 'a.example' } }),
+      app.request('/sitemap.xml', { headers: { host: 'b.example' } }),
+    ]);
+    expect(calls).toBe(1);
+    expect(await first.text()).toBe(await second.text());
     await runtime.store.close();
   });
 });
@@ -233,11 +282,36 @@ describe('JobPosting', () => {
     expect(locatedHtml).not.toContain('Unknown');
   });
 
+  it('does not take a Telegram channel title as the employer', () => {
+    const channel = lead('tg', {
+      company: undefined,
+      author: 'Вакансии Frontend | Удалёнка',
+      city: 'Берлин',
+      createdAt: new Date(NOW).toISOString(),
+      text: 'Ищем фронтенд без названия компании.',
+    });
+    expect(explainJobPosting(channel, { env, now: NOW, sourceKind: 'telegram' }).skip).toBe('no-organization');
+    const ats = explainJobPosting(channel, { env, now: NOW, sourceKind: 'ats' }).posting;
+    expect(ats?.hiringOrganization).toEqual({ '@type': 'Organization', name: 'Вакансии Frontend | Удалёнка' });
+  });
+
+  it('omits JobPosting when there is no place and the lead is not remote', () => {
+    const bare = lead('noloc', {
+      city: undefined,
+      isRemote: false,
+      createdAt: new Date(NOW).toISOString(),
+    });
+    expect(explainJobPosting(bare, { env, now: NOW }).skip).toBe('no-location');
+    const html = renderLeadPage({ lead: bare, version: 'test', indexEnv: env });
+    expect(html).not.toContain('JobPosting');
+    expect(html).not.toContain('FULL_TIME');
+  });
+
   it('counts fixture leads that lose JobPosting, by rule', () => {
     const fresh = new Date(NOW).toISOString();
-    const fixtures: Array<{ id: string; skip?: JobPostingSkipReason }> = [
+    const fixtures: Array<{ id: string; skip?: JobPostingSkipReason; sourceKind?: string }> = [
       { id: 'job-city' },
-      { id: 'gig-text', skip: undefined },
+      { id: 'gig-text' },
       { id: 'closed', skip: 'not-indexable' },
       { id: 'expired-gig', skip: 'not-indexable' },
       { id: 'expired-job', skip: 'not-indexable' },
@@ -247,45 +321,55 @@ describe('JobPosting', () => {
       { id: 'remote-online', skip: 'remote-without-location' },
       { id: 'remote-country' },
       { id: 'remote-city' },
-      { id: 'author-org' },
+      { id: 'author-ignored', skip: 'no-organization' },
+      { id: 'telegram-channel', skip: 'no-organization', sourceKind: 'telegram' },
+      { id: 'ats-author', sourceKind: 'ats' },
+      { id: 'no-place', skip: 'no-location' },
     ];
     const cards: Lead[] = [
       lead('job-city', { createdAt: fresh }),
-      lead('gig-text', { type: 'gig', company: undefined, createdAt: fresh, text: 'Компания: Яндекс Лавка\nНужен фронтенд.' }),
+      lead('gig-text', { type: 'gig', company: undefined, city: 'Москва', createdAt: fresh, text: 'Компания: Яндекс Лавка\nНужен фронтенд.' }),
       lead('closed', { state: 'closed', createdAt: fresh }),
       lead('expired-gig', { type: 'gig', createdAt: new Date(NOW - 15 * 86_400_000).toISOString() }),
       lead('expired-job', { createdAt: new Date(NOW - 40 * 86_400_000).toISOString() }),
-      lead('no-org', { company: undefined, author: undefined, text: 'Ищем человека, компания не названа.', createdAt: fresh }),
+      lead('no-org', { company: undefined, author: undefined, city: 'Москва', text: 'Ищем человека, компания не названа.', createdAt: fresh }),
       lead('placeholder-org', { company: 'Unknown', author: 'openradar', text: 'Вакансия без имени.', createdAt: fresh }),
       lead('remote-bare', { isRemote: true, city: undefined, createdAt: fresh }),
       lead('remote-online', { isRemote: true, city: 'Онлайн', createdAt: fresh }),
       lead('remote-country', { isRemote: true, city: undefined, metadata: { country: 'DE' }, createdAt: fresh }),
       lead('remote-city', { isRemote: true, city: 'Берлин', createdAt: fresh }),
-      lead('author-org', { company: undefined, author: 'Acme GmbH', text: 'Ищем инженера.', createdAt: fresh }),
+      lead('author-ignored', { company: undefined, author: 'Acme GmbH', city: 'Берлин', text: 'Ищем инженера.', createdAt: fresh }),
+      lead('telegram-channel', { company: undefined, author: 'Вакансии Frontend | Удалёнка', city: 'Берлин', text: 'Ищем фронтенд.', createdAt: fresh }),
+      lead('ats-author', { company: undefined, author: 'Acme GmbH', city: 'Берлин', text: 'Ищем инженера.', createdAt: fresh }),
+      lead('no-place', { city: undefined, isRemote: false, createdAt: fresh }),
     ];
     const counts: Record<JobPostingSkipReason | 'kept', number> = {
       'not-indexable': 0,
       'no-organization': 0,
       'remote-without-location': 0,
+      'no-location': 0,
       kept: 0,
     };
     for (const card of cards) {
-      const decision = explainJobPosting(card, { env, now: NOW });
       const expected = fixtures.find((item) => item.id === card.id);
+      const decision = explainJobPosting(card, { env, now: NOW, sourceKind: expected?.sourceKind });
       expect(decision.skip, card.id).toBe(expected?.skip);
       if (decision.skip) counts[decision.skip] += 1;
       else counts.kept += 1;
       if (decision.posting) {
-        expect(JSON.stringify(decision.posting)).not.toMatch(/Unknown|openradar/i);
+        expect(JSON.stringify(decision.posting)).not.toMatch(/Unknown|openradar|"FULL_TIME"/);
       }
     }
-    // Production database was not available. These twelve cards are the fixture set.
+    // Production database was not available. These cards are the fixture set.
+    // Rule 3 (author is not an employer outside the allowlist): author-ignored + telegram-channel.
+    // Rule 4 (no jobLocation and not TELECOMMUTE): no-place.
     expect(counts).toEqual({
       'not-indexable': 3,
-      'no-organization': 2,
+      'no-organization': 4,
       'remote-without-location': 2,
+      'no-location': 1,
       kept: 5,
     });
-    expect(cards).toHaveLength(12);
+    expect(cards).toHaveLength(15);
   });
 });
