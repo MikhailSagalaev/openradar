@@ -75,7 +75,7 @@ interface GreenhouseJob {
   company_name?: string;
   location?: { name?: string };
   first_published?: string;
-  updated_at?: string;
+  updated_at?: string | { absolute_time?: string };
   content?: string;
   departments?: Array<{ name?: string }>;
 }
@@ -98,7 +98,7 @@ function fromGreenhouse(source: SourceRecord, slug: string, name: string | undef
       author: company,
       city: cityFor(location, company, REMOTE.test(location)),
       isRemote: REMOTE.test(location),
-      publishedAt: j.first_published ?? j.updated_at,
+      publishedAt: j.first_published ?? (typeof j.updated_at === 'string' ? j.updated_at : undefined),
       raw: { ats: 'greenhouse', board: slug },
     } satisfies RawLead;
   });
@@ -521,6 +521,75 @@ const BROKEN_ANSWER = /abort|terminated|timed? ?out|fetch failed|socket|ECONNRES
  * and not others, with curl too: the same board then reads in a second. An HTTP error is
  * the board's real answer and is not retried.
  */
+/**
+ * Vendor-global pacing and per-company parking, in memory on purpose: a restart
+ * re-learns the board set in one cheap pass, and hot state must not outlive a deploy.
+ */
+const vendorLastCall = new Map<string, number>();
+const vendorFails = new Map<string, number>();
+const vendorParked = new Map<string, number>();
+/** Greenhouse light-read cache: `${sourceId}:${slug}` -> job id -> last update timestamp. */
+const boardLight = new Map<string, Map<string, string>>();
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** One shared clock per vendor, so sharded sources of one system never burst it. */
+async function vendorWait(vendorKey: string, paceMs: number): Promise<void> {
+  const wait = paceMs - (Date.now() - (vendorLastCall.get(vendorKey) ?? 0));
+  if (wait > 0) await sleep(wait);
+  vendorLastCall.set(vendorKey, Date.now());
+}
+
+function greenhouseUpdatedAt(job: GreenhouseJob): string {
+  if (typeof job.updated_at === 'string') return job.updated_at;
+  return job.updated_at?.absolute_time ?? job.first_published ?? '';
+}
+
+/**
+ * Greenhouse two-phase read: a light listing (ids and dates, `content=false` is ~16×
+ * smaller than the full read) and a detail fetch only for jobs whose timestamp changed
+ * since the last rotation. After a restart the cache is cold, so only jobs inside the
+ * freshness window are read in full, and ingest dedup absorbs the re-sends. A detail that
+ * fails is dropped from the cache so the next rotation retries it; a failed listing makes
+ * the caller fall back to the full read.
+ */
+async function greenhouseLight(
+  source: SourceRecord,
+  slug: string,
+  name: string | undefined,
+  ctx: PollContext,
+  perCompany: number,
+  since: string,
+  vendorKey: string,
+  paceMs: number,
+): Promise<{ leads: RawLead[]; present: Set<string> }> {
+  const boardUrl = `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(slug)}`;
+  const jobs = (JSON.parse(await fetchBoard(ctx, `${boardUrl}/jobs?content=false`)) as { jobs?: GreenhouseJob[] })
+    .jobs?.filter((j) => j.id && j.title?.trim()) ?? [];
+  const prev = boardLight.get(`${source.id}:${slug}`);
+  const next = new Map<string, string>();
+  for (const j of jobs) next.set(String(j.id), greenhouseUpdatedAt(j));
+  const changed = jobs
+    .filter((j) => (prev ? prev.get(String(j.id)) !== next.get(String(j.id)) : greenhouseUpdatedAt(j) >= since))
+    .sort((a, b) => greenhouseUpdatedAt(b).localeCompare(greenhouseUpdatedAt(a)))
+    .slice(0, perCompany);
+  const leads: RawLead[] = [];
+  for (const j of changed) {
+    try {
+      await vendorWait(vendorKey, paceMs);
+      const detail = JSON.parse(await fetchBoard(ctx, `${boardUrl}/jobs/${j.id}?questions=false`)) as GreenhouseJob;
+      leads.push(...fromGreenhouse(source, slug, name, JSON.stringify({ jobs: [detail] })));
+    } catch (error) {
+      next.delete(String(j.id)); // retry on the next rotation
+      ctx.logger.warn('Greenhouse job detail failed, will retry next rotation', {
+        provider: 'greenhouse', slug, id: j.id, error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  boardLight.set(`${source.id}:${slug}`, next);
+  return { leads, present: new Set(next.keys()) };
+}
+
 async function fetchBoard(ctx: PollContext, url: string): Promise<string> {
   for (let attempt = 1; ; attempt++) {
     try {
@@ -624,13 +693,33 @@ export const atsSource: SourceAdapter = {
     const hour = Math.floor(ctx.now().getTime() / 3_600_000);
     // Ghost-job detection (plan 021B): diff each fully-read board against the store.
     const ghostCheck = ctx.store && ctx.ghostCheck !== false && source.config.ghostCheck !== false;
+    // One pace per vendor, not per source: sharded sources of one system share it, so a
+    // burst of shards never trips the vendor's rate limits.
+    const paceMs = Math.max(0, Math.min(Number(source.config.vendorPaceMs ?? 500), 5_000));
+    const vendorKey = `ats:${provider}`;
     for (const { slug, name } of nextBatch(source.id, companies, perPoll, hour * perPoll)) {
+      const parkKey = `${provider}:${slug}`;
+      const parkedUntil = vendorParked.get(parkKey);
+      if (parkedUntil !== undefined && parkedUntil > Date.now()) continue;
+      await vendorWait(vendorKey, paceMs);
       try {
-        const json = await fetchBoard(boardCtx, ENDPOINTS[provider](slug));
-        const parsed = PARSERS[provider](source, slug, name, json);
-        if (ghostCheck && parsed.length < perCompany) {
+        // Greenhouse reads light by default: the full read is ~16× the bytes, and the store
+        // does not need the text of a job it already has (config.lightPoll: false opts out).
+        let parsed: RawLead[];
+        let present: Set<string> | undefined;
+        if (provider === 'greenhouse' && source.config.lightPoll !== false) {
+          const read = await greenhouseLight(source, slug, name, boardCtx, perCompany, since, vendorKey, paceMs);
+          parsed = read.leads;
+          present = read.present;
+        } else {
+          const json = await fetchBoard(boardCtx, ENDPOINTS[provider](slug));
+          parsed = PARSERS[provider](source, slug, name, json);
+        }
+        if (present === undefined && ghostCheck && parsed.length < perCompany) {
           // A complete read: every job the board lists right now, before the freshness cut.
-          const present = new Set(parsed.map((lead) => lead.externalId).filter((id): id is string => Boolean(id)));
+          present = new Set(parsed.map((lead) => lead.externalId).filter((id): id is string => Boolean(id)));
+        }
+        if (ghostCheck && present) {
           const diff = await diffBoard(ctx.store!, source, provider, slug, present, maxAgeDays, ctx.now());
           if (diff.closed || diff.reopened) ctx.logger.info('ATS board diff', { provider, slug, ...diff });
         }
@@ -639,9 +728,18 @@ export const atsSource: SourceAdapter = {
           .sort((a, b) => (b.publishedAt ?? '').localeCompare(a.publishedAt ?? ''))
           .slice(0, perCompany);
         leads.push(...found);
+        vendorFails.delete(parkKey);
       } catch (error) {
-        // One company that left the system must not stop the others.
-        ctx.logger.warn('ATS board failed', { provider, slug, error: error instanceof Error ? error.message : String(error) });
+        // One company that left the system must not stop the others. A board that failed
+        // three rotations in a row parks for a day: dead links must not cost fetches forever.
+        const fails = (vendorFails.get(parkKey) ?? 0) + 1;
+        vendorFails.set(parkKey, fails);
+        const parked = fails >= 3;
+        if (parked) {
+          vendorParked.set(parkKey, Date.now() + 24 * 3_600_000);
+          vendorFails.delete(parkKey);
+        }
+        ctx.logger.warn('ATS board failed', { provider, slug, parked, error: error instanceof Error ? error.message : String(error) });
       }
     }
     return leads;
