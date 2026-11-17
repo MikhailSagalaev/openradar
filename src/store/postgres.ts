@@ -30,6 +30,7 @@ import type {
   FeedOptions,
   LeadDeliveryRecord,
   ListLeadsOptions,
+  SitemapLeadRef,
   Store,
   UpdateSourceInput,
   UpsertGitHubUserInput,
@@ -1205,6 +1206,33 @@ export class PostgresStore implements Store {
 
   async listLeads(options: ListLeadsOptions = {}): Promise<Lead[]> {
     return this.queryLeads(options, false);
+  }
+
+  async listLeadsForSitemap(options: { createdAfter?: string; createdBefore?: string } = {}): Promise<SitemapLeadRef[]> {
+    const params: unknown[] = [];
+    const where = [`state = 'active'`, `status <> 'rejected'`];
+    if (options.createdAfter && options.createdBefore) {
+      params.push(options.createdAfter, options.createdBefore);
+      where.push(`created_at BETWEEN $1::timestamptz AND $2::timestamptz`);
+    } else if (options.createdAfter) {
+      params.push(options.createdAfter);
+      where.push(`created_at >= $${params.length}::timestamptz`);
+    } else if (options.createdBefore) {
+      params.push(options.createdBefore);
+      where.push(`created_at <= $${params.length}::timestamptz`);
+    }
+    const res = await this.webQuery(
+      `SELECT id, created_at, type, state, status, score FROM leads WHERE ${where.join(' AND ')} ORDER BY created_at DESC`,
+      params,
+    );
+    return res.rows.map((r) => ({
+      id: String(r.id),
+      createdAt: new Date(r.created_at).toISOString(),
+      type: r.type === 'job' ? 'job' : 'gig',
+      state: (r.state as LeadState) || 'active',
+      status: r.status as LeadStatus,
+      score: r.score !== null && r.score !== undefined ? Number(r.score) : undefined,
+    }));
   }
 
   async getLeadsForFeed(options: FeedOptions = {}): Promise<Lead[]> {

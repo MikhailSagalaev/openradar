@@ -1,6 +1,16 @@
 import { classifyRole, isPhysicalNonItWork } from '../research/derive.ts';
 import { escapeHtml, jsonForScript } from '../core/text.ts';
 import type { Lead, LeadType } from '../core/types.ts';
+import {
+  isIndexable,
+  isoWeekKey,
+  leadLastmod,
+  NODE_INDEX_POLICY,
+  w3cDateTime,
+  type TtlEnv,
+} from '../core/indexable.ts';
+import type { AccessPolicy } from '../core/access.ts';
+import type { SitemapLeadRef } from '../core/store.ts';
 import { layout, type AuthDisplay, formatBudget, salaryRange, safeHttpUrl, leadTitle, formatRelative } from './ui.ts';
 import { formatLeadText } from './format.ts';
 import { translateCity, translateSkill, translateSourceTitle, type SupportedLang } from './i18n.ts';
@@ -2085,16 +2095,42 @@ Sitemap: ${baseUrl}/sitemap.xml
 `;
 }
 
-/** Leads are the public lead pages a guest can open; pass none for a private node. */
+/** sitemaps.org: one file stays under 50 000 URLs and 50 MiB. */
+export const SITEMAP_MAX_URLS = 50_000;
+export const SITEMAP_MAX_BYTES = 50 * 1024 * 1024;
+
+/** Complete date, or date plus time and a timezone. Fractional seconds are allowed. */
+export const W3C_LASTMOD = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))?$/;
+
+interface SitemapUrl {
+  loc: string;
+  priority: string;
+  lastmod?: string;
+  changefreq?: string;
+}
+
+function renderUrlset(urls: SitemapUrl[]): string {
+  const items = urls
+    .map(
+      (item) =>
+        `  <url><loc>${escapeHtml(item.loc)}</loc>${item.lastmod ? `<lastmod>${item.lastmod}</lastmod>` : ''}${item.changefreq ? `<changefreq>${item.changefreq}</changefreq>` : ''}<priority>${item.priority}</priority></url>`,
+    )
+    .join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${items}
+</urlset>`;
+}
+
+/** Static, indexable pages. Lead URLs live in the weekly files. /review is not one of them. */
 export function renderSitemapXml(
   baseUrl: string,
-  leads: Array<{ id: string; createdAt: string }> = [],
   now: Date = new Date(),
   /** Pages that exist only while there is data behind them, such as research role pages. */
   extraPaths: string[] = [],
 ): string {
   const today = now.toISOString().slice(0, 10);
-  const urls: Array<{ loc: string; priority: string; lastmod?: string; changefreq?: string }> = [
+  return renderUrlset([
     { loc: `${baseUrl}/`, priority: '1.0', lastmod: today, changefreq: 'hourly' },
     { loc: `${baseUrl}/catalog`, priority: '0.7' },
     ...SEO_CATALOG.map((entry) => ({
@@ -2112,20 +2148,147 @@ export function renderSitemapXml(
     { loc: `${baseUrl}/docs`, priority: '0.7' },
     { loc: `${baseUrl}/faq`, priority: '0.5' },
     { loc: `${baseUrl}/extension`, priority: '0.5' },
-    ...leads.map((lead) => ({
-      loc: `${baseUrl}/leads/${encodeURIComponent(lead.id)}`,
-      priority: '0.5',
-      lastmod: lead.createdAt.slice(0, 10),
-    })),
-  ];
-  const items = urls
-    .map(
-      (item) =>
-        `  <url><loc>${escapeHtml(item.loc)}</loc>${item.lastmod ? `<lastmod>${item.lastmod}</lastmod>` : ''}${item.changefreq ? `<changefreq>${item.changefreq}</changefreq>` : ''}<priority>${item.priority}</priority></url>`,
-    )
+  ]);
+}
+
+export function renderSitemapIndexXml(entries: Array<{ loc: string; lastmod: string }>): string {
+  const items = entries
+    .map((item) => `  <sitemap><loc>${escapeHtml(item.loc)}</loc><lastmod>${item.lastmod}</lastmod></sitemap>`)
     .join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${items}
-</urlset>`;
+</sitemapindex>`;
+}
+
+export function renderLeadSitemapXml(
+  baseUrl: string,
+  leads: Array<{ id: string; createdAt: string }>,
+): string {
+  return renderUrlset(leads.map((lead) => ({
+    loc: `${baseUrl}/leads/${encodeURIComponent(lead.id)}`,
+    priority: '0.5',
+    lastmod: leadLastmod(lead.createdAt),
+  })));
+}
+
+function maxLastmod(values: string[]): string {
+  return values.reduce((best, value) => (Date.parse(value) > Date.parse(best) ? value : best));
+}
+
+const URLSET_OVERHEAD = Buffer.byteLength(
+  `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n\n</urlset>`,
+  'utf8',
+);
+
+function leadUrlLine(baseUrl: string, lead: { id: string; createdAt: string }): string {
+  const loc = escapeHtml(`${baseUrl}/leads/${encodeURIComponent(lead.id)}`);
+  return `  <url><loc>${loc}</loc><lastmod>${leadLastmod(lead.createdAt)}</lastmod><priority>0.5</priority></url>`;
+}
+
+/** Problems against the sitemaps.org sitemap-index shape. Empty means the document matches. */
+export function sitemapIndexIssues(xml: string): string[] {
+  const issues: string[] = [];
+  if (!xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')) issues.push('xml declaration');
+  if (!/<sitemapindex xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/.test(xml)) issues.push('sitemapindex root');
+  if (/<urlset[\s>]/.test(xml)) issues.push('urlset inside an index');
+  if (!xml.trimEnd().endsWith('</sitemapindex>')) issues.push('sitemapindex close');
+  const blocks = [...xml.matchAll(/<sitemap>([\s\S]*?)<\/sitemap>/g)];
+  if (blocks.length === 0) issues.push('no sitemap entries');
+  for (const block of blocks) {
+    const body = block[1] ?? '';
+    const loc = body.match(/<loc>([^<]*)<\/loc>/)?.[1];
+    const lastmod = body.match(/<lastmod>([^<]*)<\/lastmod>/)?.[1];
+    if (!loc || !/^https?:\/\/[^\s]+$/.test(loc)) issues.push(`loc ${loc ?? ''}`);
+    if (!lastmod || !W3C_LASTMOD.test(lastmod)) issues.push(`lastmod ${lastmod ?? ''}`);
+    if (/<url[\s>]/.test(body)) issues.push('url inside sitemap');
+  }
+  return issues;
+}
+
+export interface LeadSitemapFile {
+  /** File name only, e.g. `leads-2026-W45.xml`. */
+  file: string;
+  xml: string;
+  lastmod: string;
+}
+
+/**
+ * One urlset per ISO week of `createdAt`. A week that would pass 50 000 URLs or 50 MiB
+ * continues as `leads-2026-W45-2.xml`. `lastmod` of a file is the newest URL inside it.
+ */
+export function buildLeadSitemaps(
+  baseUrl: string,
+  leads: Array<{ id: string; createdAt: string; updatedAt?: string }>,
+  limits: { maxUrls?: number; maxBytes?: number } = {},
+): LeadSitemapFile[] {
+  const maxUrls = limits.maxUrls ?? SITEMAP_MAX_URLS;
+  const maxBytes = limits.maxBytes ?? SITEMAP_MAX_BYTES;
+  const byWeek = new Map<string, Array<{ id: string; createdAt: string; updatedAt?: string }>>();
+  for (const lead of leads) {
+    const week = isoWeekKey(lead.createdAt);
+    if (!week) continue;
+    const list = byWeek.get(week) ?? [];
+    list.push(lead);
+    byWeek.set(week, list);
+  }
+  const files: LeadSitemapFile[] = [];
+  for (const week of [...byWeek.keys()].sort().reverse()) {
+    const lines = (byWeek.get(week) ?? []).map((lead) => ({ lead, line: leadUrlLine(baseUrl, lead) }));
+    let batch: typeof lines = [];
+    let bytes = URLSET_OVERHEAD;
+    let part = 1;
+    const flush = (): void => {
+      if (batch.length === 0) return;
+      const xml = renderLeadSitemapXml(baseUrl, batch.map((item) => item.lead));
+      files.push({
+        file: part === 1 ? `leads-${week}.xml` : `leads-${week}-${part}.xml`,
+        xml,
+        lastmod: maxLastmod(batch.map((item) => leadLastmod(item.lead.createdAt))),
+      });
+      part += 1;
+      batch = [];
+      bytes = URLSET_OVERHEAD;
+    };
+    for (const item of lines) {
+      const size = Buffer.byteLength(item.line, 'utf8') + 1;
+      if (batch.length > 0 && (batch.length >= maxUrls || bytes + size > maxBytes)) flush();
+      batch.push(item);
+      bytes += size;
+    }
+    flush();
+  }
+  return files;
+}
+
+export interface SitemapBundle {
+  indexXml: string;
+  staticXml: string;
+  files: Map<string, string>;
+}
+
+/** Index plus the static urlset plus one urlset per week. Only `isIndexable` leads are listed. */
+export function assembleSitemaps(input: {
+  baseUrl: string;
+  leads: SitemapLeadRef[];
+  extraPaths?: string[];
+  env: TtlEnv;
+  policy?: AccessPolicy;
+  now?: Date;
+}): SitemapBundle {
+  const now = input.now ?? new Date();
+  const staticXml = renderSitemapXml(input.baseUrl, now, input.extraPaths ?? []);
+  const staticLastmod = [...staticXml.matchAll(/<lastmod>([^<]+)<\/lastmod>/g)].map((match) => match[1] ?? '');
+  const indexable = input.leads.filter((lead) => isIndexable(lead, input.env, input.policy ?? NODE_INDEX_POLICY, now.getTime()));
+  const leadFiles = buildLeadSitemaps(input.baseUrl, indexable);
+  const files = new Map<string, string>([['static.xml', staticXml]]);
+  const entries = [{
+    loc: `${input.baseUrl}/sitemaps/static.xml`,
+    lastmod: staticLastmod.length ? maxLastmod(staticLastmod) : w3cDateTime(now.getTime()),
+  }];
+  for (const file of leadFiles) {
+    files.set(file.file, file.xml);
+    entries.push({ loc: `${input.baseUrl}/sitemaps/${file.file}`, lastmod: file.lastmod });
+  }
+  return { indexXml: renderSitemapIndexXml(entries), staticXml, files };
 }

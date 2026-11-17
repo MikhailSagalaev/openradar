@@ -8,6 +8,9 @@ import { formatLeadText } from './format.ts';
 import { activeFilterCount, budgetStepsFor, type FeedFilters, hasActiveFilters, rankedWindowApplies } from './filters.ts';
 import { SEO_CATALOG, localizeCatalogEntry } from './seo.ts';
 import { qualityFlagsOf } from '../core/quality.ts';
+import type { AccessPolicy } from '../core/access.ts';
+import { DEFAULT_TTL_ENV, isIndexable, NODE_INDEX_POLICY, type TtlEnv } from '../core/indexable.ts';
+import { buildJobPosting } from './jobposting.ts';
 import { explainLead } from '../core/explain.ts';
 import { BROKEN_AFTER, sourceState, type SourceState } from '../core/source-health.ts';
 import { feedQuery, type SubscriptionRecord } from '../core/subscriptions.ts';
@@ -94,6 +97,10 @@ export interface LeadPageData {
   similar?: Lead[];
   /** Older than the feed keeps leads of its type. */
   expired?: boolean;
+  /** Feed age limits. Omitted renders use the same defaults as the process (14 / 30 days). */
+  indexEnv?: TtlEnv;
+  /** Guest delay. Omitted renders use node mode (no delay). */
+  access?: AccessPolicy;
   /** Other addresses where the same post was seen (migration 027). */
   sightings?: Array<{ url: string }>;
 }
@@ -3686,43 +3693,31 @@ ${data.similar?.length ? `<section class="similar">
 
   const textWithoutTags = (lead.text || '').replace(/^(?:\s*#[\wа-яё_-]+)+/giu, '').trim();
   const cleanText = textWithoutTags.replace(/\s+/g, ' ').trim().slice(0, 160);
-  const companyMatch = (lead.text || '').match(/(?:Компания|Работодатель|Company)\s*:\s*([^·\n\r|]{1,60}?)(?=\s*(?:Формат|Локация|ЗП|З\/П|График|Занятость|Вилка|Опыт|Стек|Требования|Обязанности|Условия|О нас|Всем привет|Мы\b|Контакты|$|[·\n\r|]))/iu);
-  const rawCompany = companyMatch ? companyMatch[1]?.trim().replace(/^[\s«"„“]+|[\s»"”\.…,;]+$/g, '').slice(0, 45).trim() : undefined;
-  const extractedCompany = (rawCompany && rawCompany.length >= 2 && rawCompany.length <= 45) ? rawCompany : undefined;
-  const hiringOrgName = extractedCompany || lead.author || 'openradar';
-  // A closed or expired lead stays readable by link but leaves the search index.
-  const gone = lead.state === 'closed' || Boolean(data.expired);
-  const posted = lead.publishedAt || lead.createdAt;
+  // Closed and expired leads stay readable by link and leave the index. The same
+  // isIndexable decision drops JobPosting, so the markup cannot outlive the page.
+  const ttlEnv = data.indexEnv ?? DEFAULT_TTL_ENV;
+  const access = data.access ?? NODE_INDEX_POLICY;
+  const indexable = isIndexable(lead, ttlEnv, access) && !data.expired;
+  const posting = indexable
+    ? buildJobPosting(lead, {
+      env: ttlEnv,
+      policy: access,
+      baseUrl: publicBaseUrl,
+      title: leadTitle(lead) || lead.title,
+      source,
+    })
+    : undefined;
   const headExtra = `
 <meta name="description" content="${escapeHtml(cleanText)}">
 ${publicBaseUrl ? `<link rel="canonical" href="${escapeHtml(publicBaseUrl)}/leads/${escapeHtml(lead.id)}">` : ''}
-${gone ? '<meta name="robots" content="noindex">' : ''}
+${indexable ? '' : '<meta name="robots" content="noindex">'}
 <meta property="og:title" content="${escapeHtml(leadTitle(lead))} · openradar">
 <meta property="og:description" content="${escapeHtml(cleanText)}">
 <meta property="og:type" content="article">
 ${publicBaseUrl ? `<meta property="og:url" content="${escapeHtml(publicBaseUrl)}/leads/${escapeHtml(lead.id)}">` : ''}
 <meta name="twitter:title" content="${escapeHtml(leadTitle(lead))}">
 <meta name="twitter:description" content="${escapeHtml(cleanText)}">
-<script type="application/ld+json">
-${jsonForScript({
-  '@context': 'https://schema.org',
-  '@type': 'JobPosting',
-  title: leadTitle(lead) || lead.title,
-  description: lead.text,
-  url: publicBaseUrl ? `${publicBaseUrl}/leads/${lead.id}` : undefined,
-  datePosted: posted,
-  validThrough: new Date(Date.parse(posted) + 30 * 86_400_000).toISOString(),
-  employmentType: lead.type === 'gig' ? 'CONTRACTOR' : 'FULL_TIME',
-  jobLocationType: lead.isRemote && !lead.city ? 'TELECOMMUTE' : undefined,
-  hiringOrganization: { '@type': 'Organization', name: hiringOrgName },
-  jobLocation: lead.city ? { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: lead.city } } : undefined,
-  baseSalary: typeof lead.budget === 'number' ? {
-    '@type': 'MonetaryAmount',
-    currency: lead.currency || 'RUB',
-    value: { '@type': 'QuantitativeValue', value: lead.budget, unitText: lead.type === 'gig' ? 'PROJECT' : 'MONTH' },
-  } : undefined,
-})}
-</script>`;
+${posting ? `<script type="application/ld+json">\n${jsonForScript(posting)}\n</script>` : ''}`;
 
   return layout({
     title: leadTitle(lead),
