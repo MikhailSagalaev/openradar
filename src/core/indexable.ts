@@ -6,27 +6,47 @@
  * therefore `viewerCanSeeLead` for a guest, plus "still in the feed" (not expired)
  * and `state === 'active'` (a closed lead stays readable by link, but leaves the index).
  *
- * A quality threshold, once one is chosen, belongs here and nowhere else.
+ * The quality threshold is an extra condition on top of those rules. It lives in
+ * `indexableMinScore` and `leadQuality` and does not replace them.
  */
 import type { Lead, LeadState, LeadStatus, LeadType } from './types.ts';
 import { DEFAULT_TIER_DELAY_MIN, viewerCanSeeLead, type AccessPolicy } from './access.ts';
 import { feedMaxAge } from '../pipeline/liveness.ts';
+import {
+  DEFAULT_INDEXABLE_MIN_QUALITY,
+  QUALITY_POINTS,
+  leadQuality,
+  type LeadQualityInput,
+} from './lead-quality.ts';
 
-/** The two feed age limits. `feedMaxAge` is the only reader of these numbers. */
+/** Feed age limits, plus the quality threshold from the process config. */
 export interface TtlEnv {
   RADAR_GIG_TTL_DAYS: number;
   RADAR_JOB_TTL_DAYS: number;
+  /** How many `leadQuality` checks must pass. `0` turns the gate off. */
+  RADAR_INDEXABLE_MIN_QUALITY?: number;
 }
 
 /**
- * Defaults of RADAR_GIG_TTL_DAYS and RADAR_JOB_TTL_DAYS. Pages rendered without
- * a runtime (unit tests, previews) use the same numbers the feed uses out of the box.
+ * Defaults of the feed age limits and the quality threshold. Pages rendered
+ * without a runtime use the same numbers the process uses out of the box.
  */
-export const DEFAULT_TTL_ENV: TtlEnv = { RADAR_GIG_TTL_DAYS: 14, RADAR_JOB_TTL_DAYS: 30 };
+export const DEFAULT_TTL_ENV: TtlEnv = {
+  RADAR_GIG_TTL_DAYS: 14,
+  RADAR_JOB_TTL_DAYS: 30,
+  RADAR_INDEXABLE_MIN_QUALITY: DEFAULT_INDEXABLE_MIN_QUALITY,
+};
 
-/** Score floor for the index. Undefined until a threshold is chosen. */
-export function indexableMinScore(): number | undefined {
-  return undefined;
+/**
+ * How many `leadQuality` checks a lead must pass. Read from the runtime env,
+ * not from `process.env`. An unreadable value uses the default. This is not the feed rating.
+ */
+export function indexableMinScore(env: { RADAR_INDEXABLE_MIN_QUALITY?: number }): number {
+  const value = env.RADAR_INDEXABLE_MIN_QUALITY;
+  if (value === undefined || !Number.isInteger(value) || value < 0 || value > QUALITY_POINTS) {
+    return DEFAULT_INDEXABLE_MIN_QUALITY;
+  }
+  return value;
 }
 
 /** A self-hosted node: guests have no delay. Hub mode passes the runtime policy instead. */
@@ -46,7 +66,7 @@ export function isExpired(
 }
 
 export function isIndexable(
-  lead: { state?: LeadState; status?: LeadStatus; type?: LeadType; createdAt: string; score?: number },
+  lead: { state?: LeadState; status?: LeadStatus; type?: LeadType; createdAt: string; score?: number } & LeadQualityInput,
   env: TtlEnv,
   policy: AccessPolicy = NODE_INDEX_POLICY,
   now: number = Date.now(),
@@ -55,8 +75,8 @@ export function isIndexable(
   if (state !== 'active') return false;
   if (!viewerCanSeeLead(GUEST, lead as Lead, policy, new Date(now))) return false;
   if (isExpired(lead, env, now)) return false;
-  const minScore = indexableMinScore();
-  if (minScore !== undefined && (lead.score ?? 0) < minScore) return false;
+  const minScore = indexableMinScore(env);
+  if (minScore > 0 && leadQuality(lead).score < minScore) return false;
   return true;
 }
 

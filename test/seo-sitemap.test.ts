@@ -22,7 +22,15 @@ import { renderLeadPage } from '../src/server/ui.ts';
 import { createApp } from '../src/server/app.ts';
 import { makeSource, makeTestRuntime } from './helpers.ts';
 
-const env: TtlEnv = { ...DEFAULT_TTL_ENV };
+/**
+ * These cases check closed posts, expiry, the guest delay and JobPosting location rules.
+ * The shared fixture has an employer and a city only, two signals, under the default of 3.
+ * The gate is off here so that shortfall does not hide the rule under test.
+ * The default itself is asserted in lead-quality.test.ts.
+ */
+const env: TtlEnv = { ...DEFAULT_TTL_ENV, RADAR_INDEXABLE_MIN_QUALITY: 0 };
+/** Same gate-off env: a missing employer must stay `no-organization`, not `not-indexable`. */
+const postingEnv: TtlEnv = env;
 const NOW = Date.parse('2026-11-16T12:00:00.000Z');
 
 function lead(id: string, over: Partial<Lead> = {}): Lead {
@@ -122,7 +130,8 @@ describe('sitemap index', () => {
   });
 
   it('serves the index and the week file over HTTP, with a shared cache', async () => {
-    const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true, RADAR_TIER_DELAYS: 'guest=0' });
+    // `keep` has an employer and a city only. The gate is off so the test checks the week file, not the default of 3.
+    const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true, RADAR_TIER_DELAYS: 'guest=0', RADAR_INDEXABLE_MIN_QUALITY: 0 });
     const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed', config: {} });
     const created = new Date(NOW).toISOString();
     await runtime.store.insertLead(lead('keep', {
@@ -166,7 +175,8 @@ describe('sitemap index', () => {
   });
 
   it('lists only URLs a guest can open, including the hub delay, on this store', async () => {
-    const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true, RADAR_MODE: 'hub' });
+    // `visible` has an employer and a city only. The gate is off so the test checks the guest delay, not the default of 3.
+    const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true, RADAR_MODE: 'hub', RADAR_INDEXABLE_MIN_QUALITY: 0 });
     expect(runtime.access.mode).toBe('hub');
     expect(runtime.access.delays.guest).toBe(720);
     const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed', config: {} });
@@ -197,6 +207,129 @@ describe('sitemap index', () => {
       expect(res.status, path).toBe(200);
       expect(html, path).not.toContain('noindex');
     }
+    await runtime.store.close();
+  });
+
+  it('treats an employer written only in the text or in facts the same on the page, the sitemap, and JSON-LD', async () => {
+    const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true, RADAR_TIER_DELAYS: 'guest=0', RADAR_ADMIN_TOKEN: 'secret' });
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'Лента', config: {} });
+    const old = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    const bare = {
+      sourceId: source.id,
+      company: undefined,
+      author: undefined,
+      skills: ['Python'],
+      city: undefined,
+      isRemote: false,
+      budget: undefined,
+      createdAt: old,
+      type: 'job' as const,
+    };
+    await runtime.store.insertLead(lead('from-text', { ...bare, text: 'Компания: Яндекс\nНужен разработчик.' }));
+    await runtime.store.insertLead(lead('from-facts', { ...bare, text: 'Нужен разработчик.', metadata: { facts: { company: 'Яндекс' } } }));
+    await runtime.store.insertLead(lead('stored-name', { ...bare, company: 'Яндекс', city: 'Москва', text: 'Нужен разработчик.' }));
+    const app = createApp(runtime);
+    const admin = { headers: { authorization: 'Bearer secret' } };
+    for (const id of ['from-text', 'from-facts']) {
+      for (const headers of [undefined, admin]) {
+        const html = await (await app.request(`/leads/${id}`, headers ? { headers: admin.headers } : undefined)).text();
+        expect(html, id).toContain('<meta name="robots" content="noindex">');
+        expect(html, id).not.toContain('JobPosting');
+      }
+    }
+    const storedHtml = await (await app.request('/leads/stored-name')).text();
+    expect(storedHtml).not.toContain('noindex');
+    expect(storedHtml).toContain('JobPosting');
+    expect(storedHtml).toContain('"name": "Яндекс"');
+    const index = await (await app.request('/sitemap.xml')).text();
+    const files = [...index.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => new URL(match[1]!).pathname);
+    const pages: string[] = [];
+    for (const file of files) {
+      const xml = await (await app.request(file)).text();
+      for (const loc of xml.matchAll(/<loc>([^<]+)<\/loc>/g)) pages.push(new URL(loc[1]!).pathname);
+    }
+    expect(pages.some((path) => path.endsWith('/leads/stored-name'))).toBe(true);
+    expect(pages.some((path) => path.endsWith('/leads/from-text'))).toBe(false);
+    expect(pages.some((path) => path.endsWith('/leads/from-facts'))).toBe(false);
+    await runtime.store.close();
+  });
+
+  it('shows a lead inside the guest delay to an admin and hides it from a guest, including after the admin request', async () => {
+    const runtime = makeTestRuntime({
+      RADAR_PUBLIC_READ: true,
+      RADAR_MODE: 'hub',
+      RADAR_ADMIN_TOKEN: 'secret',
+    });
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'Лента', config: {} });
+    await runtime.store.insertLead(lead('young', {
+      sourceId: source.id,
+      title: 'Свежая вакансия для своих',
+      company: 'Acme',
+      skills: ['Python'],
+      city: 'Москва',
+      createdAt: new Date().toISOString(),
+    }));
+    await runtime.store.insertLead(lead('thin-old', {
+      sourceId: source.id,
+      title: 'Старый пост без сигналов',
+      company: undefined,
+      author: undefined,
+      skills: ['Python'],
+      city: undefined,
+      isRemote: false,
+      budget: undefined,
+      createdAt: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+    }));
+    const app = createApp(runtime);
+    const adminHtml = await (await app.request('/catalog', { headers: { authorization: 'Bearer secret' } })).text();
+    expect(adminHtml).toContain('Свежая вакансия для своих');
+    expect(adminHtml).toContain('Старый пост без сигналов');
+    const guestHtml = await (await app.request('/catalog')).text();
+    expect(guestHtml).not.toContain('Свежая вакансия для своих');
+    expect(guestHtml).not.toContain('Старый пост без сигналов');
+    await runtime.store.close();
+  });
+
+  it('keeps a two-signal lead out of the index and the guest catalog, and indexes a three-signal lead', async () => {
+    const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true });
+    expect(runtime.env.RADAR_INDEXABLE_MIN_QUALITY).toBe(3);
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed', config: {} });
+    const created = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    await runtime.store.insertLead(lead('score-two', {
+      sourceId: source.id,
+      title: 'Два сигнала',
+      company: 'Acme',
+      city: 'Казань',
+      skills: [],
+      budget: undefined,
+      createdAt: created,
+    }));
+    await runtime.store.insertLead(lead('score-three', {
+      sourceId: source.id,
+      title: 'Три сигнала',
+      company: 'Acme',
+      city: 'Казань',
+      skills: ['Python'],
+      budget: undefined,
+      createdAt: created,
+    }));
+    const app = createApp(runtime);
+    const thin = await (await app.request('/leads/score-two')).text();
+    expect(thin).toContain('<meta name="robots" content="noindex">');
+    const solid = await (await app.request('/leads/score-three')).text();
+    expect(solid).not.toContain('noindex');
+    const index = await (await app.request('/sitemap.xml')).text();
+    const files = [...index.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => new URL(match[1]!).pathname);
+    const pages: string[] = [];
+    for (const file of files) {
+      const xml = await (await app.request(file)).text();
+      for (const loc of xml.matchAll(/<loc>([^<]+)<\/loc>/g)) pages.push(new URL(loc[1]!).pathname);
+    }
+    expect(pages.some((path) => path.endsWith('/leads/score-two'))).toBe(false);
+    expect(pages.some((path) => path.endsWith('/leads/score-three'))).toBe(true);
+    const catalog = await (await app.request('/catalog')).text();
+    expect(catalog).not.toContain('/leads/score-two');
+    expect(catalog).toContain('/leads/score-three');
     await runtime.store.close();
   });
 
@@ -295,12 +428,12 @@ describe('JobPosting', () => {
       createdAt: new Date(NOW).toISOString(),
       text: 'Ищем фронтенд без названия компании.',
     });
-    expect(explainJobPosting(channel, { env, now: NOW, sourceKind: 'telegram' }).skip).toBe('no-organization');
+    expect(explainJobPosting(channel, { env: postingEnv, now: NOW, sourceKind: 'telegram' }).skip).toBe('no-organization');
     const named = makeSource({
       kind: 'ats',
       config: { companies: ['board=Вакансии Frontend | Удалёнка'] },
     });
-    const ats = explainJobPosting(channel, { env, now: NOW, source: named }).posting;
+    const ats = explainJobPosting(channel, { env: postingEnv, now: NOW, source: named }).posting;
     expect(ats?.hiringOrganization).toEqual({ '@type': 'Organization', name: 'Вакансии Frontend | Удалёнка' });
     const slugOnly = makeSource({ kind: 'ats', config: { companies: ['acme'] } });
     const slugLead = lead('slug', {
@@ -310,7 +443,7 @@ describe('JobPosting', () => {
       createdAt: new Date(NOW).toISOString(),
       text: 'Company: acme\nИщем инженера.',
     });
-    expect(explainJobPosting(slugLead, { env, now: NOW, source: slugOnly }).skip).toBe('no-organization');
+    expect(explainJobPosting(slugLead, { env: postingEnv, now: NOW, source: slugOnly }).skip).toBe('no-organization');
     const stored = lead('stored-slug', {
       company: 'acme',
       author: 'acme',
@@ -319,7 +452,7 @@ describe('JobPosting', () => {
       text: 'Ищем инженера.',
       metadata: { facts: { company: 'acme' } },
     });
-    const decided = explainJobPosting(stored, { env, now: NOW, source: slugOnly });
+    const decided = explainJobPosting(stored, { env: postingEnv, now: NOW, source: slugOnly });
     expect(decided.skip).toBe('no-organization');
     expect(JSON.stringify(decided.posting ?? {})).not.toContain('"acme"');
   });
@@ -330,8 +463,8 @@ describe('JobPosting', () => {
       isRemote: false,
       createdAt: new Date(NOW).toISOString(),
     });
-    expect(explainJobPosting(bare, { env, now: NOW }).skip).toBe('no-location');
-    const html = renderLeadPage({ lead: bare, version: 'test', indexEnv: env });
+    expect(explainJobPosting(bare, { env: postingEnv, now: NOW }).skip).toBe('no-location');
+    const html = renderLeadPage({ lead: bare, version: 'test', indexEnv: postingEnv });
     expect(html).not.toContain('JobPosting');
     expect(html).not.toContain('FULL_TIME');
   });
@@ -357,12 +490,29 @@ describe('JobPosting', () => {
     ];
     const cards: Lead[] = [
       lead('job-city', { createdAt: fresh }),
-      lead('gig-text', { type: 'gig', company: undefined, city: 'Москва', createdAt: fresh, text: 'Компания: Яндекс Лавка\nНужен фронтенд.' }),
+      lead('gig-text', {
+        type: 'gig',
+        company: undefined,
+        city: 'Москва',
+        createdAt: fresh,
+        text: 'Компания: Яндекс Лавка\nНужен фронтенд.',
+      }),
       lead('closed', { state: 'closed', createdAt: fresh }),
       lead('expired-gig', { type: 'gig', createdAt: new Date(NOW - 15 * 86_400_000).toISOString() }),
       lead('expired-job', { createdAt: new Date(NOW - 40 * 86_400_000).toISOString() }),
-      lead('no-org', { company: undefined, author: undefined, city: 'Москва', text: 'Ищем человека, компания не названа.', createdAt: fresh }),
-      lead('placeholder-org', { company: 'Unknown', author: 'openradar', text: 'Вакансия без имени.', createdAt: fresh }),
+      lead('no-org', {
+        company: undefined,
+        author: undefined,
+        city: 'Москва',
+        text: 'Ищем человека, компания не названа.',
+        createdAt: fresh,
+      }),
+      lead('placeholder-org', {
+        company: 'Unknown',
+        author: 'openradar',
+        text: 'Вакансия без имени.',
+        createdAt: fresh,
+      }),
       lead('remote-bare', { isRemote: true, city: undefined, createdAt: fresh }),
       lead('remote-online', { isRemote: true, city: 'Онлайн', createdAt: fresh }),
       lead('remote-country', { isRemote: true, city: undefined, metadata: { country: 'DE' }, createdAt: fresh }),
@@ -383,7 +533,7 @@ describe('JobPosting', () => {
     for (const card of cards) {
       const expected = fixtures.find((item) => item.id === card.id);
       const decision = explainJobPosting(card, {
-        env,
+        env: postingEnv,
         now: NOW,
         sourceKind: expected?.sourceKind,
         source: card.id === 'ats-author' ? atsNamed : undefined,

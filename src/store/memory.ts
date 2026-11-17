@@ -904,14 +904,29 @@ export class MemoryStore implements Store {
       .filter((lead) => (lead.state ?? 'active') === 'active' && lead.status !== 'rejected')
       .filter((lead) => !after || lead.createdAt >= after)
       .filter((lead) => !before || lead.createdAt <= before)
-      .map((lead) => ({
-        id: lead.id,
-        createdAt: lead.createdAt,
-        type: lead.type,
-        state: lead.state,
-        status: lead.status,
-        score: lead.score,
-      }));
+      .map((lead) => {
+        const source = this.sources.get(lead.sourceId);
+        const companies = source?.config.companies;
+        return {
+          id: lead.id,
+          createdAt: lead.createdAt,
+          type: lead.type,
+          state: lead.state,
+          status: lead.status,
+          score: lead.score,
+          company: lead.company,
+          author: lead.author,
+          budget: lead.budget,
+          skills: lead.skills,
+          city: lead.city,
+          isRemote: lead.isRemote,
+          workplaceType: lead.workplaceType,
+          sourceKind: source?.kind,
+          atsCompanies: source?.kind === 'ats' && Array.isArray(companies)
+            ? companies.filter((entry): entry is string => typeof entry === 'string')
+            : undefined,
+        };
+      });
   }
 
   private queryLeads(options: FeedOptions, feedOnly = false, countOnly = false): Lead[] {

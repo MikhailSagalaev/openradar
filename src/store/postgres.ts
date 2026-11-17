@@ -1210,19 +1210,28 @@ export class PostgresStore implements Store {
 
   async listLeadsForSitemap(options: { createdAfter?: string; createdBefore?: string } = {}): Promise<SitemapLeadRef[]> {
     const params: unknown[] = [];
-    const where = [`state = 'active'`, `status <> 'rejected'`];
+    const where = [`l.state = 'active'`, `l.status <> 'rejected'`];
     if (options.createdAfter && options.createdBefore) {
       params.push(options.createdAfter, options.createdBefore);
-      where.push(`created_at BETWEEN $1::timestamptz AND $2::timestamptz`);
+      where.push(`l.created_at BETWEEN $1::timestamptz AND $2::timestamptz`);
     } else if (options.createdAfter) {
       params.push(options.createdAfter);
-      where.push(`created_at >= $${params.length}::timestamptz`);
+      where.push(`l.created_at >= $${params.length}::timestamptz`);
     } else if (options.createdBefore) {
       params.push(options.createdBefore);
-      where.push(`created_at <= $${params.length}::timestamptz`);
+      where.push(`l.created_at <= $${params.length}::timestamptz`);
     }
+    // Quality columns only. The post body stays in the table: char length is not required,
+    // and last_seen is not an edit time.
     const res = await this.webQuery(
-      `SELECT id, created_at, type, state, status, score FROM leads WHERE ${where.join(' AND ')} ORDER BY created_at DESC`,
+      `SELECT l.id, l.created_at, l.type, l.state, l.status, l.score,
+              l.company, l.author, l.budget, l.skills_json, l.city, l.is_remote, l.workplace_type,
+              s.kind AS source_kind,
+              CASE WHEN s.kind = 'ats' THEN s.config_json->'companies' ELSE NULL END AS ats_companies
+         FROM leads l
+         LEFT JOIN sources s ON s.id = l.source_id
+        WHERE ${where.join(' AND ')}
+        ORDER BY l.created_at DESC`,
       params,
     );
     return res.rows.map((r) => ({
@@ -1232,6 +1241,15 @@ export class PostgresStore implements Store {
       state: (r.state as LeadState) || 'active',
       status: r.status as LeadStatus,
       score: r.score !== null && r.score !== undefined ? Number(r.score) : undefined,
+      company: r.company ? String(r.company) : undefined,
+      author: r.author ? String(r.author) : undefined,
+      budget: r.budget !== null && r.budget !== undefined ? Number(r.budget) : undefined,
+      skills: parseJsonArray(r.skills_json).filter((item): item is string => typeof item === 'string'),
+      city: r.city ? String(r.city) : undefined,
+      isRemote: r.is_remote === null || r.is_remote === undefined ? undefined : Boolean(r.is_remote),
+      workplaceType: r.workplace_type ? String(r.workplace_type) : undefined,
+      sourceKind: r.source_kind ? String(r.source_kind) : undefined,
+      atsCompanies: parseJsonArray(r.ats_companies).filter((item): item is string => typeof item === 'string'),
     }));
   }
 

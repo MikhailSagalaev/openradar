@@ -215,7 +215,10 @@ export interface UserVoteResult {
   myVote?: LeadVoteSignal | null;
 }
 
-/** A lead row small enough to build the sitemap without loading the post body. */
+/**
+ * A lead row for the sitemap. Quality fields only: no post body and no `last_seen`.
+ * `lastmod` stays `createdAt`.
+ */
 export interface SitemapLeadRef {
   id: string;
   createdAt: string;
@@ -223,6 +226,16 @@ export interface SitemapLeadRef {
   state?: LeadState;
   status?: LeadStatus;
   score?: number;
+  company?: string;
+  author?: string;
+  budget?: number;
+  skills?: string[];
+  city?: string;
+  isRemote?: boolean;
+  workplaceType?: string;
+  sourceKind?: string;
+  /** ATS `config.companies`, so a board slug is not treated as an employer. */
+  atsCompanies?: string[];
 }
 
 export interface FeedOptions extends ListLeadsOptions {

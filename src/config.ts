@@ -97,6 +97,8 @@ const envSchema = z.object({
   RADAR_SUBSCRIPTION_BOT: booleanFromEnv(false),
   RADAR_GIG_TTL_DAYS: z.coerce.number().int().nonnegative().default(14),
   RADAR_JOB_TTL_DAYS: z.coerce.number().int().nonnegative().default(30),
+  // Index gate on leadQuality (0–4 checks). 0 disables it. Default: at least three real signals.
+  RADAR_INDEXABLE_MIN_QUALITY: z.coerce.number().int().min(0).max(4).default(3),
   // Per-IP requests per minute on public GETs. Limiters live in process memory: each process counts on its own.
   RADAR_FEED_RATE_PER_MIN: z.coerce.number().int().positive().default(120),
   RADAR_RSS_RATE_PER_MIN: z.coerce.number().int().positive().default(60),

@@ -160,6 +160,13 @@ export interface Translations {
   langRu: string;
   langEn: string;
   similarLeads: string;
+  atAGlance: string;
+  originHeading: string;
+  deadline: string;
+  platform: string;
+  original: string;
+  client: string;
+  employer: string;
   navProfile: string;
   recentSearches: string;
   popularSkills: string;
@@ -355,6 +362,13 @@ export const RU: Translations = {
   langRu: 'На русском',
   langEn: 'На английском',
   similarLeads: 'Похожие заказы',
+  atAGlance: 'Кратко',
+  originHeading: 'Источник и заказчик',
+  deadline: 'Срок',
+  platform: 'Площадка',
+  original: 'Оригинал',
+  client: 'Заказчик',
+  employer: 'Работодатель',
   navProfile: 'Профиль',
   recentSearches: 'Недавние запросы',
   popularSkills: 'Популярные навыки за неделю',
@@ -545,6 +559,13 @@ export const EN: Translations = {
   langRu: 'In Russian',
   langEn: 'In English',
   similarLeads: 'Similar leads',
+  atAGlance: 'At a glance',
+  originHeading: 'Source and client',
+  deadline: 'Deadline',
+  platform: 'Platform',
+  original: 'Original',
+  client: 'Client',
+  employer: 'Employer',
   navProfile: 'Profile',
   recentSearches: 'Recent searches',
   popularSkills: 'Popular skills this week',
