@@ -85,7 +85,7 @@ export class ServiceMonitor {
       `[openradar alert] Сервис ${service.label} (${service.name}) перешел в статус ERROR!`,
       service.httpStatus ? `HTTP Status: ${service.httpStatus}` : undefined,
       service.error ? `Причина: ${service.error}` : undefined,
-      service.httpStatus === 402 ? 'Требуется пополнить баланс или обновить SUBQ_API_KEY.' : undefined,
+      service.httpStatus === 402 ? 'Все ключи SubQ исчерпаны: пополните баланс или добавьте новый ключ в SUBQ_API_KEYS.' : undefined,
       service.httpStatus === 401 ? 'Ключ API недействителен (Unauthorized).' : undefined,
       `Время: ${service.lastChecked}`,
     ]

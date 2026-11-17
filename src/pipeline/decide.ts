@@ -21,8 +21,75 @@ function decideKey(env: Env): string | undefined {
   return env.RADAR_DECIDE_KEY ?? env.SUBQ_API_KEY;
 }
 
+/** Ordered, deduplicated pool: explicit override first, then the comma list, then the single key. */
+export function decideKeys(env: Env): string[] {
+  const raw = [env.RADAR_DECIDE_KEY, ...(env.SUBQ_API_KEYS?.split(',') ?? []), env.SUBQ_API_KEY];
+  const seen = new Set<string>();
+  const keys: string[] = [];
+  for (const entry of raw) {
+    const key = entry?.trim();
+    if (key && !seen.has(key)) {
+      seen.add(key);
+      keys.push(key);
+    }
+  }
+  return keys;
+}
+
+/** A key that answers one of these is dead until the cooldown passes: bad key, no credits, no access. */
+const KEY_DEAD = new Set([401, 402, 403]);
+
+export interface DecisionKeyPool {
+  /** First key not parked, or undefined when every key is parked. */
+  current(): string | undefined;
+  /** Park a dead key; the next current() skips it until the cooldown passes. */
+  park(key: string, status: number): void;
+  /** Status that parked the most recent key — the batch's stop reason when all keys are parked. */
+  parkedStatus(): number | undefined;
+  readonly size: number;
+}
+
+/**
+ * Shared across rounds so an exhausted key stays parked instead of being retried every batch.
+ * SubQ credits are a prepaid balance with no timed reset, but a top-up (or a fresh grant on the
+ * account) brings the same key back, so parked keys are retried once the cooldown passes.
+ */
+export function newDecisionKeys(env: Env, now: () => number = Date.now): DecisionKeyPool {
+  const keys = decideKeys(env);
+  const cooldownMs = (env.RADAR_DECIDE_KEY_COOLDOWN_MIN ?? 60) * 60_000;
+  const parkedUntil = new Map<string, number>();
+  let lastStatus: number | undefined;
+  return {
+    size: keys.length,
+    current() {
+      const at = now();
+      for (const key of keys) {
+        const until = parkedUntil.get(key);
+        if (until === undefined) return key;
+        if (until <= at) {
+          parkedUntil.delete(key);
+          return key;
+        }
+      }
+      return undefined;
+    },
+    park(key, status) {
+      parkedUntil.set(key, now() + cooldownMs);
+      lastStatus = status;
+    },
+    parkedStatus() {
+      return lastStatus;
+    },
+  };
+}
+
+/** Never log a full key: the prefix is enough to tell the pool's keys apart. */
+function maskKey(key: string): string {
+  return `${key.slice(0, 10)}…`;
+}
+
 export function decisionsEnabled(env: Env): boolean {
-  return Boolean(env.RADAR_DECIDE_ENABLED && decideKey(env));
+  return Boolean(env.RADAR_DECIDE_ENABLED && decideKeys(env).length > 0);
 }
 
 export interface DecideDeps {
@@ -33,6 +100,8 @@ export interface DecideDeps {
   now?: () => Date;
   /** Idempotency cache for the paid call (plan 021E); the runner shares one across rounds. */
   replay?: ReplayCache<ModelDecision | number | undefined>;
+  /** Key pool shared across rounds; without it the single configured key is used as before. */
+  keys?: DecisionKeyPool;
 }
 
 export interface DecideSummary {
@@ -61,15 +130,27 @@ export function newDecisionReplay(): ReplayCache<ModelDecision | number | undefi
 async function askOne(lead: { id: string; title: string; text: string }, deps: DecideDeps): Promise<ModelDecision | number | undefined> {
   const { env } = deps;
   const state = scrubContacts(`${lead.title}\n\n${lead.text.slice(0, MAX_TEXT)}`);
-  const response = await deps.fetchImpl(env.RADAR_DECIDE_URL!, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${decideKey(env)}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ model: env.RADAR_DECIDE_MODEL, state, questions: DECISION_QUESTIONS }),
-    signal: AbortSignal.timeout(REQUEST_MS),
-  });
-  if (!response.ok) return response.status;
-  const decidedAt = (deps.now?.() ?? new Date()).toISOString();
-  return parseDecision(await response.json(), lead.id, env.RADAR_DECIDE_MODEL!, decidedAt);
+  for (;;) {
+    const key = deps.keys ? deps.keys.current() : decideKey(env);
+    // Every key is parked: report the status that killed the last one without a network call.
+    if (!key) return deps.keys?.parkedStatus() ?? 402;
+    const response = await deps.fetchImpl(env.RADAR_DECIDE_URL!, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ model: env.RADAR_DECIDE_MODEL, state, questions: DECISION_QUESTIONS }),
+      signal: AbortSignal.timeout(REQUEST_MS),
+    });
+    if (!response.ok) {
+      if (deps.keys && KEY_DEAD.has(response.status)) {
+        deps.keys.park(key, response.status);
+        deps.logger.warn('decision key parked, rotating', { key: maskKey(key), status: response.status, left: deps.keys.size });
+        continue;
+      }
+      return response.status;
+    }
+    const decidedAt = (deps.now?.() ?? new Date()).toISOString();
+    return parseDecision(await response.json(), lead.id, env.RADAR_DECIDE_MODEL!, decidedAt);
+  }
 }
 
 async function withRetry<T>(ask: () => Promise<T>): Promise<T> {

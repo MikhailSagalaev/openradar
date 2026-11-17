@@ -1,4 +1,4 @@
-import { applyDecisions, decisionsEnabled, newDecisionReplay, runDecisions } from './decide.ts';
+import { applyDecisions, decisionsEnabled, newDecisionKeys, newDecisionReplay, runDecisions, type DecisionKeyPool } from './decide.ts';
 import { runEnrichment } from './enrich.ts';
 import { runVisaSponsors } from '../research/visa-sponsors.ts';
 import { webPubkey } from '../hub/web-key.ts';
@@ -48,6 +48,8 @@ export class PollRunner {
   private nextDecisionsAt = 0;
   /** Shared idempotency cache for the paid model call across rounds (plan 021E). */
   private decisionReplay = newDecisionReplay();
+  /** Shared key pool: an exhausted key stays parked across rounds until its cooldown passes. */
+  private decisionKeys: DecisionKeyPool | undefined;
   private enrichmentRunning = false;
   private nextEnrichmentAt = 0;
   private visaSponsorsRunning = false;
@@ -260,7 +262,8 @@ export class PollRunner {
     if (Date.now() < this.nextDecisionsAt) return;
     this.nextDecisionsAt = Date.now() + EXTRACTION_INTERVAL_MS;
     this.decisionsRunning = true;
-    void runDecisions({ store: this.deps.store, env, logger: this.deps.logger.child('decide'), fetchImpl: fetch, replay: this.decisionReplay }, Math.max(1, Math.round(perHour / BATCHES_PER_HOUR)))
+    this.decisionKeys ??= newDecisionKeys(env);
+    void runDecisions({ store: this.deps.store, env, logger: this.deps.logger.child('decide'), fetchImpl: fetch, replay: this.decisionReplay, keys: this.decisionKeys }, Math.max(1, Math.round(perHour / BATCHES_PER_HOUR)))
       .then((summary) => {
         if (summary.asked) this.logger.info('decisions finished', { ...summary });
         if (this.deps.services) {

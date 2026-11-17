@@ -62,6 +62,8 @@ const envSchema = z.object({
   // ATS board-diff: a job removed from its board is soft-closed, a returned one reopened.
   RADAR_ATS_GHOST_CHECK: booleanFromEnv(true),
   SUBQ_API_KEY: optionalString,
+  SUBQ_API_KEYS: optionalString,
+  RADAR_DECIDE_KEY_COOLDOWN_MIN: z.coerce.number().int().nonnegative().default(60),
   RADAR_EXTRACT_PROVIDER: z.enum(['openai', 'gigachat']).default('openai'),
   GIGACHAT_AUTH_KEY: optionalString,
   GIGACHAT_SCOPE: z.string().default('GIGACHAT_API_PERS'),

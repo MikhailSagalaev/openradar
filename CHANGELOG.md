@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.75.0 — 2026-11-17
+
+- **Decision key rotation (`SUBQ_API_KEYS`)**: the decide classifier now takes a comma-separated pool of SubQ keys (order: `RADAR_DECIDE_KEY`, then `SUBQ_API_KEYS`, then `SUBQ_API_KEY`, deduplicated). A key that answers 401/402/403 is parked and the next key answers the same post in the same round; the pool is shared across rounds, so an exhausted key is not retried every batch. Parked keys come back after `RADAR_DECIDE_KEY_COOLDOWN_MIN` (default 60) — SubQ credits are a prepaid balance with no timed reset, but a top-up revives the same key. When every key is parked the round stops with the parking status and makes no network calls; a 429 still stops the batch without parking the key. The 402 admin alert now points at `SUBQ_API_KEYS`.
+
 ## 0.73.2 — 2026-11-16
 
 - **Extension connect compatibility**: `/extension/connect` auto-assigns a server state nonce when legacy installed browser extensions connect without a `state` parameter, resolving the `Bad state` 400 error on sign-in.

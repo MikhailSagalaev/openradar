@@ -49,6 +49,10 @@ export interface Env {
   /** ATS board-diff: soft-close jobs removed from their board, reopen returned ones (plan 021B). */
   RADAR_ATS_GHOST_CHECK?: boolean;
   SUBQ_API_KEY?: string;
+  /** Comma-separated pool of SubQ keys; a key that answers 401/402/403 is parked and the next one takes over. */
+  SUBQ_API_KEYS?: string;
+  /** Minutes a parked decision key waits before it is tried again (credits may be topped up). 0 tries every round. */
+  RADAR_DECIDE_KEY_COOLDOWN_MIN: number;
   /** Site visitors may link their own Telegram account by QR (sessions stored encrypted). */
   RADAR_USER_TELEGRAM: boolean;
   RADAR_EXTRACT_PROVIDER: 'openai' | 'gigachat';

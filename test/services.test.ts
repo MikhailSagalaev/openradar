@@ -42,7 +42,8 @@ describe('ServiceMonitor', () => {
     expect(body.chat_id).toBe('987654321');
     expect(body.text).toContain('SubQ AI');
     expect(body.text).toContain('HTTP 402');
-    expect(body.text).toContain('Требуется пополнить баланс');
+    expect(body.text).toContain('пополните баланс');
+    expect(body.text).toContain('SUBQ_API_KEYS');
 
     // Repeated error before cooldown should NOT alert again
     monitor.record('subq', 'SubQ AI', 'error', { error: 'HTTP 402 Insufficient credits', httpStatus: 402 });
