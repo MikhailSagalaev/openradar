@@ -167,11 +167,11 @@ importers:
   .:
     dependencies:
       '@hono/node-server':
-        specifier: ^2.1.6
-        version: 2.1.6(hono@4.13.16)
+        specifier: ^2.1.8
+        version: 2.1.8(hono@4.13.18)
       '@mtcute/node':
-        specifier: 0.32.7
-        version: 0.32.7
+        specifier: 0.32.8
+        version: 0.32.8
       '@noble/curves':
         specifier: ^2.4.0
         version: 2.4.0
@@ -179,20 +179,20 @@ importers:
         specifier: ^1.2.0
         version: 1.2.0
       commander:
-        specifier: ^15.0.0
-        version: 15.0.0
+        specifier: ^15.1.0
+        version: 15.1.0
       dotenv:
-        specifier: ^18.0.9
-        version: 18.0.9
+        specifier: ^18.0.10
+        version: 18.0.10
       hono:
-        specifier: ^4.13.16
-        version: 4.13.16
+        specifier: ^4.13.18
+        version: 4.13.18
       imapflow:
-        specifier: ^2.10.0
-        version: 2.10.0
+        specifier: ^2.11.0
+        version: 2.11.0
       mailparser:
-        specifier: ^3.14.1
-        version: 3.14.1
+        specifier: ^3.14.3
+        version: 3.14.3
       pg:
         specifier: ^8.23.1
         version: 8.23.1
@@ -200,8 +200,8 @@ importers:
         specifier: ^3.13.0
         version: 3.13.0
       undici:
-        specifier: 7.30.1
-        version: 7.30.1
+        specifier: 8.12.4
+        version: 8.12.4
       uqr:
         specifier: 0.1.3
         version: 0.1.3
@@ -406,8 +406,8 @@ packages:
   '@fuman/utils@0.0.23':
     resolution: {integrity: sha512-dTpiCi5CLkqfpf2PvsvEyX4WP3dj3r8j/ffm0/H/Xi3atCI4O4wNWhN+nn8th6k24zC1+8ooJJdiSKylepJnag==}
 
-  '@hono/node-server@2.1.6':
-    resolution: {integrity: sha512-p/KH9MnfNcsm3sR6x4lNgm5j+QN4Et8srKredl9DZfXiyZ1UQ3aQ2YVpFLbqktYN5JI+DB+VZFKM2PqE5hLKjQ==}
+  '@hono/node-server@2.1.8':
+    resolution: {integrity: sha512-jdf7FHh6A1lzjpHHQUgxsg2GeER2vMetnAOfeActzcoli6jamlK+NAwL6Dsr5Fl3BS3tYUQzCdtZjU8Qxv7bEA==}
     engines: {node: '>=20'}
     peerDependencies:
       hono: ^4 || ^5.0.0-0
@@ -422,26 +422,26 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@mtcute/core@0.32.7':
-    resolution: {integrity: sha512-S2Vu0PCPo/hqWd0u0WLRK1PdXi/bnOEInViRCdURwxnY0DP2Gh0b81vL1z7enGLjWBDazgPgwelu+pqRABOIdA==}
+  '@mtcute/core@0.32.8':
+    resolution: {integrity: sha512-X/CLzn1ageA8pXsFa5E/AuIq4svba4PYUeoamy9vSU569wvNBjWKMyQ8ehV04DJ2pymyYfYXgh52rsJDWqRNUQ==}
 
   '@mtcute/file-id@0.32.6':
     resolution: {integrity: sha512-qnHRstP/aCxl7L/OG3ZuiiLYiDNALCcU8ZpeASZx+BvqRRvsJORNdG80jWy8yhdpqQmWtamoq2ywgzOvTuBmgA==}
 
-  '@mtcute/html-parser@0.32.7':
-    resolution: {integrity: sha512-dy0Thz+tFLsc6CSD/f8qPN1HH5DSAmJ+fNo1pQAwV48zJsAFvQgAfeUMKFmYCHsf/mTUJ+LoUi5pHEdjeUcvgg==}
+  '@mtcute/html-parser@0.32.8':
+    resolution: {integrity: sha512-wlbYNFNBE7v5PHVl9qpzFIEa95uqC4/JCajc+JuDDkZ1wcqsKqkYd8Xv5avN4fBZ8ac3j6YIRhj6n7o/o6Uxzw==}
 
-  '@mtcute/markdown-parser@0.32.7':
-    resolution: {integrity: sha512-kAaiwQWpaHd3AJfVDw3Is4iY5R9Uz8gl0m/mg9TTE+RQ9n6K3tbC2k0ZGFPqdYhXOjYlJmzizwTE3hKj1nb4lA==}
+  '@mtcute/markdown-parser@0.32.8':
+    resolution: {integrity: sha512-6ae0hz2vOjaPgaukBkxoNUrBWYu6zmIxHTCccHnm7SN1ZmW3AnAfiZuFs0Ooc9Umb5LUhRJRPc3wQGU/mP1cEw==}
 
-  '@mtcute/node@0.32.7':
-    resolution: {integrity: sha512-AmysnHyp870ESObBJSZWIHvRGW/Aq49dTZFS5Sa6v7z51m9r9Ysbzh1SMTzc7eZTHfTWCisqwtn4w8YUlm3RVw==}
+  '@mtcute/node@0.32.8':
+    resolution: {integrity: sha512-iY3j7F+guRiWxuPa1sNe003VMb2l1WM9fS+y59Mo3F6NFIBRJ1GoWljUMN/nB+hV5yqcdEJh0eVqyY5sE9qp5g==}
 
   '@mtcute/tl-runtime@0.32.6':
     resolution: {integrity: sha512-5Y31HHeH3GoZAqtPulh5L12OEvpk7prf1jPWkN0lN8ifCImCo+txqM1OA0yOnkpcsfNkUI4J3r3kuIAFTrl38g==}
 
-  '@mtcute/wasm@0.32.6':
-    resolution: {integrity: sha512-vDq8YdLoaZQfDKmc/ANa3cBg0i+vkWn+LRFUPzv4dt24BNC695b1c0M8coI8+z4JcwaVFnzjBusXTe8bL0W2Qg==}
+  '@mtcute/wasm@0.32.8':
+    resolution: {integrity: sha512-nT988eIWH0qQLNDXTTpLQkqx6TRc70dS1QR51zyocr6b4uPOpJ0c1SbZPrWhAoKvxT+wZjZP39oHDaoldiKlIg==}
 
   '@noble/curves@2.4.0':
     resolution: {integrity: sha512-P4/62zrgfH33CneE3Dn4WhJVA22YUU0eR51wKIan4NVRvwsA0YnPTwWGpNbpuacSujmSFLvyzpyuR30+fbq2Ew==}
@@ -838,8 +838,8 @@ packages:
   '@vitest/spy@5.1.0':
     resolution: {integrity: sha512-2DPO5OMHWKrBngC+fCmTQqemNF0gidRhp3lxbBmRhW+M1XJrfgPpqNqWVevXtn2f2ufD5ZaR1B6B641aAlcX5A==}
 
-  '@zone-eu/mailsplit@5.4.29':
-    resolution: {integrity: sha512-CCUNycmUjrV5M0wNf23waWAt9eOHczhjLbUQS7k0FNJvR0py9VSqHFt+tSl/D0+XI73VLG0U+PwYtq9R0zsm9Q==}
+  '@zone-eu/mailsplit@5.4.30':
+    resolution: {integrity: sha512-qN0KT6/ziAFvo5TzscaqpurIJaJQEXPPtqBZnpyhiGrACOKLDVMV6Lm57kXt5e/8zZUWoYiSC8oKl/aewtrJDQ==}
     engines: {node: '>=20.0.0'}
 
   assertion-error@2.0.1:
@@ -883,8 +883,8 @@ packages:
   chownr@1.1.4:
     resolution: {integrity: sha512-jJ0bqzaylmJtVnNgzTeSOs8DPavpbYgEr/b0YL8/2GO3xJEhInFmhKMUnEJQjZumK7KXGFhUy89PrsJWlakBVg==}
 
-  commander@15.0.0:
-    resolution: {integrity: sha512-z67u4ZhzCL/Tydu1lJARtEZYWbWaN7oYLHbsuzocr6y4N6WZAagG3RQ4FW61V1/0+jImpj293XfrcYnd1qxtPg==}
+  commander@15.1.0:
+    resolution: {integrity: sha512-cgnQ88TRrWcC7pVq46RzJVRMktu3W2RcbnoidnfBsl1bmDCBwJS/udcIZpKoCrbAYYaCqsz1yZCVIgbIaU3ddQ==}
     engines: {node: '>=22.12.0'}
 
   css-select@5.2.2:
@@ -923,13 +923,13 @@ packages:
   domutils@3.2.2:
     resolution: {integrity: sha512-6kZKyUajlDuqlHKVX1w7gyslj9MPIXzIFiz/rGu35uC1wMi+kMhQwGhl4lt9unC9Vb9INnY9Z3/ZA3+FhASLaw==}
 
-  dotenv@18.0.9:
-    resolution: {integrity: sha512-3fVOW4cB02R066PUSwn8O4TJyz9NckQl7F81blIbaq9jKBm2tSmOKky7ZHIXzGvkVPXCSn6jkpziBPZdGFs8Tw==}
+  dotenv@18.0.10:
+    resolution: {integrity: sha512-89FAA1xchzK2mxVWdr5F/0rldwiueXs6zJM86rO66EzekR1iBdiXRthyG+m5GvkJaFH3C2LESzamTkgndmLT2A==}
     engines: {node: '>=12'}
     hasBin: true
 
-  encoding-japanese@2.4.0:
-    resolution: {integrity: sha512-PE0KjlsDy9JSsoU4C2Q8NXb1kC4c+bZRac9ZvHXUE4q1Ht63gScKMdEy9jst9+Fi3M4eDkqzkEhBZvix4blP2A==}
+  encoding-japanese@2.5.0:
+    resolution: {integrity: sha512-5TKhaMWTUF777NQ16OrAkJFuEd1uOnEBw8ODeXFTc/Y9csZZQ6/jiIS5r4aFuzfowu9gLGrE51zqI2H0dLwlmg==}
     engines: {node: '>=18.0.0'}
 
   encoding-sniffer@0.2.1:
@@ -999,8 +999,8 @@ packages:
     resolution: {integrity: sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==}
     hasBin: true
 
-  hono@4.13.16:
-    resolution: {integrity: sha512-AOLOEhvrV+iH92xXCnFr/5+3KjPKcI3xP63XJtX5spAnkznPdHijlIsUTpi7/9EhWqrTCekw5c5zh1K+YsVw7A==}
+  hono@4.13.18:
+    resolution: {integrity: sha512-H9q/E1XizaWstJxUW881dmLxEj+t/TrGGnyxINkm4+sK0qUwsMtFdo2BWI9Vs3cIS19MU6b6iCijoUoEf4f3DA==}
     engines: {node: '>=16.9.0'}
 
   html-to-text@10.0.1:
@@ -1021,8 +1021,8 @@ packages:
   ieee754@1.2.1:
     resolution: {integrity: sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA==}
 
-  imapflow@2.10.0:
-    resolution: {integrity: sha512-J4YH1eHwemE00xaCT2vn30s+81iJi+C4OHQEoO6/hptA/z75nGdP1isU3oDfMaiheHD240LIhMMJcMMCJ5RDYA==}
+  imapflow@2.11.0:
+    resolution: {integrity: sha512-Jv/PBBbBsKjBkdN5DUbELRCo7Xm3DQz+gYBkAy4h87ObQthTRd7nu53WV/dKDf2M8imoJZY+eQFBVkQAJagC6g==}
     engines: {node: '>=20.0.0'}
 
   inherits@2.0.4:
@@ -1042,8 +1042,8 @@ packages:
     resolution: {integrity: sha512-Nyh3H90B3gRtrcxIe56Ayy7635J0jmh6AbxbQgQae8wrSPQMH5wFqJChiMTB13yKG512L3YspbA5DzumhFTITA==}
     engines: {node: '>=20.0.0'}
 
-  libmime@5.6.3:
-    resolution: {integrity: sha512-cuTUW/Jybvh5O4/U9p61gyutHOjDtZyGQYuY99+bfnaFwqcDf2Nb+R6hMHY6DDen2H9wLKQSMpofWUgn2TI5JQ==}
+  libmime@5.6.4:
+    resolution: {integrity: sha512-QWiiwq3ujIUSsCCjFDldDN7FfXuLYSTnEln0oeYfOjgqyVlRV6WQ3UyJ/paguoz8Ynxy1s7k3kh6xomS3bJkCw==}
     engines: {node: '>=20.0.0'}
 
   libqp@3.0.1:
@@ -1133,8 +1133,8 @@ packages:
   magic-string@1.4.5:
     resolution: {integrity: sha512-oLLC2+YvQUfAa+vxoufE/yc1icb87M9iXIRqAoR/2EhE/8cb3SF/+Gi0c2By1B+5Vz2e2vQtUvHiu1+63Znh+w==}
 
-  mailparser@3.14.1:
-    resolution: {integrity: sha512-Z0LLk7F0yhSCx3xjyL8BMm6dXO3vuWrSAeVhm1F18wVGVBbLAKOsVsCjPyOhJy+KuyDW9PRyDuyiPb7yJCHwVA==}
+  mailparser@3.14.3:
+    resolution: {integrity: sha512-GFaKR2tMTDALRM9PQ3DkfOmWeLaRerjifEhCdUb4mM2+VtO+jZFhPMvQivvM/Df/51qYmH7msrreeQmdWjM2kw==}
     engines: {node: '>=20.0.0'}
 
   mimic-response@3.1.0:
@@ -1159,8 +1159,8 @@ packages:
     resolution: {integrity: sha512-bkb/RkuWCE64eWu1PCh3Fu2pGc9mKRs+kOE+FU2bGHRYlQa86/D321DSATV54AsCQMKz3/xSt9sRgraZTpqdhQ==}
     engines: {node: '>=10'}
 
-  nodemailer@10.3.1:
-    resolution: {integrity: sha512-uF0AFsJC07Y1vdW7p580DKAnh7rAO+4UPSSB3mDCPNDufoiaOebV6JmrzpxB14OjEEEiBsNdYoM2Y+fN8M7BBA==}
+  nodemailer@10.5.0:
+    resolution: {integrity: sha512-L/w/HH5MqpzMDuZD7fQdt/+KqymuvrpaApaIjAH2XA3ILePwlcvXCVVvP75xVrXCEt2ggK2marrrHHFB5Qu0kA==}
     engines: {node: '>=20.0.0'}
 
   nth-check@2.1.1:
@@ -1425,6 +1425,10 @@ packages:
     resolution: {integrity: sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==}
     engines: {node: '>=20.18.1'}
 
+  undici@8.12.4:
+    resolution: {integrity: sha512-8Mx+uNKKER2bA4AdtedkqRbwUCIJFr2nJckXRe5yrDqzePqwLP7VNcctN8/XdmDSbF7mS+jJKIszlL+vbam1VA==}
+    engines: {node: '>=22.19.0'}
+
   uqr@0.1.3:
     resolution: {integrity: sha512-0rjE8iEJe4YmT9TOhwsZtqCMRLc5DXZUI2UEYUUg63ikBkqqE5EYWaI0etFe/5KUcmcYwLih2RND1kq+hrUJXA==}
 
@@ -1644,9 +1648,9 @@ snapshots:
 
   '@fuman/utils@0.0.23': {}
 
-  '@hono/node-server@2.1.6(hono@4.13.16)':
+  '@hono/node-server@2.1.8(hono@4.13.18)':
     dependencies:
-      hono: 4.13.16
+      hono: 4.13.18
 
   '@jridgewell/resolve-uri@3.1.2': {}
 
@@ -1657,7 +1661,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
 
-  '@mtcute/core@0.32.7':
+  '@mtcute/core@0.32.8':
     dependencies:
       '@fuman/io': 0.0.23
       '@fuman/net': 0.0.23
@@ -1673,26 +1677,26 @@ snapshots:
       '@mtcute/tl-runtime': 0.32.6
       long: 5.3.2
 
-  '@mtcute/html-parser@0.32.7':
+  '@mtcute/html-parser@0.32.8':
     dependencies:
-      '@mtcute/core': 0.32.7
+      '@mtcute/core': 0.32.8
       htmlparser2: 10.1.0
       long: 5.3.2
 
-  '@mtcute/markdown-parser@0.32.7':
+  '@mtcute/markdown-parser@0.32.8':
     dependencies:
-      '@mtcute/core': 0.32.7
+      '@mtcute/core': 0.32.8
       long: 5.3.2
 
-  '@mtcute/node@0.32.7':
+  '@mtcute/node@0.32.8':
     dependencies:
       '@fuman/net': 0.0.23
       '@fuman/node': 0.0.23
       '@fuman/utils': 0.0.23
-      '@mtcute/core': 0.32.7
-      '@mtcute/html-parser': 0.32.7
-      '@mtcute/markdown-parser': 0.32.7
-      '@mtcute/wasm': 0.32.6
+      '@mtcute/core': 0.32.8
+      '@mtcute/html-parser': 0.32.8
+      '@mtcute/markdown-parser': 0.32.8
+      '@mtcute/wasm': 0.32.8
       better-sqlite3: 12.11.1
     transitivePeerDependencies:
       - ws
@@ -1702,7 +1706,7 @@ snapshots:
       '@fuman/utils': 0.0.23
       long: 5.3.2
 
-  '@mtcute/wasm@0.32.6': {}
+  '@mtcute/wasm@0.32.8': {}
 
   '@noble/curves@2.4.0':
     dependencies:
@@ -1921,10 +1925,10 @@ snapshots:
 
   '@vitest/spy@5.1.0': {}
 
-  '@zone-eu/mailsplit@5.4.29':
+  '@zone-eu/mailsplit@5.4.30':
     dependencies:
       libbase64: 1.4.1
-      libmime: 5.6.3
+      libmime: 5.6.4
       libqp: 3.0.1
 
   assertion-error@2.0.1: {}
@@ -1982,7 +1986,7 @@ snapshots:
 
   chownr@1.1.4: {}
 
-  commander@15.0.0: {}
+  commander@15.1.0: {}
 
   css-select@5.2.2:
     dependencies:
@@ -2022,9 +2026,9 @@ snapshots:
       domelementtype: 2.3.0
       domhandler: 5.0.3
 
-  dotenv@18.0.9: {}
+  dotenv@18.0.10: {}
 
-  encoding-japanese@2.4.0: {}
+  encoding-japanese@2.5.0: {}
 
   encoding-sniffer@0.2.1:
     dependencies:
@@ -2097,7 +2101,7 @@ snapshots:
 
   he@1.2.0: {}
 
-  hono@4.13.16: {}
+  hono@4.13.18: {}
 
   html-to-text@10.0.1:
     dependencies:
@@ -2124,13 +2128,13 @@ snapshots:
 
   ieee754@1.2.1: {}
 
-  imapflow@2.10.0:
+  imapflow@2.11.0:
     dependencies:
-      '@zone-eu/mailsplit': 5.4.29
-      encoding-japanese: 2.4.0
+      '@zone-eu/mailsplit': 5.4.30
+      encoding-japanese: 2.5.0
       iconv-lite: 0.7.3
       libbase64: 1.4.1
-      libmime: 5.6.3
+      libmime: 5.6.4
       libqp: 3.0.1
       pino: 10.3.1
       socks: 2.8.10
@@ -2145,9 +2149,9 @@ snapshots:
 
   libbase64@1.4.1: {}
 
-  libmime@5.6.3:
+  libmime@5.6.4:
     dependencies:
-      encoding-japanese: 2.4.0
+      encoding-japanese: 2.5.0
       iconv-lite: 0.7.3
       libbase64: 1.4.1
       libqp: 3.0.1
@@ -2213,14 +2217,14 @@ snapshots:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.6.0
 
-  mailparser@3.14.1:
+  mailparser@3.14.3:
     dependencies:
-      '@zone-eu/mailsplit': 5.4.29
+      '@zone-eu/mailsplit': 5.4.30
       he: 1.2.0
       html-to-text: 10.0.1
-      libmime: 5.6.3
+      libmime: 5.6.4
       linkify-it: 5.0.2
-      nodemailer: 10.3.1
+      nodemailer: 10.5.0
       punycode.js: 2.3.1
       tlds: 1.261.0
 
@@ -2238,7 +2242,7 @@ snapshots:
     dependencies:
       semver: 7.8.6
 
-  nodemailer@10.3.1: {}
+  nodemailer@10.5.0: {}
 
   nth-check@2.1.1:
     dependencies:
@@ -2551,6 +2555,8 @@ snapshots:
   undici-types@8.9.0: {}
 
   undici@7.30.1: {}
+
+  undici@8.12.4: {}
 
   uqr@0.1.3: {}
 
