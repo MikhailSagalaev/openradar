@@ -290,6 +290,49 @@ describe('sitemap index', () => {
     await runtime.store.close();
   });
 
+  it('keeps a two-signal lead out of the index and the guest catalog, and indexes a three-signal lead', async () => {
+    const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true });
+    expect(runtime.env.RADAR_INDEXABLE_MIN_QUALITY).toBe(3);
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed', config: {} });
+    const created = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    await runtime.store.insertLead(lead('score-two', {
+      sourceId: source.id,
+      title: 'Два сигнала',
+      company: 'Acme',
+      city: 'Казань',
+      skills: [],
+      budget: undefined,
+      createdAt: created,
+    }));
+    await runtime.store.insertLead(lead('score-three', {
+      sourceId: source.id,
+      title: 'Три сигнала',
+      company: 'Acme',
+      city: 'Казань',
+      skills: ['Python'],
+      budget: undefined,
+      createdAt: created,
+    }));
+    const app = createApp(runtime);
+    const thin = await (await app.request('/leads/score-two')).text();
+    expect(thin).toContain('<meta name="robots" content="noindex">');
+    const solid = await (await app.request('/leads/score-three')).text();
+    expect(solid).not.toContain('noindex');
+    const index = await (await app.request('/sitemap.xml')).text();
+    const files = [...index.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => new URL(match[1]!).pathname);
+    const pages: string[] = [];
+    for (const file of files) {
+      const xml = await (await app.request(file)).text();
+      for (const loc of xml.matchAll(/<loc>([^<]+)<\/loc>/g)) pages.push(new URL(loc[1]!).pathname);
+    }
+    expect(pages.some((path) => path.endsWith('/leads/score-two'))).toBe(false);
+    expect(pages.some((path) => path.endsWith('/leads/score-three'))).toBe(true);
+    const catalog = await (await app.request('/catalog')).text();
+    expect(catalog).not.toContain('/leads/score-two');
+    expect(catalog).toContain('/leads/score-three');
+    await runtime.store.close();
+  });
+
   it('builds one sitemap for parallel requests and ignores Host when the public URL is unset', async () => {
     const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true, RADAR_TIER_DELAYS: 'guest=0' });
     const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed', config: {} });

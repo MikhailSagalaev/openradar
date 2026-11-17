@@ -62,6 +62,17 @@ describe('http server', () => {
     }
   });
 
+  it('defaults the index quality threshold to 3 when the environment is empty', () => {
+    const saved = { ...process.env };
+    for (const key of Object.keys(process.env)) delete process.env[key];
+    try {
+      expect(loadEnv().RADAR_INDEXABLE_MIN_QUALITY).toBe(3);
+    } finally {
+      for (const key of Object.keys(process.env)) delete process.env[key];
+      Object.assign(process.env, saved);
+    }
+  });
+
   it('rejects unauthenticated requests to protected endpoints with 401 or redirect', async () => {
     const runtime = makeRuntime();
     const app = createApp(runtime);
