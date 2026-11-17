@@ -64,8 +64,10 @@ describe('leadQuality', () => {
     expect(leadQuality(card({ ...empty, author: 'Acme GmbH', sourceKind: 'ats', atsCompanies: ['acme=Acme GmbH'] })).checks.employer).toBe(true);
     expect(leadQuality(card({ ...empty, city: 'Онлайн', isRemote: true })).checks.place).toBe(true);
     expect(leadQuality(card({ ...empty, workplaceType: 'onsite' })).checks.place).toBe(false);
-    expect(indexableMinScore(DEFAULT_TTL_ENV)).toBe(2);
+    expect(indexableMinScore(DEFAULT_TTL_ENV)).toBe(3);
     expect(isIndexable(card(), DEFAULT_TTL_ENV, NODE_INDEX_POLICY, NOW)).toBe(true);
+    expect(isIndexable(card({ budget: undefined }), DEFAULT_TTL_ENV, NODE_INDEX_POLICY, NOW)).toBe(true);
+    expect(isIndexable(card({ budget: undefined, skills: [] }), DEFAULT_TTL_ENV, NODE_INDEX_POLICY, NOW)).toBe(false);
     expect(isIndexable(card(empty), DEFAULT_TTL_ENV, NODE_INDEX_POLICY, NOW)).toBe(false);
     expect(isIndexable(card({ ...empty, city: 'Москва' }), DEFAULT_TTL_ENV, NODE_INDEX_POLICY, NOW)).toBe(false);
   });
@@ -76,7 +78,7 @@ describe('leadQuality', () => {
     expect(isIndexable(card(empty), off, NODE_INDEX_POLICY, NOW)).toBe(true);
     expect(isIndexable(card({ state: 'closed' }), off, NODE_INDEX_POLICY, NOW)).toBe(false);
     expect(isIndexable(card({ type: 'gig', createdAt: '2026-10-01T00:00:00.000Z' }), off, NODE_INDEX_POLICY, NOW)).toBe(false);
-    expect(indexableMinScore({ RADAR_INDEXABLE_MIN_QUALITY: 9 })).toBe(2);
+    expect(indexableMinScore({ RADAR_INDEXABLE_MIN_QUALITY: 9 })).toBe(3);
   });
 
   it('reads a deadline only when the lead already states one', () => {
@@ -215,11 +217,13 @@ describe('catalog facts', () => {
       now: new Date(NOW),
       leads: [
         card({ id: 'good', createdAt: '2026-11-10T08:00:00.000Z' }),
+        card({ id: 'two', createdAt: '2026-11-10T08:00:00.000Z', budget: undefined, skills: [] }),
         card({ id: 'thin', createdAt: '2026-11-10T08:00:00.000Z', ...empty }),
       ],
     });
     const xml = [...bundle.files.values()].join('\n');
     expect(xml).toContain('/leads/good');
+    expect(xml).not.toContain('/leads/two');
     expect(xml).not.toContain('/leads/thin');
     expect(xml).not.toContain('/review');
   });

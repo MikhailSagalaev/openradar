@@ -16,6 +16,7 @@ import {
   renderLeadSitemapXml,
 } from '../src/server/seo.ts';
 import { translateCity, translateSkill, translateSourceTitle } from '../src/server/i18n.ts';
+import { DEFAULT_TTL_ENV } from '../src/core/indexable.ts';
 import { renderLeadPage, renderLeadsPage } from '../src/server/ui.ts';
 import { makeSource } from './helpers.ts';
 
@@ -215,11 +216,13 @@ describe('SEO catalog pages', () => {
       titleKey: 'разработчик frontend',
       reasons: [],
     };
+    // The company is only in the text, so leadQuality scores budget and city. This case checks the schema, not the default of 3.
     const html = renderLeadPage({
       lead,
       source: undefined,
       version: 'test',
       auth: undefined,
+      indexEnv: { ...DEFAULT_TTL_ENV, RADAR_INDEXABLE_MIN_QUALITY: 0 },
     });
     expect(html).toContain('"@type": "JobPosting"');
     expect(html).not.toContain('"employmentType"');

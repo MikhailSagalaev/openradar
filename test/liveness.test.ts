@@ -63,7 +63,8 @@ function lead(id: string, url: string, overrides: Partial<Lead> = {}): Lead {
 
 describe('closed-post check', () => {
   it('closes leads the board shows as closed and leaves the rest', async () => {
-    const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true, RADAR_TIER_DELAYS: 'guest=0,member=0' });
+    // The open order has a budget and a city only. The gate is off so noindex here means the board closed it, not the default of 3.
+    const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true, RADAR_TIER_DELAYS: 'guest=0,member=0', RADAR_INDEXABLE_MIN_QUALITY: 0 });
     const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed', config: { url: 'https://example.com/rss' } });
     await runtime.store.insertLead(lead('open', 'https://kwork.ru/projects/1', { sourceId: source.id }));
     await runtime.store.insertLead(lead('closed', 'https://kwork.ru/projects/2', { sourceId: source.id }));

@@ -16,11 +16,11 @@ import type { SourceConfig } from './types.ts';
 export const QUALITY_POINTS = 4;
 
 /**
- * At least two of employer, budget, skills, and location-or-format.
- * One signal is not a page worth indexing; requiring all four drops most real posts.
+ * At least three of employer, budget, skills, and location-or-format.
+ * Two signals still leave a thin page; requiring all four drops most real posts.
  * `0` turns the gate off.
  */
-export const DEFAULT_INDEXABLE_MIN_QUALITY = 2;
+export const DEFAULT_INDEXABLE_MIN_QUALITY = 3;
 
 const PLACEHOLDER_NAME =
   /^(?:unknown|n\/?a|none|null|undefined|openradar|confidential|не\s*указан(?:о|а)?|неизвестно|нет(?:\s+данных)?|—|–|-|\.+)$/i;

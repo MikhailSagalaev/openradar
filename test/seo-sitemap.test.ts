@@ -22,9 +22,15 @@ import { renderLeadPage } from '../src/server/ui.ts';
 import { createApp } from '../src/server/app.ts';
 import { makeSource, makeTestRuntime } from './helpers.ts';
 
-const env: TtlEnv = { ...DEFAULT_TTL_ENV };
-/** JobPosting cases that name no employer still have to be indexable, or the skip reason collapses into the quality gate. */
-const postingEnv: TtlEnv = { ...DEFAULT_TTL_ENV, RADAR_INDEXABLE_MIN_QUALITY: 0 };
+/**
+ * These cases check closed posts, expiry, the guest delay and JobPosting location rules.
+ * The shared fixture has an employer and a city only, two signals, under the default of 3.
+ * The gate is off here so that shortfall does not hide the rule under test.
+ * The default itself is asserted in lead-quality.test.ts.
+ */
+const env: TtlEnv = { ...DEFAULT_TTL_ENV, RADAR_INDEXABLE_MIN_QUALITY: 0 };
+/** Same gate-off env: a missing employer must stay `no-organization`, not `not-indexable`. */
+const postingEnv: TtlEnv = env;
 const NOW = Date.parse('2026-11-16T12:00:00.000Z');
 
 function lead(id: string, over: Partial<Lead> = {}): Lead {
@@ -124,7 +130,8 @@ describe('sitemap index', () => {
   });
 
   it('serves the index and the week file over HTTP, with a shared cache', async () => {
-    const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true, RADAR_TIER_DELAYS: 'guest=0' });
+    // `keep` has an employer and a city only. The gate is off so the test checks the week file, not the default of 3.
+    const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true, RADAR_TIER_DELAYS: 'guest=0', RADAR_INDEXABLE_MIN_QUALITY: 0 });
     const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed', config: {} });
     const created = new Date(NOW).toISOString();
     await runtime.store.insertLead(lead('keep', {
@@ -168,7 +175,8 @@ describe('sitemap index', () => {
   });
 
   it('lists only URLs a guest can open, including the hub delay, on this store', async () => {
-    const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true, RADAR_MODE: 'hub' });
+    // `visible` has an employer and a city only. The gate is off so the test checks the guest delay, not the default of 3.
+    const runtime = makeTestRuntime({ RADAR_PUBLIC_READ: true, RADAR_MODE: 'hub', RADAR_INDEXABLE_MIN_QUALITY: 0 });
     expect(runtime.access.mode).toBe('hub');
     expect(runtime.access.delays.guest).toBe(720);
     const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed', config: {} });
