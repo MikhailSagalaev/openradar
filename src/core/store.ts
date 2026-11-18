@@ -663,6 +663,11 @@ export interface Store extends HubStore {
   deleteLead?(id: string): Promise<boolean>;
   cleanupOldLeads?(retentionDays: number): Promise<number>;
   cleanupRuns?(retentionDays: number): Promise<number>;
+  /** Soft archive (hot/warm/cold): leads older than hotDays hide from feed/API and their
+   * text rewrites under zstd TOAST; nothing is deleted, the reference history survives. */
+  archiveOldLeads?(hotDays: number): Promise<number>;
+  /** Monthly gz JSONL export of fully-archived months, for research without the DB. */
+  exportArchivedLeads?(dir: string, hotDays: number): Promise<string[]>;
 
   close(): Promise<void>;
 }

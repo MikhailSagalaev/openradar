@@ -1,5 +1,8 @@
 import pg from 'pg';
 import { randomUUID } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { recalculateVoteScoreAndStatus } from '../core/rules.ts';
 import { normalizeTechTokens, type WorkplaceType } from '../core/text.ts';
 import { mergeContacts } from '../core/contacts.ts';
@@ -1254,6 +1257,9 @@ export class PostgresStore implements Store {
     const conditions: string[] = [];
     const params: unknown[] = [];
     let idx = 1;
+    // Soft archive: hidden leads still live in this table for statistics; the public
+    // surface (feed, listing, search, counts) does not see them.
+    conditions.push('archived_at IS NULL');
 
     if (feedOnly) {
       // Leads rejected by the pipeline rules stay with the operator, not in the public feed.

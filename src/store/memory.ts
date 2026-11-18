@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { recalculateVoteScoreAndStatus } from '../core/rules.ts';
 import { isRemoteLead, normalizeTechTokens, titleForLanguage } from '../core/text.ts';
 import { contactKey, mergeContacts } from '../core/contacts.ts';
@@ -899,6 +902,8 @@ export class MemoryStore implements Store {
 
   private queryLeads(options: FeedOptions, feedOnly = false, countOnly = false): Lead[] {
     let result = Array.from(this.leads.values());
+    // Soft archive: hidden leads stay for statistics, the public surface does not see them.
+    result = result.filter((l) => !l.archivedAt);
     if (options.createdBefore) {
       const cutoff = options.createdBefore;
       result = result.filter((l) => l.createdAt <= cutoff);
@@ -1507,6 +1512,44 @@ export class MemoryStore implements Store {
     const before = this.runs.length;
     this.runs = this.runs.filter((run) => run.startedAt >= cutoff);
     return before - this.runs.length;
+  }
+
+  /** Soft archive: hide leads older than hotDays from the feed/API; nothing is deleted. */
+  async archiveOldLeads(hotDays: number): Promise<number> {
+    const cutoff = Date.now() - hotDays * 24 * 3600 * 1000;
+    let archived = 0;
+    for (const lead of this.leads.values()) {
+      if (!lead.archivedAt && Date.parse(lead.createdAt) < cutoff) {
+        lead.archivedAt = new Date().toISOString();
+        archived++;
+      }
+    }
+    return archived;
+  }
+
+  /** Cold export: fully-archived months as gzipped JSONL, one file per month. */
+  async exportArchivedLeads(dir: string, hotDays: number): Promise<string[]> {
+    mkdirSync(dir, { recursive: true });
+    const byMonth = new Map<string, Lead[]>();
+    const hotEnd = Date.now() - (hotDays + 1) * 24 * 3600 * 1000;
+    for (const lead of this.leads.values()) {
+      if (!lead.archivedAt) continue;
+      const created = new Date(lead.createdAt);
+      const monthEnd = new Date(created);
+      monthEnd.setDate(1);
+      monthEnd.setMonth(monthEnd.getMonth() + 1);
+      if (monthEnd.getTime() > hotEnd) continue;
+      const month = lead.createdAt.slice(0, 7);
+      byMonth.set(month, [...(byMonth.get(month) ?? []), lead]);
+    }
+    const written: string[] = [];
+    for (const [month, rows] of byMonth) {
+      const file = join(dir, `leads-${month}.jsonl.gz`);
+      if (existsSync(file)) continue;
+      writeFileSync(file, gzipSync(Buffer.from(rows.map((l) => JSON.stringify(l)).join('\n'), 'utf-8')));
+      written.push(file);
+    }
+    return written;
   }
 
   async getLeadsForFeed(options: FeedOptions = {}): Promise<Lead[]> {

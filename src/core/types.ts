@@ -115,6 +115,10 @@ export interface Env {
   RADAR_DIGEST_CHAT_ID?: string;
   RADAR_DIGEST_INTERVAL_HOURS: number;
   RADAR_RETENTION_DAYS: number;
+  /** Leads older than this hide from the feed/API (soft archive, nothing is deleted). */
+  RADAR_LEADS_HOT_DAYS: number;
+  /** Where the monthly gz JSONL exports of archived leads land. */
+  RADAR_ARCHIVE_DIR: string;
   RADAR_CHECK_CLOSED: boolean;
   /** Hub: the TELEGRAM_BOT_TOKEN bot takes /start codes and sends saved-search digests (sets its webhook). */
   RADAR_SUBSCRIPTION_BOT: boolean;
@@ -246,6 +250,8 @@ export interface Lead extends RawLead {
   reasons: string[];
   createdAt: string;
   deliveredAt?: string;
+  /** Soft archive: set once the lead leaves the hot window (feed/API hide it, data stays). */
+  archivedAt?: string;
   votes_up?: number;
   votes_down?: number;
   votes_scam?: number;
