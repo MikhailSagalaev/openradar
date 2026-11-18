@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.77.0 — 2026-11-18
+
+- **25 new Telegram discovery channels**: job-channel presets from the `rabota_jobs_chnls` list join the source catalog — Frontend, Python, Java, Golang, PHP, 1C, .NET, C++, Node.js, Unity, DevOps, QA, iOS/Swift, Android, Flutter/Dart, Data Engineering, Data Science/ML, data/system/business/product analytics, Project/Product Management and HR/IT recruiting.
+
 ## 0.76.0 — 2026-11-18
 
 - **Extract provider rotation (`RADAR_EXTRACT_PROVIDERS`)**: model extraction now takes an ordered JSON pool of OpenAI-compatible endpoints (`baseUrl`, `apiKey`, `model`, optional `fallbackModel`, `pauseMs`, `concurrency`). An endpoint answering 401/402/403 is parked and the next one extracts the same post in the same batch; the pool is shared across rounds and parked endpoints retry after `RADAR_EXTRACT_PROVIDER_COOLDOWN_MIN` (default 60). The legacy `OPENAI_*` provider joins the pool last unless already listed, so single-provider setups work unchanged; GigaChat keeps its own flow. Per-endpoint `pauseMs`/`concurrency` pace the batch for rate-limited free tiers. Stored model facts now record the model that actually answered, including cascade and rotation fallbacks. When every endpoint is parked the batch stops with the parking status and makes no network calls; a 429 still pauses without parking.
