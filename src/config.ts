@@ -116,6 +116,9 @@ const envSchema = z.object({
   RADAR_DIGEST_CHAT_ID: optionalString,
   RADAR_DIGEST_INTERVAL_HOURS: z.coerce.number().int().positive().default(6),
   RADAR_RETENTION_DAYS: z.coerce.number().int().positive().default(180),
+  // Soft archive (hot/warm/cold): старые лиды прячутся из фида и сжимаются, ничего не удаляется.
+  RADAR_LEADS_HOT_DAYS: z.coerce.number().int().positive().default(60),
+  RADAR_ARCHIVE_DIR: z.string().default('data/archives'),
   // Closed-post checks against the boards, and feed age limits (0 turns a limit off).
   RADAR_CHECK_CLOSED: booleanFromEnv(true),
   RADAR_SUBSCRIPTION_BOT: booleanFromEnv(false),

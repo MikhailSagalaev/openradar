@@ -359,6 +359,12 @@ export class PollRunner {
     const store = this.deps.store;
     try {
       const leads = await store.cleanupOldLeads?.(this.deps.env.RADAR_RETENTION_DAYS);
+      // Soft archive (hot/warm/cold): старые лиды прячутся из фида и сжимаются, но данные
+      // остаются на диске — ни одного удаления, вся история ссылок сохраняется.
+      const archived = await store.archiveOldLeads?.(this.deps.env.RADAR_LEADS_HOT_DAYS ?? 60);
+      if (archived) this.logger.info('leads archived', { archived });
+      const exported = await store.exportArchivedLeads?.(this.deps.env.RADAR_ARCHIVE_DIR ?? 'data/archives', this.deps.env.RADAR_LEADS_HOT_DAYS ?? 60);
+      if (exported?.length) this.logger.info('archive exported', { files: exported });
       // Голоса-события и история запусков нужны для health (24ч) и аудита;
       // храним их 30 дней, чтобы таблицы не росли бесконечно.
       const runs = await store.cleanupRuns?.(30);
