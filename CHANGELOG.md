@@ -8,6 +8,16 @@
 
 - **Decision key rotation (`SUBQ_API_KEYS`)**: the decide classifier now takes a comma-separated pool of SubQ keys (order: `RADAR_DECIDE_KEY`, then `SUBQ_API_KEYS`, then `SUBQ_API_KEY`, deduplicated). A key that answers 401/402/403 is parked and the next key answers the same post in the same round; the pool is shared across rounds, so an exhausted key is not retried every batch. Parked keys come back after `RADAR_DECIDE_KEY_COOLDOWN_MIN` (default 60) — SubQ credits are a prepaid balance with no timed reset, but a top-up revives the same key. When every key is parked the round stops with the parking status and makes no network calls; a 429 still stops the batch without parking the key. The 402 admin alert now points at `SUBQ_API_KEYS`.
 
+## 0.74.0 — 2026-11-16
+
+- **ATS phase 1: light poll**: one shared request clock per vendor (shards of one board system cannot burst it), a board failing three rotations in a row parks for a day, Greenhouse reads a light listing (`content=false`, ~16× smaller) and fetches full content only for jobs whose timestamp changed; the ghost diff gets the exact board id set, and any listing hiccup falls back to the full read.
+- **`OPENAI_EXTRA_BODY`**: verbatim JSON merged into classifier/extract requests, so provider switches like Qwen's `enable_thinking:false` need no code change.
+
+## 0.73.3 — 2026-11-16
+
+- **Deploy**: pre-deploy database dumps are skipped by default (regular cron backups cover it; force with `PREDEPLOY_BACKUP=1`).
+- **Network**: all active contributors are ranked, and the network page copy is clarified.
+
 ## 0.73.2 — 2026-11-16
 
 - **Extension connect compatibility**: `/extension/connect` auto-assigns a server state nonce when legacy installed browser extensions connect without a `state` parameter, resolving the `Bad state` 400 error on sign-in.
