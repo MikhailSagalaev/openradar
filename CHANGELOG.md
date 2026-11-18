@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.76.0 — 2026-11-18
+
+- **Extract provider rotation (`RADAR_EXTRACT_PROVIDERS`)**: model extraction now takes an ordered JSON pool of OpenAI-compatible endpoints (`baseUrl`, `apiKey`, `model`, optional `fallbackModel`, `pauseMs`, `concurrency`). An endpoint answering 401/402/403 is parked and the next one extracts the same post in the same batch; the pool is shared across rounds and parked endpoints retry after `RADAR_EXTRACT_PROVIDER_COOLDOWN_MIN` (default 60). The legacy `OPENAI_*` provider joins the pool last unless already listed, so single-provider setups work unchanged; GigaChat keeps its own flow. Per-endpoint `pauseMs`/`concurrency` pace the batch for rate-limited free tiers. Stored model facts now record the model that actually answered, including cascade and rotation fallbacks. When every endpoint is parked the batch stops with the parking status and makes no network calls; a 429 still pauses without parking.
+
 ## 0.75.0 — 2026-11-17
 
 - **Decision key rotation (`SUBQ_API_KEYS`)**: the decide classifier now takes a comma-separated pool of SubQ keys (order: `RADAR_DECIDE_KEY`, then `SUBQ_API_KEYS`, then `SUBQ_API_KEY`, deduplicated). A key that answers 401/402/403 is parked and the next key answers the same post in the same round; the pool is shared across rounds, so an exhausted key is not retried every batch. Parked keys come back after `RADAR_DECIDE_KEY_COOLDOWN_MIN` (default 60) — SubQ credits are a prepaid balance with no timed reset, but a top-up revives the same key. When every key is parked the round stops with the parking status and makes no network calls; a 429 still stops the batch without parking the key. The 402 admin alert now points at `SUBQ_API_KEYS`.

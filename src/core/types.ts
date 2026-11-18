@@ -21,6 +21,18 @@ export interface Logger {
   child(scope: string): Logger;
 }
 
+/** One OpenAI-compatible extraction endpoint in the RADAR_EXTRACT_PROVIDERS pool. */
+export interface ExtractProvider {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  /** Second model tried on the same endpoint when the primary returns nothing usable. */
+  fallbackModel?: string;
+  /** Minimum pause between requests: rate-limited free tiers need a slower pace. */
+  pauseMs?: number;
+  concurrency?: number;
+}
+
 export interface Env {
   NODE_ENV: 'development' | 'production' | 'test';
   DATABASE_URL?: string;
@@ -37,6 +49,10 @@ export interface Env {
   RADAR_EXTRACT_FALLBACK_MODEL?: string;
   RADAR_EXTRACT_PER_HOUR: number;
   RADAR_EXTRACT_APPLY: boolean;
+  /** Ordered pool of OpenAI-compatible extraction endpoints; a parked one is skipped for the cooldown. */
+  RADAR_EXTRACT_PROVIDERS?: ExtractProvider[];
+  /** Minutes a parked extract provider waits before it is tried again. 0 tries every round. */
+  RADAR_EXTRACT_PROVIDER_COOLDOWN_MIN: number;
   RADAR_DECIDE_ENABLED?: boolean;
   RADAR_DECIDE_URL?: string;
   RADAR_DECIDE_MODEL?: string;

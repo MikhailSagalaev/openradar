@@ -7,12 +7,13 @@
  * Any OpenAI-compatible API works (Coarena, Groq, OpenAI, DeepSeek, OpenRouter, a local
  * Ollama or vLLM), and GigaChat.
  */
-import type { Env, Lead, Logger } from '../core/types.ts';
+import type { Env, ExtractProvider, Lead, Logger } from '../core/types.ts';
 import { getProxyAgent } from '../net/proxy.ts';
 import { fetch as undiciFetch } from 'undici';
 import { scrubContacts } from '../server/collector.ts';
 import { GRADE_ORDER, MIN_CONFIDENCE, ROLES, type Grade } from './derive.ts';
 import { GigachatBusyError, gigachatFetch, gigachatToken, markGigachatBusy, resetGigachatToken, retryAfterMs } from './gigachat.ts';
+import type { ExtractProviderPool } from './providers.ts';
 
 export { MIN_CONFIDENCE };
 
@@ -171,7 +172,7 @@ export function extractModelCascade(env: Env): string[] {
 
 export function extractionEnabled(env: Env): boolean {
   const key = env.RADAR_EXTRACT_PROVIDER === 'gigachat' ? env.GIGACHAT_AUTH_KEY : env.OPENAI_API_KEY;
-  return env.RADAR_EXTRACT_ENABLED && Boolean(key);
+  return env.RADAR_EXTRACT_ENABLED && Boolean(key || env.RADAR_EXTRACT_PROVIDERS?.length);
 }
 
 interface ChatResponse {
@@ -197,14 +198,15 @@ async function askModel(
   model: string,
   deps: { env: Env; logger: Logger; fetchImpl: typeof fetch; dispatcher?: unknown },
   useSchema: boolean,
+  provider?: ExtractProvider,
 ): Promise<ModelFacts | undefined> {
   const { env } = deps;
   const gigachat = env.RADAR_EXTRACT_PROVIDER === 'gigachat';
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30_000);
   try {
-    const base = gigachat ? env.GIGACHAT_BASE_URL : env.OPENAI_BASE_URL;
-    const key = gigachat ? await gigachatToken(env, deps.fetchImpl, controller.signal) : env.OPENAI_API_KEY;
+    const base = gigachat ? env.GIGACHAT_BASE_URL : (provider?.baseUrl ?? env.OPENAI_BASE_URL);
+    const key = gigachat ? await gigachatToken(env, deps.fetchImpl, controller.signal) : (provider?.apiKey ?? env.OPENAI_API_KEY);
     const title = scrubContacts(lead.title);
     const text = scrubContacts(lead.text).slice(0, 2500);
     const response = await deps.fetchImpl(`${base.replace(/\/+$/, '')}/chat/completions`, {
@@ -234,7 +236,7 @@ async function askModel(
       if (gigachat && response.status === 401) resetGigachatToken();
       // Some hosts reject json_schema: retry once with plain json_object.
       if (!gigachat && useSchema && response.status === 400) {
-        return askModel(lead, model, deps, false);
+        return askModel(lead, model, deps, false, provider);
       }
       deps.logger.warn('model extraction HTTP error', { status: response.status, model, body: (await response.text().catch(() => '')).slice(0, 200) });
       return undefined;
@@ -248,8 +250,8 @@ async function askModel(
 
 export async function extractWithModel(
   lead: Pick<Lead, 'title' | 'text' | 'type'>,
-  deps: { env: Env; logger: Logger; fetchImpl?: typeof fetch },
-): Promise<ModelFacts | undefined> {
+  deps: { env: Env; logger: Logger; fetchImpl?: typeof fetch; providers?: ExtractProviderPool },
+): Promise<{ facts: ModelFacts; model: string } | undefined> {
   const { env } = deps;
   const gigachat = env.RADAR_EXTRACT_PROVIDER === 'gigachat';
   const injected = deps.fetchImpl && deps.fetchImpl !== globalThis.fetch ? deps.fetchImpl : undefined;
@@ -257,12 +259,36 @@ export async function extractWithModel(
   const dispatcher = (!gigachat && !injected && proxyUrl) ? getProxyAgent(proxyUrl) : undefined;
   const fetchImpl = injected ?? (gigachat ? gigachatFetch : (dispatcher ? (undiciFetch as unknown as typeof fetch) : fetch));
   const callDeps = { env, logger: deps.logger, fetchImpl, dispatcher };
-  try {
-    for (const model of extractModelCascade(env)) {
-      const facts = await askModel(lead, model, callDeps, !gigachat);
-      if (facts) return facts;
+  const cascadeFor = (provider?: ExtractProvider): string[] => {
+    if (!provider) return extractModelCascade(env);
+    const fallback = provider.fallbackModel?.trim();
+    return fallback && fallback !== provider.model ? [provider.model, fallback] : [provider.model];
+  };
+  const tryProvider = async (provider?: ExtractProvider): Promise<{ facts: ModelFacts; model: string } | undefined> => {
+    for (const model of cascadeFor(provider)) {
+      const facts = await askModel(lead, model, callDeps, !gigachat, provider);
+      if (facts) return { facts, model };
     }
     return undefined;
+  };
+  try {
+    // No pool (or GigaChat): the single configured provider, exactly as before.
+    if (gigachat || !deps.providers || deps.providers.size === 0) return await tryProvider();
+    for (;;) {
+      const provider = deps.providers.current();
+      // Every provider is parked: stop the batch with the status that killed the last one.
+      if (!provider) throw new ExtractStoppedError(deps.providers.parkedStatus() ?? 402);
+      try {
+        return await tryProvider(provider);
+      } catch (error) {
+        if (error instanceof ExtractStoppedError) {
+          deps.providers.park(provider, error.status);
+          deps.logger.warn('extract provider parked, rotating', { baseUrl: provider.baseUrl, status: error.status });
+          continue;
+        }
+        throw error;
+      }
+    }
   } catch (error) {
     if (error instanceof GigachatBusyError || error instanceof ExtractStoppedError) throw error;
     deps.logger.warn('model extraction failed', { error: error instanceof Error ? error.message : String(error) });
@@ -286,7 +312,7 @@ export interface ExtractionSummary {
  * with-pay set). Orders and Russian posts come first. A few requests at a time.
  */
 export async function runModelExtraction(
-  deps: { store: import('../core/store.ts').Store; env: Env; logger: Logger; fetchImpl?: typeof fetch },
+  deps: { store: import('../core/store.ts').Store; env: Env; logger: Logger; fetchImpl?: typeof fetch; providers?: ExtractProviderPool },
   options: { limit: number; concurrency?: number; pauseMs?: number; since?: Date; withPayFirst?: boolean },
 ): Promise<ExtractionSummary> {
   const summary: ExtractionSummary = { asked: 0, saved: 0, failed: 0, ids: [] };
@@ -295,7 +321,9 @@ export async function runModelExtraction(
   const since = (options.since ?? new Date(Date.now() - 30 * 86_400_000)).toISOString();
   const leads = await store.listLeadsForModel({ limit: options.limit, since, version: MODEL_EXTRACT_VERSION, withPayFirst: options.withPayFirst });
   const queue = [...leads];
-  const pauseMs = options.pauseMs ?? (deps.env.RADAR_EXTRACT_PROVIDER === 'gigachat' ? 0 : 1200);
+  // A rate-limited free tier sets its own pace; the legacy default stays for everyone else.
+  const active = deps.providers?.current();
+  const pauseMs = options.pauseMs ?? active?.pauseMs ?? (deps.env.RADAR_EXTRACT_PROVIDER === 'gigachat' ? 0 : 1200);
   const worker = async (): Promise<void> => {
     for (let lead = queue.shift(); lead; lead = queue.shift()) {
       if (summary.stopped !== undefined) break;
@@ -303,9 +331,9 @@ export async function runModelExtraction(
         await new Promise((resolve) => setTimeout(resolve, pauseMs));
       }
       summary.asked++;
-      let facts: ModelFacts | undefined;
+      let result: { facts: ModelFacts; model: string } | undefined;
       try {
-        facts = await extractWithModel(lead, deps);
+        result = await extractWithModel(lead, deps);
       } catch (error) {
         if (error instanceof ExtractStoppedError) {
           summary.failed++;
@@ -321,7 +349,7 @@ export async function runModelExtraction(
         deps.logger.warn('model extraction paused', { reason: error.message });
         break;
       }
-      if (!facts) {
+      if (!result) {
         summary.failed++;
         // Leave the queue: a hard failure on this post should not be retried every two minutes.
         await store.saveLeadModelFacts!(lead.id, {
@@ -332,13 +360,14 @@ export async function runModelExtraction(
         }, { applyToLead: false });
         continue;
       }
-      const stored: StoredModelFacts = { v: MODEL_EXTRACT_VERSION, model: modelName(deps.env), at: new Date().toISOString(), facts };
+      // Record the model that actually answered, which may be a cascade or rotation fallback.
+      const stored: StoredModelFacts = { v: MODEL_EXTRACT_VERSION, model: result.model, at: new Date().toISOString(), facts: result.facts };
       await store.saveLeadModelFacts!(lead.id, stored, { applyToLead: deps.env.RADAR_EXTRACT_APPLY });
       summary.saved++;
       summary.ids.push(lead.id);
     }
   };
-  const concurrency = options.concurrency ?? (deps.env.RADAR_EXTRACT_PROVIDER === 'gigachat' ? 1 : 2);
+  const concurrency = options.concurrency ?? active?.concurrency ?? (deps.env.RADAR_EXTRACT_PROVIDER === 'gigachat' ? 1 : 2);
   await Promise.all(Array.from({ length: Math.max(1, concurrency) }, worker));
   return summary;
 }

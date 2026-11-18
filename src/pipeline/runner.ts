@@ -16,6 +16,7 @@ import { ensureMonthlySnapshot, liveReport } from '../research/service.ts';
 import { ensureDailyCounts, openradarIndex } from '../research/index.ts';
 import { ensureFxRates } from '../research/fx.ts';
 import { extractionEnabled, runModelExtraction } from '../research/model.ts';
+import { newExtractProviders, type ExtractProviderPool } from '../research/providers.ts';
 import type { UserTelegramRound } from './user-telegram.ts';
 
 const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000;
@@ -50,6 +51,8 @@ export class PollRunner {
   private decisionReplay = newDecisionReplay();
   /** Shared key pool: an exhausted key stays parked across rounds until its cooldown passes. */
   private decisionKeys: DecisionKeyPool | undefined;
+  /** Shared extract provider pool: an exhausted endpoint stays parked across rounds. */
+  private extractProviderPool: ExtractProviderPool | undefined;
   private enrichmentRunning = false;
   private nextEnrichmentAt = 0;
   private visaSponsorsRunning = false;
@@ -313,8 +316,10 @@ export class PollRunner {
     if (Date.now() - this.lastExtractionAt < EXTRACTION_INTERVAL_MS) return;
     this.lastExtractionAt = Date.now();
     this.extractionRunning = true;
+    this.extractProviderPool ??= newExtractProviders(env);
+    const providers = this.extractProviderPool.size > 0 ? this.extractProviderPool : undefined;
     const limit = Math.max(1, Math.min(25, Math.round(env.RADAR_EXTRACT_PER_HOUR / BATCHES_PER_HOUR)));
-    void runModelExtraction({ store: this.deps.store, env, logger: this.deps.logger.child('extract'), fetchImpl: this.deps.fetchImpl }, { limit })
+    void runModelExtraction({ store: this.deps.store, env, logger: this.deps.logger.child('extract'), fetchImpl: this.deps.fetchImpl, providers }, { limit })
       .then((summary) => {
         if (summary.asked) this.logger.info('model extraction finished', { asked: summary.asked, saved: summary.saved, failed: summary.failed, stopped: summary.stopped });
         if (summary.pausedMs) this.lastExtractionAt = Date.now() + summary.pausedMs - EXTRACTION_INTERVAL_MS;

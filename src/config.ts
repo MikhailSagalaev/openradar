@@ -45,6 +45,26 @@ const envSchema = z.object({
   RADAR_EXTRACT_MODEL: optionalString,
   RADAR_EXTRACT_FALLBACK_MODEL: optionalString,
   RADAR_EXTRACT_PER_HOUR: z.coerce.number().int().nonnegative().default(300),
+  // Ordered pool of OpenAI-compatible endpoints: [{"baseUrl","apiKey","model","fallbackModel"?,"pauseMs"?,"concurrency"?}].
+  // The legacy OPENAI_* provider joins last unless the same baseUrl+key is already listed.
+  RADAR_EXTRACT_PROVIDERS: z.string().optional().transform((value, ctx) => {
+    const trimmed = value?.trim();
+    if (!trimmed) return undefined;
+    try {
+      return z.array(z.object({
+        baseUrl: z.string().url(),
+        apiKey: z.string().min(1),
+        model: z.string().min(1),
+        fallbackModel: z.string().min(1).optional(),
+        pauseMs: z.coerce.number().int().nonnegative().optional(),
+        concurrency: z.coerce.number().int().positive().optional(),
+      })).min(1).parse(JSON.parse(trimmed));
+    } catch {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'RADAR_EXTRACT_PROVIDERS must be a non-empty JSON array of {baseUrl, apiKey, model, fallbackModel?, pauseMs?, concurrency?}' });
+      return z.NEVER;
+    }
+  }),
+  RADAR_EXTRACT_PROVIDER_COOLDOWN_MIN: z.coerce.number().int().nonnegative().default(60),
   // Answers are saved either way; figures use them only once their quality is checked.
   RADAR_EXTRACT_APPLY: booleanFromEnv(false),
   RADAR_USER_TELEGRAM: booleanFromEnv(false),
