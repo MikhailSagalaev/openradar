@@ -21,30 +21,28 @@ OPENAI_API_KEY=ollama                        # любое непустое зн�
 проверены `qwen2.5` от 7B и `llama3.1` от 8B. Классификатор зовётся только для принятых
 правилами лидов; таймаут 25 секунд, при ошибке пайплайн продолжает по правилам.
 
-## Groq
+## Внешний провайдер (на примере Groq)
 
-Для хаба выбрана модель `qwen/qwen3.8-27b` через [Groq](https://console.groq.com): быстрая
-(0,4–0,7 с на пост), с JSON-режимом и хорошим русским. **Сейчас хаб ещё работает на GigaChat:**
-ключ Groq действует, но с российского адреса сервиса запрос до него не доходит, нужен ретранслятор
-(см. ниже), и он пока не развёрнут.
+Подойдёт любой OpenAI-совместимый провайдер и любая его модель с JSON-режимом и хорошим
+русским — выбор за оператором. Например, [Groq](https://console.groq.com):
 
 ```bash
 RADAR_EXTRACT_ENABLED=true
 RADAR_EXTRACT_PROVIDER=openai
 OPENAI_BASE_URL=https://api.groq.com/openai/v1
 OPENAI_API_KEY=gsk_...
-RADAR_EXTRACT_MODEL=qwen/qwen3.8-27b
+RADAR_EXTRACT_MODEL=your-model
 RADAR_EXTRACT_PER_HOUR=40
 ```
 
-- Бесплатный тариф — 1 000 запросов в сутки и 8 000 токенов в минуту, это около
+- Бесплатный тариф Groq — 1 000 запросов в сутки и 8 000 токенов в минуту, это около
   40 постов в час. На HTTP 429 пачка останавливается и ждёт `Retry-After`. Платный
   тариф снимает оба предела, тогда `RADAR_EXTRACT_PER_HOUR` можно поднять до 150–200.
 - Groq отвечает 403 российским адресам и выходам Tor. С такого сервера запросы идут через
   ретранслятор на Vercel из `deploy/model-relay` (README там же): `OPENAI_BASE_URL`
-  указывает на него, ключ Groq проходит насквозь и в ретрансляторе не хранится.
-- Классификатор (`RADAR_LLM_ENABLED`) на хабе выключен: он спрашивает модель о каждом
-  принятом лиде, а это тысячи запросов в сутки, больше бесплатного предела.
+  указывает на него, ключ провайдера проходит насквозь и в ретрансляторе не хранится.
+- Классификатор (`RADAR_LLM_ENABLED`) спрашивает модель о каждом принятом лиде — это
+  тысячи запросов в сутки; сверяйтесь с лимитами своего провайдера.
 
 ## Ротация провайдеров извлечения
 
@@ -54,7 +52,7 @@ RADAR_EXTRACT_PER_HOUR=40
 Удобно ставить бесплатные тиры первыми, платные пакеты последними:
 
 ```bash
-RADAR_EXTRACT_PROVIDERS=[{"baseUrl":"https://gateway.respan.ai/v1","apiKey":"...","model":"gpt-6.2-sol:free","pauseMs":9000,"concurrency":1},{"baseUrl":"https://api.openai.com/v1","apiKey":"sk-...","model":"gpt-4o-mini"}]
+RADAR_EXTRACT_PROVIDERS=[{"baseUrl":"https://free-provider.example/v1","apiKey":"...","model":"free-model","pauseMs":9000,"concurrency":1},{"baseUrl":"https://api.openai.com/v1","apiKey":"sk-...","model":"your-model"}]
 ```
 
 `pauseMs`/`concurrency` задают темп пачки под лимиты конкретного провайдера (например,

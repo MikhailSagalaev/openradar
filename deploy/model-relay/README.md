@@ -21,7 +21,7 @@ Then on the hub (`/opt/radar-test/.env`):
 RADAR_EXTRACT_PROVIDER=openai
 OPENAI_BASE_URL=https://<project>.vercel.app/<RELAY_TOKEN>/openai/v1
 OPENAI_API_KEY=<Groq key>
-RADAR_EXTRACT_MODEL=qwen/qwen3.8-27b
+RADAR_EXTRACT_MODEL=your-model
 RADAR_EXTRACT_PER_HOUR=40
 ```
 

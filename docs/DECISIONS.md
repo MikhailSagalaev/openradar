@@ -30,7 +30,7 @@
 ```bash
 RADAR_DECIDE_ENABLED=true
 RADAR_DECIDE_URL=https://api.subq.ai/v1/systemone
-RADAR_DECIDE_MODEL=subq-snap-1.2
+RADAR_DECIDE_MODEL=ваша_модель   # любая модель службы systemone
 SUBQ_API_KEY=ваш_ключ
 RADAR_DECIDE_PER_HOUR=1200
 ```
