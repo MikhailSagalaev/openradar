@@ -682,17 +682,20 @@ function buildProgram(): Command {
 
   program
     .command('refilter')
-    .description('Re-run the door spam patterns over visible leads; dry run unless --apply')
+    .description('Re-run the tightened spam patterns over visible leads; dry run unless --apply')
     .option('--days <n>', 'Leads created in the last N days', '30')
     .option('--limit <n>', 'At most this many newest leads', '50000')
     .option('--apply', 'Actually reject the matches (default: dry run)')
-    .action(async (options: { days: string; limit: string; apply?: boolean }) => {
+    .option('--all', 'Re-run every spam category, not only the 2026-11 audit additions')
+    .action(async (options: { days: string; limit: string; apply?: boolean; all?: boolean }) => {
       await withRuntime(async (runtime) => {
         const summary = await refilterLeads(runtime.store, {
           days: Number(options.days) || 30,
           limit: Number(options.limit) || 50000,
           apply: options.apply === true,
+          onlyReasons: options.all ? null : undefined,
         });
+        console.log(`Область: ${options.all ? 'все spam-категории' : 'MASS_MESSAGING + GREY_FINANCE (аудит 2026-11)'}`);
         console.log(`Проверено: ${summary.checked}, совпало: ${summary.matched}, отклонено: ${summary.rejected}${options.apply ? '' : ' (dry run)'}`);
         if (summary.samples.length) {
           console.log(table(['Причина', 'Заголовок'], summary.samples.map((s) => [s.reasons.join(','), s.title.slice(0, 90)])));

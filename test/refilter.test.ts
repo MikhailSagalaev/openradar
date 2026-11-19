@@ -31,9 +31,15 @@ describe('refilter pass', () => {
     await insert('recovery', 'Recuperación Urgente de Instagram Bloqueado', 'recuperación de cuentas de Instagram bloqueadas');
     await insert('clean', 'Нужен лендинг на Tilda', 'Сверстать лендинг для кофейни, бюджет 30000 ₽');
     await insert('old', 'Ищу работу менеджером', '#помогу #резюме', 'rejected');
+    // A legitimate sales vacancy an older, broader rule matches: the default pass must keep it.
+    await insert('sales', 'Менеджер по холодным B2B-продажам', 'Обзвон базы клиентов, продажа оборудования');
 
     const dry = await refilterLeads(runtime.store, { days: 30, now });
     expect(dry.matched).toBe(2);
+    expect(dry.samples.map((s) => s.id)).not.toContain('sales');
+    // With every category re-run, the old COLD_CALLING rule does match the sales vacancy.
+    const all = await refilterLeads(runtime.store, { days: 30, now, onlyReasons: null });
+    expect(all.samples.map((s) => s.id)).toContain('sales');
     expect(dry.rejected).toBe(0);
     expect((await runtime.store.getLead('spam'))?.status).toBe('new');
 

@@ -96,6 +96,14 @@ export interface RuleResult {
 }
 
 /**
+ * The spam categories tightened by the 2026-11 quality audit. The retroactive refilter pass
+ * targets only these by default: re-running every old rule over stored leads would retroactively
+ * reject legitimate vacancies that predate a rule (the COLD_CALLING pattern fires on ordinary
+ * sales-manager jobs), which is a product decision for the operator, not a cleanup.
+ */
+export const AUDIT_2026_11_REASONS = ['spam:MASS_MESSAGING', 'spam:GREY_FINANCE'];
+
+/**
  * The door spam categories alone, without a source's keyword/budget/age gates. Shared by
  * applyRules at ingest and by the retroactive refilter pass, so a stored lead is judged by
  * the same spam patterns a fresh one is. The data-entry foreign-currency special case reads

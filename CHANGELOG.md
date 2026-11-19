@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.79.4 — 2026-11-19
+
+- **`radar refilter` scoped to the audit additions by default**: it now acts only on MASS_MESSAGING and GREY_FINANCE (the categories tightened by the 2026-11 audit), not every spam rule. Re-running older, broader rules over stored leads would retroactively reject legitimate vacancies — the COLD_CALLING pattern matches ordinary sales-manager jobs («менеджер по продажам», «без холодных звонков») — which is an operator product decision, not a cleanup. `--all` re-runs every category explicitly. A dry run on production surfaced this before any lead was hidden.
+
 ## 0.79.3 — 2026-11-19
 
 - **Tighter door spam patterns**: MASS_MESSAGING now catches «массовая/массой отправка личных сообщений» (the typo that slipped past the old «рассылка»-only pattern), and GREY_FINANCE catches social-account recovery/unban gigs (RU + ES/EN: Instagram, Facebook, WhatsApp, TikTok, VK). The spam loop is extracted into a shared `spamReasons()` so ingest and the retro pass judge by the same patterns; legitimate bulk-email dev tasks and cloud-account recovery are kept.
