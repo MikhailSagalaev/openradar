@@ -53,6 +53,8 @@ export interface Env {
   RADAR_EXTRACT_PROVIDERS?: ExtractProvider[];
   /** Minutes a parked extract provider waits before it is tried again. 0 tries every round. */
   RADAR_EXTRACT_PROVIDER_COOLDOWN_MIN: number;
+  /** Leads per extraction request: ≥2 groups posts into one batched call (0/1 = one lead per call). */
+  RADAR_EXTRACT_BATCH: number;
   RADAR_DECIDE_ENABLED?: boolean;
   RADAR_DECIDE_URL?: string;
   RADAR_DECIDE_MODEL?: string;
