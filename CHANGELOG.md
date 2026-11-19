@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.79.3 — 2026-11-19
+
+- **Tighter door spam patterns**: MASS_MESSAGING now catches «массовая/массой отправка личных сообщений» (the typo that slipped past the old «рассылка»-only pattern), and GREY_FINANCE catches social-account recovery/unban gigs (RU + ES/EN: Instagram, Facebook, WhatsApp, TikTok, VK). The spam loop is extracted into a shared `spamReasons()` so ingest and the retro pass judge by the same patterns; legitimate bulk-email dev tasks and cloud-account recovery are kept.
+- **`radar refilter`**: re-runs the door spam patterns over still-visible leads (default 30 days), dry run unless `--apply`; rejects only new matches, never restores, records the reasons. Archived rows are untouched.
+- **Silent-drop alert**: a source that still answers but stopped bringing posts (the hh-1C feed-URL drift, where dedup absorbed a generic firehose) is now surfaced — `getFlowStats()` compares the last 7 days with the 7 before, `detectSilentDrops()` flags live polls whose inserts fell below 20% of a ≥100-post baseline, the hourly maintenance (6h gate) records a degraded `source-flow` service on `/health` and sends one Telegram notice per day. `radar source drops` runs the check on demand.
+
 ## 0.79.2 — 2026-11-19
 
 - **Deploy: English social card actually reaches X**: the Docker image now ships `assets/og-en.png` (the runtime stage copied only `og.png`, so `/og-en.png` 404'd in production), and `docs/nginx-bots.conf` lets the token-bounded `Twitterbot` UA bypass the anonymous microcache both ways — the shared cache previously served the crawler the cached RU variant. Telegram and human traffic keep the cache unchanged.
