@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.79.2 — 2026-11-19
+
+- **Deploy: English social card actually reaches X**: the Docker image now ships `assets/og-en.png` (the runtime stage copied only `og.png`, so `/og-en.png` 404'd in production), and `docs/nginx-bots.conf` lets the token-bounded `Twitterbot` UA bypass the anonymous microcache both ways — the shared cache previously served the crawler the cached RU variant. Telegram and human traffic keep the cache unchanged.
+
 ## 0.79.1 — 2026-11-19
 
 - **Postgres soft-archive parity**: `archiveOldLeads` and `exportArchivedLeads` now exist on the PostgreSQL store (the 041 column already hid archived rows from public queries, but the runner's optional calls silently skipped on postgres hubs); `rowToLead` exposes `archivedAt`. Fixes the red CI postgres suite and enables hot/warm/cold archiving on production.
