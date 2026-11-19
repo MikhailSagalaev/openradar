@@ -38,7 +38,7 @@ describe('refilter pass', () => {
     expect(dry.matched).toBe(2);
     expect(dry.samples.map((s) => s.id)).not.toContain('sales');
     // With every category re-run, the old COLD_CALLING rule does match the sales vacancy.
-    const all = await refilterLeads(runtime.store, { days: 30, now, onlyReasons: null });
+    const all = await refilterLeads(runtime.store, { days: 30, now, all: true });
     expect(all.samples.map((s) => s.id)).toContain('sales');
     expect(dry.rejected).toBe(0);
     expect((await runtime.store.getLead('spam'))?.status).toBe('new');
