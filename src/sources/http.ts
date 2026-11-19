@@ -3,6 +3,41 @@ import { readTextLimited } from '../net/body.ts';
 import { fetchTextViaProxy } from '../net/proxy.ts';
 import type { PollContext } from '../core/types.ts';
 
+/**
+ * POST of a JSON body to a JSON API: the Workday career API, unlike the other ATS
+ * systems, lists its jobs only this way. The same SSRF and size rules as fetchText;
+ * a proxy set for the source would not carry POSTs, so it goes direct.
+ */
+export async function postJsonText(
+  ctx: PollContext,
+  url: string,
+  body: unknown,
+  extraHeaders?: Record<string, string>,
+  maxBytes?: number,
+): Promise<string> {
+  await assertSafeUrl(url);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ctx.timeoutMs);
+  try {
+    const response = await safeFetchImpl(ctx.fetchImpl)(url, {
+      method: 'POST',
+      redirect: 'manual',
+      signal: controller.signal,
+      headers: {
+        'User-Agent': ctx.userAgent,
+        'Content-Type': 'application/json',
+        Accept: extraHeaders?.Accept ?? 'application/json',
+        ...extraHeaders,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
+    return await readTextLimited(response, maxBytes);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function fetchText(
   ctx: PollContext,
   initialUrl: string,

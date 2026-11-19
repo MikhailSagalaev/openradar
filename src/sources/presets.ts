@@ -515,6 +515,26 @@ const BASE_PRESETS: SourcePreset[] = [
     },
   },
   {
+    id: 'ats-workday',
+    kind: 'ats',
+    title: 'Карьерные страницы компаний — Workday',
+    description: 'Публичное API системы найма Workday: вакансии крупнейших работодателей прямо с их карьерных страниц, без ключа',
+    config: {
+      provider: 'workday',
+      perPoll: 2,
+      maxAgeDays: 30,
+      companies: [
+        'nvidia@wd5=NVIDIA|NVIDIAExternalCareerSite',
+        'boeing@wd1=Boeing|EXTERNAL_CAREERS',
+        'astrazeneca@wd3=AstraZeneca|Careers',
+        'pfizer@wd1=Pfizer|PfizerCareers',
+        'unilever@wd3=Unilever|Unilever_Experienced_Professionals',
+        'geaerospace@wd5=GE Aerospace|GE_ExternalSite',
+        'ttmtech@wd5=TTM Technologies|jobs',
+      ],
+    },
+  },
+  {
     id: 'rt-solar',
     kind: 'sitemap',
     title: 'RT-Solar — Вакансии',
@@ -935,6 +955,69 @@ const BASE_PRESETS: SourcePreset[] = [
     description: 'Публичный TG-канал с вакансиями и стажировками для начинающих аналитиков',
     config: {
       channel: 'job4analyst_junior',
+    },
+  },
+  {
+    id: 'tg-ya-jobs',
+    kind: 'telegram',
+    title: 'Telegram — @ya_jobs: Яндекс нанимает',
+    description: 'Корпоративный канал Яндекса с вакансиями для разработчиков',
+    config: {
+      channel: 'ya_jobs',
+    },
+  },
+  {
+    id: 'tg-yandexcareers',
+    kind: 'telegram',
+    title: 'Telegram — @yandexcareers: YandexCareers',
+    description: 'Канал Яндекс Карьеры с вакансиями Яндекса',
+    config: {
+      channel: 'yandexcareers',
+    },
+  },
+  {
+    id: 'tg-mts-digital',
+    kind: 'telegram',
+    title: 'Telegram — @mts_digital: MTS Digital',
+    description: 'Официальный канал МТС Digital: вакансии и новости технологических команд',
+    config: {
+      channel: 'mts_digital',
+    },
+  },
+  {
+    id: 'tg-sibur-career',
+    kind: 'telegram',
+    title: 'Telegram — @sibur_career: СИБУР',
+    description: 'Карьерный канал СИБУРа: вакансии и стажировки',
+    config: {
+      channel: 'sibur_career',
+    },
+  },
+  {
+    id: 'tg-lamoda-tech',
+    kind: 'telegram',
+    title: 'Telegram — @lamoda_tech: Lamoda Tech',
+    description: 'Корпоративный канал Lamoda Tech с IT-вакансиями',
+    config: {
+      channel: 'lamoda_tech',
+    },
+  },
+  {
+    id: 'tg-distantsiya',
+    kind: 'telegram',
+    title: 'Telegram — @distantsiya: Дистанция',
+    description: 'Публичный TG-канал с удалёнными вакансиями',
+    config: {
+      channel: 'distantsiya',
+    },
+  },
+  {
+    id: 'tg-remote-job-ru',
+    kind: 'telegram',
+    title: 'Telegram — @remote_job_ru: удалённая работа',
+    description: 'Публичный TG-канал с удалённой работой для IT-специалистов',
+    config: {
+      channel: 'remote_job_ru',
     },
   },
   {

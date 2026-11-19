@@ -1,7 +1,7 @@
 import type { PollContext, RawLead, SourceAdapter, SourceRecord } from '../core/types.ts';
 import type { Store } from '../core/store.ts';
 import { decodeHtmlEntities, stripHtml } from '../core/text.ts';
-import { fetchText } from './http.ts';
+import { fetchText, postJsonText } from './http.ts';
 
 /**
  * Company career boards through the public job-board APIs of applicant tracking systems:
@@ -9,22 +9,26 @@ import { fetchText } from './http.ts';
  * to read, without a key. One source holds a list of companies of one system; each poll
  * reads a few of them in turn.
  */
-export type AtsProvider = 'greenhouse' | 'lever' | 'ashby' | 'workable' | 'recruitee' | 'smartrecruiters' | 'pinpoint' | 'bamboohr' | 'personio' | 'teamtailor';
+export type AtsProvider = 'greenhouse' | 'lever' | 'ashby' | 'workable' | 'recruitee' | 'smartrecruiters' | 'pinpoint' | 'bamboohr' | 'personio' | 'teamtailor' | 'workday';
 
-export const ATS_PROVIDERS: AtsProvider[] = ['greenhouse', 'lever', 'ashby', 'workable', 'recruitee', 'smartrecruiters', 'pinpoint', 'bamboohr', 'personio', 'teamtailor'];
+export const ATS_PROVIDERS: AtsProvider[] = ['greenhouse', 'lever', 'ashby', 'workable', 'recruitee', 'smartrecruiters', 'pinpoint', 'bamboohr', 'personio', 'teamtailor', 'workday'];
 export const ATS_LABELS: Record<AtsProvider, string> = {
-  greenhouse: 'Greenhouse', lever: 'Lever', ashby: 'Ashby', workable: 'Workable', recruitee: 'Recruitee', smartrecruiters: 'SmartRecruiters', pinpoint: 'Pinpoint', bamboohr: 'BambooHR', personio: 'Personio', teamtailor: 'Teamtailor',
+  greenhouse: 'Greenhouse', lever: 'Lever', ashby: 'Ashby', workable: 'Workable', recruitee: 'Recruitee', smartrecruiters: 'SmartRecruiters', pinpoint: 'Pinpoint', bamboohr: 'BambooHR', personio: 'Personio', teamtailor: 'Teamtailor', workday: 'Workday',
 };
 const PROVIDERS = ATS_PROVIDERS;
 const MAX_TEXT = 8000;
 
-/** "gitlab" or "gitlab=GitLab": the board slug and, optionally, the name to show. */
+/**
+ * "gitlab" or "gitlab=GitLab": the board slug and, optionally, the name to show. Workday
+ * entries carry the instance in the slug — "crowdstrike@wd5=CrowdStrike|crowdstrikecareers" —
+ * because the same tenant name lives on different wd hosts.
+ */
 export function companiesOf(source: SourceRecord): Array<{ slug: string; name?: string }> {
   const raw = source.config.companies;
   const list = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(/[\s,]+/) : [];
   return list
     .map((entry) => String(entry).trim())
-    .filter((entry) => /^[a-z0-9][a-z0-9_.-]{0,80}(=.{1,80})?$/i.test(entry))
+    .filter((entry) => /^[a-z0-9][a-z0-9_.@-]{0,80}(=.{1,80})?$/i.test(entry))
     .map((entry) => {
       const [slug, name] = entry.split('=', 2) as [string, string | undefined];
       return { slug: slug.toLowerCase(), name: name?.trim() || undefined };
@@ -492,7 +496,102 @@ function fromTeamtailor(source: SourceRecord, slug: string, name: string | undef
   });
 }
 
-const ENDPOINTS: Record<AtsProvider, (slug: string) => string> = {
+/**
+ * Workday is the system of the largest employers; its career API takes a POST and pages by
+ * 20. The listing carries no description — the title, place and requisition id are what the
+ * post says — like SmartRecruiters and BambooHR above.
+ */
+interface WorkdayPosting {
+  title?: string;
+  externalPath?: string;
+  locationsText?: string;
+  postedOn?: string;
+  bulletFields?: string[];
+}
+
+/** "Posted Today | Yesterday | 3 Days Ago | 30+ Days Ago" — relative to the poll's now. */
+function workdayPostedOn(text: string | undefined, now: Date): string | undefined {
+  if (!text) return undefined;
+  const lower = text.toLowerCase();
+  if (lower.includes('today')) return now.toISOString();
+  if (lower.includes('yesterday')) return new Date(now.getTime() - 86_400_000).toISOString();
+  const days = lower.match(/(\d+)\+?\s*days?/);
+  if (days) return new Date(now.getTime() - Number(days[1]) * 86_400_000).toISOString();
+  return undefined;
+}
+
+/** "USA - Sunnyvale, CA" → Sunnyvale; "2 Locations" is no place to name. */
+function workdayCity(location: string | undefined): string | undefined {
+  if (!location?.trim() || /^\d+\s+locations?$/i.test(location.trim())) return undefined;
+  const part = location.includes(' - ') ? location.split(' - ')[1]! : location;
+  return part.split(',')[0]!.trim() || undefined;
+}
+
+export function workdayBoardOf(slug: string, name: string | undefined): { tenant: string; wd: string; site: string; company: string } {
+  const [tenant, wd = 'wd5'] = slug.split('@');
+  const [label, site = tenant!] = (name ?? '').split('|');
+  return { tenant: tenant!, wd, site, company: label?.trim() || tenant! };
+}
+
+function fromWorkday(source: SourceRecord, slug: string, name: string | undefined, json: string, now: Date): RawLead[] {
+  const { tenant, wd, site, company } = workdayBoardOf(slug, name);
+  const postings = (JSON.parse(json) as { jobPostings?: WorkdayPosting[] }).jobPostings ?? [];
+  return postings
+    .filter((p) => p.title?.trim() && p.externalPath)
+    .map((p) => {
+      const title = p.title!.trim();
+      const location = p.locationsText?.trim() ?? '';
+      const requisition = p.bulletFields?.find((f) => /^R-?\d+$/i.test(f)) ?? p.externalPath!.split('_').pop() ?? '';
+      return {
+        sourceId: source.id,
+        type: 'job',
+        externalId: `workday:${tenant}:${requisition || p.externalPath}`,
+        url: `https://${tenant}.${wd}.myworkdayjobs.com/en-US/${site}${p.externalPath}`,
+        title,
+        text: text(title, [
+          `Company: ${company}`,
+          location && `Location: ${location}`,
+          requisition && `Requisition: ${requisition}`,
+        ], ''),
+        author: company,
+        city: workdayCity(location),
+        isRemote: REMOTE.test(`${title} ${location}`),
+        publishedAt: workdayPostedOn(p.postedOn, now),
+        raw: { ats: 'workday', board: slug },
+      } satisfies RawLead;
+    });
+}
+
+/** One Workday board page by page, newest first, up to the per-company cap. */
+async function pollWorkday(
+  source: SourceRecord,
+  slug: string,
+  name: string | undefined,
+  ctx: PollContext,
+  perCompany: number,
+): Promise<{ leads: RawLead[]; present: Set<string> | undefined }> {
+  const { tenant, wd, site } = workdayBoardOf(slug, name);
+  const url = `https://${tenant}.${wd}.myworkdayjobs.com/wday/cxs/${tenant}/${site}/jobs`;
+  const leads: RawLead[] = [];
+  let total = Infinity;
+  let offset = 0;
+  while (offset < perCompany && offset < total) {
+    const json = await postJsonText(ctx, url, { appliedFacets: {}, limit: 20, offset, searchText: '' });
+    const page = JSON.parse(json) as { total?: number; jobPostings?: WorkdayPosting[] };
+    if (typeof page.total === 'number') total = page.total;
+    const found = fromWorkday(source, slug, name, json, ctx.now());
+    if (!found.length) break;
+    leads.push(...found);
+    offset += found.length;
+    if (found.length < 20) break;
+  }
+  // The full board was read only when nothing was cut by the cap: a capped list would
+  // look like removals to the ghost-job diff.
+  const complete = offset >= total;
+  return { leads, present: complete ? new Set(leads.map((l) => l.externalId!).filter(Boolean)) : undefined };
+}
+
+const ENDPOINTS: Record<Exclude<AtsProvider, 'workday'>, (slug: string) => string> = {
   greenhouse: (slug) => `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(slug)}/jobs?content=true`,
   lever: (slug) => `https://api.lever.co/v0/postings/${encodeURIComponent(slug)}?mode=json`,
   ashby: (slug) => `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(slug)}?includeCompensation=true`,
@@ -604,7 +703,7 @@ async function fetchBoard(ctx: PollContext, url: string): Promise<string> {
   }
 }
 
-const PARSERS: Record<AtsProvider, (source: SourceRecord, slug: string, name: string | undefined, json: string) => RawLead[]> = {
+const PARSERS: Record<Exclude<AtsProvider, 'workday'>, (source: SourceRecord, slug: string, name: string | undefined, json: string) => RawLead[]> = {
   greenhouse: fromGreenhouse,
   lever: fromLever,
   ashby: fromAshby,
@@ -711,7 +810,11 @@ export const atsSource: SourceAdapter = {
         // does not need the text of a job it already has (config.lightPoll: false opts out).
         let parsed: RawLead[];
         let present: Set<string> | undefined;
-        if (provider === 'greenhouse' && source.config.lightPoll !== false) {
+        if (provider === 'workday') {
+          const read = await pollWorkday(source, slug, name, boardCtx, perCompany);
+          parsed = read.leads;
+          present = read.present;
+        } else if (provider === 'greenhouse' && source.config.lightPoll !== false) {
           const read = await greenhouseLight(source, slug, name, boardCtx, perCompany, since, vendorKey, paceMs);
           parsed = read.leads;
           present = read.present;
