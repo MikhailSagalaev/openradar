@@ -1128,9 +1128,20 @@ export function createApp(runtime: Runtime): Hono {
       return undefined;
     }
   })();
+  const ogImageEn = (() => {
+    try {
+      return fs.readFileSync(path.resolve(process.cwd(), 'assets/og-en.png'));
+    } catch {
+      return undefined;
+    }
+  })();
   app.get('/og.png', (c) => {
     if (!ogImage) return c.notFound();
     return new Response(ogImage, { headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=86400' } });
+  });
+  app.get('/og-en.png', (c) => {
+    if (!ogImageEn) return c.notFound();
+    return new Response(ogImageEn, { headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=86400' } });
   });
 
   app.get(LOGO_ASSET_PATH, () => {
