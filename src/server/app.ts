@@ -28,7 +28,7 @@ import { remoteFromText } from '../core/extract.ts';
 import { DEFAULT_SESSION_ENV, TELEGRAM_SESSION_ENV_RE } from '../sources/telegram-account.ts';
 import { VERSION } from '../version.ts';
 import { githubOAuthConfigured, startGitHubOAuth, handleGitHubCallback, secureCookie } from './auth.ts';
-import { renderAdminPage, renderAdminUsersPage } from './admin.ts';
+import { renderAdminAnalyticsPage, renderAdminPage, renderAdminUsersPage } from './admin.ts';
 import { analyticsFromEnv, contentSecurityPolicy } from './analytics.ts';
 import { filterOptions, IT_SKILLS, matchesSavedFilters, parseFeedFilters, type FeedFilters } from './filters.ts';
 import { computeInsights, estimateMarket } from '../core/market.ts';
@@ -1680,6 +1680,14 @@ export function createApp(runtime: Runtime): Hono {
         subscriptions: data.subscriptions,
       }),
     );
+  });
+
+  /** The agent-usage counters of plan A: aggregated day cells, no per-call rows. */
+  app.get('/admin/analytics', async (c) => {
+    if (!await isAdmin(c, runtime)) return c.redirect('/login?returnTo=/admin/analytics');
+    const data = runtime.store.agentUsageStats ? await runtime.store.agentUsageStats(14) : undefined;
+    if (!data) return c.text('This store has no agent usage stats', 501);
+    return c.html(renderAdminAnalyticsPage({ version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c), ...data }));
   });
 
   /** Each account's web key, to put a name on a line of the rating. */

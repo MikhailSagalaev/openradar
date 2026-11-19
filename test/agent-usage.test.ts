@@ -80,3 +80,20 @@ describe('agent analytics counting', () => {
     await runtime.store.close();
   });
 });
+
+describe('/admin/analytics', () => {
+  it('renders the counters for an admin and hides them from everyone else', async () => {
+    const runtime = makeTestRuntime({ RADAR_ADMIN_TOKEN: 'secret', RADAR_PUBLIC_READ: true });
+    const app = createApp(runtime);
+    await app.request('/api/leads?limit=1&via=treg', { headers: { 'user-agent': 'claude-ai-agent/1.0' } });
+
+    const anon = await app.request('/admin/analytics');
+    expect(anon.status).toBe(302);
+
+    const page = await (await app.request('/admin/analytics', { headers: { authorization: 'Bearer secret' } })).text();
+    expect(page).toContain('Аналитика агентов');
+    expect(page).toContain('/api/leads');
+    expect(page).toContain('treg');
+    await runtime.store.close();
+  });
+});
