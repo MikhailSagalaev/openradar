@@ -152,6 +152,14 @@ export interface AgentUsageStats {
   clients: Array<{ client: string; calls: number }>;
 }
 
+/** The data-goods metric (план D3): per day, how many leads carry model facts and model pay. */
+export interface ModelPayDay {
+  day: string;
+  leads: number;
+  withFacts: number;
+  withPay: number;
+}
+
 /** The last `count` UTC dates ending today, oldest first. */
 export function lastDays(count: number, now: Date = new Date()): string[] {
   const out: string[] = [];
@@ -638,6 +646,8 @@ export interface Store extends HubStore {
   touchTokenDay?(userId: number, day?: string): Promise<void>;
   /** The /admin/analytics view over the counters for the last `days` days. */
   agentUsageStats?(days?: number): Promise<AgentUsageStats>;
+  /** The extract-goods view (план D3): leads with model facts and model pay per day. */
+  modelPayStats?(days?: number): Promise<ModelPayDay[]>;
   /** Browser extension tokens, stored as SHA-256 hashes. */
   saveExtensionToken?(tokenHash: string, userId: number): Promise<void>;
   getUserByExtensionToken?(tokenHash: string): Promise<UserRecord | null>;

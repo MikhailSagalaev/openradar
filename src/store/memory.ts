@@ -25,6 +25,7 @@ import type {
   AdminStats,
   AdminUsersData,
   AgentUsageStats,
+  ModelPayDay,
   ApiUsageDim,
   UserTelegramAccountInput,
   UserTelegramAccountRecord,
@@ -1101,6 +1102,22 @@ export class MemoryStore implements Store {
 
   private apiUsage = new Map<string, { dim: ApiUsageDim; calls: number }>();
   private tokenDays = new Set<string>();
+
+  async modelPayStats(days = 14): Promise<ModelPayDay[]> {
+    const window = lastDays(days);
+    const byDay = new Map<string, ModelPayDay>(window.map((day) => [day, { day, leads: 0, withFacts: 0, withPay: 0 }]));
+    for (const lead of this.leads.values()) {
+      const cell = byDay.get(lead.createdAt.slice(0, 10));
+      if (!cell || lead.status === 'rejected') continue;
+      cell.leads++;
+      const model = (lead.metadata as Record<string, unknown> | undefined)?.model as { facts?: Record<string, unknown> } | undefined;
+      if (model?.facts) {
+        cell.withFacts++;
+        if (model.facts.payMin != null || model.facts.payMax != null) cell.withPay++;
+      }
+    }
+    return window.map((day) => byDay.get(day)!);
+  }
 
   async bumpApiUsage(dim: ApiUsageDim, calls = 1): Promise<void> {
     const key = [dim.day, dim.surface, dim.detail, dim.tier, dim.client, dim.via].join('\u0000');

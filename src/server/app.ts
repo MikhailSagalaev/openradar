@@ -1687,7 +1687,8 @@ export function createApp(runtime: Runtime): Hono {
     if (!await isAdmin(c, runtime)) return c.redirect('/login?returnTo=/admin/analytics');
     const data = runtime.store.agentUsageStats ? await runtime.store.agentUsageStats(14) : undefined;
     if (!data) return c.text('This store has no agent usage stats', 501);
-    return c.html(renderAdminAnalyticsPage({ version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c), ...data }));
+    const modelPay = await runtime.store.modelPayStats?.(14).catch(() => undefined);
+    return c.html(renderAdminAnalyticsPage({ version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c), ...data, modelPay }));
   });
 
   /** Each account's web key, to put a name on a line of the rating. */
