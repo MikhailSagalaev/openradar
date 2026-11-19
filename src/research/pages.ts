@@ -4,6 +4,7 @@
  */
 import { escapeHtml, jsonForScript } from '../core/text.ts';
 import { layout, type AuthDisplay } from '../server/ui.ts';
+import { RESEARCH_ENHANCE_HEAD, renderResearchEnhancements } from './enhance.ts';
 import { translateCity, translateSkill, translateSourceTitle, type SupportedLang } from '../server/i18n.ts';
 import { periodEn } from './pages-en.ts';
 import { GRADE_LABELS, MIN_CONFIDENCE, ROLES, roleLabel } from './derive.ts';
@@ -26,10 +27,13 @@ import {
   type LanguageMatrixRow,
   type MarketEconometrics,
   type ScientificAnalysis,
+  type CrossMarketComparison,
+  type IntlMarketResearch,
   type RegionalComparisonRow,
   type RegionalMatrixRow,
   type Report,
   type RoleDetail,
+  type CitySlice,
   type Slice,
 } from './report.ts';
 
@@ -567,7 +571,7 @@ export function renderLanguageMatrixSection(
 export function renderRegionalComparisonSection(
   comparison: RegionalComparisonRow[] | undefined,
   regionalMatrix: RegionalMatrixRow[] | undefined,
-  byCity: Slice[] | undefined,
+  byCity: CitySlice[] | undefined,
   roleHref: (slug: string) => string | undefined,
   lang: SupportedLang = "ru",
 ): string {
@@ -690,9 +694,35 @@ export function renderRegionalComparisonSection(
   ${heatmapLegend(minMat, maxMat, lang)}` : ""}
   ${cityRows.length >= 3 ? `<h3 style="margin-top:20px">${en ? "Pay across major cities & regional IT hubs" : "Зарплаты по крупнейшим городам и ИТ-хабам"}</h3>
   <p class="muted small">${en
-    ? "Cities with at least 10 paid vacancies over the period: median, 95% confidence interval, and interquartile range."
-    : "Города с не менее чем 10 оплачиваемыми вакансиями за период: медиана, 95% доверительный интервал и межквартильный размах."}</p>
-  ${rangeChart(cityRows, { lang, unit: fmt })}` : ""}
+    ? "Top Russian labour markets by sample volume (with at least 10 paid vacancies), ranked by median monthly pay: overall median, 95% confidence interval, interquartile range, and IT-sector median."
+    : "Крупнейшие региональные рынки труда и ИТ-хабы по объёму выборки (от 10 вакансий с оплатой), ранжированные по медиане: общая медиана, 95% доверительный интервал, межквартильный размах и чистая медиана в IT."}</p>
+  ${rangeChart(cityRows, { lang, unit: fmt })}
+  ${(byCity ?? []).some((c) => c.itPay?.median !== undefined) ? `<div style="overflow-x:auto;margin-top:12px">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>${en ? "City / Agglomeration" : "Город / ИТ-хаб"}</th>
+          <th>${en ? "Total vacancies (paid)" : "Вакансий (с вилкой)"}</th>
+          <th>${en ? "Overall median" : "Медиана (все)"}</th>
+          <th>${en ? "IT median (RUB)" : "Медиана в IT"}</th>
+          <th>${en ? "IT P25–P75 range" : "Коридор P25–P75 в IT"}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${(byCity ?? []).filter((c) => c.itPay?.median !== undefined).map((c) => {
+          const cName = en ? (translateCity(c.label, "en") ?? c.label) : c.label;
+          const itRange = c.itPay?.p25 && c.itPay?.p75 ? `${escapeHtml(fmt(c.itPay.p25))} – ${escapeHtml(fmt(c.itPay.p75))}` : "—";
+          return `<tr>
+            <td><b>${escapeHtml(cName)}</b></td>
+            <td>${num(c.n)} <span class="muted small">(${num(c.withPay)})</span></td>
+            <td><b>${c.pay.median ? escapeHtml(fmt(c.pay.median)) : "—"}</b></td>
+            <td><b style="color:var(--emerald)">${c.itPay?.median ? escapeHtml(fmt(c.itPay.median)) : "—"}</b> <span class="muted small">(n=${num(c.itPay?.n ?? 0)})</span></td>
+            <td class="small">${itRange}</td>
+          </tr>`;
+        }).join("")}
+      </tbody>
+    </table>
+  </div>` : ""}` : ""}
 </section>`;
 }
 
@@ -704,7 +734,7 @@ export function renderEconometricsSection(
   const en = lang === "en";
   const fmt = (v: number | undefined): string =>
     v !== undefined ? (en ? `₽${new Intl.NumberFormat("en-US").format(v)}` : formatRub(v)) : "—";
-  const { all, it, employerConcentration, gradeTransparency } = econ;
+  const { all, it, employerConcentration, gradeTransparency, ipwCorrectedIt } = econ;
   const gradeLabelEn: Record<string, string> = { intern: "Intern", junior: "Junior", middle: "Middle", senior: "Senior", lead: "Lead" };
 
   return `<section class="rs-section" id="econometrics">
@@ -760,6 +790,12 @@ export function renderEconometricsSection(
           <td class="small muted">${en ? "0 = uniform pay, 1 = total concentration; IT is wider due to grade progression" : "0 — полное равенство, 1 — максимальная концентрация; в IT выше из-за разрыва Junior–Lead"}</td>
         </tr>
         <tr>
+          <td><b>${en ? "Theil entropy index T = GE(1)" : "Индекс энтропии Тейла T = GE(1)"}</b></td>
+          <td><b>${all.theil !== undefined ? all.theil.toFixed(3) : "—"}</b></td>
+          <td><b>${it.theil !== undefined ? it.theil.toFixed(3) : "—"}</b></td>
+          <td class="small muted">${en ? "Additively decomposable generalized entropy measure of upper-tail wage dispersion" : "Аддитивно разложимая мера обобщённой энтропии GE(1), чувствительная к правому хвосту окладов"}</td>
+        </tr>
+        <tr>
           <td><b>${en ? "Bowley (S_B) / Kelley (S_K) skewness" : "Асимметрия Боули (S_B) / Келли (S_K)"}</b></td>
           <td>${all.bowleySkew ?? "—"} / ${all.kelleySkew ?? "—"}</td>
           <td><b>${it.bowleySkew ?? "—"} / ${it.kelleySkew ?? "—"}</b></td>
@@ -769,7 +805,13 @@ export function renderEconometricsSection(
           <td><b>${en ? "Employer concentration (HHI / CR5 / CR10)" : "Концентрация нанимателей (HHI / CR5 / CR10)"}</b></td>
           <td colspan="2"><b>HHI = ${num(employerConcentration.hhi)}</b> · CR₅ = ${en ? `${employerConcentration.cr5Pct}%` : formatShare(employerConcentration.cr5Pct)} · CR₁₀ = ${en ? `${employerConcentration.cr10Pct}%` : formatShare(employerConcentration.cr10Pct)} <span class="muted small">(${num(employerConcentration.totalEmployers)} ${en ? "IT employers" : "IT-нанимателей"})</span></td>
           <td class="small muted">${employerConcentration.hhi < 150 ? (en ? "HHI < 150 — highly competitive, non-monopolized demand" : "HHI < 150 — высококонкурентный рынок без доминирования одного нанимателя") : (en ? "Moderate concentration among largest ecosystems" : "Умеренная концентрация спроса у крупнейших экосистем")}</td>
-        </tr>
+        </tr>${ipwCorrectedIt ? `
+        <tr>
+          <td><b>${en ? "IPW selection-corrected IT median (Horvitz–Thompson)" : "IPW-медиана IT с поправкой на скрытые вилки (Хорвица — Томпсона)"}</b></td>
+          <td>${fmt(ipwCorrectedIt.rawMedian)} <span class="muted small">(${en ? "observed" : "наблюдаемая"})</span></td>
+          <td><b>${fmt(ipwCorrectedIt.ipwMedian)}</b> <span class="muted small">(${ipwCorrectedIt.biasPct >= 0 ? "+" : ""}${ipwCorrectedIt.biasPct}%)</span></td>
+          <td class="small muted">${en ? "Weighted by inverse disclosure probability 1 / P(Disclosed | Grade) across N = " + num(ipwCorrectedIt.n) + " graded IT vacancies" : "Взвешивание по обратной вероятности раскрытия вилки 1 / P(Disclosed | Grade), N = " + num(ipwCorrectedIt.n)}</td>
+        </tr>` : ""}
       </tbody>
     </table>
   </div>
@@ -870,14 +912,53 @@ export function renderAcademicCitations(report: Report, baseUrl: string, lang: S
         <td class="small"><code>${escapeHtml(bibtex)}</code></td>
         <td>${quoteButton(bibtex, lang)}</td>
       </tr>
+      <tr>
+        <td><b>IMRaD LaTeX (.tex)</b><br><span class="muted small">${en ? "Full preprint template" : "Шаблон статьи / ВКР"}</span></td>
+        <td class="small">${en ? "Ready-to-compile LaTeX manuscript with Mincer OLS, ANOVA, Blinder–Oaxaca & booktabs tables:" : "Готовый к компиляции в Overleaf LaTeX-препринт научной статьи (IMRaD) с таблицами booktabs и уравнениями:"} <a href="${en ? "/en/research/paper.tex" : "/research/paper.tex"}"><b>${en ? "Download paper.tex" : "Скачать paper.tex"}</b></a></td>
+        <td><a class="btn-ghost small" href="${en ? "/en/research/paper.tex" : "/research/paper.tex"}">.tex</a></td>
+      </tr>
     </tbody>
   </table>
 </div>`;
 }
 
+
+export function renderFormulaGallerySection(lang: SupportedLang = "ru"): string {
+  const en = lang === "en";
+  const cards = [{"key":"mincer","num":1,"tex":"\\ln(W_i) = \\beta_0 + \\beta_1\\,\\text{Middle}_i + \\beta_2\\,\\text{Senior}_i + \\beta_3\\,\\text{Lead}_i + \\gamma_1\\,\\text{Moscow}_i + \\gamma_2\\,\\text{SPb}_i + \\gamma_3\\,\\text{Remote}_i + \\delta\\,\\text{AI}_i + \\varepsilon_i","ruTitle":"Уравнение заработной платы Якоба Минсера (Mincer Log-Wage OLS)","enTitle":"Mincerian Log-Wage Regression (OLS)","ruNote":"Зависимая переменная ln(W_i) — натуральный логарифм месячного оклада в рублях; β₀ — базовая оплата Junior/Intern в региональном офисе.","enNote":"Dependent variable ln(W_i) is log monthly pay in RUB; β₀ is the baseline Junior/Intern pay in a regional office.","mathml":"<span class=\"katex\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><mi>ln</mi><mo>⁡</mo><mo stretchy=\"false\">(</mo><msub><mi>W</mi><mi>i</mi></msub><mo stretchy=\"false\">)</mo><mo>=</mo><msub><mi>β</mi><mn>0</mn></msub><mo>+</mo><msub><mi>β</mi><mn>1</mn></msub><mtext> </mtext><msub><mtext>Middle</mtext><mi>i</mi></msub><mo>+</mo><msub><mi>β</mi><mn>2</mn></msub><mtext> </mtext><msub><mtext>Senior</mtext><mi>i</mi></msub><mo>+</mo><msub><mi>β</mi><mn>3</mn></msub><mtext> </mtext><msub><mtext>Lead</mtext><mi>i</mi></msub><mo>+</mo><msub><mi>γ</mi><mn>1</mn></msub><mtext> </mtext><msub><mtext>Moscow</mtext><mi>i</mi></msub><mo>+</mo><msub><mi>γ</mi><mn>2</mn></msub><mtext> </mtext><msub><mtext>SPb</mtext><mi>i</mi></msub><mo>+</mo><msub><mi>γ</mi><mn>3</mn></msub><mtext> </mtext><msub><mtext>Remote</mtext><mi>i</mi></msub><mo>+</mo><mi>δ</mi><mtext> </mtext><msub><mtext>AI</mtext><mi>i</mi></msub><mo>+</mo><msub><mi>ε</mi><mi>i</mi></msub></mrow><annotation encoding=\"application/x-tex\">\\ln(W_i) = \\beta_0 + \\beta_1\\,\\text{Middle}_i + \\beta_2\\,\\text{Senior}_i + \\beta_3\\,\\text{Lead}_i + \\gamma_1\\,\\text{Moscow}_i + \\gamma_2\\,\\text{SPb}_i + \\gamma_3\\,\\text{Remote}_i + \\delta\\,\\text{AI}_i + \\varepsilon_i</annotation></semantics></math></span>"},{"key":"whiteHc1","num":2,"tex":"\\widehat{V}_{\\text{HC1}}(\\hat{\\beta}) = \\frac{n}{n - k}\\,(X^\\top X)^{-1}\\!\\left(\\sum_{i=1}^{n} \\hat{\\varepsilon}_i^{\\,2}\\, x_i x_i^\\top\\right)(X^\\top X)^{-1}, \\qquad \\Delta\\% = \\left(\\exp(\\hat{\\beta}_j) - 1\\right)\\times 100\\%","ruTitle":"Робастная ковариационная матрица Уайта (HC1) и поправка Халворсена — Палмквиста","enTitle":"White HC1 Heteroskedasticity-Robust Covariance & Halvorsen–Palmquist Semi-Elasticity","ruNote":"Устойчивые к гетероскедастичности стандартные ошибки SE_HC1 и точный процентный эффект бинарного фактора при прочих равных.","enNote":"Heteroskedasticity-consistent standard errors SE_HC1 and exact percentage wage premium of binary dummy variables.","mathml":"<span class=\"katex\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><msub><mover accent=\"true\"><mi>V</mi><mo stretchy=\"true\">^</mo></mover><mtext>HC1</mtext></msub><mo stretchy=\"false\">(</mo><mover accent=\"true\"><mi>β</mi><mo>^</mo></mover><mo stretchy=\"false\">)</mo><mo>=</mo><mfrac><mi>n</mi><mrow><mi>n</mi><mo>−</mo><mi>k</mi></mrow></mfrac><mtext> </mtext><mo stretchy=\"false\">(</mo><msup><mi>X</mi><mi mathvariant=\"normal\">⊤</mi></msup><mi>X</mi><msup><mo stretchy=\"false\">)</mo><mrow><mo>−</mo><mn>1</mn></mrow></msup><mtext> ⁣</mtext><mrow><mo fence=\"true\">(</mo><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><msubsup><mover accent=\"true\"><mi>ε</mi><mo>^</mo></mover><mi>i</mi><mrow><mtext> </mtext><mn>2</mn></mrow></msubsup><mtext> </mtext><msub><mi>x</mi><mi>i</mi></msub><msubsup><mi>x</mi><mi>i</mi><mi mathvariant=\"normal\">⊤</mi></msubsup><mo fence=\"true\">)</mo></mrow><mo stretchy=\"false\">(</mo><msup><mi>X</mi><mi mathvariant=\"normal\">⊤</mi></msup><mi>X</mi><msup><mo stretchy=\"false\">)</mo><mrow><mo>−</mo><mn>1</mn></mrow></msup><mo separator=\"true\">,</mo><mspace width=\"2em\"/><mi mathvariant=\"normal\">Δ</mi><mi mathvariant=\"normal\">%</mi><mo>=</mo><mrow><mo fence=\"true\">(</mo><mi>exp</mi><mo>⁡</mo><mo stretchy=\"false\">(</mo><msub><mover accent=\"true\"><mi>β</mi><mo>^</mo></mover><mi>j</mi></msub><mo stretchy=\"false\">)</mo><mo>−</mo><mn>1</mn><mo fence=\"true\">)</mo></mrow><mo>×</mo><mn>100</mn><mi mathvariant=\"normal\">%</mi></mrow><annotation encoding=\"application/x-tex\">\\widehat{V}_{\\text{HC1}}(\\hat{\\beta}) = \\frac{n}{n - k}\\,(X^\\top X)^{-1}\\!\\left(\\sum_{i=1}^{n} \\hat{\\varepsilon}_i^{\\,2}\\, x_i x_i^\\top\\right)(X^\\top X)^{-1}, \\qquad \\Delta\\% = \\left(\\exp(\\hat{\\beta}_j) - 1\\right)\\times 100\\%</annotation></semantics></math></span>"},{"key":"anova","num":3,"tex":"\\eta^2 = \\frac{SS_{\\text{between}}}{SS_{\\text{total}}} = \\frac{\\sum_{g=1}^{G} n_g \\left(\\bar{y}_g - \\bar{y}\\right)^2}{\\sum_{g=1}^{G}\\sum_{i=1}^{n_g}\\left(y_{gi} - \\bar{y}\\right)^2}, \\qquad F = \\frac{SS_{\\text{between}} / (G - 1)}{SS_{\\text{within}} / (N - G)}","ruTitle":"Декомпозиция дисперсии логарифма зарплат (Однофакторный ANOVA, η² и F-критерий)","enTitle":"One-Way ANOVA Log-Wage Variance Decomposition (η² & Fisher’s F-test)","ruNote":"Доля общей дисперсии логарифма зарплат y = ln(W), объясняемая группирующим институциональным фактором из G категорий на выборке N.","enNote":"Proportion of total log-wage variance y = ln(W) explained by an institutional grouping factor with G categories across N observations.","mathml":"<span class=\"katex\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><msup><mi>η</mi><mn>2</mn></msup><mo>=</mo><mfrac><mrow><mi>S</mi><msub><mi>S</mi><mtext>between</mtext></msub></mrow><mrow><mi>S</mi><msub><mi>S</mi><mtext>total</mtext></msub></mrow></mfrac><mo>=</mo><mfrac><mrow><munderover><mo>∑</mo><mrow><mi>g</mi><mo>=</mo><mn>1</mn></mrow><mi>G</mi></munderover><msub><mi>n</mi><mi>g</mi></msub><msup><mrow><mo fence=\"true\">(</mo><msub><mover accent=\"true\"><mi>y</mi><mo>ˉ</mo></mover><mi>g</mi></msub><mo>−</mo><mover accent=\"true\"><mi>y</mi><mo>ˉ</mo></mover><mo fence=\"true\">)</mo></mrow><mn>2</mn></msup></mrow><mrow><munderover><mo>∑</mo><mrow><mi>g</mi><mo>=</mo><mn>1</mn></mrow><mi>G</mi></munderover><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><msub><mi>n</mi><mi>g</mi></msub></munderover><msup><mrow><mo fence=\"true\">(</mo><msub><mi>y</mi><mrow><mi>g</mi><mi>i</mi></mrow></msub><mo>−</mo><mover accent=\"true\"><mi>y</mi><mo>ˉ</mo></mover><mo fence=\"true\">)</mo></mrow><mn>2</mn></msup></mrow></mfrac><mo separator=\"true\">,</mo><mspace width=\"2em\"/><mi>F</mi><mo>=</mo><mfrac><mrow><mi>S</mi><msub><mi>S</mi><mtext>between</mtext></msub><mi mathvariant=\"normal\">/</mi><mo stretchy=\"false\">(</mo><mi>G</mi><mo>−</mo><mn>1</mn><mo stretchy=\"false\">)</mo></mrow><mrow><mi>S</mi><msub><mi>S</mi><mtext>within</mtext></msub><mi mathvariant=\"normal\">/</mi><mo stretchy=\"false\">(</mo><mi>N</mi><mo>−</mo><mi>G</mi><mo stretchy=\"false\">)</mo></mrow></mfrac></mrow><annotation encoding=\"application/x-tex\">\\eta^2 = \\frac{SS_{\\text{between}}}{SS_{\\text{total}}} = \\frac{\\sum_{g=1}^{G} n_g \\left(\\bar{y}_g - \\bar{y}\\right)^2}{\\sum_{g=1}^{G}\\sum_{i=1}^{n_g}\\left(y_{gi} - \\bar{y}\\right)^2}, \\qquad F = \\frac{SS_{\\text{between}} / (G - 1)}{SS_{\\text{within}} / (N - G)}</annotation></semantics></math></span>"},{"key":"mannWhitney","num":4,"tex":"U_1 = R_1 - \\frac{n_1(n_1 + 1)}{2}, \\qquad z = \\frac{U_1 - \\frac{n_1 n_2}{2}}{\\sqrt{\\frac{n_1 n_2}{12}\\!\\left(N + 1 - \\frac{\\sum (t_k^3 - t_k)}{N(N - 1)}\\right)}}, \\qquad \\delta = \\frac{2U_1}{n_1 n_2} - 1","ruTitle":"Ранговый U-критерий Манна — Уитни с поправкой на связки и дельта Клиффа (δ)","enTitle":"Mann–Whitney U Test with Tie Correction & Cliff’s Delta Effect Size (δ)","ruNote":"R₁ — сумма рангов первой выборки объёма n₁; t_k — число совпадающих наблюдений в k-й группе связок; δ ∈ [−1, +1] — непараметрический размер эффекта.","enNote":"R₁ is the rank sum of group 1 (size n₁); t_k is the number of tied observations in tie group k; δ ∈ [−1, +1] is the non-parametric effect size.","mathml":"<span class=\"katex\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><msub><mi>U</mi><mn>1</mn></msub><mo>=</mo><msub><mi>R</mi><mn>1</mn></msub><mo>−</mo><mfrac><mrow><msub><mi>n</mi><mn>1</mn></msub><mo stretchy=\"false\">(</mo><msub><mi>n</mi><mn>1</mn></msub><mo>+</mo><mn>1</mn><mo stretchy=\"false\">)</mo></mrow><mn>2</mn></mfrac><mo separator=\"true\">,</mo><mspace width=\"2em\"/><mi>z</mi><mo>=</mo><mfrac><mrow><msub><mi>U</mi><mn>1</mn></msub><mo>−</mo><mfrac><mrow><msub><mi>n</mi><mn>1</mn></msub><msub><mi>n</mi><mn>2</mn></msub></mrow><mn>2</mn></mfrac></mrow><msqrt><mrow><mfrac><mrow><msub><mi>n</mi><mn>1</mn></msub><msub><mi>n</mi><mn>2</mn></msub></mrow><mn>12</mn></mfrac><mtext> ⁣</mtext><mrow><mo fence=\"true\">(</mo><mi>N</mi><mo>+</mo><mn>1</mn><mo>−</mo><mfrac><mrow><mo>∑</mo><mo stretchy=\"false\">(</mo><msubsup><mi>t</mi><mi>k</mi><mn>3</mn></msubsup><mo>−</mo><msub><mi>t</mi><mi>k</mi></msub><mo stretchy=\"false\">)</mo></mrow><mrow><mi>N</mi><mo stretchy=\"false\">(</mo><mi>N</mi><mo>−</mo><mn>1</mn><mo stretchy=\"false\">)</mo></mrow></mfrac><mo fence=\"true\">)</mo></mrow></mrow></msqrt></mfrac><mo separator=\"true\">,</mo><mspace width=\"2em\"/><mi>δ</mi><mo>=</mo><mfrac><mrow><mn>2</mn><msub><mi>U</mi><mn>1</mn></msub></mrow><mrow><msub><mi>n</mi><mn>1</mn></msub><msub><mi>n</mi><mn>2</mn></msub></mrow></mfrac><mo>−</mo><mn>1</mn></mrow><annotation encoding=\"application/x-tex\">U_1 = R_1 - \\frac{n_1(n_1 + 1)}{2}, \\qquad z = \\frac{U_1 - \\frac{n_1 n_2}{2}}{\\sqrt{\\frac{n_1 n_2}{12}\\!\\left(N + 1 - \\frac{\\sum (t_k^3 - t_k)}{N(N - 1)}\\right)}}, \\qquad \\delta = \\frac{2U_1}{n_1 n_2} - 1</annotation></semantics></math></span>"},{"key":"kruskalWallis","num":5,"tex":"H = \\frac{\\frac{12}{N(N + 1)}\\sum_{g=1}^{G}\\frac{R_g^2}{n_g} - 3(N + 1)}{1 - \\frac{\\sum (t_k^3 - t_k)}{N^3 - N}}, \\qquad \\varepsilon^2 = \\frac{H}{N - 1}","ruTitle":"Ранговый дисперсионный критерий Краскела — Уоллиса (H) и коэффициент ε²","enTitle":"Kruskal–Wallis Rank ANOVA (H) & Epsilon-Squared Effect Size (ε²)","ruNote":"Непараметрический аналог ANOVA для G ≥ 3 независимых групп (регионов или грейдов) с поправкой на связанные ранги.","enNote":"Non-parametric multi-group rank test across G ≥ 3 independent groups (regions or seniority grades) with tie correction.","mathml":"<span class=\"katex\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><mi>H</mi><mo>=</mo><mfrac><mrow><mfrac><mn>12</mn><mrow><mi>N</mi><mo stretchy=\"false\">(</mo><mi>N</mi><mo>+</mo><mn>1</mn><mo stretchy=\"false\">)</mo></mrow></mfrac><munderover><mo>∑</mo><mrow><mi>g</mi><mo>=</mo><mn>1</mn></mrow><mi>G</mi></munderover><mfrac><msubsup><mi>R</mi><mi>g</mi><mn>2</mn></msubsup><msub><mi>n</mi><mi>g</mi></msub></mfrac><mo>−</mo><mn>3</mn><mo stretchy=\"false\">(</mo><mi>N</mi><mo>+</mo><mn>1</mn><mo stretchy=\"false\">)</mo></mrow><mrow><mn>1</mn><mo>−</mo><mfrac><mrow><mo>∑</mo><mo stretchy=\"false\">(</mo><msubsup><mi>t</mi><mi>k</mi><mn>3</mn></msubsup><mo>−</mo><msub><mi>t</mi><mi>k</mi></msub><mo stretchy=\"false\">)</mo></mrow><mrow><msup><mi>N</mi><mn>3</mn></msup><mo>−</mo><mi>N</mi></mrow></mfrac></mrow></mfrac><mo separator=\"true\">,</mo><mspace width=\"2em\"/><msup><mi>ε</mi><mn>2</mn></msup><mo>=</mo><mfrac><mi>H</mi><mrow><mi>N</mi><mo>−</mo><mn>1</mn></mrow></mfrac></mrow><annotation encoding=\"application/x-tex\">H = \\frac{\\frac{12}{N(N + 1)}\\sum_{g=1}^{G}\\frac{R_g^2}{n_g} - 3(N + 1)}{1 - \\frac{\\sum (t_k^3 - t_k)}{N^3 - N}}, \\qquad \\varepsilon^2 = \\frac{H}{N - 1}</annotation></semantics></math></span>"},{"key":"cmhAndGini","num":6,"tex":"\\text{Gap}_{\\text{CMH}} = \\exp\\!\\left(\\frac{\\sum_{c} w_c \\ln(\\tilde{y}_{c,1} / \\tilde{y}_{c,0})}{\\sum_{c} w_c}\\right) - 1, \\qquad G = \\frac{\\sum_{i=1}^{n}(2i - n - 1)\\,x_{(i)}}{n\\sum_{i=1}^{n} x_{(i)}}, \\qquad \\text{QCD} = \\frac{P_{75} - P_{25}}{P_{75} + P_{25}}","ruTitle":"Поправка Кохрана — Мантеля — Хензеля на парадокс Симпсона, индекс Джини (G) и дисперсия (QCD)","enTitle":"Cochran–Mantel–Haenszel Stratified Adjustment, Gini Coefficient (G) & Quartile Dispersion (QCD)","ruNote":"Внутриячеечное сопоставление при равной роли и грейде c = (role, grade) с весами w_c = min(n_{c,1}, n_{c,0}), индекс концентрации Джини и квартильная дисперсия.","enNote":"Within-cell matching across c = (role, grade) strata with weights w_c = min(n_{c,1}, n_{c,0}), Gini inequality index, and quartile dispersion.","mathml":"<span class=\"katex\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><msub><mtext>Gap</mtext><mtext>CMH</mtext></msub><mo>=</mo><mi>exp</mi><mo>⁡</mo><mtext> ⁣</mtext><mrow><mo fence=\"true\">(</mo><mfrac><mrow><munder><mo>∑</mo><mi>c</mi></munder><msub><mi>w</mi><mi>c</mi></msub><mi>ln</mi><mo>⁡</mo><mo stretchy=\"false\">(</mo><msub><mover accent=\"true\"><mi>y</mi><mo>~</mo></mover><mrow><mi>c</mi><mo separator=\"true\">,</mo><mn>1</mn></mrow></msub><mi mathvariant=\"normal\">/</mi><msub><mover accent=\"true\"><mi>y</mi><mo>~</mo></mover><mrow><mi>c</mi><mo separator=\"true\">,</mo><mn>0</mn></mrow></msub><mo stretchy=\"false\">)</mo></mrow><mrow><munder><mo>∑</mo><mi>c</mi></munder><msub><mi>w</mi><mi>c</mi></msub></mrow></mfrac><mo fence=\"true\">)</mo></mrow><mo>−</mo><mn>1</mn><mo separator=\"true\">,</mo><mspace width=\"2em\"/><mi>G</mi><mo>=</mo><mfrac><mrow><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><mo stretchy=\"false\">(</mo><mn>2</mn><mi>i</mi><mo>−</mo><mi>n</mi><mo>−</mo><mn>1</mn><mo stretchy=\"false\">)</mo><mtext> </mtext><msub><mi>x</mi><mrow><mo stretchy=\"false\">(</mo><mi>i</mi><mo stretchy=\"false\">)</mo></mrow></msub></mrow><mrow><mi>n</mi><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><msub><mi>x</mi><mrow><mo stretchy=\"false\">(</mo><mi>i</mi><mo stretchy=\"false\">)</mo></mrow></msub></mrow></mfrac><mo separator=\"true\">,</mo><mspace width=\"2em\"/><mtext>QCD</mtext><mo>=</mo><mfrac><mrow><msub><mi>P</mi><mn>75</mn></msub><mo>−</mo><msub><mi>P</mi><mn>25</mn></msub></mrow><mrow><msub><mi>P</mi><mn>75</mn></msub><mo>+</mo><msub><mi>P</mi><mn>25</mn></msub></mrow></mfrac></mrow><annotation encoding=\"application/x-tex\">\\text{Gap}_{\\text{CMH}} = \\exp\\!\\left(\\frac{\\sum_{c} w_c \\ln(\\tilde{y}_{c,1} / \\tilde{y}_{c,0})}{\\sum_{c} w_c}\\right) - 1, \\qquad G = \\frac{\\sum_{i=1}^{n}(2i - n - 1)\\,x_{(i)}}{n\\sum_{i=1}^{n} x_{(i)}}, \\qquad \\text{QCD} = \\frac{P_{75} - P_{25}}{P_{75} + P_{25}}</annotation></semantics></math></span>"},{"key":"blinderOaxaca","num":7,"tex":"\\Delta\\overline{\\ln W} = \\overline{\\ln W}_A - \\overline{\\ln W}_B = \\underbrace{(\\bar{\\mathbf{X}}_A - \\bar{\\mathbf{X}}_B)^\\top \\hat{\\boldsymbol{\\beta}}^*}_{\\text{Endowments } (E)} + \\underbrace{\\bigl[\\bar{\\mathbf{X}}_A^\\top (\\hat{\\boldsymbol{\\beta}}_A - \\hat{\\boldsymbol{\\beta}}^*) + \\bar{\\mathbf{X}}_B^\\top (\\hat{\\boldsymbol{\\beta}}^* - \\hat{\\boldsymbol{\\beta}}_B)\\bigr]}_{\\text{Coefficients / Pure Returns } (C)}","ruTitle":"Двухфакторная декомпозиция Оахаки — Блайндера (Blinder–Oaxaca Decomposition)","enTitle":"Blinder–Oaxaca Twofold Econometric Wage Decomposition","ruNote":"Разложение межгруппового разрыва логарифмов зарплат на эффект композиции квалификации (Endowments E) и чистую ценовую ренту (Coefficients C).","enNote":"Decomposes mean log-wage differentials into human-capital composition (Endowments E) and pure structural returns (Coefficients C).","mathml":"<span class=\"katex\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><mi mathvariant=\"normal\">Δ</mi><mover accent=\"true\"><mrow><mi>ln</mi><mo>⁡</mo><mi>W</mi></mrow><mo stretchy=\"true\">‾</mo></mover><mo>=</mo><msub><mover accent=\"true\"><mrow><mi>ln</mi><mo>⁡</mo><mi>W</mi></mrow><mo stretchy=\"true\">‾</mo></mover><mi>A</mi></msub><mo>−</mo><msub><mover accent=\"true\"><mrow><mi>ln</mi><mo>⁡</mo><mi>W</mi></mrow><mo stretchy=\"true\">‾</mo></mover><mi>B</mi></msub><mo>=</mo><munder><munder><mrow><mo stretchy=\"false\">(</mo><msub><mover accent=\"true\"><mi mathvariant=\"bold\">X</mi><mo>ˉ</mo></mover><mi>A</mi></msub><mo>−</mo><msub><mover accent=\"true\"><mi mathvariant=\"bold\">X</mi><mo>ˉ</mo></mover><mi>B</mi></msub><msup><mo stretchy=\"false\">)</mo><mi mathvariant=\"normal\">⊤</mi></msup><msup><mover accent=\"true\"><mi mathvariant=\"bold-italic\">β</mi><mo>^</mo></mover><mo>∗</mo></msup></mrow><mo stretchy=\"true\">⏟</mo></munder><mrow><mtext>Endowments </mtext><mo stretchy=\"false\">(</mo><mi>E</mi><mo stretchy=\"false\">)</mo></mrow></munder><mo>+</mo><munder><munder><mrow><mo fence=\"true\" stretchy=\"true\" minsize=\"1.2em\" maxsize=\"1.2em\">[</mo><msubsup><mover accent=\"true\"><mi mathvariant=\"bold\">X</mi><mo>ˉ</mo></mover><mi>A</mi><mi mathvariant=\"normal\">⊤</mi></msubsup><mo stretchy=\"false\">(</mo><msub><mover accent=\"true\"><mi mathvariant=\"bold-italic\">β</mi><mo>^</mo></mover><mi>A</mi></msub><mo>−</mo><msup><mover accent=\"true\"><mi mathvariant=\"bold-italic\">β</mi><mo>^</mo></mover><mo>∗</mo></msup><mo stretchy=\"false\">)</mo><mo>+</mo><msubsup><mover accent=\"true\"><mi mathvariant=\"bold\">X</mi><mo>ˉ</mo></mover><mi>B</mi><mi mathvariant=\"normal\">⊤</mi></msubsup><mo stretchy=\"false\">(</mo><msup><mover accent=\"true\"><mi mathvariant=\"bold-italic\">β</mi><mo>^</mo></mover><mo>∗</mo></msup><mo>−</mo><msub><mover accent=\"true\"><mi mathvariant=\"bold-italic\">β</mi><mo>^</mo></mover><mi>B</mi></msub><mo stretchy=\"false\">)</mo><mo fence=\"true\" stretchy=\"true\" minsize=\"1.2em\" maxsize=\"1.2em\">]</mo></mrow><mo stretchy=\"true\">⏟</mo></munder><mrow><mtext>Coefficients / Pure Returns </mtext><mo stretchy=\"false\">(</mo><mi>C</mi><mo stretchy=\"false\">)</mo></mrow></munder></mrow><annotation encoding=\"application/x-tex\">\\Delta\\overline{\\ln W} = \\overline{\\ln W}_A - \\overline{\\ln W}_B = \\underbrace{(\\bar{\\mathbf{X}}_A - \\bar{\\mathbf{X}}_B)^\\top \\hat{\\boldsymbol{\\beta}}^*}_{\\text{Endowments } (E)} + \\underbrace{\\bigl[\\bar{\\mathbf{X}}_A^\\top (\\hat{\\boldsymbol{\\beta}}_A - \\hat{\\boldsymbol{\\beta}}^*) + \\bar{\\mathbf{X}}_B^\\top (\\hat{\\boldsymbol{\\beta}}^* - \\hat{\\boldsymbol{\\beta}}_B)\\bigr]}_{\\text{Coefficients / Pure Returns } (C)}</annotation></semantics></math></span>"},{"key":"theilAndIpw","num":8,"tex":"T_{\\text{Theil}} = \\frac{1}{n}\\sum_{i=1}^{n}\\frac{W_i}{\\overline{W}}\\ln\\!\\left(\\frac{W_i}{\\overline{W}}\\right), \\qquad \\widehat{M}_{\\text{IPW}} = \\operatorname{median}_{w_i}(W_i), \\quad w_i = \\frac{1}{\\hat{P}(\\text{Disclosed}=1 \\mid \\text{Grade}_i)}","ruTitle":"Индекс энтропии Тейла GE(1) и поправка Хорвица — Томпсона (IPW) на цензурирование вилок","enTitle":"Theil Entropy Index GE(1) & Horvitz–Thompson IPW Selection Bias Correction","ruNote":"Аддитивно разложимый индекс неравенства Тейла и оценка медианы с весами обратной вероятности раскрытия зарплатной вилки по грейдам.","enNote":"Additively decomposable generalized entropy index and inverse-probability-weighted median correcting for non-random salary hiding.","mathml":"<span class=\"katex\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><msub><mi>T</mi><mtext>Theil</mtext></msub><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><mfrac><msub><mi>W</mi><mi>i</mi></msub><mover accent=\"true\"><mi>W</mi><mo stretchy=\"true\">‾</mo></mover></mfrac><mi>ln</mi><mo>⁡</mo><mtext> ⁣</mtext><mrow><mo fence=\"true\">(</mo><mfrac><msub><mi>W</mi><mi>i</mi></msub><mover accent=\"true\"><mi>W</mi><mo stretchy=\"true\">‾</mo></mover></mfrac><mo fence=\"true\">)</mo></mrow><mo separator=\"true\">,</mo><mspace width=\"2em\"/><msub><mover accent=\"true\"><mi>M</mi><mo stretchy=\"true\">^</mo></mover><mtext>IPW</mtext></msub><mo>=</mo><msub><mrow><mi mathvariant=\"normal\">median</mi><mo>⁡</mo></mrow><msub><mi>w</mi><mi>i</mi></msub></msub><mo stretchy=\"false\">(</mo><msub><mi>W</mi><mi>i</mi></msub><mo stretchy=\"false\">)</mo><mo separator=\"true\">,</mo><mspace width=\"1em\"/><msub><mi>w</mi><mi>i</mi></msub><mo>=</mo><mfrac><mn>1</mn><mrow><mover accent=\"true\"><mi>P</mi><mo>^</mo></mover><mo stretchy=\"false\">(</mo><mtext>Disclosed</mtext><mo>=</mo><mn>1</mn><mo>∣</mo><msub><mtext>Grade</mtext><mi>i</mi></msub><mo stretchy=\"false\">)</mo></mrow></mfrac></mrow><annotation encoding=\"application/x-tex\">T_{\\text{Theil}} = \\frac{1}{n}\\sum_{i=1}^{n}\\frac{W_i}{\\overline{W}}\\ln\\!\\left(\\frac{W_i}{\\overline{W}}\\right), \\qquad \\widehat{M}_{\\text{IPW}} = \\operatorname{median}_{w_i}(W_i), \\quad w_i = \\frac{1}{\\hat{P}(\\text{Disclosed}=1 \\mid \\text{Grade}_i)}</annotation></semantics></math></span>"}];
+  return `<div style="margin-top:20px" id="mathematical-apparatus">
+  <h3>${en ? "Mathematical apparatus & econometric specification (LaTeX / MathML)" : "Математический аппарат и спецификация эконометрических моделей (LaTeX / MathML)"}</h3>
+  <p class="muted small">${en
+    ? "Exact mathematical formulations used in the automated econometric pipeline. Each equation is typeset via KaTeX/MathML and includes its raw LaTeX source code for direct citation in academic papers and theses:"
+    : "Строгая математическая запись уравнений и критериев, заложенных в расчётное ядро openradar. Каждая формула свёрстана в стандарте KaTeX / W3C MathML и снабжена кнопкой копирования исходного кода LaTeX для вставки в научные статьи, диссертации и ВКР:"}</p>
+  <div style="display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px">
+    ${cards
+      .map(
+        (c) => `<div class="rs-formula-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+          <div>
+            <b>(${c.num}) ${escapeHtml(en ? c.enTitle : c.ruTitle)}</b>
+            <p class="muted small" style="margin:4px 0 0 0">${escapeHtml(en ? c.enNote : c.ruNote)}</p>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span class="muted small">LaTeX:</span>
+            ${quoteButton(c.tex, lang)}
+          </div>
+        </div>
+        <div class="rs-formula-math">
+          ${c.mathml}
+        </div>
+        <div class="small muted" style="margin-top:6px;font-family:monospace;overflow-x:auto"><code>${escapeHtml(c.tex)}</code></div>
+      </div>`,
+      )
+      .join("")}
+  </div>
+</div>`;
+}
+
 export function renderScientificSection(scientific: ScientificAnalysis | undefined, lang: SupportedLang = "ru"): string {
   if (!scientific) return "";
-  const { mincer, varianceDecomposition, hypotheses } = scientific;
+  const { mincer, varianceDecomposition, hypotheses, oaxaca } = scientific;
   if (!mincer && !varianceDecomposition.length && !hypotheses.length) return "";
   const en = lang === "en";
   const fmt = (v: number): string => (en ? `₽${new Intl.NumberFormat("en-US").format(v)}` : formatRub(v));
@@ -1036,6 +1117,42 @@ export function renderScientificSection(scientific: ScientificAnalysis | undefin
       </tbody>
     </table>
   </div>` : ""}
+  ${oaxaca && oaxaca.length ? `<h3 style="margin-top:20px">${en ? "Table 4. Blinder–Oaxaca twofold wage gap decomposition (Endowments vs Pure Returns)" : "Таблица 4. Эконометрическая декомпозиция зарплатных разрывов Оахаки — Блайндера"}</h3>
+  <p class="muted small">${en
+    ? "Separates the mean log-wage differential Δln(W) between groups into the Endowment Effect (E: differences in seniority grade, high-paying roles, and AI skills) and the pure Coefficient / Returns Effect (C: pure location or remote rent at equal human capital)."
+    : "Разделяет наблюдаемый разрыв логарифмов зарплат Δln(W) на две составляющие: эффект структуры / характеристик (Endowments E — различия в доле Senior/Lead и дорогих специализаций) и чистый ценовой эффект (Coefficients C — чистая рента локации или удалёнки при равной квалификационной структуре)."}</p>
+  <div style="overflow-x:auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>${en ? "Structural comparison (A vs B)" : "Сравниваемые сегменты (A против B)"}</th>
+          <th>${en ? "Sample (n_A / n_B)" : "Выборка (n_A / n_B)"}</th>
+          <th>${en ? "Total gap Δln(W)" : "Общий разрыв Δln(W)"}</th>
+          <th>${en ? "Endowment effect E (composition)" : "Эффект структуры E (композиция)"}</th>
+          <th>${en ? "Pure returns effect C (rent)" : "Чистый ценовой эффект C (рента)"}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${oaxaca
+          .map((o) => {
+            const label = en
+              ? o.key === "moscow_vs_regions"
+                ? "Moscow (office) vs Russian Regions (office) in IT"
+                : "All-Russia Remote vs Russian Regions (office) in IT"
+              : o.label;
+            return `<tr>
+              <td><b>${escapeHtml(label)}</b></td>
+              <td>${num(o.nA)} / ${num(o.nB)}</td>
+              <td><b>${o.totalLogGap >= 0 ? "+" : ""}${o.totalLogGap.toFixed(3)}</b> <span class="muted small">(${o.rawGapPct >= 0 ? "+" : ""}${o.rawGapPct}%)</span></td>
+              <td><code>${o.endowmentLog >= 0 ? "+" : ""}${o.endowmentLog.toFixed(3)}</code> <span class="muted small">(${o.endowmentSharePct}% ${en ? "of gap" : "разрыва"})</span></td>
+              <td><b><code>${o.coefficientLog >= 0 ? "+" : ""}${o.coefficientLog.toFixed(3)}</code></b> <span class="muted small">(${o.coefficientSharePct}% ${en ? "of gap" : "разрыва"}, ${o.coefficientPct >= 0 ? "+" : ""}${o.coefficientPct}%)</span></td>
+            </tr>`;
+          })
+          .join("")}
+      </tbody>
+    </table>
+  </div>` : ""}
+  ${renderFormulaGallerySection(lang)}
 </section>`;
 }
 
@@ -1207,17 +1324,8 @@ ${(jobs.itCompanies?.length || jobs.companies.length) ? `<section class="rs-sect
   ${gigs.hourly.median ? `<p class="small" style="margin-top:12px">Почасовая ставка в заказах, где она указана: медиана ${formatRub(gigs.hourly.median)} в час (n = ${gigs.hourly.n}).</p>` : ''}
 </section>
 
-${intlMedian ? `<section class="rs-section" id="international">
-  <h2>Международная удалёнка и глобальный рынок</h2>
-  <p class="small">Англоязычные вакансии на зарубежных job-бордах и карьерных страницах компаний в Greenhouse, Lever, Ashby (${num(totals.intlJobs ?? 0)} вакансий). Годовая медиана в валюте — <b>${num(rubMonthToUsdYear(intlMedian, usd))} в год</b>${jobs.intl.p25 && jobs.intl.p75 ? ` (межквартильный коридор ${num(rubMonthToUsdYear(jobs.intl.p25, usd))}–${num(rubMonthToUsdYear(jobs.intl.p75, usd))} в год)` : ''}, n = ${num(jobs.intl.n)} вакансий с указанной вилкой. В рублёвые медианы РФ эти публикации не входят; динамика потока отслеживается в <a href="/research/index#global-index">международном индексе openradar</a>.</p>
-  ${jobs.intlByRole?.length ? `<h3 style="margin-top:16px">Годовые зарплаты на глобальном рынке по направлениям ($/год)</h3>
-  ${rangeChart(sliceRows(jobs.intlByRole), { unit: (v) => `${num(rubMonthToUsdYear(v, usd))} / год` })}` : ''}
-  ${jobs.intlByGrade?.length ? `<h3 style="margin-top:16px">По грейду на международном рынке ($/год)</h3>
-  ${rangeChart(sliceRows(jobs.intlByGrade), { unit: (v) => `${num(rubMonthToUsdYear(v, usd))} / год` })}` : ''}
-  ${jobs.intlCompanies?.length ? `<h3 style="margin-top:16px">Крупнейшие международные наниматели за период</h3>
-  ${countBars(jobs.intlCompanies.slice(0, 10).map((c) => ({ label: c.name, n: c.n })))}` : ''}
-  ${gigs.intlBudget?.median ? `<p class="small" style="margin-top:14px"><b>Глобальный фриланс (Freelancer.com, ${num(totals.intlGigs ?? 0)} заказов):</b> медианный проектный бюджет — <b>${num(Math.round(gigs.intlBudget.median / (usd ?? 80)))}</b>${gigs.intlBudget.p25 && gigs.intlBudget.p75 ? ` (половина проектов — от ${num(Math.round(gigs.intlBudget.p25 / (usd ?? 80)))} до ${num(Math.round(gigs.intlBudget.p75 / (usd ?? 80)))})` : ''}, выборка n = ${num(gigs.intlBudget.n)} заказов с бюджетом.</p>` : ''}
-</section>` : ''}
+${renderCrossMarketSection(jobs.crossMarket, (slug) => (jobs.roles.some((r) => r.slug === slug) ? `/research/roles/${slug}` : undefined), 'ru')}
+${renderIntlResearchSection(report, (slug) => (jobs.roles.some((r) => r.slug === slug) ? `/research/roles/${slug}` : undefined), 'ru')}
 
 <section class="rs-section">
   <h2>Откуда данные</h2>
@@ -1280,9 +1388,9 @@ ${intlMedian ? `<section class="rs-section" id="international">
     title,
     version,
     active: 'research',
-    body,
+    body: body + renderResearchEnhancements('ru'),
     script: QUOTE_SCRIPT,
-    head: `<meta name="description" content="${escapeHtml(description)}">
+    head: `${RESEARCH_ENHANCE_HEAD}<meta name="description" content="${escapeHtml(description)}">
 <meta property="og:description" content="${escapeHtml(description)}">
 ${scholarMetaTags({ title, baseUrl, path: reportUrl(report), dateIso: report.generatedAt, lang: 'ru' })}
 <link rel="canonical" href="${escapeHtml(`${baseUrl}${reportUrl(report)}`)}">
@@ -1413,6 +1521,616 @@ export function renderEmbedPage(options: { chartId: string; report: Report; base
 </html>`;
 }
 
+
+export function renderCrossMarketSection(
+  crossMarket: CrossMarketComparison | undefined,
+  roleHref: (slug: string) => string | undefined,
+  lang: SupportedLang = "ru",
+): string {
+  if (!crossMarket || (!crossMarket.byGrade.length && !crossMarket.byRole.length)) return "";
+  const en = lang === "en";
+  const fmtRub = (v: number): string => (en ? `₽${new Intl.NumberFormat("en-US").format(v)}` : formatRub(v));
+  const fmtUsdYr = (v: number): string => `$${num(v)}${en ? "/yr" : " / год"}`;
+  const gradeLabelEn: Record<string, string> = {
+    intern: "Intern",
+    junior: "Junior",
+    middle: "Middle",
+    senior: "Senior",
+    lead: "Lead / Staff",
+  };
+  const metricLabelEn: Record<string, { label: string; interpretation: string }> = {
+    gini: {
+      label: "Gini wage inequality index (G)",
+      interpretation: "Cross-border dispersion across US, EU, and CEE vs unified national IT market in Russia",
+    },
+    theil: {
+      label: "Theil entropy index T = GE(1)",
+      interpretation: "Upper-tail concentration driven by US Staff/Principal and global remote packages",
+    },
+    decile_ratio: {
+      label: "Decile dispersion ratio (P90 / P10)",
+      interpretation: "Pay ratio between the top 10% and bottom 10% of IT vacancies",
+    },
+    anova_grade: {
+      label: "Variance explained by Seniority Grade (ANOVA η²)",
+      interpretation: "In Russia seniority grade explains ~52% of variance; globally geography competes with seniority",
+    },
+    hhi: {
+      label: "Employer concentration index (HHI)",
+      interpretation: "Both markets are highly competitive (HHI < 150), with global demand distributed across more employers",
+    },
+  };
+
+  return `<section class="rs-section" id="cross-market-comparison">
+  <h2>${en ? "Cross-market econometric comparison: Russian IT vs Global IT (nominal & PPP)" : "Межстрановое эконометрическое сравнение: IT-рынок РФ против глобального рынка (номинал и ППС)"}</h2>
+  <p class="muted small">${en
+    ? `Comparative analysis of annualised IT compensation in Russia (converted from monthly RUB at ${crossMarket.usdRate} RUB/USD) against the international English-language market ($/year). Because non-tradable services and housing costs differ substantially across countries, we report both nominal USD exchange-rate comparisons and Purchasing Power Parity (PPP) real consumption equivalents using the IMF / World Bank ICP conversion factor (${crossMarket.pppFactor}×).`
+    : `Сопоставление годовых IT-зарплат в России (пересчёт из месячных рублёвых медиан по курсу ${crossMarket.usdRate} ₽/$) с глобальным англоязычным рынком ($/год). Поскольку стоимость жизни, жилья и неторгуемых услуг кратно различается между странами, расчёт приводится в двух стандартах: по номинальному биржевому курсу USD и по паритету покупательной способности (ППС / PPP, коэффициент Всемирного банка и МВФ ${crossMarket.pppFactor}×).`}</p>
+  ${crossMarket.byGrade.length ? `<h3 style="margin-top:16px">${en ? "1. Compensation parity across seniority grades (Nominal USD vs Real PPP)" : "1. Паритет вознаграждения по грейдам (номинальный курс USD и реальный ППС)"}</h3>
+  <div style="overflow-x:auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>${en ? "Seniority grade" : "Грейд"}</th>
+          <th>${en ? "Russia IT (RUB/mo)" : "РФ IT (₽ / мес)"}</th>
+          <th>${en ? "Russia Nominal ($/yr)" : "РФ номинал ($ / год)"}</th>
+          <th>${en ? "Russia Real PPP ($/yr)" : "РФ по ППС ($ / год PPP)"}</th>
+          <th>${en ? "Global IT ($/yr)" : "Глобальный рынок ($ / год)"}</th>
+          <th>${en ? "Nominal gap (Global / RU)" : "Номинальный разрыв"}</th>
+          <th>${en ? "Real PPP parity (RU / Global)" : "Реальный паритет по ППС"}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${crossMarket.byGrade
+          .map((g) => {
+            const label = en ? (gradeLabelEn[g.grade] ?? g.label) : g.label;
+            const parityColor = g.pppParityPct >= 95 ? "var(--emerald)" : g.pppParityPct >= 75 ? "var(--ink)" : "var(--muted)";
+            return `<tr>
+              <td><b>${escapeHtml(label)}</b></td>
+              <td><b>${escapeHtml(fmtRub(g.ruMedianRubMo))}</b></td>
+              <td>${escapeHtml(fmtUsdYr(g.ruMedianUsdYr))}</td>
+              <td><b>${escapeHtml(fmtUsdYr(g.ruPppUsdYr))}</b></td>
+              <td><b>${escapeHtml(fmtUsdYr(g.intlMedianUsdYr))}</b></td>
+              <td><code>${g.nominalGapRatio}×</code></td>
+              <td><b style="color:${parityColor}">${g.pppParityPct}%</b></td>
+            </tr>`;
+          })
+          .join("")}
+      </tbody>
+    </table>
+  </div>` : ""}
+  ${crossMarket.byRole.length ? `<h3 style="margin-top:18px">${en ? "2. Compensation parity by specialization (Russia vs Global IT)" : "2. Межстрановое сравнение по специализациям (РФ против глобального рынка)"}</h3>
+  <div style="overflow-x:auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>${en ? "Specialization" : "Направление"}</th>
+          <th>${en ? "Russia (RUB/mo)" : "РФ (₽ / мес)"}</th>
+          <th>${en ? "Russia Nominal ($/yr)" : "РФ номинал ($ / год)"}</th>
+          <th>${en ? "Russia PPP ($/yr)" : "РФ по ППС ($ / год)"}</th>
+          <th>${en ? "Global ($/yr)" : "Мир ($ / год)"}</th>
+          <th>${en ? "Nominal gap" : "Разрыв (ном.)"}</th>
+          <th>${en ? "Real PPP parity" : "Паритет ППС"}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${crossMarket.byRole
+          .slice(0, 12)
+          .map((r) => {
+            const href = roleHref(r.slug);
+            const name = escapeHtml(roleLabel(r.slug, lang));
+            const link = href ? `<a href="${escapeHtml(href)}">${name}</a>` : name;
+            return `<tr>
+              <td><b>${link}</b></td>
+              <td>${escapeHtml(fmtRub(r.ruMedianRubMo))}</td>
+              <td>${escapeHtml(fmtUsdYr(r.ruMedianUsdYr))}</td>
+              <td><b>${escapeHtml(fmtUsdYr(r.ruPppUsdYr))}</b></td>
+              <td><b>${escapeHtml(fmtUsdYr(r.intlMedianUsdYr))}</b></td>
+              <td><code>${r.nominalGapRatio}×</code></td>
+              <td><b>${r.pppParityPct}%</b></td>
+            </tr>`;
+          })
+          .join("")}
+      </tbody>
+    </table>
+  </div>` : ""}
+  ${crossMarket.structuralMetrics.length ? `<h3 style="margin-top:18px">${en ? "3. Institutional & inequality structure: Russia vs Global market" : "3. Сравнение институциональной структуры и неравенства: РФ против глобального рынка"}</h3>
+  <div style="overflow-x:auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>${en ? "Econometric indicator" : "Эконометрический показатель"}</th>
+          <th>${en ? "Russia IT" : "Рынок РФ (IT)"}</th>
+          <th>${en ? "Global / International IT" : "Глобальный рынок (IT)"}</th>
+          <th>${en ? "Structural interpretation" : "Аналитическая интерпретация"}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${crossMarket.structuralMetrics
+          .map((m) => {
+            const tr = en ? metricLabelEn[m.key] : undefined;
+            return `<tr>
+              <td><b>${escapeHtml(tr?.label ?? m.label)}</b></td>
+              <td><b>${escapeHtml(m.ruValue)}</b></td>
+              <td><b>${escapeHtml(m.intlValue)}</b></td>
+              <td class="small muted">${escapeHtml(tr?.interpretation ?? m.interpretation)}</td>
+            </tr>`;
+          })
+          .join("")}
+      </tbody>
+    </table>
+  </div>` : ""}
+</section>`;
+}
+
+export function renderIntlResearchSection(
+  report: Report,
+  roleHref: (slug: string) => string | undefined,
+  lang: SupportedLang = "ru",
+): string {
+  const { jobs, gigs, totals } = report;
+  const intlMedian = jobs.intl.median;
+  if (!intlMedian) return "";
+  const en = lang === "en";
+  const usd = report.fx?.USD;
+  const ir = jobs.intlResearch;
+  const fmtUsdYr = (v: number): string => `$${num(v)}${en ? "/yr" : " / год"}`;
+  const fmtUsdShort = (v: number): string => `$${num(v)}`;
+  const signPct = (v: number): string => `${v > 0 ? "+" : v < 0 ? (en ? "-" : "−") : ""}${Math.abs(v)}%`;
+
+  const gmRows = (ir?.gradeMatrix ?? []).filter(
+    (r) => r.median !== undefined && (r.junior !== undefined || r.middle !== undefined || r.senior !== undefined || r.lead !== undefined),
+  );
+  const gmVals = gmRows.flatMap((r) => [r.junior, r.middle, r.senior, r.lead, r.median].filter((v): v is number => v !== undefined));
+  const gmMin = gmVals.length ? Math.min(...gmVals) : 20_000;
+  const gmMax = gmVals.length ? Math.max(...gmVals) : 200_000;
+  const gmCell = (v: number | undefined): string =>
+    v !== undefined ? `<td${heatmapStyle(v, gmMin, gmMax)}>${escapeHtml(fmtUsdShort(v))}</td>` : `<td class="muted">—</td>`;
+
+  const lmRows = (ir?.languageMatrix ?? []).filter(
+    (r) => r.median !== undefined && (r.junior !== undefined || r.middle !== undefined || r.senior !== undefined || r.lead !== undefined),
+  );
+  const lmVals = lmRows.flatMap((r) => [r.junior, r.middle, r.senior, r.lead, r.median].filter((v): v is number => v !== undefined));
+  const lmMin = lmVals.length ? Math.min(...lmVals) : 25_000;
+  const lmMax = lmVals.length ? Math.max(...lmVals) : 200_000;
+  const lmCell = (v: number | undefined): string =>
+    v !== undefined ? `<td${heatmapStyle(v, lmMin, lmMax)}>${escapeHtml(fmtUsdShort(v))}</td>` : `<td class="muted">—</td>`;
+
+  const macroLabelEn: Record<string, string> = {
+    north_america: "North America (US & Canada, USD)",
+    western_europe: "Western Europe & UK (EUR / GBP / CHF)",
+    cee_poland: "Central & Eastern Europe (PLN / CEE hubs)",
+    global_remote: "Global Remote / Worldwide",
+  };
+
+  const econ = ir?.econometrics;
+  const sci = ir?.scientific;
+
+  const mincerLabelEn: Record<string, string> = {
+    intercept: "Intercept β₀ (Junior/Intern, CEE/regional baseline, $/yr)",
+    middle: "Seniority: Middle (vs Junior/Intern)",
+    senior: "Seniority: Senior (vs Junior/Intern)",
+    lead: "Seniority: Lead / Staff (vs Junior/Intern)",
+    moscow: "Location: North America / US-tier pay (vs baseline)",
+    spb: "Location: Western Europe / UK / CH (vs baseline)",
+    remote: "Work mode: Global Remote (vs on-site baseline)",
+    ai: "Skill requirement: AI / LLM mentioned",
+  };
+  const mincerLabelRu: Record<string, string> = {
+    intercept: "Константа β₀ (Junior/Intern, базовый хаб ЦВЕ, $/год)",
+    middle: "Грейд: Middle (к Junior/Intern)",
+    senior: "Грейд: Senior (к Junior/Intern)",
+    lead: "Грейд: Lead / Staff (к Junior/Intern)",
+    moscow: "Макрорегион: Северная Америка / США (к базе)",
+    spb: "Макрорегион: Западная Европа / Британия / Швейцария (к базе)",
+    remote: "Формат: Глобальная удалёнка / Worldwide Remote (к базе)",
+    ai: "Навык: требование AI / LLM в вакансии",
+  };
+  const anovaLabelEn: Record<string, string> = {
+    grade: "Seniority grade (Intern → Lead)",
+    geo: "Macro-region (North America, W. Europe, CEE, Global Remote)",
+    role: "Professional specialization (role)",
+    language: "Primary programming language / stack",
+  };
+  const anovaLabelRu: Record<string, string> = {
+    grade: "Квалификационный грейд (Intern → Lead)",
+    geo: "Макрорегион (Сев. Америка, Зап. Европа, ЦВЕ, Global Remote)",
+    role: "Профессиональная специализация (роль)",
+    language: "Основной язык программирования / стек",
+  };
+
+  const hubRows: BarRow[] = (ir?.byHub ?? []).slice(0, 14).map((s) => ({
+    label: en ? (translateCity(s.label, "en") ?? s.label) : s.label,
+    n: s.n,
+    pay: s.pay,
+  }));
+
+  const intlRoleRows: BarRow[] = (jobs.intlByRole ?? []).map((s) => ({
+    label: en ? roleLabel(s.key, "en") : s.label,
+    href: roleHref(s.key),
+    n: s.n,
+    pay: {
+      n: s.pay.n,
+      median: s.pay.median ? rubMonthToUsdYear(s.pay.median, usd) : undefined,
+      p25: s.pay.p25 ? rubMonthToUsdYear(s.pay.p25, usd) : undefined,
+      p75: s.pay.p75 ? rubMonthToUsdYear(s.pay.p75, usd) : undefined,
+      ciLow: s.pay.ciLow ? rubMonthToUsdYear(s.pay.ciLow, usd) : undefined,
+      ciHigh: s.pay.ciHigh ? rubMonthToUsdYear(s.pay.ciHigh, usd) : undefined,
+    },
+  }));
+
+  const intlGradeLabelEn: Record<string, string> = { intern: "Intern", junior: "Junior", middle: "Middle", senior: "Senior", lead: "Lead" };
+  const intlGradeRows: BarRow[] = (jobs.intlByGrade ?? []).map((s) => ({
+    label: en ? (intlGradeLabelEn[s.key] ?? s.label) : s.label,
+    n: s.n,
+    pay: {
+      n: s.pay.n,
+      median: s.pay.median ? rubMonthToUsdYear(s.pay.median, usd) : undefined,
+      p25: s.pay.p25 ? rubMonthToUsdYear(s.pay.p25, usd) : undefined,
+      p75: s.pay.p75 ? rubMonthToUsdYear(s.pay.p75, usd) : undefined,
+      ciLow: s.pay.ciLow ? rubMonthToUsdYear(s.pay.ciLow, usd) : undefined,
+      ciHigh: s.pay.ciHigh ? rubMonthToUsdYear(s.pay.ciHigh, usd) : undefined,
+    },
+  }));
+
+  const intlGigRows: BarRow[] = (gigs.intlByCategory ?? []).map((s) => ({
+    label: en ? roleLabel(s.key, "en") : s.label,
+    n: s.n,
+    pay: s.pay,
+  }));
+
+  const naRow = ir?.macroRegions?.find((m) => m.key === "north_america");
+  const naMedian = naRow?.pay.median;
+
+  return `<section class="rs-section" id="international">
+  <h2>${en ? "International & Global IT Labour Market: Econometric Study ($/year)" : "Глобальный и международный рынок IT: полноценное эконометрическое исследование ($/год)"}</h2>
+  <p class="small">${en
+    ? `Empirical analysis of <b>${num(totals.intlJobs ?? 0)}</b> English-language international vacancies collected from global remote boards and company ATS career portals (Greenhouse, Lever, Ashby, Workable, European & North American tech hubs). Compensation is stated in <b>${ir ? `${ir.payShare}%` : formatShare(Math.round((jobs.intl.n / Math.max(1, totals.intlJobs ?? 1)) * 100))}</b> of listings (n = <b>${num(jobs.intl.n)}</b> paid vacancies); global median annual pay is <b>$${num(rubMonthToUsdYear(intlMedian, usd))}/yr</b>${jobs.intl.p25 && jobs.intl.p75 ? ` (interquartile range $${num(rubMonthToUsdYear(jobs.intl.p25, usd))}–$${num(rubMonthToUsdYear(jobs.intl.p75, usd))}/yr)` : ""}. Remote-eligible positions account for <b>${ir ? `${ir.remoteShare}%` : "—"}</b> of global demand. Daily dynamics are tracked in the <a href="/en/research/index#global-index">openradar international index</a>.`
+    : `Эмпирическое исследование <b>${num(totals.intlJobs ?? 0)}</b> англоязычных вакансий на зарубежных job-бордах и в ATS-системах прямых нанимателей (Greenhouse, Lever, Ashby, технологические хабы США, Великобритании, Западной и Центральной Европы). Зарплатная вилка раскрыта в <b>${ir ? formatShare(ir.payShare) : "—"}</b> публикаций (выборка с оплатой n = <b>${num(jobs.intl.n)}</b>); годовая медиана составляет <b>$${num(rubMonthToUsdYear(intlMedian, usd))} в год</b>${jobs.intl.p25 && jobs.intl.p75 ? ` (межквартильный коридор $${num(rubMonthToUsdYear(jobs.intl.p25, usd))}–$${num(rubMonthToUsdYear(jobs.intl.p75, usd))} в год)` : ""}. Удалённый формат допускают <b>${ir ? formatShare(ir.remoteShare) : "—"}</b> международных вакансий. Ежедневная динамика потока отслеживается в <a href="/research/index#global-index">международном индексе openradar</a>.`}</p>
+
+  ${intlRoleRows.length ? `<h3 style="margin-top:16px">${en ? "Global annual pay by specialization ($/year)" : "Годовые зарплаты на международном рынке по направлениям ($/год)"}</h3>
+  ${rangeChart(intlRoleRows, { unit: fmtUsdYr, lang })}` : ""}
+
+  ${intlGradeRows.length ? `<h3 style="margin-top:16px">${en ? "Global annual pay by seniority grade ($/year)" : "Годовые зарплаты на глобальном рынке по грейдам ($/год)"}</h3>
+  ${rangeChart(intlGradeRows, { unit: fmtUsdYr, lang })}` : ""}
+
+  ${gmRows.length ? `<h3 style="margin-top:20px" id="intl-heatmap-role-grade">${en ? "Global salary heatmap: specialization × seniority ($/year)" : "Тепловая карта глобального рынка: направление × грейд ($/год)"}</h3>
+  <p class="muted small">${en
+    ? "Median annual compensation ($/year) across global roles and seniority grades, Senior/Junior progression multiplier, and within-role quartile dispersion (QCD)."
+    : "Медианная годовая зарплата ($/год) на пересечении специализации и грейда на международном рынке, мультипликатор карьерного роста Senior/Junior и внутриролевая дисперсия (QCD)."}</p>
+  <div style="overflow-x:auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>${en ? "Role" : "Направление"}</th>
+          <th>${en ? "Median ($/yr)" : "Медиана ($/год)"}</th>
+          <th>Junior</th>
+          <th>Middle</th>
+          <th>Senior</th>
+          <th>Lead</th>
+          <th>Senior / Jr</th>
+          <th>QCD</th>
+          <th>${en ? "Remote" : "Удалёнка"}</th>
+          <th>${en ? "Pay stated" : "С вилкой"}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${gmRows
+          .slice(0, 16)
+          .map((r) => {
+            const href = roleHref(r.slug);
+            const name = escapeHtml(roleLabel(r.slug, lang));
+            const link = href ? `<a href="${escapeHtml(href)}">${name}</a>` : name;
+            const ratio = r.seniorToJuniorRatio ? `${String(r.seniorToJuniorRatio).replace(".", en ? "." : ",")}×` : "—";
+            const qcd = r.qcdPct !== undefined ? (en ? `${r.qcdPct}%` : formatShare(r.qcdPct)) : "—";
+            return `<tr>
+              <td><b>${link}</b> <span class="muted small">(${num(r.withPay)})</span></td>
+              <td${heatmapStyle(r.median, gmMin, gmMax)}><b>${r.median !== undefined ? escapeHtml(fmtUsdShort(r.median)) : "—"}</b></td>
+              ${gmCell(r.junior)}
+              ${gmCell(r.middle)}
+              ${gmCell(r.senior)}
+              ${gmCell(r.lead)}
+              <td><b>${ratio}</b></td>
+              <td>${qcd}</td>
+              <td>${en ? `${r.remoteShare}%` : formatShare(r.remoteShare)}</td>
+              <td>${en ? `${r.payShare}%` : formatShare(r.payShare)}</td>
+            </tr>`;
+          })
+          .join("")}
+      </tbody>
+    </table>
+  </div>` : ""}
+
+  ${lmRows.length ? `<h3 style="margin-top:20px" id="intl-heatmap-language-grade">${en ? "Global stack heatmap: programming language × seniority ($/year)" : "Тепловая карта глобального стека: язык программирования × грейд ($/год)"}</h3>
+  <div style="overflow-x:auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>${en ? "Language" : "Язык"}</th>
+          <th>${en ? "Median ($/yr)" : "Медиана ($/год)"}</th>
+          <th>Junior</th>
+          <th>Middle</th>
+          <th>Senior</th>
+          <th>Lead</th>
+          <th>Senior / Jr</th>
+          <th>QCD</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${lmRows
+          .map((r) => {
+            const ratio = r.seniorToJuniorRatio ? `${String(r.seniorToJuniorRatio).replace(".", en ? "." : ",")}×` : "—";
+            const qcd = r.qcdPct !== undefined ? (en ? `${r.qcdPct}%` : formatShare(r.qcdPct)) : "—";
+            return `<tr>
+              <td><b>${escapeHtml(r.language)}</b> <span class="muted small">(${num(r.withPay)})</span></td>
+              <td${heatmapStyle(r.median, lmMin, lmMax)}><b>${r.median !== undefined ? escapeHtml(fmtUsdShort(r.median)) : "—"}</b></td>
+              ${lmCell(r.junior)}
+              ${lmCell(r.middle)}
+              ${lmCell(r.senior)}
+              ${lmCell(r.lead)}
+              <td><b>${ratio}</b></td>
+              <td>${qcd}</td>
+            </tr>`;
+          })
+          .join("")}
+      </tbody>
+    </table>
+  </div>` : ""}
+
+  ${ir?.macroRegions?.length ? `<h3 style="margin-top:20px" id="intl-macro-regions">${en ? "Global macro-regions & Cochran–Mantel–Haenszel adjusted pay gaps ($/year)" : "Макрорегионы глобального рынка и стратифицированные разрывы CMH ($/год)"}</h3>
+  <p class="muted small">${en
+    ? "Comparison across four international macro-segments: North America (US/Canada USD), Western Europe & UK (EUR/GBP/CHF), Central & Eastern Europe (Poland/CEE hubs), and Global Remote. Adjusted gap controls for role and seniority composition relative to North America."
+    : "Декомпозиция международного рынка на четыре макрорегиона: Северная Америка (США и Канада), Западная Европа и Великобритания (EUR/GBP/CHF), Центральная и Восточная Европа (хабы Польши и ЦВЕ) и глобальная удалёнка (Worldwide Remote). Поправка Кохрана — Мантеля — Хензеля (CMH) показывает разницу к Северной Америке при одинаковой роли и грейде."}</p>
+  <div style="overflow-x:auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>${en ? "International macro-region" : "Макрорегион"}</th>
+          <th>${en ? "Vacancies" : "Вакансий"}</th>
+          <th>${en ? "Pay stated" : "С вилкой"}</th>
+          <th>${en ? "Median ($/yr)" : "Медиана ($/год)"}</th>
+          <th>${en ? "Middle half (P25–P75)" : "Коридор P25–P75"}</th>
+          <th>${en ? "Parity vs North America" : "Паритет к Сев. Америке"}</th>
+          <th>${en ? "Adjusted gap vs NA (CMH)" : "При той же роли и грейде к США"}</th>
+          <th>QCD</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${ir.macroRegions
+          .map((m) => {
+            const label = en ? (macroLabelEn[m.key] ?? m.label) : m.label;
+            const iqr = m.pay.p25 && m.pay.p75 ? `${fmtUsdShort(m.pay.p25)}–${fmtUsdShort(m.pay.p75)}` : "—";
+            const parityPct = naMedian && m.pay.median ? Math.round((m.pay.median / naMedian) * 100) : undefined;
+            const adj =
+              m.key === "north_america"
+                ? en ? "100% (reference)" : "эталон (база)"
+                : m.adjustedVsNa
+                  ? `<b>${signPct(m.adjustedVsNa.pct)}</b> <span class="muted small">(n=${num(m.adjustedVsNa.n)})</span>`
+                  : "—";
+            return `<tr>
+              <td><b>${escapeHtml(label)}</b></td>
+              <td>${num(m.n)} <span class="muted small">(${en ? `${m.sharePct}%` : formatShare(m.sharePct)})</span></td>
+              <td>${en ? `${m.payShare}%` : formatShare(m.payShare)} <span class="muted small">(${num(m.withPay)})</span></td>
+              <td><b>${m.pay.median !== undefined ? escapeHtml(fmtUsdYr(m.pay.median)) : "—"}</b></td>
+              <td class="small">${escapeHtml(iqr)}</td>
+              <td><b>${parityPct !== undefined ? `${parityPct}%` : "—"}</b></td>
+              <td>${adj}</td>
+              <td>${m.qcdPct !== undefined ? (en ? `${m.qcdPct}%` : formatShare(m.qcdPct)) : "—"}</td>
+            </tr>`;
+          })
+          .join("")}
+      </tbody>
+    </table>
+  </div>` : ""}
+
+  ${hubRows.length ? `<h3 style="margin-top:18px">${en ? "Major international tech hubs ($/year)" : "Крупнейшие зарубежные тех-хабы и города ($/год)"}</h3>
+  <p class="muted small">${en
+    ? "Top global cities and regional hubs by vacancy volume, with annual median and interquartile salary range ($/year)."
+    : "Ведущие мировые города и технологические хабы по числу вакансий с медианной годовой зарплатой и межквартильным коридором ($/год)."}</p>
+  ${rangeChart(hubRows, { unit: fmtUsdYr, lang })}` : ""}
+
+  ${econ && econ.all.n >= 20 ? `<h3 style="margin-top:20px" id="intl-econometrics">${en ? "Global distributional econometrics & inequality profile ($/year)" : "Эконометрический профиль распределения и неравенства на глобальном рынке ($/год)"}</h3>
+  <div style="overflow-x:auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>${en ? "Distributional metric" : "Статистическая метрика"}</th>
+          <th>${en ? "Global Market (all)" : "Все международные вакансии"}</th>
+          <th>${en ? "Global IT Core" : "Глобальный IT-сегмент"}</th>
+          <th>${en ? "Econometric meaning" : "Эконометрический смысл"}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>${en ? "Sample with stated pay (n)" : "Выборка с вилкой (n)"}</b></td>
+          <td><b>${num(econ.all.n)}</b></td>
+          <td><b>${num(econ.it.n)}</b></td>
+          <td class="small muted">${en ? "Verified international postings with annualised USD pay" : "Международные публикации с валидированной годовой оплатой в USD"}</td>
+        </tr>
+        <tr>
+          <td><b>${en ? "Decile ladder P10 / P25 / P50 / P75 / P90" : "Децильная лестница P10 / P25 / P50 / P75 / P90"}</b></td>
+          <td class="small">${[econ.all.p10, econ.all.p25, econ.all.p50, econ.all.p75, econ.all.p90].map((v) => (v ? fmtUsdShort(v) : "—")).join(" · ")}</td>
+          <td class="small"><b>${[econ.it.p10, econ.it.p25, econ.it.p50, econ.it.p75, econ.it.p90].map((v) => (v ? fmtUsdShort(v) : "—")).join(" · ")}</b></td>
+          <td class="small muted">${en ? "Full non-parametric quantile profile ($/year)" : "Полный квантильный профиль годовых зарплат ($/год)"}</td>
+        </tr>
+        <tr>
+          <td><b>${en ? "Trimmed mean (5%) & right-tail premium" : "Усечённое среднее (5%) и премия правого хвоста"}</b></td>
+          <td>${econ.all.trimmedMean ? fmtUsdYr(econ.all.trimmedMean) : "—"} ${econ.all.meanToMedianPct !== undefined ? `(+${econ.all.meanToMedianPct}%)` : ""}</td>
+          <td><b>${econ.it.trimmedMean ? fmtUsdYr(econ.it.trimmedMean) : "—"}</b> ${econ.it.meanToMedianPct !== undefined ? `(+${econ.it.meanToMedianPct}%)` : ""}</td>
+          <td class="small muted">${en ? "Exceedance of mean over median due to US Staff/Principal packages" : "Превышение среднего над медианой за счёт высоких офферов США и Staff/Lead ролей"}</td>
+        </tr>
+        <tr>
+          <td><b>${en ? "Gini index (G) & Theil entropy T = GE(1)" : "Индекс Джини (G) и индекс энтропии Тейла T = GE(1)"}</b></td>
+          <td><b>G = ${econ.all.gini?.toFixed(3) ?? "—"}</b> · T = ${econ.all.theil?.toFixed(3) ?? "—"}</td>
+          <td><b>G = ${econ.it.gini?.toFixed(3) ?? "—"} · T = ${econ.it.theil?.toFixed(3) ?? "—"}</b></td>
+          <td class="small muted">${en ? "Cross-border dispersion across CEE, Western Europe, and US pay bands" : "Межстрановое неравенство между вилками Восточной Европы, ЕС и США"}</td>
+        </tr>
+        <tr>
+          <td><b>${en ? "Decile ratio (P90/P10) & Quartile ratio (P75/P25)" : "Децильный (P90/P10) и квартильный (P75/P25) коэффициенты"}</b></td>
+          <td>${econ.all.decileRatio ?? "—"}× / ${econ.all.quartileRatio ?? "—"}× (QCD ${econ.all.qcdPct ?? "—"}%)</td>
+          <td><b>${econ.it.decileRatio ?? "—"}× / ${econ.it.quartileRatio ?? "—"}×</b> (QCD ${econ.it.qcdPct ?? "—"}%)</td>
+          <td class="small muted">${en ? "Ratio between top-decile US/Remote roles and entry-level international roles" : "Соотношение верхнего дециля (США / Senior Remote) к стартовым позициям"}</td>
+        </tr>
+        <tr>
+          <td><b>${en ? "Employer concentration (HHI / CR5 / CR10)" : "Концентрация нанимателей (HHI / CR5 / CR10)"}</b></td>
+          <td colspan="2"><b>HHI = ${num(econ.employerConcentration.hhi)}</b> · CR₅ = ${econ.employerConcentration.cr5Pct}% · CR₁₀ = ${econ.employerConcentration.cr10Pct}% <span class="muted small">(${num(econ.employerConcentration.totalEmployers)} ${en ? "employers" : "нанимателей"})</span></td>
+          <td class="small muted">${en ? "Fragmented global demand across thousands of companies" : "Низкая концентрация: спрос распределён между тысячами глобальных нанимателей"}</td>
+        </tr>${econ.ipwCorrectedIt ? `
+        <tr>
+          <td><b>${en ? "IPW selection-corrected global IT median" : "IPW-медиана глобального IT с поправкой Хорвица — Томпсона"}</b></td>
+          <td>${fmtUsdYr(econ.ipwCorrectedIt.rawMedian)} <span class="muted small">(${en ? "observed" : "наблюдаемая"})</span></td>
+          <td><b>${fmtUsdYr(econ.ipwCorrectedIt.ipwMedian)}</b> <span class="muted small">(${econ.ipwCorrectedIt.biasPct >= 0 ? "+" : ""}${econ.ipwCorrectedIt.biasPct}%)</span></td>
+          <td class="small muted">${en ? `Inverse disclosure probability weighted across N = ${num(econ.ipwCorrectedIt.n)} graded global IT vacancies` : `Взвешивание по обратной вероятности раскрытия вилки 1 / P(Disclosed | Grade), N = ${num(econ.ipwCorrectedIt.n)}`}</td>
+        </tr>` : ""}
+      </tbody>
+    </table>
+  </div>` : ""}
+
+  ${sci?.mincer ? `<h3 style="margin-top:20px" id="intl-mincer">${en ? "Global Mincerian log-wage OLS regression (ln USD/year, White HC1 robust SEs)" : "Глобальное уравнение Минсера (МНК для ln USD/год с робастными ошибками Уайта HC1)"}</h3>
+  <p class="muted small">${en
+    ? `Estimated across N = ${num(sci.mincer.n)} graded international IT vacancies (R² = ${sci.mincer.r2.toFixed(3)}, F = ${sci.mincer.fStat}, p < 0.001). Baseline β₀ represents a Junior/Intern engineer in Central/Eastern Europe without AI skill requirements.`
+    : `Оценка по N = ${num(sci.mincer.n)} международным IT-вакансиям с указанным грейдом (R² = ${sci.mincer.r2.toFixed(3)}, F = ${sci.mincer.fStat}, p < 0.001). Базовая категория (β₀) — специалист уровня Junior/Intern в хабе ЦВЕ без требований AI.`}</p>
+  <div style="overflow-x:auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>${en ? "Variable (global model)" : "Переменная (глобальная модель)"}</th>
+          <th>${en ? "Coeff. β (log)" : "Коэффициент β"}</th>
+          <th>${en ? "Robust SE (HC1)" : "Робастная SE (HC1)"}</th>
+          <th>t-stat</th>
+          <th>p-value</th>
+          <th>${en ? "Pure effect Δ% (ceteris paribus)" : "Чистый вклад Δ% (ceteris paribus)"}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${sci.mincer.coefficients
+          .map((c) => {
+            const label = en ? (mincerLabelEn[c.key] ?? c.label) : (mincerLabelRu[c.key] ?? c.label);
+            const eff =
+              c.key === "intercept" && c.baselineRub
+                ? `<b>${escapeHtml(fmtUsdYr(c.baselineRub))}</b> <span class="muted small">(${en ? "base" : "база"})</span>`
+                : c.effectPct !== undefined
+                  ? `<b style="color:${c.effectPct > 0 ? "var(--emerald)" : "inherit"}">${c.effectPct > 0 ? "+" : ""}${c.effectPct}%</b>`
+                  : "—";
+            return `<tr>
+              <td><b>${escapeHtml(label)}</b></td>
+              <td><code>${c.beta > 0 && c.key !== "intercept" ? "+" : ""}${c.beta.toFixed(3)}${c.stars}</code></td>
+              <td><code>${c.se.toFixed(3)}</code></td>
+              <td><code>${c.tStat.toFixed(2)}</code></td>
+              <td><b>${escapeHtml(c.pValue)}</b></td>
+              <td>${eff}</td>
+            </tr>`;
+          })
+          .join("")}
+      </tbody>
+    </table>
+  </div>` : ""}
+
+  ${sci?.varianceDecomposition?.length ? `<h3 style="margin-top:18px">${en ? "Global ANOVA log-wage variance decomposition (η²)" : "Глобальная декомпозиция дисперсии логарифма зарплат (ANOVA η²)"}</h3>
+  <div style="overflow-x:auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>${en ? "Global institutional factor" : "Институциональный фактор (глобальный рынок)"}</th>
+          <th>${en ? "Sample (N)" : "Выборка (N)"}</th>
+          <th>${en ? "Groups (G)" : "Групп (G)"}</th>
+          <th>${en ? "Variance explained (η²)" : "Объяснённая дисперсия (η²)"}</th>
+          <th>${en ? "Fisher F-stat" : "F-критерий Фишера"}</th>
+          <th>p-value</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${sci.varianceDecomposition
+          .map(
+            (v) => `<tr>
+              <td><b>${escapeHtml(en ? (anovaLabelEn[v.key] ?? v.label) : (anovaLabelRu[v.key] ?? v.label))}</b></td>
+              <td>${num(v.n)}</td>
+              <td>${v.groups}</td>
+              <td><b>${en ? `${v.etaSqPct}%` : formatShare(v.etaSqPct)}</b></td>
+              <td><code>F = ${v.fStat}</code></td>
+              <td><b>${escapeHtml(v.pValue)}</b></td>
+            </tr>`,
+          )
+          .join("")}
+      </tbody>
+    </table>
+  </div>` : ""}
+
+  ${sci?.oaxaca?.length ? `<h3 style="margin-top:18px">${en ? "Global Blinder–Oaxaca twofold wage gap decomposition" : "Декомпозиция Оахаки — Блайндера на глобальном рынке"}</h3>
+  <div style="overflow-x:auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>${en ? "International comparison (A vs B)" : "Сравниваемые макросегменты (A против B)"}</th>
+          <th>n_A / n_B</th>
+          <th>${en ? "Total log gap Δln(W)" : "Общий разрыв Δln(W)"}</th>
+          <th>${en ? "Endowments E (grade/role mix)" : "Эффект структуры E (грейды и роли)"}</th>
+          <th>${en ? "Pure returns C (location rent)" : "Чистый ценовой эффект C (рента локации)"}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${sci.oaxaca
+          .map((o) => {
+            const label =
+              o.key === "moscow_vs_regions"
+                ? en
+                  ? "North America (USD) vs Central & Eastern Europe (CEE) in IT"
+                  : "Северная Америка (USD) против Центральной и Восточной Европы (ЦВЕ) в IT"
+                : en
+                  ? "Global Remote (Worldwide) vs Central & Eastern Europe (CEE) in IT"
+                  : "Глобальная удалёнка (Worldwide Remote) против хабов ЦВЕ в IT";
+            return `<tr>
+              <td><b>${escapeHtml(label)}</b></td>
+              <td>${num(o.nA)} / ${num(o.nB)}</td>
+              <td><b>${o.totalLogGap >= 0 ? "+" : ""}${o.totalLogGap.toFixed(3)}</b> <span class="muted small">(${o.rawGapPct >= 0 ? "+" : ""}${o.rawGapPct}%)</span></td>
+              <td><code>${o.endowmentLog >= 0 ? "+" : ""}${o.endowmentLog.toFixed(3)}</code> <span class="muted small">(${o.endowmentSharePct}%)</span></td>
+              <td><b><code>${o.coefficientLog >= 0 ? "+" : ""}${o.coefficientLog.toFixed(3)}</code></b> <span class="muted small">(${o.coefficientSharePct}%, ${o.coefficientPct >= 0 ? "+" : ""}${o.coefficientPct}%)</span></td>
+            </tr>`;
+          })
+          .join("")}
+      </tbody>
+    </table>
+  </div>` : ""}
+
+  ${jobs.intlCompanies?.length ? `<h3 style="margin-top:18px">${en ? "Top hiring international employers" : "Крупнейшие международные наниматели за период"}</h3>
+  ${countBars(jobs.intlCompanies.slice(0, 12).map((c) => ({ label: c.name, n: c.n })))}` : ""}
+
+  ${gigs.intlBudget?.median ? `<div style="margin-top:22px;padding-top:16px;border-top:1px solid var(--line)" id="intl-freelance">
+    <h3>${en ? `Global freelance market (Freelancer.com, ${num(totals.intlGigs ?? 0)} orders)` : `Глобальный рынок фриланса (Freelancer.com, ${num(totals.intlGigs ?? 0)} заказов)`}</h3>
+    <p class="small">${en
+      ? `Median fixed-price project budget is <b>$${num(Math.round(gigs.intlBudget.median / (usd ?? 80)))}</b>${gigs.intlBudget.p25 && gigs.intlBudget.p75 ? ` (interquartile range $${num(Math.round(gigs.intlBudget.p25 / (usd ?? 80)))}–$${num(Math.round(gigs.intlBudget.p75 / (usd ?? 80)))})` : ""}, sample n = <b>${num(gigs.intlBudget.n)}</b> orders with stated budget.`
+      : `Медианный бюджет зарубежного проекта — <b>$${num(Math.round(gigs.intlBudget.median / (usd ?? 80)))}</b>${gigs.intlBudget.p25 && gigs.intlBudget.p75 ? ` (межквартильный коридор от $${num(Math.round(gigs.intlBudget.p25 / (usd ?? 80)))} до $${num(Math.round(gigs.intlBudget.p75 / (usd ?? 80)))})` : ""}, выборка n = <b>${num(gigs.intlBudget.n)}</b> заказов с указанным бюджетом.`}</p>
+    ${intlGigRows.length ? rangeChart(intlGigRows, { unit: fmtUsdShort, lang }) : ""}
+    ${gigs.intlBrackets?.length ? `<div style="overflow-x:auto;margin-top:12px">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>${en ? "Project price bracket (USD)" : "Ценовой сегмент заказа (USD)"}</th>
+            <th>${en ? "Orders" : "Заказов"}</th>
+            <th>${en ? "Share of volume" : "Доля в числе заказов"}</th>
+            <th>${en ? "Share of total budget pool" : "Доля в сумме бюджетов"}</th>
+            <th>${en ? "Median in bracket" : "Медиана в сегменте"}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${gigs.intlBrackets
+            .map(
+              (b) => `<tr>
+                <td><b>${escapeHtml(b.label)}</b></td>
+                <td>${num(b.n)}</td>
+                <td>${en ? `${b.nShare}%` : formatShare(b.nShare)}</td>
+                <td><b>${en ? `${b.capitalShare}%` : formatShare(b.capitalShare)}</b></td>
+                <td>${b.median !== undefined ? escapeHtml(fmtUsdShort(b.median)) : "—"}</td>
+              </tr>`,
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>` : ""}
+  </div>` : ""}
+</section>`;
+}
+
 export function renderRolePage(options: { detail: RoleDetail; report: Report; baseUrl: string; version: string; auth?: AuthDisplay; lang?: SupportedLang }): string {
   const { detail, report, baseUrl, version } = options;
   const ru = (options.lang ?? 'ru') !== 'en';
@@ -1484,10 +2202,10 @@ ${detail.companies.length ? `<section class="rs-section"><h2>${ru ? 'Кто на
     title,
     version,
     active: 'research',
-    body,
+    body: body + renderResearchEnhancements(options.lang ?? 'ru'),
     lang: options.lang,
     script: QUOTE_SCRIPT,
-    head: `<meta name="description" content="${escapeHtml(description)}">
+    head: `${RESEARCH_ENHANCE_HEAD}<meta name="description" content="${escapeHtml(description)}">
 <link rel="canonical" href="${escapeHtml(baseUrl + path)}">`,
   });
 }
@@ -1570,6 +2288,8 @@ export function renderMethodologyPage(options: { baseUrl: string; version: strin
     <li><b>Дисперсионный анализ (ANOVA η²) и непараметрические ранговые критерии:</b> доля общей дисперсии логарифма зарплат, объясняемая каждым институциональным фактором (грейд, география, направление, язык программирования), рассчитывается как <code>η² = SS_between / SS_total</code>. Проверка статистических гипотез выполняется непараметрическими критериями Манна — Уитни (<code>U</code>-тест с поправкой на связки и рангово-бисериальной дельтой Клиффа <code>δ = 2U / (n₁n₂) − 1</code>), Краскела — Уоллиса (<code>H</code>-тест и <code>ε² = H / (N − 1)</code>) и ранговой корреляцией Спирмена (<code>ρ_s</code>).</li>
   </ul>
 
+  ${renderFormulaGallerySection('ru')}
+
   <h2 id="index">8. Индекс openradar (панельный индекс рыночной активности)</h2>
   <p>Индекс (<a href="/research/index">/research/index</a>) показывает, сколько новых вакансий и фриланс-заказов появляется на рынке каждый день относительно базового периода (9 ноября — 6 декабря 2026 = 100).</p>
   <ul>
@@ -1638,8 +2358,8 @@ export function renderMethodologyPage(options: { baseUrl: string; version: strin
     title: 'Методика исследований и индекса openradar',
     version,
     active: 'research',
-    body,
-    head: `<meta name="description" content="Полная методика исследований и индекса openradar: источники, нормализация зарплатных вилок, 95% доверительные интервалы, поправка на парадокс Симпсона и формула индекса.">
+    body: body + renderResearchEnhancements('ru'),
+    head: `${RESEARCH_ENHANCE_HEAD}<meta name="description" content="Полная методика исследований и индекса openradar: источники, нормализация зарплатных вилок, 95% доверительные интервалы, поправка на парадокс Симпсона и формула индекса.">
 ${scholarMetaTags({ title: "Методика исследований и индекса openradar", baseUrl, path: "/research/methodology", dateIso: new Date().toISOString(), lang: "ru" })}
 <link rel="canonical" href="${escapeHtml(baseUrl)}/research/methodology">
 <link rel="alternate" hreflang="en" href="${escapeHtml(baseUrl)}/en/research/methodology">`,
@@ -1647,3 +2367,129 @@ ${scholarMetaTags({ title: "Методика исследований и инд�
 }
 
 export { GRADE_LABELS };
+
+export function renderAcademicPaperLatex(report: Report, baseUrl = "https://openradar.fun", lang: SupportedLang = "ru"): string {
+  const en = lang === "en";
+  const mincer = report.jobs.scientific?.mincer;
+  const anova = report.jobs.scientific?.varianceDecomposition ?? [];
+  const oaxaca = report.jobs.scientific?.oaxaca ?? [];
+  const econ = report.jobs.econometrics;
+  const escTex = (s: string): string =>
+    s.replace(/\\/g, "\\textbackslash{}").replace(/([&%$#_{}])/g, "\\$1").replace(/~/g, "\\textasciitilde{}").replace(/\^/g, "\\textasciicircum{}");
+
+  return [
+    "\\documentclass[11pt,a4paper]{article}",
+    "\\usepackage[utf8]{inputenc}",
+    "\\usepackage[T2A,T1]{fontenc}",
+    "\\usepackage[english,russian]{babel}",
+    "\\usepackage{amsmath,amssymb,amsfonts}",
+    "\\usepackage{booktabs}",
+    "\\usepackage{geometry}",
+    "\\usepackage{hyperref}",
+    "\\geometry{margin=2.5cm}",
+    "",
+    `\\title{${en ? "Empirical Econometric Analysis of the IT and Freelance Labour Market" : "Эмпирический эконометрический анализ рынка труда в IT и фрилансе"} (${escTex(report.period.label)})}`,
+    "\\author{openradar Research}",
+    `\\date{${escTex(report.generatedAt.slice(0, 10))}}`,
+    "",
+    "\\begin{document}",
+    "\\maketitle",
+    "",
+    "\\begin{abstract}",
+    en
+      ? `This paper presents an automated empirical econometric study of ${report.totals.posts} labour market observations (${report.totals.jobs} vacancies and ${report.totals.gigs} freelance orders; ${report.totals.jobsWithPay} vacancies with disclosed pay) collected by the openradar research network over ${escTex(report.period.label)}. We estimate a Mincerian log-wage equation via Ordinary Least Squares (OLS) with White HC1 heteroskedasticity-robust standard errors, perform one-way ANOVA variance decomposition ($\\eta^2$), two-fold Blinder--Oaxaca wage gap decomposition, and non-parametric Mann--Whitney $U$, Kruskal--Wallis $H$, and Spearman $\\rho_s$ hypothesis tests.`
+      : `В работе представлено эмпирическое эконометрическое исследование на выборке из ${report.totals.posts} наблюдений рынка труда (${report.totals.jobs} вакансий и ${report.totals.gigs} фриланс-заказов; ${report.totals.jobsWithPay} вакансий с раскрытой оплатой), собранных открытой исследовательской сетью openradar за период ${escTex(report.period.label)}. Проведена оценка лог-линейного уравнения заработной платы Якоба Минсера методом МНК с гетероскедастично-робастными ошибками Уайта (HC1), однофакторная декомпозиция дисперсии логарифма зарплат (ANOVA $\\eta^2$), двухфакторная декомпозиция Оахаки — Блайндера, а также непараметрическая проверка гипотез по критериям Манна — Уитни $U$, Краскела — Уоллиса $H$ и ранговой корреляции Спирмена $\\rho_s$.`,
+    "\\end{abstract}",
+    "",
+    "\\section{Econometric Specification}",
+    "\\begin{equation}",
+    "  \\ln(y_i) = \\beta_0 + \\sum_{g} \\beta_g \\mathbb{I}(\\text{Grade}_i = g) + \\sum_{r} \\gamma_r \\mathbb{I}(\\text{Region}_i = r) + \\delta_{\\text{AI}} \\mathbb{I}(\\text{AI}_i = 1) + \\varepsilon_i",
+    "\\end{equation}",
+    "\\begin{equation}",
+    "  \\widehat{\\mathbf{V}}_{\\text{HC1}}(\\hat{\\boldsymbol{\\beta}}) = \\frac{n}{n - k}(\\mathbf{X}^\\top \\mathbf{X})^{-1}\\left(\\sum_{i=1}^{n} \\hat{\\varepsilon}_i^2 \\mathbf{x}_i \\mathbf{x}_i^\\top\\right)(\\mathbf{X}^\\top \\mathbf{X})^{-1}, \\qquad \\Delta\\%_j = (\\exp(\\hat{\\beta}_j) - 1)\\times 100\\%",
+    "\\end{equation}",
+    "\\begin{equation}",
+    "  \\Delta\\overline{\\ln W} = (\\bar{\\mathbf{X}}_A - \\bar{\\mathbf{X}}_B)^\\top \\hat{\\boldsymbol{\\beta}}^* + \\bigl[\\bar{\\mathbf{X}}_A^\\top (\\hat{\\boldsymbol{\\beta}}_A - \\hat{\\boldsymbol{\\beta}}^*) + \\bar{\\mathbf{X}}_B^\\top (\\hat{\\boldsymbol{\\beta}}^* - \\hat{\\boldsymbol{\\beta}}_B)\\bigr]",
+    "\\end{equation}",
+    "",
+    "\\section{Empirical Results}",
+    mincer
+      ? [
+          "\\begin{table}[htbp]",
+          "\\centering",
+          `\\caption{Mincerian Log-Wage OLS Regression (N = ${mincer.n}, R^2 = ${mincer.r2.toFixed(3)}, F = ${mincer.fStat})}`,
+          "\\begin{tabular}{lrrrrr}",
+          "\\toprule",
+          "Variable & Coeff. $\\hat{\\beta}$ & Robust SE (HC1) & $t$-stat & $p$-value & Semi-elasticity $\\Delta\\%$ \\\\",
+          "\\midrule",
+          ...mincer.coefficients.map(
+            (c) =>
+              `${escTex(c.label)} & ${c.beta.toFixed(3)}${c.stars} & ${c.se.toFixed(3)} & ${c.tStat.toFixed(2)} & ${escTex(c.pValue)} & ${c.effectPct !== undefined ? `${c.effectPct}\\%` : "---"} \\\\`,
+          ),
+          "\\bottomrule",
+          "\\end{tabular}",
+          "\\end{table}",
+        ].join("\n")
+      : "",
+    anova.length
+      ? [
+          "\\begin{table}[htbp]",
+          "\\centering",
+          "\\caption{One-Way ANOVA Log-Wage Variance Decomposition ($\\eta^2$)}",
+          "\\begin{tabular}{lrrrr}",
+          "\\toprule",
+          "Factor & Sample $N$ & Groups $G$ & $\\eta^2$ (\\%) & Fisher $F$-stat \\\\",
+          "\\midrule",
+          ...anova.map((v) => `${escTex(v.label)} & ${v.n} & ${v.groups} & ${v.etaSqPct}\\% & ${v.fStat} \\\\`),
+          "\\bottomrule",
+          "\\end{tabular}",
+          "\\end{table}",
+        ].join("\n")
+      : "",
+    oaxaca.length
+      ? [
+          "\\begin{table}[htbp]",
+          "\\centering",
+          "\\caption{Blinder--Oaxaca Twofold Wage Gap Decomposition}",
+          "\\begin{tabular}{lrrrr}",
+          "\\toprule",
+          "Comparison & $n_A / n_B$ & $\\Delta\\ln(W)$ & Endowments $E$ & Pure Returns $C$ \\\\",
+          "\\midrule",
+          ...oaxaca.map(
+            (o) =>
+              `${escTex(o.label)} & ${o.nA}/${o.nB} & ${o.totalLogGap.toFixed(3)} & ${o.endowmentLog.toFixed(3)} (${o.endowmentSharePct}\\%) & ${o.coefficientLog.toFixed(3)} (${o.coefficientSharePct}\\%) \\\\`,
+          ),
+          "\\bottomrule",
+          "\\end{tabular}",
+          "\\end{table}",
+        ].join("\n")
+      : "",
+    econ
+      ? `\\noindent\\textbf{Distributional & Inequality Summary:} Overall median = ${econ.all.p50 ?? "---"} RUB (Gini $G = ${econ.all.gini?.toFixed(3) ?? "---"}$, Theil $T = ${econ.all.theil?.toFixed(3) ?? "---"}$); IT median = ${econ.it.p50 ?? "---"} RUB (Gini $G = ${econ.it.gini?.toFixed(3) ?? "---"}$, Theil $T = ${econ.it.theil?.toFixed(3) ?? "---"}$); Employer HHI = ${econ.employerConcentration.hhi}.${econ.ipwCorrectedIt ? ` Horvitz--Thompson IPW selection-corrected IT median = ${econ.ipwCorrectedIt.ipwMedian} RUB (${econ.ipwCorrectedIt.biasPct >= 0 ? "+" : ""}${econ.ipwCorrectedIt.biasPct}\\% vs observed).`: ""}`
+      : "",
+    "",
+    report.jobs.crossMarket?.byGrade.length
+      ? [
+          "\\section{International & Cross-Market Econometric Comparison (Nominal vs PPP)}",
+          "\\begin{table}[htbp]",
+          "\\centering",
+          `\\caption{Russia IT vs Global IT Compensation by Seniority Grade (FX = ${report.jobs.crossMarket.usdRate} RUB/USD, IMF/WB PPP Factor = ${report.jobs.crossMarket.pppFactor}\\times)}`,
+          "\\begin{tabular}{lrrrrrr}",
+          "\\toprule",
+          "Grade & RU (RUB/mo) & RU Nominal (\\$/yr) & RU PPP (\\$/yr) & Global (\\$/yr) & Nominal Gap & PPP Parity \\\\",
+          "\\midrule",
+          ...report.jobs.crossMarket.byGrade.map(
+            (g) =>
+              `${escTex(g.label)} & ${g.ruMedianRubMo} & ${g.ruMedianUsdYr} & ${g.ruPppUsdYr} & ${g.intlMedianUsdYr} & ${g.nominalGapRatio}\\times & ${g.pppParityPct}\\% \\\\`,
+          ),
+          "\\bottomrule",
+          "\\end{tabular}",
+          "\\end{table}",
+        ].join("\n")
+      : "",
+    "\\section*{Data Availability & Citation}",
+    `Open dataset (CC BY 4.0): \\url{${baseUrl}/research/dataset.csv}, JSON report: \\url{${baseUrl}/research/report.json}, Methodology: \\url{${baseUrl}/research/methodology}.`,
+    "\\end{document}",
+    "",
+  ].join("\n");
+}

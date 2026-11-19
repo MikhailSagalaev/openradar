@@ -6,11 +6,15 @@
  */
 import { escapeHtml, jsonForScript } from '../core/text.ts';
 import { layout, type AuthDisplay } from '../server/ui.ts';
+import { RESEARCH_ENHANCE_HEAD, renderResearchEnhancements } from './enhance.ts';
 import { translateSkill, translateSourceTitle } from '../server/i18n.ts';
 import type { IndexSeries, OpenradarIndex } from './index.ts';
 import { lineChart, renderIntlIndexSection, renderPlatformIndexTable, renderWeekdayProfileSection } from './index-page.ts';
 import { renderEconometricsSection,
   renderScientificSection,
+  renderCrossMarketSection,
+  renderIntlResearchSection,
+  renderFormulaGallerySection,
   renderAcademicCitations,
   scholarMetaTags, renderGigBracketsSection, renderGradeMatrixSection, renderLanguageMatrixSection, renderRegionalComparisonSection } from './pages.ts';
 import { MIN_MEDIAN, MIN_QUARTILES, RELIABLE, REPORT_VERSION, rubMonthToUsdYear, type Dist, type Report, type Slice } from './report.ts';
@@ -251,15 +255,8 @@ ${(jobs.itCompanies?.length || jobs.companies.length) ? `<section class="rs-sect
   <p class="small">Russian-language orders. <b>${pct(gigs.budgetShare)}</b> of them state a budget, for the whole project.${totals.intlGigs ? ` English-language orders (${num(totals.intlGigs)}) stay out.` : ''}</p>
   ${rangeChart(translate(gigs.byCategory.filter((s) => s.key !== 'other'), ROLE_EN))}
   ${renderGigBracketsSection(gigs.brackets, 'en')}</section>
-${intlMedian ? `<section class="rs-section" id="international"><h2>International remote vacancies &amp; global market</h2>
-  <p class="small">English-language vacancies from international remote boards and company ATS career pages in Greenhouse, Lever, and Ashby (${num(totals.intlJobs ?? 0)} vacancies): a median of <b>${num(rubMonthToUsdYear(intlMedian, report.fx?.USD))} a year</b>${jobs.intl.p25 && jobs.intl.p75 ? ` (middle half: ${num(rubMonthToUsdYear(jobs.intl.p25, report.fx?.USD))}–${num(rubMonthToUsdYear(jobs.intl.p75, report.fx?.USD))}/yr)` : ''} (n = ${num(jobs.intl.n)}). They stay out of the Russian rouble figures above; daily volume dynamics are tracked in the <a href="/en/research/index#global-index">openradar international index</a>.</p>
-  ${jobs.intlByRole?.length ? `<h3 style="margin-top:16px">Global annual pay by role ($/year)</h3>
-  ${rangeChart(translate(jobs.intlByRole, ROLE_EN), (v) => `${num(rubMonthToUsdYear(v, report.fx?.USD))}/yr`)}` : ''}
-  ${jobs.intlByGrade?.length ? `<h3 style="margin-top:16px">Global annual pay by seniority ($/year)</h3>
-  ${rangeChart(translate(jobs.intlByGrade, GRADE_EN), (v) => `${num(rubMonthToUsdYear(v, report.fx?.USD))}/yr`)}` : ''}
-  ${jobs.intlCompanies?.length ? `<h3 style="margin-top:16px">Top hiring international employers</h3>
-  ${countBars(jobs.intlCompanies.slice(0, 10).map((c) => ({ label: c.name, n: c.n })))}` : ''}
-  ${gigs.intlBudget?.median ? `<p class="small" style="margin-top:14px"><b>Global freelance orders (Freelancer.com, ${num(totals.intlGigs ?? 0)} orders):</b> median project budget is <b>${num(Math.round(gigs.intlBudget.median / (report.fx?.USD ?? 80)))}</b>${gigs.intlBudget.p25 && gigs.intlBudget.p75 ? ` (middle half: ${num(Math.round(gigs.intlBudget.p25 / (report.fx?.USD ?? 80)))}–${num(Math.round(gigs.intlBudget.p75 / (report.fx?.USD ?? 80)))})` : ''}, sample n = ${num(gigs.intlBudget.n)} orders with stated budget.</p>` : ''}</section>` : ''}
+${renderCrossMarketSection(jobs.crossMarket, (slug) => (jobs.roles.some((r) => r.slug === slug) ? `/en/research/roles/${slug}` : undefined), 'en')}
+${renderIntlResearchSection(report, (slug) => (jobs.roles.some((r) => r.slug === slug) ? `/en/research/roles/${slug}` : undefined), 'en')}
 <section class="rs-section"><h2>Where the data comes from</h2>
   ${countBars(totals.platforms.slice(0, 12).map((p) => ({ label: p.key, n: p.n })))}
   ${totals.payOrigins && Object.keys(totals.payOrigins).length ? `<p class="small">Where the pay was read: ${Object.entries(totals.payOrigins).map(([o, n]) => `${escapeHtml(ORIGIN_EN[o] ?? o)} — ${num(n)}`).join(', ')}.</p>` : ''}</section>
@@ -295,11 +292,11 @@ ${intlMedian ? `<section class="rs-section" id="international"><h2>International
     title,
     version,
     active: 'research',
-    body,
+    body: body + renderResearchEnhancements('en'),
     lang: 'en',
     auth: options.auth,
     script: QUOTE_SCRIPT,
-    head: `${scholarMetaTags({ title, baseUrl, path, dateIso: report.generatedAt, lang: 'en' })}
+    head: `${RESEARCH_ENHANCE_HEAD}${scholarMetaTags({ title, baseUrl, path, dateIso: report.generatedAt, lang: 'en' })}
 ${enHead(description, `${baseUrl}${path}`, ruPath, baseUrl)}
 <script type="application/ld+json">${jsonForScript(dataset)}</script>`,
   });
@@ -343,10 +340,10 @@ ${renderIntlIndexSection(index.intl, 'en', (slug, fallback) => ROLE_EN[slug] ?? 
     title: 'The openradar index: vacancies and freelance orders in Russia',
     version,
     active: 'research',
-    body,
+    body: body + renderResearchEnhancements('en'),
     lang: 'en',
     auth: options.auth,
-    head: enHead('The daily openradar index: new vacancies and freelance orders in Russian-language IT against a base of 100. Open data, CC BY 4.0.', `${baseUrl}/en/research/index`, '/research/index', baseUrl),
+    head: RESEARCH_ENHANCE_HEAD + enHead('The daily openradar index: new vacancies and freelance orders in Russian-language IT against a base of 100. Open data, CC BY 4.0.', `${baseUrl}/en/research/index`, '/research/index', baseUrl),
   });
 }
 
@@ -408,6 +405,8 @@ export function renderMethodologyPageEn(options: { baseUrl: string; version: str
     <li><b>Mincerian log-wage regression (OLS with White HC1 robust standard errors) &amp; ANOVA (η²):</b> to isolate the pure ceteris paribus returns to seniority (Middle, Senior, Lead vs Junior/Intern), geography (Moscow, St. Petersburg vs regional offices), all-Russia remote work, and AI skills, openradar estimates a multi-factor OLS regression on <code>ln(W_i)</code> with White heteroskedasticity-consistent standard errors (<code>HC1</code>) and Halvorsen–Palmquist exact percentage effects <code>Δ% = (exp(β_j) − 1) × 100%</code>, alongside one-way ANOVA variance decomposition (<code>η² = SS_between / SS_total</code>) and non-parametric hypothesis tests (Mann–Whitney <code>U</code> with Cliff’s <code>δ</code>, Kruskal–Wallis <code>H</code> with <code>ε²</code>, and Spearman’s <code>ρ_s</code>).</li>
   </ul>
 
+  ${renderFormulaGallerySection('en')}
+
   <h2 id="index">7. The openradar index (Russian-language &amp; Global panels)</h2>
   <p>The index (<a href="/en/research/index">/en/research/index</a>) tracks daily new vacancies and freelance orders against a base of 100 (9 November – 6 December 2026) across two independent fixed panels: the 8-feed Russian-language panel (hh.ru, Habr Career, getmatch, Rabota Rossii, Kwork, FL.ru, Freelancehunt) and the 11-board International Global &amp; Remote panel (Himalayas, Arbeitnow, JustJoin, Jobicy, WeWorkRemotely, RemoteWorker UK, CryptoJobsList, Ashby, Greenhouse, Lever, and Freelancer.com). Sequential vacancy IDs on hh.ru (<code>Δid ≤ 230,000</code>) and Habr Career (<code>Δid ≤ 100</code>) filter out bumped older vacancies. Values are 7-day rolling averages (<code>MA_7</code>) with pre-base onboarding spike Winsorization (<code>2.5 × median</code>), accompanied by IT-vacancies sub-indices, per-board indices, role indices, and Monday–Sunday seasonality profiles.</p>
 
@@ -420,9 +419,9 @@ export function renderMethodologyPageEn(options: { baseUrl: string; version: str
     title: 'Methodology of openradar research & index',
     version,
     active: 'research',
-    body,
+    body: body + renderResearchEnhancements('en'),
     lang: 'en',
     auth: options.auth,
-    head: enHead('How openradar counts pay and budgets: sources, pay parsing, roles and seniority, 95% CIs, Simpson paradox adjustment, and the panel index.', `${baseUrl}/en/research/methodology`, '/research/methodology', baseUrl),
+    head: RESEARCH_ENHANCE_HEAD + enHead('How openradar counts pay and budgets: sources, pay parsing, roles and seniority, 95% CIs, Simpson paradox adjustment, and the panel index.', `${baseUrl}/en/research/methodology`, '/research/methodology', baseUrl),
   });
 }

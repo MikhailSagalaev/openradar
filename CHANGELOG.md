@@ -8,6 +8,10 @@
 
 - **English social preview card for X/Twitter**: the `Twitterbot` crawler gets `lang=en` (token-bounded UA match, so `TelegramBot (like TwitterBot)` keeps the Russian card), a new `/og-en.png` banner in the same design and English og/twitter meta; English visitors get the English banner too. Lead-page titles stay the language of the post.
 - **llms.txt agent quickstart (RU+EN)**: operational loop for agents (search → card → market → delta-sync), guest 12h delay and contact rules, 404 semantics, Cache-Control instead of polling.
+- **Global & cross-market PPP econometrics**: `/research` and `/en/research` now analyze both the Russian market (RUB/month) and the global English-language market (USD/year across Greenhouse, Lever, Ashby, RemoteOK, Remotive, WorkingNomads, HN, JustJoin and more), including IMF/World Bank ICP Purchasing Power Parity (κ_PPP = 2.55) comparisons by grade and role.
+- **Blinder–Oaxaca twofold decomposition, Theil entropy GE(1) & IPW disclosure correction**: `src/research/report.ts` computes pooled-reference Blinder–Oaxaca decompositions (Endowments E vs pure location/remote rent C), Theil upper-tail entropy, and Horvitz–Thompson inverse-probability-weighted medians correcting for non-random salary hiding.
+- **W3C MathML / LaTeX equations & ready-to-compile `/research/paper.tex`**: `/research/methodology` and `/en/research/methodology` render publication-grade MathML equations with one-click LaTeX copy, and `GET /research/paper.tex` + `GET /en/research/paper.tex` export complete LaTeX manuscripts with live econometric tables.
+- **Native OpenRadar UI polish & mobile responsiveness**: `src/research/enhance.ts` preserves OpenRadar's native Zinc + Emerald palette, 8px cards and pill controls while adding a Light/Dark/Auto theme toggle, 2px emerald reading progress bar, SVG chart tooltips, J/K section navigation, and responsive horizontal scroll wrappers for wide research tables on mobile viewports.
 
 ## 0.77.0 — 2026-11-18
 

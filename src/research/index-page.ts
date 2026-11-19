@@ -5,6 +5,7 @@
  */
 import { escapeHtml, jsonForScript } from '../core/text.ts';
 import { layout, type AuthDisplay } from '../server/ui.ts';
+import { RESEARCH_ENHANCE_HEAD, renderResearchEnhancements } from './enhance.ts';
 import type { IndexPoint, IndexSeries, OpenradarIndex, PlatformIndex, WeekdayPoint } from './index.ts';
 
 const num = (value: number): string => new Intl.NumberFormat('ru-RU').format(value).replace(/\u00a0/g, ' ');
@@ -296,8 +297,8 @@ document.addEventListener('click', (event) => {
     title: 'Индекс openradar: вакансии и заказы в IT и фрилансе',
     version,
     active: 'research',
-    body,
-    head: `<meta name="description" content="Ежедневный индекс openradar: сколько новых вакансий и заказов появляется в русскоязычном IT и фрилансе относительно базы 100. Открытые данные CC BY 4.0.">
+    body: body + renderResearchEnhancements('ru'),
+    head: `${RESEARCH_ENHANCE_HEAD}<meta name="description" content="Ежедневный индекс openradar: сколько новых вакансий и заказов появляется в русскоязычном IT и фрилансе относительно базы 100. Открытые данные CC BY 4.0.">
 <link rel="canonical" href="${escapeHtml(baseUrl)}/research/index">
 <link rel="alternate" hreflang="en" href="${escapeHtml(baseUrl)}/en/research/index">`,
   });

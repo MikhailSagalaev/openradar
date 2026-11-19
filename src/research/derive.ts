@@ -350,7 +350,13 @@ export function detectCompany(lead: Pick<Lead, 'author' | 'text' | 'type' | 'sou
   // adapters already fill (lead.company), then the author of a vacancy. Without lead.company
   // an English board post that names its employer only in the structured field had no company.
   const named = [facts?.company, fromText, lead.company, lead.type === 'job' ? lead.author : undefined];
-  return named.map((name) => name?.replace(/\s+/g, ' ').trim()).find((name) => name && !isOutletName(name, lead.sourceRef?.channelTitle));
+  const raw = named.map((name) => name?.replace(/\s+/g, ' ').trim()).find((name) => name && !isOutletName(name, lead.sourceRef?.channelTitle));
+  if (!raw) return undefined;
+  const cleaned = raw.replace(/,\s*розничная\s+сеть$/iu, '').trim();
+  if (/^(?:unknown|n\/a|none|null|undefined|confidential|undisclosed|anonymous|не указан\p{L}*|частное лицо|-)$/iu.test(cleaned)) return undefined;
+  if (/^Сбер(?:\.\s*(?:IT|ИТ|Tech|Тех|Бизнес|Финансы|Здоровье|Маркетинг|Данные|Кибербезопасность)|Тех|банк)?$/iu.test(cleaned)) return 'Сбер';
+  if (/^(?:RWB|РВБ|Wildberries\s*(?:&\s*Russ|и\s*Русс)?)$/iu.test(cleaned)) return 'Wildberries';
+  return cleaned;
 }
 
 // ---------- Pay ----------
@@ -497,21 +503,71 @@ export function normalizePay(pay: Pay, type: LeadType, rates: Record<string, num
 const AI_MENTION = rx(`нейросет|${W}llm${E}|${W}gpt|chatgpt|openai|langchain|${W}rag${E}|генеративн|prompt|промпт|вайб|vibe|cursor|copilot|${W}ии${E}|${W}ai${E}|machine learning|машинн\\p{L}* обучен`);
 const REMOTE = /удал[её]нн|удал[её]нк|можно\s+удал|дистанц|remote|anywhere/i;
 
+const INTL_CITY_MAP: Array<[RegExp, string]> = [
+  [/^(?:warsaw|warszawa)(?:,\s*poland)?$/iu, 'Warsaw'],
+  [/^(?:krak[oó]w|cracow)(?:,\s*poland)?$/iu, 'Krakow'],
+  [/^(?:wroc[lł]aw)(?:,\s*poland)?$/iu, 'Wroclaw'],
+  [/^(?:gda[nń]sk)(?:,\s*poland)?$/iu, 'Gdansk'],
+  [/^(?:pozna[nń])(?:,\s*poland)?$/iu, 'Poznan'],
+  [/^london(?:,\s*(?:uk|united kingdom|england|gb))?$/iu, 'London'],
+  [/^berlin(?:,\s*germany)?$/iu, 'Berlin'],
+  [/^(?:munich|m[uü]nchen)(?:,\s*germany)?$/iu, 'Munich'],
+  [/^amsterdam(?:,\s*(?:netherlands|nl))?$/iu, 'Amsterdam'],
+  [/^(?:zurich|z[uü]rich)(?:,\s*switzerland)?$/iu, 'Zurich'],
+  [/^(?:new york|new york city|nyc)(?:,\s*(?:ny|usa|us|united states))?$/iu, 'New York'],
+  [/^(?:san francisco|sf)(?:,\s*(?:ca|usa|us|united states))?$/iu, 'San Francisco'],
+  [/^limassol(?:,\s*cyprus)?$/iu, 'Limassol'],
+];
+
+const EN_RU_CITY_MAP: Array<[RegExp, string]> = [
+  [/^(?:москв\p{L}*|зеленоград|moscow)$/iu, 'Москва'],
+  [/^(?:санкт[- ]?петербург|петербург|спб|петроград|ленинград|saint[- ]?petersburg|st\.?\s*petersburg)$/iu, 'Санкт-Петербург'],
+  [/^(?:новосибирск|novosibirsk)$/iu, 'Новосибирск'],
+  [/^(?:екатеринбург|yekaterinburg|ekaterinburg)$/iu, 'Екатеринбург'],
+  [/^(?:казан[ьи]|kazan)$/iu, 'Казань'],
+  [/^(?:нижн\p{L}*\s+новгород|nizhn[iy]\s+novgorod)$/iu, 'Нижний Новгород'],
+  [/^(?:краснодар|krasnodar)$/iu, 'Краснодар'],
+  [/^(?:самар[аеу]|samara)$/iu, 'Самара'],
+  [/^(?:ростов[- ]на[- ]дону|rostov[- ]on[- ]don)$/iu, 'Ростов-на-Дону'],
+  [/^(?:воронеж|voronezh)$/iu, 'Воронеж'],
+  [/^(?:перм[ьи]|perm)$/iu, 'Пермь'],
+  [/^(?:уф[аеу]|ufa)$/iu, 'Уфа'],
+  [/^(?:челябинск|chelyabinsk)$/iu, 'Челябинск'],
+  [/^(?:омск|omsk)$/iu, 'Омск'],
+  [/^(?:красноярск|krasnoyarsk)$/iu, 'Красноярск'],
+  [/^(?:волгоград|volgograd)$/iu, 'Волгоград'],
+  [/^(?:тюмен[ьи]|tyumen)$/iu, 'Тюмень'],
+  [/^(?:владивосток|vladivostok)$/iu, 'Владивосток'],
+  [/^(?:калининград|kaliningrad)$/iu, 'Калининград'],
+  [/^(?:иннополис|innopolis)$/iu, 'Иннополис'],
+];
+
 function normalizeCityName(rawCity: string | undefined): string | undefined {
   if (!rawCity) return undefined;
   const trimmed = rawCity.trim();
   if (!trimmed || /^(?:онлайн|удал|не указан|россия|рф|remote|anywhere)/i.test(trimmed)) return undefined;
+  for (const [rxCity, canonical] of EN_RU_CITY_MAP) {
+    if (rxCity.test(trimmed)) return canonical;
+  }
+  for (const [rxCity, canonical] of INTL_CITY_MAP) {
+    if (rxCity.test(trimmed)) return canonical;
+  }
   if (/москв|зеленоград/i.test(trimmed)) return 'Москва';
   if (/петербург|спб|петроград/i.test(trimmed)) return 'Санкт-Петербург';
   const extracted = extractCity(`Город: ${trimmed}`);
-  if (extracted && extracted !== 'Онлайн') return extracted;
+  if (extracted && extracted !== 'Онлайн') {
+    for (const [rxCity, canonical] of EN_RU_CITY_MAP) {
+      if (rxCity.test(extracted)) return canonical;
+    }
+    return extracted;
+  }
   return trimmed.length <= 30 ? trimmed : undefined;
 }
 
 function regionOf(city: string | undefined): ResearchRecord['region'] {
   if (!city || /^(?:онлайн|удал)/i.test(city)) return 'Не указан';
-  if (/москв/i.test(city)) return 'Москва';
-  if (/петербург|спб/i.test(city)) return 'Санкт-Петербург';
+  if (/москв|moscow/i.test(city)) return 'Москва';
+  if (/петербург|спб|petersburg/i.test(city)) return 'Санкт-Петербург';
   return 'Другие города';
 }
 

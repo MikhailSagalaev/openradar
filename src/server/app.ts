@@ -108,7 +108,7 @@ import {
 } from './seo.ts';
 import { renderApiCatalog, renderOpenApi } from './openapi.ts';
 import { datasetCsv, liveReport, monthSnapshot } from '../research/service.ts';
-import { renderEmbedPage, renderMethodologyPage, renderReportPage, renderRolePage } from '../research/pages.ts';
+import { renderAcademicPaperLatex, renderEmbedPage, renderMethodologyPage, renderReportPage, renderRolePage } from '../research/pages.ts';
 import { extractPreviewFromHtml, validateSubmissionUrl } from './preview.ts';
 import { renderLogo, LOGO_SVG, LOGO_ASSET_PATH, FAVICON_SVG } from './logo.ts';
 
@@ -3477,6 +3477,24 @@ export function createApp(runtime: Runtime): Hono {
     return c.body(datasetCsv(records), 200, {
       'content-type': 'text/csv; charset=utf-8',
       'content-disposition': 'attachment; filename="openradar-dataset.csv"',
+      'access-control-allow-origin': '*',
+      'cache-control': 'public, max-age=300',
+    });
+  });
+  app.get('/research/paper.tex', async (c) => {
+    const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+    return c.body(renderAcademicPaperLatex(report, seoBaseUrl(c), 'ru'), 200, {
+      'content-type': 'application/x-tex; charset=utf-8',
+      'content-disposition': 'attachment; filename="openradar-research-ru.tex"',
+      'access-control-allow-origin': '*',
+      'cache-control': 'public, max-age=300',
+    });
+  });
+  app.get('/en/research/paper.tex', async (c) => {
+    const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+    return c.body(renderAcademicPaperLatex(report, seoBaseUrl(c), 'en'), 200, {
+      'content-type': 'application/x-tex; charset=utf-8',
+      'content-disposition': 'attachment; filename="openradar-research-en.tex"',
       'access-control-allow-origin': '*',
       'cache-control': 'public, max-age=300',
     });
