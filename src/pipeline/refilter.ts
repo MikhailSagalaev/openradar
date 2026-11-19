@@ -1,6 +1,5 @@
 import { auditSpamReasons, spamReasons } from '../core/rules.ts';
 import type { Store } from '../core/store.ts';
-import type { Lead } from '../core/types.ts';
 
 /** Leads read per store call: the stores cap a listing at 5000. */
 const REFILTER_PAGE = 5000;
@@ -36,40 +35,47 @@ export async function refilterLeads(
   const limit = options.limit ?? 50_000;
   const days = options.days ?? 30;
   const createdAfter = new Date(now.getTime() - days * 24 * 3600 * 1000).toISOString();
-  // Walk the window newest first by date, the same way rescore does: the store caps a page
-  // at 5000 and an offset at 10 000, so a long window is walked by createdBefore, skipping
-  // repeats by id. A page of nothing but repeats widens until it gets past a shared instant.
+  // Walk the window newest first by date, processing each page as it arrives so a long window
+  // never holds every lead in memory (a 30-day pass over hundreds of thousands of posts would
+  // otherwise exhaust the heap). Only seen ids are retained, to skip the repeats a shared
+  // created_at instant can produce at a page edge; a page of nothing but repeats widens.
   let pageSize = options.pageSize ?? REFILTER_PAGE;
-  const byId = new Map<string, Lead>();
+  const seen = new Set<string>();
   let createdBefore: string | undefined;
-  while (byId.size < limit) {
+  let checked = 0;
+  let matched = 0;
+  let rejected = 0;
+  const samples: RefilterSummary['samples'] = [];
+  while (checked < limit) {
     const page = await store.listLeads({ limit: pageSize, createdAfter, createdBefore });
-    const known = byId.size;
-    for (const lead of page) byId.set(lead.id, lead);
-    if (page.length < pageSize) break;
-    if (byId.size === known) {
+    if (page.length === 0) break;
+    const before = seen.size;
+    for (const lead of page) {
+      if (seen.has(lead.id)) continue;
+      seen.add(lead.id);
+      checked += 1;
+      if (lead.status !== 'rejected') {
+        const reasons = options.all
+          ? spamReasons(lead.title, lead.text, lead.currency)
+          : auditSpamReasons(lead.title, lead.text);
+        if (reasons.length > 0) {
+          matched += 1;
+          if (samples.length < 25) samples.push({ id: lead.id, title: lead.title, reasons });
+          if (options.apply && store.updateLeadStatusAndReasons) {
+            await store.updateLeadStatusAndReasons(lead.id, 'rejected', reasons);
+            rejected += 1;
+          }
+        }
+      }
+      if (checked >= limit) break;
+    }
+    if (page.length < pageSize || checked >= limit) break;
+    if (seen.size === before) {
       if (pageSize >= REFILTER_PAGE) throw new Error(`More than ${REFILTER_PAGE} leads at ${createdBefore}: cannot walk past them`);
       pageSize = Math.min(pageSize * 2, REFILTER_PAGE);
       continue;
     }
     createdBefore = new Date(Date.parse(page.at(-1)!.createdAt) + 1).toISOString();
   }
-  const leads = [...byId.values()].slice(0, limit);
-  let matched = 0;
-  let rejected = 0;
-  const samples: RefilterSummary['samples'] = [];
-  for (const lead of leads) {
-    if (lead.status === 'rejected') continue;
-    const reasons = options.all
-      ? spamReasons(lead.title, lead.text, lead.currency)
-      : auditSpamReasons(lead.title, lead.text);
-    if (reasons.length === 0) continue;
-    matched += 1;
-    if (samples.length < 25) samples.push({ id: lead.id, title: lead.title, reasons });
-    if (options.apply && store.updateLeadStatusAndReasons) {
-      await store.updateLeadStatusAndReasons(lead.id, 'rejected', reasons);
-      rejected += 1;
-    }
-  }
-  return { checked: leads.length, matched, rejected, samples };
+  return { checked, matched, rejected, samples };
 }
