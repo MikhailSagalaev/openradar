@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.79.0 — 2026-11-19
+
+- **English social preview card for X/Twitter**: the `Twitterbot` crawler gets `lang=en` (token-bounded UA match, so `TelegramBot (like TwitterBot)` keeps the Russian card), a new `/og-en.png` banner in the same design and English og/twitter meta; English visitors get the English banner too. Lead-page titles stay the language of the post.
+- **llms.txt agent quickstart (RU+EN)**: operational loop for agents (search → card → market → delta-sync), guest 12h delay and contact rules, 404 semantics, Cache-Control instead of polling.
+
 ## 0.77.0 — 2026-11-18
 
 - **25 new Telegram discovery channels**: job-channel presets from the `rabota_jobs_chnls` list join the source catalog — Frontend, Python, Java, Golang, PHP, 1C, .NET, C++, Node.js, Unity, DevOps, QA, iOS/Swift, Android, Flutter/Dart, Data Engineering, Data Science/ML, data/system/business/product analytics, Project/Product Management and HR/IT recruiting.
