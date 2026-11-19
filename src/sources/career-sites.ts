@@ -114,3 +114,47 @@ export const HH_EMPLOYER_PRESETS: SourcePreset[] = HH_EMPLOYERS.map(([id, name, 
   description: `Лента вакансий компании ${name} на hh.ru`,
   config: { url: `https://hh.ru/search/vacancy/rss?employer_id=${employer}&order_by=publication_time`, company: name },
 }));
+
+/**
+ * Large RU groups post through many hh accounts at once («Сбер. IT», «Сбер. Работа с
+ * клиентами» are separate employers), so one employer_id misses most of the group. The
+ * company-name search feed returns every account's vacancies — and it is the path for
+ * the companies whose own career sites are closed to us.
+ */
+const HH_NAME_EMPLOYERS: Array<[id: string, name: string]> = [
+  ['hh-name-sber', 'Сбербанк'],
+  ['hh-name-vtb', 'ВТБ'],
+  ['hh-name-gazprombank', 'Газпромбанк'],
+  ['hh-name-sovcombank', 'Совкомбанк'],
+  ['hh-name-megafon', 'МегаФон'],
+  ['hh-name-aeroflot', 'Аэрофлот'],
+  ['hh-name-rzd', 'РЖД'],
+  ['hh-name-wildberries', 'Wildberries'],
+  ['hh-name-samokat', 'Самокат'],
+  ['hh-name-vkusvill', 'ВкусВилл'],
+  ['hh-name-magnit', 'Магнит'],
+  ['hh-name-gazprom-neft', 'Газпром нефть'],
+  ['hh-name-lenta', 'Лента'],
+  ['hh-name-severstal', 'Северсталь'],
+  ['hh-name-nlmk', 'НЛМК'],
+  ['hh-name-grinatom', 'Гринатом'],
+  ['hh-name-astra', 'Группа Астра'],
+  ['hh-name-postgrespro', 'Postgres Professional'],
+  ['hh-name-crt', 'ЦРТ'],
+  ['hh-name-gnivts', 'ГНИВЦ'],
+  ['hh-name-ostrovok', 'Островок'],
+  ['hh-name-yandex-market', 'Яндекс Маркет'],
+  ['hh-name-kuper', 'Купер'],
+  ['hh-name-lamoda', 'Lamoda'],
+];
+
+export const HH_NAME_EMPLOYER_PRESETS: SourcePreset[] = HH_NAME_EMPLOYERS.map(([id, name]) => ({
+  id,
+  kind: 'rss',
+  title: `${name} — вакансии на hh.ru`,
+  description: `Лента вакансий группы ${name} на hh.ru: поиск по названию компании собирает все аккаунты группы`,
+  config: {
+    url: `https://hh.ru/search/vacancy/rss?text=${encodeURIComponent(name)}&search_field=company_name&order_by=publication_time`,
+    company: name,
+  },
+}));

@@ -1,6 +1,6 @@
 import type { SourceConfig, SourceKind } from '../core/types.ts';
 import { ATS_COMPANIES } from './ats-companies.ts';
-import { CAREER_SITE_PRESETS, HH_EMPLOYER_PRESETS } from './career-sites.ts';
+import { CAREER_SITE_PRESETS, HH_EMPLOYER_PRESETS, HH_NAME_EMPLOYER_PRESETS } from './career-sites.ts';
 import { JSON_BOARD_PRESETS } from './json-boards.ts';
 
 export interface SourcePreset {
@@ -1140,6 +1140,7 @@ const BASE_PRESETS: SourcePreset[] = [
   ...CAREER_SITE_PRESETS,
   ...JSON_BOARD_PRESETS,
   ...HH_EMPLOYER_PRESETS,
+  ...HH_NAME_EMPLOYER_PRESETS,
   { id: 'tg-freeit-job', kind: 'telegram', title: 'Telegram — @freeIT_job: IT-вакансии', description: 'Публичный TG-канал с IT-вакансиями', config: { channel: 'freeIT_job' } },
   { id: 'tg-frontend-jobs-vakansii', kind: 'telegram', title: 'Telegram — @frontend_jobs_vakansii: Frontend-вакансии', description: 'Публичный TG-канал с вакансиями для Frontend-разработчиков', config: { channel: 'frontend_jobs_vakansii' } },
   { id: 'tg-python-vakansii-jobs', kind: 'telegram', title: 'Telegram — @python_vakansii_jobs: Python-вакансии', description: 'Публичный TG-канал с вакансиями для Python-разработчиков', config: { channel: 'python_vakansii_jobs' } },
