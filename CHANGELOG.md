@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.79.1 — 2026-11-19
+
+- **Postgres soft-archive parity**: `archiveOldLeads` and `exportArchivedLeads` now exist on the PostgreSQL store (the 041 column already hid archived rows from public queries, but the runner's optional calls silently skipped on postgres hubs); `rowToLead` exposes `archivedAt`. Fixes the red CI postgres suite and enables hot/warm/cold archiving on production.
+
 ## 0.79.0 — 2026-11-19
 
 - **English social preview card for X/Twitter**: the `Twitterbot` crawler gets `lang=en` (token-bounded UA match, so `TelegramBot (like TwitterBot)` keeps the Russian card), a new `/og-en.png` banner in the same design and English og/twitter meta; English visitors get the English banner too. Lead-page titles stay the language of the post.
