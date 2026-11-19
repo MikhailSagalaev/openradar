@@ -38,7 +38,10 @@ const SPAM_RULES: SpamRule[] = [
   {
     reason: 'GREY_FINANCE',
     pattern:
-      /(дроп[а-я]*|обнал[а-я]*|оформлени[а-я]*\s+карт[а-я]*\s+на\s+себя|аренда\s+(аккаунт|лс|ватсап)|верификац[а-я]*\s+(кошельк|бирж|авито)|оплата\s+за\s+верификац|(?:восстановлени[ея]|восстановить|разблокировк[аи]|разблокировать|разбан[а-я]*|recuperaci[oó]n|recuperar|recover(?:y)?|unban)[\s\S]{0,60}?(?:instagram|инстаграм|facebook|фейсбук|whatsapp|ватсап|tiktok|тикток|вконтакте|одноклассник))/iu,
+      // «дроповод» is the unambiguous money-mule term; a bare «дроп» stem also matched
+      // «гидропроект», «недропользователь», «дропшиппинг» and SEO dropped domains, hiding
+      // legitimate engineering and e-commerce posts, so it is deliberately not used.
+      /(дроповод[а-я]*|обнал[а-я]*|оформлени[а-я]*\s+карт[а-я]*\s+на\s+себя|аренда\s+(аккаунт|лс|ватсап)|верификац[а-я]*\s+(кошельк|бирж|авито)|оплата\s+за\s+верификац|(?:восстановлени[ея]|восстановить|разблокировк[аи]|разблокировать|разбан[а-я]*|recuperaci[oó]n|recuperar|recover(?:y)?|unban)[\s\S]{0,60}?(?:instagram|инстаграм|facebook|фейсбук|whatsapp|ватсап|tiktok|тикток|вконтакте|одноклассник))/iu,
   },
   {
     reason: 'ACADEMIC_FRAUD',
@@ -96,12 +99,33 @@ export interface RuleResult {
 }
 
 /**
- * The spam categories tightened by the 2026-11 quality audit. The retroactive refilter pass
- * targets only these by default: re-running every old rule over stored leads would retroactively
- * reject legitimate vacancies that predate a rule (the COLD_CALLING pattern fires on ordinary
- * sales-manager jobs), which is a product decision for the operator, not a cleanup.
+ * The exact patterns added by the 2026-11 quality audit: the mass-messaging «отправка личных
+ * сообщений» branch (the typo that slipped past the old «рассылка»-only pattern) and social-account
+ * recovery/unban. The retroactive refilter pass tests only these by default, not whole spam
+ * categories: older, broader stems (COLD_CALLING on sales jobs, the former bare «дроп» on
+ * «гидропроект»/«дропшиппинг») would retroactively hide legitimate posts, which is an operator
+ * product decision, not a cleanup.
  */
-export const AUDIT_2026_11_REASONS = ['spam:MASS_MESSAGING', 'spam:GREY_FINANCE'];
+export const AUDIT_2026_11_PATTERNS: Array<{ reason: string; pattern: RegExp }> = [
+  {
+    reason: 'spam:MASS_MESSAGING',
+    pattern: /масс(?:ов|ой)[а-я]*\s+отправк[а-я]*\s+(?:личных|сообщени[а-я]*\s+в\s+(?:соц|личн|директ))/iu,
+  },
+  {
+    reason: 'spam:GREY_FINANCE',
+    pattern: /(?:восстановлени[ея]|восстановить|разблокировк[аи]|разблокировать|разбан[а-я]*|recuperaci[oó]n|recuperar|recover(?:y)?|unban)[\s\S]{0,60}?(?:instagram|инстаграм|facebook|фейсбук|whatsapp|ватсап|tiktok|тикток|вконтакте|одноклассник)/iu,
+  },
+];
+
+/** The audit-added spam reasons for a stored post, without the older broader rules. */
+export function auditSpamReasons(title: string, text: string): string[] {
+  const haystack = `${title}\n${text}`;
+  const reasons: string[] = [];
+  for (const { reason, pattern } of AUDIT_2026_11_PATTERNS) {
+    if (pattern.test(haystack)) reasons.push(reason);
+  }
+  return reasons;
+}
 
 /**
  * The door spam categories alone, without a source's keyword/budget/age gates. Shared by

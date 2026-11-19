@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.79.5 — 2026-11-19
+
+- **GREY_FINANCE no longer hides legitimate posts via a bare «дроп» substring**: the stem matched «гидропроект», «недропользователь», «автогидроподъемник», «гидропресс», «дропшиппинг» and SEO dropped domains, rejecting engineering, e-commerce and SEO vacancies. It is replaced with the unambiguous money-mule term «дроповод». A production dry run exposed this; 58 wrongly-hidden leads were restored.
+- **`radar refilter` tests only the exact audit-added patterns by default** (`auditSpamReasons`: the mass «отправка личных сообщений» branch and social-account recovery), not whole spam categories whose older broad stems (COLD_CALLING on sales jobs) would retroactively hide legitimate vacancies. `--all` re-runs every category explicitly.
+
 ## 0.79.4 — 2026-11-19
 
 - **`radar refilter` scoped to the audit additions by default**: it now acts only on MASS_MESSAGING and GREY_FINANCE (the categories tightened by the 2026-11 audit), not every spam rule. Re-running older, broader rules over stored leads would retroactively reject legitimate vacancies — the COLD_CALLING pattern matches ordinary sales-manager jobs («менеджер по продажам», «без холодных звонков») — which is an operator product decision, not a cleanup. `--all` re-runs every category explicitly. A dry run on production surfaced this before any lead was hidden.

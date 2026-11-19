@@ -1,4 +1,4 @@
-import { AUDIT_2026_11_REASONS, spamReasons } from '../core/rules.ts';
+import { auditSpamReasons, spamReasons } from '../core/rules.ts';
 import type { Store } from '../core/store.ts';
 import type { Lead } from '../core/types.ts';
 
@@ -24,15 +24,14 @@ export interface RefilterSummary {
  * rejected leads are left alone, and nothing is ever restored. The store's listing hides
  * archived rows, so the pass only touches what a reader can still see.
  *
- * By default only the categories tightened by the 2026-11 audit are acted on (onlyReasons);
- * pass onlyReasons: undefined to re-run every spam category. This keeps the pass from
- * retroactively rejecting legitimate vacancies that an older, broader rule now matches.
+ * By default only the exact patterns added by the 2026-11 audit are tested (auditSpamReasons);
+ * pass all: true to re-run every spam category. This keeps the pass from retroactively rejecting
+ * legitimate vacancies that an older, broader rule now matches.
  */
 export async function refilterLeads(
   store: Store,
-  options: { days?: number; limit?: number; apply?: boolean; now?: Date; pageSize?: number; onlyReasons?: string[] | null } = {},
+  options: { days?: number; limit?: number; apply?: boolean; now?: Date; pageSize?: number; all?: boolean } = {},
 ): Promise<RefilterSummary> {
-  const onlyReasons = options.onlyReasons === undefined ? AUDIT_2026_11_REASONS : options.onlyReasons;
   const now = options.now ?? new Date();
   const limit = options.limit ?? 50_000;
   const days = options.days ?? 30;
@@ -61,9 +60,10 @@ export async function refilterLeads(
   const samples: RefilterSummary['samples'] = [];
   for (const lead of leads) {
     if (lead.status === 'rejected') continue;
-    const reasons = spamReasons(lead.title, lead.text, lead.currency);
+    const reasons = options.all
+      ? spamReasons(lead.title, lead.text, lead.currency)
+      : auditSpamReasons(lead.title, lead.text);
     if (reasons.length === 0) continue;
-    if (onlyReasons && !reasons.some((r) => onlyReasons.includes(r))) continue;
     matched += 1;
     if (samples.length < 25) samples.push({ id: lead.id, title: lead.title, reasons });
     if (options.apply && store.updateLeadStatusAndReasons) {

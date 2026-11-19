@@ -693,9 +693,9 @@ function buildProgram(): Command {
           days: Number(options.days) || 30,
           limit: Number(options.limit) || 50000,
           apply: options.apply === true,
-          onlyReasons: options.all ? null : undefined,
+          all: options.all === true,
         });
-        console.log(`Область: ${options.all ? 'все spam-категории' : 'MASS_MESSAGING + GREY_FINANCE (аудит 2026-11)'}`);
+        console.log(`Область: ${options.all ? 'все spam-категории' : 'новые паттерны аудита 2026-11 (масс-отправка личных + recovery аккаунтов)'}`);
         console.log(`Проверено: ${summary.checked}, совпало: ${summary.matched}, отклонено: ${summary.rejected}${options.apply ? '' : ' (dry run)'}`);
         if (summary.samples.length) {
           console.log(table(['Причина', 'Заголовок'], summary.samples.map((s) => [s.reasons.join(','), s.title.slice(0, 90)])));
