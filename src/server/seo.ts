@@ -2033,7 +2033,7 @@ export function renderLlmsTxt(baseUrl: string, lang: SupportedLang = 'ru'): stri
       const entry = localizeCatalogEntry(raw, 'en');
       return `- [${entry.h1}](${baseUrl}/catalog/${entry.slug}): ${entry.description}`;
     };
-    return `# openradar\n\n> Open-source aggregator of freelance gigs and IT vacancies. Collects listings from freelance boards (FL.ru, Kwork, Freelancehunt), job boards (hh.ru, Habr Career, Rabota Rossii, We Work Remotely, Jobicy, RemoteOK), company ATS pages and Telegram channels into one deduplicated feed. Free, no paid tiers, open source (AGPL-3.0).\n\n## Sections\n\n- [Gigs and jobs feed](${baseUrl}/?lang=en): search, filters by skills, budget, direction and remote work.\n- [Labour market research & econometrics](${baseUrl}/en/research): empirical study of salaries and freelance budgets — role x seniority heatmaps, programming language x seniority heatmaps, regional comparisons (Moscow, St. Petersburg, regions, all-Russia remote), Mincerian log-wage OLS regression (White HC1 robust SEs), ANOVA variance decomposition (eta-squared), Mann-Whitney U / Kruskal-Wallis H / Spearman rho hypothesis tests, Gini index, decile ratios, and employer HHI concentration. Open data (CC BY 4.0): [Dataset CSV](${baseUrl}/research/dataset.csv), [Report JSON](${baseUrl}/research/report.json), [Daily Panel Index JSON](${baseUrl}/research/index.json), [Index CSV](${baseUrl}/research/index.csv), [Methodology & Codebook](${baseUrl}/en/research/methodology). Standard academic citation (APA 7th): openradar Research. (2026). Russian IT & Freelance Labour Market Empirical Dataset and Econometric Report [Data set]. ${baseUrl}/en/research\n- [About](${baseUrl}/about?lang=en): how openradar works and where listings come from.\n- [Sources](${baseUrl}/sources?lang=en): public list of connected boards and channels.\n- [FAQ](${baseUrl}/faq?lang=en)\n- [Browser extension](${baseUrl}/extension?lang=en): submit vacancies from any site and estimate market pay.\n- [RSS feed](${baseUrl}/feed.rss): query parameters q (search) and type (gig or job).\n- [HTTP API](${baseUrl}/docs): endpoints, parameters and responses; OpenAPI 3.1 — ${baseUrl}/openapi.json; API catalog — ${baseUrl}/.well-known/api-catalog; MCP server — ${baseUrl}/mcp (tools: search_leads, get_lead_details, get_market_analytics, estimate_compensation).\n\n## Freelance Gigs\n\n${SEO_CATALOG.filter((entry) => entry.type !== 'job').map(lineEn).join('\n')}\n\n## Vacancies\n\n${SEO_CATALOG.filter((entry) => entry.type === 'job').map(lineEn).join('\n')}\n\n## Agent quickstart\n\nThe REST API answers without authentication. A guest reads the feed with a 12-hour delay and never sees contact details: every lead carries the URL of the original post — link users there, never republish contacts.\n\n    GET ${baseUrl}/api/leads?q=backend&limit=50      # search; without q it ranks by quality score; filters: type, direction, workplace, language, budget\n    GET ${baseUrl}/api/leads/{id}                    # one lead card\n    GET ${baseUrl}/api/market?title=backend+developer # pay percentiles from posted pay, last 90 days\n    GET ${baseUrl}/api/delta?since=2026-11-18T00:00:00Z # changed leads since a moment; keep a local index in sync with this instead of re-fetching the whole feed\n\nRules: honor the Cache-Control headers instead of polling; a 404 on /api/leads/{id} can mean "not visible to guests yet", not deleted — retry later or watch /api/delta; the full parameter reference is ${baseUrl}/openapi.json.\n\n## For Developers\n\n- [Source code](${REPO_URL})\n- [How to run your own node (EN)](${REPO_URL}/blob/main/docs/GETTING_STARTED_EN.md)\n- [Exchange protocol](${REPO_URL}/blob/main/docs/PROTOCOL.md)\n`;
+    return `# openradar\n\n> Open-source aggregator of freelance gigs and IT vacancies. Collects listings from freelance boards (FL.ru, Kwork, Freelancehunt), job boards (hh.ru, Habr Career, Rabota Rossii, We Work Remotely, Jobicy, RemoteOK), company ATS pages and Telegram channels into one deduplicated feed. Free, no paid tiers, open source (AGPL-3.0).\n\n## Sections\n\n- [Gigs and jobs feed](${baseUrl}/?lang=en): search, filters by skills, budget, direction and remote work.\n- [Labour market research & econometrics](${baseUrl}/en/research): empirical study of salaries and freelance budgets — role x seniority heatmaps, programming language x seniority heatmaps, regional comparisons (Moscow, St. Petersburg, regions, all-Russia remote), Mincerian log-wage OLS regression (White HC1 robust SEs), ANOVA variance decomposition (eta-squared), Mann-Whitney U / Kruskal-Wallis H / Spearman rho hypothesis tests, Gini index, decile ratios, and employer HHI concentration. Open data (CC BY 4.0): [Dataset CSV](${baseUrl}/research/dataset.csv), [Report JSON](${baseUrl}/research/report.json), [Daily Panel Index JSON](${baseUrl}/research/index.json), [Index CSV](${baseUrl}/research/index.csv), [Methodology & Codebook](${baseUrl}/en/research/methodology). Standard academic citation (APA 7th): openradar Research. (2026). Russian IT & Freelance Labour Market Empirical Dataset and Econometric Report [Data set]. ${baseUrl}/en/research\n- [About](${baseUrl}/about?lang=en): how openradar works and where listings come from.\n- [Sources](${baseUrl}/sources?lang=en): public list of connected boards and channels.\n- [FAQ](${baseUrl}/faq?lang=en)\n- [Browser extension](${baseUrl}/extension?lang=en): submit vacancies from any site and estimate market pay.\n- [RSS feed](${baseUrl}/feed.rss): query parameters q (search) and type (gig or job).\n- [HTTP API](${baseUrl}/docs): endpoints, parameters and responses; OpenAPI 3.1 — ${baseUrl}/openapi.json; API catalog — ${baseUrl}/.well-known/api-catalog; MCP server — ${baseUrl}/mcp (tools: search_leads, get_lead_details, get_market_analytics, estimate_compensation).\n- [Agent skill pack](${baseUrl}/skill.md): install the ready-made skills (/orders, /market) and the MCP connection in one command — Claude Code: /plugin marketplace add MikhailSagalaev/openradar-plugin, others: npx skills add MikhailSagalaev/openradar-plugin.\n\n## Freelance Gigs\n\n${SEO_CATALOG.filter((entry) => entry.type !== 'job').map(lineEn).join('\n')}\n\n## Vacancies\n\n${SEO_CATALOG.filter((entry) => entry.type === 'job').map(lineEn).join('\n')}\n\n## Agent quickstart\n\nThe REST API answers without authentication. A guest reads the feed with a 12-hour delay and never sees contact details: every lead carries the URL of the original post — link users there, never republish contacts.\n\n    GET ${baseUrl}/api/leads?q=backend&limit=50      # search; without q it ranks by quality score; filters: type, direction, workplace, language, budget\n    GET ${baseUrl}/api/leads/{id}                    # one lead card\n    GET ${baseUrl}/api/market?title=backend+developer # pay percentiles from posted pay, last 90 days\n    GET ${baseUrl}/api/delta?since=2026-11-18T00:00:00Z # changed leads since a moment; keep a local index in sync with this instead of re-fetching the whole feed\n\nRules: honor the Cache-Control headers instead of polling; a 404 on /api/leads/{id} can mean "not visible to guests yet", not deleted — retry later or watch /api/delta; the full parameter reference is ${baseUrl}/openapi.json.\n\n## For Developers\n\n- [Source code](${REPO_URL})\n- [How to run your own node (EN)](${REPO_URL}/blob/main/docs/GETTING_STARTED_EN.md)\n- [Exchange protocol](${REPO_URL}/blob/main/docs/PROTOCOL.md)\n`;
   }
   const line = (entry: CatalogEntry): string => `- [${entry.h1}](${baseUrl}/catalog/${entry.slug}): ${entry.description}`;
   return `# openradar
@@ -2050,6 +2050,7 @@ export function renderLlmsTxt(baseUrl: string, lang: SupportedLang = 'ru'): stri
 - [Расширение для браузера](${baseUrl}/extension): отправка вакансии с любого сайта и оценка рыночной оплаты.
 - [RSS-лента](${baseUrl}/feed.rss): параметры q (поиск) и type (gig — заказы, job — вакансии).
 - [HTTP API](${baseUrl}/docs): эндпоинты, параметры и ответы; OpenAPI 3.1 — ${baseUrl}/openapi.json; каталог — ${baseUrl}/.well-known/api-catalog; MCP-сервер — ${baseUrl}/mcp (tools: search_leads, get_lead_details, estimate_compensation, submit_lead, vote_lead, get_market_analytics, save_search, list_saved_searches, xray_generate_dorks).
+- [Пакет скиллов для агентов](${baseUrl}/skill.md): готовые скиллы (/orders, /market) и подключение к MCP одной командой — Claude Code: /plugin marketplace add MikhailSagalaev/openradar-plugin, остальные: npx skills add MikhailSagalaev/openradar-plugin.
 
 ## Заказы
 
@@ -2139,4 +2140,63 @@ export function renderSitemapXml(
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${items}
 </urlset>`;
+}
+
+/** The stable-URL skill for visiting agents (/skill.md): what the MCP server does and how to install it. */
+export function renderSkillMd(baseUrl: string): string {
+  return `# openradar: live job & freelance leads for your agent
+
+Search a live, deduplicated feed of job posts and freelance gigs (Telegram channels,
+ATS job boards, freelance platforms), benchmark pay from real priced leads, and cite
+a daily market-research report. Free and keyless; contacts stay in the original post.
+
+## Connect
+
+- **MCP server**: ${baseUrl}/mcp — JSON-RPC 2.0 over Streamable HTTP, works without a
+  token (guest tier: 12-hour feed delay, no contact details). Tools: search_leads,
+  get_lead_details, estimate_compensation, get_market_analytics, xray_generate_dorks.
+  Write tools (submit_lead, vote_lead, save_search) need a personal token from ${baseUrl}/me.
+- **REST fallback**: ${baseUrl}/api/leads?q=…&limit=50, ${baseUrl}/api/market?title=…,
+  ${baseUrl}/api/delta?since=… — the full reference is ${baseUrl}/openapi.json.
+
+## Install the ready-made skill pack
+
+    # Claude Code
+    /plugin marketplace add MikhailSagalaev/openradar-plugin
+    /plugin install openradar@openradar
+
+    # other agent CLIs
+    npx skills add MikhailSagalaev/openradar-plugin
+
+The pack ships three skills (search-orders, market-research, submit-lead), the
+/orders and /market commands, and the MCP connection above.
+
+## Rules
+
+- Link users to the original post URL; never store or republish contact details.
+- Prefer /api/delta over re-fetching the whole feed; honor Cache-Control headers.
+- A 404 on a lead id can mean "not visible to guests yet", not deleted.
+
+Machine-readable index of these skills: ${baseUrl}/.well-known/skills/index.json
+`;
+}
+
+/** The skills manifest agents discover from llms.txt: names, install commands, MCP endpoint. */
+export function renderSkillsIndex(baseUrl: string): Record<string, unknown> {
+  return {
+    name: 'openradar',
+    description: 'Live job and freelance leads: search, market pay benchmarks, and a citable research report.',
+    url: `${baseUrl}/skill.md`,
+    install: {
+      claudeCode: '/plugin marketplace add MikhailSagalaev/openradar-plugin, then /plugin install openradar@openradar',
+      generic: 'npx skills add MikhailSagalaev/openradar-plugin',
+    },
+    mcp: { url: `${baseUrl}/mcp`, auth: 'none (guest tier); personal mcp_ token for write tools' },
+    skills: [
+      { name: 'search-orders', description: 'Find orders and jobs: filters, compact results, paging' },
+      { name: 'market-research', description: 'How much does X cost: pay percentiles from real priced leads' },
+      { name: 'submit-lead', description: 'Contribute an observed lead to the network' },
+    ],
+    api: { openapi: `${baseUrl}/openapi.json`, guide: `${baseUrl}/llms.txt` },
+  };
 }

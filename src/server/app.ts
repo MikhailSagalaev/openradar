@@ -104,6 +104,8 @@ import {
   renderSourceQualityPage,
   renderFaqPage,
   renderLlmsTxt,
+  renderSkillMd,
+  renderSkillsIndex,
   renderRobotsTxt,
   renderSitemapXml,
 } from './seo.ts';
@@ -3568,6 +3570,17 @@ export function createApp(runtime: Runtime): Hono {
   );
   app.get('/en/llms.txt', (c) =>
     c.text(renderLlmsTxt(seoBaseUrl(c), 'en'), 200, { 'content-type': 'text/plain; charset=utf-8' }),
+  );
+  // The ready-made skill pack for visiting agents (план B): a stable URL with the
+  // skills' essence and install commands, plus the machine-readable manifest.
+  app.get('/skill.md', (c) =>
+    c.text(renderSkillMd(seoBaseUrl(c)), 200, {
+      'content-type': 'text/markdown; charset=utf-8',
+      'cache-control': 'public, max-age=3600',
+    }),
+  );
+  app.get('/.well-known/skills/index.json', (c) =>
+    c.json(renderSkillsIndex(seoBaseUrl(c)), 200, { 'cache-control': 'public, max-age=3600' }),
   );
   // Machine-readable API description: OpenAPI 3.1 plus the RFC 9727 catalog pointing at it.
   app.get('/openapi.json', (c) =>
