@@ -7,19 +7,22 @@
 - Дата старта: 2026-11-18
 - Владелец задачи: владелец openradar (пользователь чата)
 - Путь валидации: `py -3 C:\Users\26\.agents\skills\deep-context\scripts\validate-context.py docs/research-run.md`
-- Причина BLOCKED: не установлен бизнес-результат и метрика (C1). Сформирован [data-request.md](data-request.md).
+- Причина BLOCKED: не установлен бизнес-результат и метрика (C1); владелец не ответил на data-request от 2026-11-18. Сформирован обновлённый data-request.md.
 - Обновление 2026-11-18 (раунд 2): канал публикации известен — x.com; требование «нужно всё максимально» (объём не определён). Добавлены факты о путях доступа к Upwork (F5.5–F5.9), гипотезы H5–H7. Гейт остаётся BLOCKED: метрика C1 не названа.
-- Обновление 2026-11-18 (раунд 3): проверена официальная статья Upwork о выдаче API-ключей (F5.10): барьер ≥$25k lifetime + JSS≥90% и «personal and internal use only». Подготовлен пакет заявки [upwork-api-application.md](upwork-api-application.md) (не подан: нужен аккаунт владельца). Добавлено противоречие S5 (CC BY vs internal-only). Гейт BLOCKED.
+- Обновление 2026-11-18 (раунд 3): проверена официальная статья Upwork о выдаче API-ключей (F5.10): барьер ≥$25k lifetime + JSS≥90% и «personal and internal use only». Подготовлен пакет заявки upwork-api-application.md (не подан: нужен аккаунт владельца). Добавлено противоречие S5 (CC BY vs internal-only). Гейт BLOCKED.
+- Обновление 2026-11-19 (раунд 4, стратегический обзор по задаче «в каком состоянии проект и куда движемся»): ядро расширено с публикаций в X до стратегии проекта; добавлены факты F1.7–F1.8, F2.6–F2.7, F3.4–F3.5, F4.14–F4.19, F5.12–F5.17, F6.7–F6.8, F7.4–F7.6, F8.5–F8.7; синтез и гипотезы пересобраны (S1–S6 → H1–H6); итерация 18.11 сохранена в приложениях A–E. Гейт BLOCKED: метрика C1 не названа владельцем.
+- Конвенция source_date: для месячных документов нормализован к первому дню месяца (2026-11-01); для внешних проб без точной даты — дата пробы 2026-11-18.
 
 ---
 
 ## Исходный запрос (как гипотеза)
 
-> «Хочу писать выводы на основе данных и исследований openradar, например: "По данным openradar, количество задач на Upwork в категории разработка уменьшилось на 30% за месяц". Что для этого нужно и хорошая ли это идея?»
+> «Давай подумаем, что нам дальше делать, в каком сейчас состоянии проект и куда мы движемся» (задача владельца 2026-11-19, стратегический обзор; вход для обсуждения, не план реализации).
 
-- Скрытое допущение (если → то): если публиковать количественные выводы о рынке от имени openradar, то проект получит ценность (трафик/цитируемость/доверие — что именно, неизвестно).
-- Почему выбран этот инструмент: данные и исследовательский модуль у проекта уже есть; владелец хочет превратить их в публичные утверждения.
-- Статус: непроверенное предположение. Пример с Upwork проверяем отдельно (C4, C5).
+- Скрытое допущение (если → то): если собрать полную карту системы (8 контекстов) и найти системные противоречия, то выбор следующего шага станет обоснованным, а не интуитивным.
+- Почему выбран этот инструмент: проект вырос по данным (212k постов/30д) и по поверхностям (MCP 9 тулов, treg-листинг, EN-карточка), но бизнес-результат и метрика владельцем не названы; направления расходятся (RU-глубина vs intl-масштаб, миссия vs монетизация, два репо).
+- Статус: непроверенное предположение. Предыдущая итерация ядра (публикации «По данным openradar…» в X, 2026-11-18) сохранена в приложениях A–E; её факты остаются в C1–C8.
+- Запрошенное решение («стратегический обзор») само по себе гипотеза: обзор полезен только если породит проверяемые гипотезы с дешёвыми тестами (Phase 3).
 
 ---
 
@@ -51,9 +54,10 @@
 | F1.1 | Бизнес-результат публикаций владельцем не сформулирован | interview | чат, запрос 2026-11-18 | 2026-11-18 | high | yes |
 | F1.2 | Аудитория мала: 50 аккаунтов, 1 подписка, 1 токен агента, 13 звёзд GitHub; переходы на сайт с GitHub (60) и Google (57) за 5 ноября | document | docs/STATE_2026-11.md | 2026-11-05 | high | yes |
 | F1.3 | Спрос на заказы в ~10 раз выше, чем на вакансии (type=gig 364 против type=job 32 за 5 ноября; логи грубые) | document | docs/STATE_2026-11.md | 2026-11-05 | med | no |
-| F1.4 | Направление «Data-продукт: Signals, закрытия, таксономия, insights — бесплатно и открыто» уже заявлено (эпик #61) | document | docs/ROADMAP.md | 2026-11 | high | no |
+| F1.4 | Направление «Data-продукт: Signals, закрытия, таксономия, insights — бесплатно и открыто» уже заявлено (эпик #61) | document | docs/ROADMAP.md | 2026-11-01 | high | no |
 | F1.5 | Канал публикации выбран владельцем: x.com | interview | чат 2026-11-18 | 2026-11-18 | high | yes |
-| F1.6 | Требование «нужно всё максимально»; объём (источники/частота/автоматизация/формулировки) не определён | interview | чат 2026-11-18 | 2026-11-18 | high | yes |
+| F1.7 | Данные выросли на порядок (212 449 постов/30д против ~42 000 в базе на 05.11), но свежих замеров людей/активации нет: последние цифры людей — 50 аккаунтов, 1 подписка, 1 токен агента (05.11) | observation | https://openradar.fun/research/report.json (totals, проба 2026-11-19); docs/STATE_2026-11.md | 2026-11-19 | high | yes |
+| F1.8 | Бизнес-результат и метрика владельцем не названы; data-request от 2026-11-18 без ответа; новый запрос 2026-11-19 — стратегический, без метрики | interview | чат 2026-11-18 и 2026-11-19; docs/data-request.md | 2026-11-19 | high | yes |
 
 ### Интерпретация
 
@@ -79,7 +83,8 @@
 
 ### Пробелы
 
-- Бизнес-результат, метрика baseline→target, срок, канал публикации, ответственный за тексты.
+- Какой репо канонический (openradar vs radar-oss) и кто синхронизирует PR/теги (F3.4, F6.7).
+- Аппетит к монетизации без paywall: спонсорство/гранты/партнёрские лицензии; операционные расходы и их покрытие (нет данных).
 
 ---
 
@@ -96,9 +101,10 @@
 |---------|------|-------------|------------|-------------|------------|----------|
 | F2.1 | Целевая аудитория публичных выводов не определена владельцем | interview | чат 2026-11-18 | 2026-11-18 | high | yes |
 | F2.2 | Посетители сайта смотрят карточки лидов (3227) и главную (920); трафик /research отдельно не измерен | document | docs/STATE_2026-11.md | 2026-11-05 | med | no |
-| F2.3 | В отчёте уже есть блок «Редакционный вывод openradar» (факт/контраст/вывод) и кнопка «Скопировать для СМИ» с готовой цитатой «По данным openradar, …» | repository | src/research/pages.ts:147–157; src/research/report.ts:720–740 | 2026-11 | high | no |
+| F2.3 | В отчёте уже есть блок «Редакционный вывод openradar» (факт/контраст/вывод) и кнопка «Скопировать для СМИ» с готовой цитатой «По данным openradar, …» | repository | src/research/pages.ts:147–157; src/research/report.ts:720–740 | 2026-11-01 | high | no |
 | F2.4 | Реальные MCP-клиенты уже читают ленту: kwork-agent/1.0 (108 запросов), OWNERA-public-opportunity-intake (54 чтения /v2/feed) | document | docs/STATE_2026-11.md | 2026-11-05 | high | no |
-| F2.5 | Публикации владелец планирует в x.com; язык аудитории (RU/EN/оба) не уточнён | interview | чат 2026-11-18 | 2026-11-18 | high | yes |
+| F2.6 | EN-поверхность готова: /en/llms.txt отвечает 200 (7481 байт), EN OG-карточка смержена (#117), но на момент пробы прод отдаёт RU-карточку (деплой 0.79.0 ещё не прошёл) | observation | проба https://openradar.fun/en/llms.txt и / с UA Twitterbot 2026-11-19; gh pr 117 | 2026-11-19 | high | no |
+| F2.7 | Реальные агент-клиенты на 05.11: kwork-agent/1.0 (108 запросов) и OWNERA-public-opportunity-intake (54 чтения /v2/feed); свежих замеров MCP-usage нет | document | docs/STATE_2026-11.md | 2026-11-05 | med | yes |
 
 ### Интерпретация
 
@@ -125,7 +131,7 @@
 
 ### Пробелы
 
-- Список внешних упоминаний openradar (baseline цитируемости); трафик /research.
+- Свежие замеры MCP-usage и агент-клиентов после 05.11 (F2.7): нужны логи /mcp за 30 дней.
 
 ---
 
@@ -140,9 +146,10 @@
 
 | fact_id | fact | source_type | source_ref | source_date | confidence | critical |
 |---------|------|-------------|------------|-------------|------------|----------|
-| F3.1 | Код AGPL-3.0, исследовательские данные CC BY 4.0; zero-paywall, контакты бесплатно | repository | src/server/openapi.ts:18–19; docs/COMPETITORS.md §1 | 2026-11 | high | no |
+| F3.1 | Код AGPL-3.0, исследовательские данные CC BY 4.0; zero-paywall, контакты бесплатно | repository | src/server/openapi.ts:18–19; docs/COMPETITORS.md §1 | 2026-11-01 | high | no |
 | F3.2 | Один сервер, общий с другим проектом; резервных копий вне сервера нет; в базе ~42 000 постов | document | docs/STATE_2026-11.md | 2026-11-05 | high | yes |
-| F3.3 | Опубликованы форматы цитирования: ГОСТ Р 7.0.5–2008, APA 7, BibTeX; встраиваемые графики с атрибуцией; выгрузки dataset.csv, report.json, index.json, index.csv | repository | src/research/pages.ts:840–842,1251; src/server/seo.ts:2036–2046 | 2026-11 | high | no |
+| F3.4 | Два публичных репо одного продукта: MikhailSagalaev/openradar (31 stars, 1 fork, 9 issues, эпики #59–63, последний тег v0.78.1) и MikhailSagalaev/radar-oss (1 star, 0 forks, последний тег v0.41.2, PR #107/#115/#117); поток контрибуций расщеплён | repository | gh api repos/MikhailSagalaev/openradar и radar-oss, проба 2026-11-19 | 2026-11-19 | high | yes |
+| F3.5 | Релиз 0.79.0 готовится (src/version.ts=0.79.0 в worktree), прод на 08:45 UTC 2026-11-19 = 0.78.1; #117 смержен в radar-oss 08:41 UTC; деплой выполняет lead | repository | src/version.ts; проба /health; gh pr 117; задача lead 2026-11-19 | 2026-11-19 | high | no |
 
 ### Интерпретация
 
@@ -168,7 +175,7 @@
 
 ### Пробелы
 
-- Кто пишет и проверяет тексты выводов; сколько времени владелец готов тратить.
+- Решение о каноническом репо и релизном контуре (F3.4); сколько времени владелец готов тратить на синк и каталоги.
 
 ---
 
@@ -183,19 +190,24 @@
 
 | fact_id | fact | source_type | source_ref | source_date | confidence | critical |
 |---------|------|-------------|------------|-------------|------------|----------|
-| F4.1 | Есть ежедневный ряд research_daily: счётчики по тип/площадка/роль/рынок; фиксированная панель лент; последние 2 дня пересчитываются | repository | src/research/index.ts:1–146 | 2026-11 | high | yes |
-| F4.2 | Индекс openradar: база 100, скользящее среднее 7 дней, weekChange; RU-панель (hh-it, hh-remote-project, habr-career, getmatch, trudvsem-remote, kwork-all, fl-all, freelancehunt) и INTL-панель (10 досок вакансий + freelancer.com для заказов); индексы по ролям и площадкам | repository | src/research/index.ts:19–69,148–217 | 2026-11 | high | yes |
+| F4.1 | Есть ежедневный ряд research_daily: счётчики по тип/площадка/роль/рынок; фиксированная панель лент; последние 2 дня пересчитываются | repository | src/research/index.ts:1–146 | 2026-11-01 | high | yes |
+| F4.2 | Индекс openradar: база 100, скользящее среднее 7 дней, weekChange; RU-панель (hh-it, hh-remote-project, habr-career, getmatch, trudvsem-remote, kwork-all, fl-all, freelancehunt) и INTL-панель (10 досок вакансий + freelancer.com для заказов); индексы по ролям и площадкам | repository | src/research/index.ts:19–69,148–217 | 2026-11-01 | high | yes |
 | F4.3 | История ряда с 2026-10-30 (PANEL_START); база 2026-11-09…2026-12-07 предварительная до 7 декабря; на 18 ноября ~19 дней наблюдений | repository | src/research/index.ts:19–21 | 2026-11-18 | high | yes |
 | F4.4 | Upwork отсутствует в источниках и документации (поиск по src/ и docs/ — 0 совпадений); международные заказы в панели — только freelancer.com | repository | grep upwork по src/ и docs/; src/research/index.ts:41 | 2026-11-18 | high | yes |
-| F4.5 | Методика: индекс описывает панель, а не весь рынок; сезонность не убрана (нужно ≥2 лет наблюдений); день простоя ленты считается нулём; смена правил требует новой версии индекса | document | docs/RESEARCH_METHODOLOGY.md §4 | 2026-11 | high | yes |
-| F4.6 | Пороги достоверности: медиана от n≥10, квартили от n≥20; группы <30 помечены «мало» и не попадают в выводы; «больше всего платят» только при непересекающихся 95% интервалах | document | docs/RESEARCH_METHODOLOGY.md §3 | 2026-11 | high | no |
+| F4.5 | Методика: индекс описывает панель, а не весь рынок; сезонность не убрана (нужно ≥2 лет наблюдений); день простоя ленты считается нулём; смена правил требует новой версии индекса | document | docs/RESEARCH_METHODOLOGY.md §4 | 2026-11-01 | high | yes |
+| F4.6 | Пороги достоверности: медиана от n≥10, квартили от n≥20; группы <30 помечены «мало» и не попадают в выводы; «больше всего платят» только при непересекающихся 95% интервалах | document | docs/RESEARCH_METHODOLOGY.md §3 | 2026-11-01 | high | no |
 | F4.7 | Точность разметки (золотая выборка 300 постов, правила 0.45): тип 96%, направление 76% (русскоязычные 69%, n=54), когда правила назвали направление — 81%, сумма 92%; правила подбирались на той же выборке, честная оценка на новой выборке ещё не сделана | document | docs/RESEARCH_METHODOLOGY.md §6 | 2026-11-04 | med | yes |
-| F4.8 | Месячный отчёт /research уже генерирует «Редакционный вывод» (факт/контраст/вывод/цитата) из данных с порогом надёжности; октябрьский отчёт зафиксирован по версии 1 | repository | src/research/report.ts:720–740; docs/RESEARCH_METHODOLOGY.md шапка | 2026-11 | high | no |
-| F4.9 | Открытые машиночитаемые выгрузки: dataset.csv (микроданные), report.json, index.json, index.csv | repository | src/server/seo.ts:2036–2046; src/server/openapi.ts:138–146 | 2026-11 | high | no |
+| F4.8 | Месячный отчёт /research уже генерирует «Редакционный вывод» (факт/контраст/вывод/цитата) из данных с порогом надёжности; октябрьский отчёт зафиксирован по версии 1 | repository | src/research/report.ts:720–740; docs/RESEARCH_METHODOLOGY.md шапка | 2026-11-01 | high | no |
+| F4.9 | Открытые машиночитаемые выгрузки: dataset.csv (микроданные), report.json, index.json, index.csv | repository | src/server/seo.ts:2036–2046; src/server/openapi.ts:138–146 | 2026-11-01 | high | no |
 | F4.10 | Known issues сбора: FL.ru предупреждает о запрете robots.txt (решения в журнале нет); Telegram-папка: 458 из 465 постов за 2 дня из одного канала; Jobspresso — пустой фид | document | docs/STATE_2026-11.md «Что сломано» | 2026-11-05 | high | yes |
 | F4.11 | В индексе есть weekChange (7-дневное среднее к неделе назад), но месячного изменения (MoM) в публичных рядах нет | repository | src/research/index.ts:160–163,246 | 2026-11-18 | high | no |
 | F4.12 | IMAP-адаптер уже есть и зарегистрирован (чтение писем площадок) | repository | src/sources/imap.ts; src/sources/index.ts:46 | 2026-11-18 | high | no |
-| F4.13 | Расширение уже умеет: (а) 1-click захват страницы/выделения с любого сайта участником, (б) сборщик заказов по таймеру ≤15 мин в фоновой вкладке (только администратор) | document | docs/EXTENSION.md | 2026-11 | high | no |
+| F4.14 | Живой index.json v2: база предварительная 19 дней (2026-11-09…2026-12-07), updatedAt 2026-11-18; RU-панель досок 4 job + 3 gig (hh.ru, career.habr.com, getmatch.ru, trudvsem.ru; kwork.ru, fl.ru, freelancehunt.com), INTL-панель отдельная в коде | observation | https://openradar.fun/research/index.json (проба 2026-11-19); src/research/index.ts:23–45 | 2026-11-19 | high | yes |
+| F4.15 | MCP-поверхность выросла с 6 до 9 тулов: search_leads, get_lead_details, estimate_compensation, submit_lead, vote_lead, get_market_analytics, save_search, list_saved_searches, xray_generate_dorks | repository | src/mcp/server.ts:60–195; live MCP schema сессии 2026-11-19 | 2026-11-19 | high | no |
+| F4.16 | Масштаб за 30д: posts 212 449, jobs 88 365, gigs 9 473, intlJobs 102 210, companies 34 093; gigsWithBudget 5 884 (62% заказов), jobsWithPay 46 393 (52% вакансий); топ-площадки hh.ru 77 842, himalayas 33 036, agilefluent 21 723, freelancer.com 12 368, ashby 11 753 | observation | https://openradar.fun/research/report.json (totals, проба 2026-11-19) | 2026-11-19 | high | yes |
+| F4.17 | Guest REST лимитирован: x-ratelimit-limit=120 запросов/мин на /api/leads | observation | заголовки ответа https://openradar.fun/api/leads?limit=1, проба 2026-11-19 | 2026-11-19 | med | no |
+| F4.18 | Soft archive hot/warm/cold смержен (#116): старые лиды скрываются из ленты, ничего не удаляется; влияние на полноту ряда research_daily не проверено | repository | git log 0a2f60e и bd6e44e; CHANGELOG 0.78.x | 2026-11-19 | med | no |
+| F4.19 | /health: sources 281, enabled 266, last24h 12 150 постов, status ok, сервисы subq и extract ok; публичная доска /sources отвечает 200 | observation | https://openradar.fun/health и /sources, проба 2026-11-19 | 2026-11-19 | high | yes |
 
 ### Интерпретация
 
@@ -228,7 +240,8 @@
 
 - Нет мониторинга здоровья лент, отделяющего «рынок упал» от «сбор сломался».
 - Нет честной оценки точности на новой золотой выборке.
-- Нет MoM-метрики и правила её публикации (минимальная история, пороги).
+- Аудит здоровья панели за 19+ дней не проводился (F4.14, F4.19): нулевые дни, всплески, перекосы.
+- Влияние soft archive (#116) на полноту ряда research_daily не проверено.
 
 ---
 
@@ -243,17 +256,22 @@
 
 | fact_id | fact | source_type | source_ref | source_date | confidence | critical |
 |---------|------|-------------|------------|-------------|------------|----------|
-| F5.1 | Indeed Hiring Lab Job Postings Index: база 100 (1 фев 2020), 7-дневное среднее, сезонная поправка по 3 годам истории; публичные данные, регулярно цитируются СМИ | external | https://hiring-lab.github.io/job_postings_tracker/ ; https://hiringlab.indeed.com/data/ | 2026-11 | high | no |
+| F5.1 | Indeed Hiring Lab Job Postings Index: база 100 (1 фев 2020), 7-дневное среднее, сезонная поправка по 3 годам истории; публичные данные, регулярно цитируются СМИ | external | https://hiring-lab.github.io/job_postings_tracker/ ; https://hiringlab.indeed.com/data/ | 2026-11-01 | high | no |
 | F5.2 | Русскоязычные СМИ/блогеры активно тиражируют статистику рынка труда (пример: статья на Habr про −36% IT-вакансий год к году и индекс hh 19,6 резюме/вакансия; цифры первоисточника не проверены) | external | https://habr.com/ru/articles/1082146/ | 2026-09-13 | low | no |
-| F5.3 | Коммерческие RU-агрегаторы (Primelance, Telegram-боты) не дают рыночной аналитики и бенчмаркинга — это заявленное отличие openradar | document | docs/COMPETITORS.md §2 | 2026-11 | med | no |
-| F5.4 | Upwork: официальный API выдаётся по заявке (approval-gated, рассмотрение ~неделя); скрейпинг публичных данных прямо запрещён правилами как bot use; Cloudflare блокирует; без входа поиск отдаёт ~30 карточек без пагинации | external | https://www.itechguides.com/can-you-scrape-upwork-jobs-public-postings-skills-and-the-approved-api-route/ ; https://crawlora.net/blog/how-to-scrape-upwork ; https://github.com/browser-use/browser-harness/blob/189479961591af69b9c62ed2892d983aca7a1105/agent-workspace/domain-skills/upwork/scraping.md | 2026 | med | yes |
+| F5.3 | Коммерческие RU-агрегаторы (Primelance, Telegram-боты) не дают рыночной аналитики и бенчмаркинга — это заявленное отличие openradar | document | docs/COMPETITORS.md §2 | 2026-11-01 | med | no |
+| F5.4 | Upwork: официальный API выдаётся по заявке (approval-gated, рассмотрение ~неделя); скрейпинг публичных данных прямо запрещён правилами как bot use; Cloudflare блокирует; без входа поиск отдаёт ~30 карточек без пагинации | external | https://www.itechguides.com/can-you-scrape-upwork-jobs-public-postings-skills-and-the-approved-api-route/ ; https://crawlora.net/blog/how-to-scrape-upwork ; https://github.com/browser-use/browser-harness/blob/189479961591af69b9c62ed2892d983aca7a1105/agent-workspace/domain-skills/upwork/scraping.md | 2026-11-18 | med | yes |
 | F5.5 | robots.txt Upwork (проверен вживую 2026-11-18, HTTP 200): Disallow /jobs/, /ab/feed/ (RSS), /rss/, /api*, /*/jobs/search*, пагинация; AI-краулеры (OAI-SearchBot, ChatGPT-User, Claude-User, PerplexityBot, Google-Extended) явно Allow: /; RadarBot не в исключениях → серверный опрос лент вне robots-дисциплины проекта | external | https://www.upwork.com/robots.txt | 2026-11-18 | high | yes |
-| F5.6 | Официальный GraphQL API api.upwork.com/graphql, OAuth2; marketplaceJobPostingsSearch (курсорная пагинация, фильтры: ключевые слова, категории, навыки, бюджет, уровень), marketplaceJobPosting; legacy REST /api/v3/jobs/search свёрнут; доступ после review заявки и одобрения scopes; «even with an API key, scraping public or private data is off-limits» | external | https://github.com/tryAGI/Upwork ; https://rottenwifi.com/how-to-search-upwork-job-listings-with-the-official-api-without-unauthorized-scraping/ ; https://dlthub.com/context/source/upwork | 2026 | med | yes |
-| F5.7 | Алерты Upwork: instant email/app alerts — Freelancer Plus ($19.99/мес) + ≥1 proposal на активный заказ; алерты о jobs, похожих на те, куда подавал; saved searches (до 30) бесплатны, но только in-app лента; digest-письма у talent badge holders, не ежедневные | external | https://tryvibeworker.com/blog/upwork-notifications ; https://tryvibeworker.com/blog/is-upwork-freelancer-plus-worth-it ; https://upcat.app/how-to-get-upwork-job-alerts/ | 2026 | med | yes |
-| F5.8 | Guru: API по регистрации, одобрение несколько недель, история работ не требуется (академический источник 2024); сторонние n8n-workflow мониторят RSS Upwork/Freelancer/Guru/PeoplePerHour — ленты существуют и используются | external | https://www.maxwell.vrac.puc-rio.br/73222/73222.PDF ; https://n8n.io/workflows/7782-automate-job-discovery-and-ai-proposals-across-upwork-freelancer-guru-and-pph-with-openrouter/ | 2024–2026 | med | no |
-| F5.9 | X API free tier: ~500 постов/мес (часть источников до 1500), ~100 чтений/мес; для ежедневных постов и тредов достаточно | external | https://www.npmjs.com/package/@iflow-mcp/datawhisker-x-mcp-server ; https://github.com/jikig-ai/soleur/blob/afc95ddd9457eae1fbc6e2ead54abf1f1792f9a9/knowledge-base/project/plans/2026-03-10-feat-post-blog-social-distribution-plan.md | 2026-02–03 | med | no |
+| F5.6 | Официальный GraphQL API api.upwork.com/graphql, OAuth2; marketplaceJobPostingsSearch (курсорная пагинация, фильтры: ключевые слова, категории, навыки, бюджет, уровень), marketplaceJobPosting; legacy REST /api/v3/jobs/search свёрнут; доступ после review заявки и одобрения scopes; «even with an API key, scraping public or private data is off-limits» | external | https://github.com/tryAGI/Upwork ; https://rottenwifi.com/how-to-search-upwork-job-listings-with-the-official-api-without-unauthorized-scraping/ ; https://dlthub.com/context/source/upwork | 2026-11-18 | med | yes |
+| F5.7 | Алерты Upwork: instant email/app alerts — Freelancer Plus ($19.99/мес) + ≥1 proposal на активный заказ; алерты о jobs, похожих на те, куда подавал; saved searches (до 30) бесплатны, но только in-app лента; digest-письма у talent badge holders, не ежедневные | external | https://tryvibeworker.com/blog/upwork-notifications ; https://tryvibeworker.com/blog/is-upwork-freelancer-plus-worth-it ; https://upcat.app/how-to-get-upwork-job-alerts/ | 2026-11-18 | med | yes |
+| F5.8 | Guru: API по регистрации, одобрение несколько недель, история работ не требуется (академический источник 2024); сторонние n8n-workflow мониторят RSS Upwork/Freelancer/Guru/PeoplePerHour — ленты существуют и используются | external | https://www.maxwell.vrac.puc-rio.br/73222/73222.PDF ; https://n8n.io/workflows/7782-automate-job-discovery-and-ai-proposals-across-upwork-freelancer-guru-and-pph-with-openrouter/ | 2026-11-18 | med | no |
+| F5.9 | X API free tier: ~500 постов/мес (часть источников до 1500), ~100 чтений/мес; для ежедневных постов и тредов достаточно | external | https://www.npmjs.com/package/@iflow-mcp/datawhisker-x-mcp-server ; https://github.com/jikig-ai/soleur/blob/afc95ddd9457eae1fbc6e2ead54abf1f1792f9a9/knowledge-base/project/plans/2026-03-10-feat-post-blog-social-distribution-plan.md | 2026-11-18 | med | no |
 | F5.10 | Официальные требования Upwork API key: настоящее имя/адрес/фото, верифицированный платёжный метод, ID-верификация, **≥$25 000 lifetime earnings/spend** (заработок агентства — только при текущей аффилиации), **JSS ≥90%**, good standing; описание use-case (internal/public, роль); подтверждение ≤40 000 запросов/день; запрет имени/лого/фирменных цветов Upwork в приложении; **«API is available for personal and internal use only. Commercial use isn't supported»**; sandbox не выдают; заявка upwork.com/services/api/apply (нужен логин), решение по email ~неделя | external | https://support.upwork.com/hc/en-us/articles/115015857647-How-to-request-an-API-key-from-Upwork (вживую) | 2026-11-18 | high | yes |
-| F5.11 | tryAGI/Upwork — C# SDK (MIT) к официальному GraphQL API, не портал заявки: OAuth2 (authorize/token/refresh), marketplaceJobPostingsSearch/Posting/Contents, scopes «Common Entities - Read-Only Access» + «Read marketplace Job Postings», 429 RetryAfter; openradar на TypeScript — SDK только справочник | external | https://github.com/tryAGI/Upwork (README вживую) | 2026-11-18 | high | no |
+| F5.12 | treg — capability-каталог агент-инструментов с keyless public tier (прецедент Greenhouse); наш PR #1791 (8 keyless endpoints) OPEN, reviewDecision REVIEW_REQUIRED на 2026-11-19; клон C:\projects\treg-study\treg на ветке vendor/openradar | repository | gh pr view 1791 --repo superdesigndev/treg; git -C C:\projects\treg-study\treg branch; проба 2026-11-19 | 2026-11-19 | high | yes |
+| F5.13 | Hirebase: 6.69M живых вакансий, ~216K новых/сутки; цена job $0.0005–0.0015 (Scale/Growth), insights $0.01/call, salary-benchmark $0.25 (async ~80s); полный intl-firehose ≈$324/день, таргетные срезы ≈$0.24/день | document | C:\projects\bench-hirebase\REPORT.md §3, живые пробы 2026-11-19 | 2026-11-19 | high | no |
+| F5.14 | ToS Hirebase запрещает redistribution/bulk-access третьим лицам и построение конкурирующей базы/продукта; internal analysis/research разрешён; агрегаты для публичного /research — серая зона (нужен юр. review или лицензия) | document | C:\projects\bench-hirebase\REPORT.md §8–9 и notes.md (цитаты hirebase.org/terms) | 2026-11-19 | high | yes |
+| F5.15 | RU-покрытие Hibase ≈ноль: 738 live, 6 SWE, 0 новых/день; description — EN LLM-саммари даже для RU-постов, контакты вырезаны, ~13% placeholder-мусора в свежей выборке; RU salary n=8, disclosure 5% | experiment | C:\projects\bench-hirebase\dumps/api (выборки fresh100/RU50), REPORT.md §5 | 2026-11-19 | high | yes |
+| F5.16 | treg листит только 10 endpoints Hirebase по $0.0015/job; export/lookup/historical/technographics/webhooks в их реестре отсутствуют — реестр отстаёт от API v2.5.6 | repository | C:\projects\treg-study\treg\src\treg\catalog (hirebase.yaml), REPORT.md §6 | 2026-11-19 | med | no |
+| F5.17 | Платный agent-data рынок сложился: treg реселлит Hirebase/Jobspipe/Glassdoor; openradar после merge #1791 станет единственным keyless-free провайдером jobs-данных в витрине treg (цена $0 против $0.00015–0.002/job) | document | C:\projects\bench-hirebase\REPORT.md §6; C:\projects\treg-study\treg\src\treg\catalog | 2026-11-19 | med | no |
 
 ### Интерпретация
 
@@ -283,7 +301,8 @@
 
 ### Пробелы
 
-- Нет списка СМИ/блогов, которые уже цитировали openradar; нет контакта с Upwork по API.
+- Судьба treg #1791: ответы на ревью и сроки merge (F5.12).
+- Решение по лицензии Hirebase для intl-среза и агрегатов /research (F5.14).
 
 ---
 
@@ -298,12 +317,13 @@
 
 | fact_id | fact | source_type | source_ref | source_date | confidence | critical |
 |---------|------|-------------|------------|-------------|------------|----------|
-| F6.1 | Версионирование методологии: REPORT_VERSION=2, INDEX_VERSION=2; октябрьский отчёт зафиксирован по v1 и не пересчитывался | document | docs/RESEARCH_METHODOLOGY.md шапка | 2026-11 | high | no |
-| F6.2 | В индекс добавлена винзоризация pre-base всплесков подключения лент, чтобы бэкфилл не создавал искусственные «−70%» через 7 дней | repository | src/research/index.ts:221–233 | 2026-11 | high | yes |
+| F6.1 | Версионирование методологии: REPORT_VERSION=2, INDEX_VERSION=2; октябрьский отчёт зафиксирован по v1 и не пересчитывался | document | docs/RESEARCH_METHODOLOGY.md шапка | 2026-11-01 | high | no |
+| F6.2 | В индекс добавлена винзоризация pre-base всплесков подключения лент, чтобы бэкфилл не создавал искусственные «−70%» через 7 дней | repository | src/research/index.ts:221–233 | 2026-11-01 | high | yes |
 | F6.3 | Решение 2026-11-05: Profi/Яндекс/YouDo собираются только через браузер с аккаунтами владельца (расширение), сознательно вне порядка robots; бот-проверки не обходятся, подписи приложений не повторяются | document | docs/GIG_SOURCES.md | 2026-11-05 | high | no |
 | F6.4 | Первая золотая проверка 4 ноября: 300 постов разметила LLM вслепую (не человек), русскоязычных только 54; порог 85% модель не прошла из-за малого числа ответов | document | docs/RESEARCH_METHODOLOGY.md §6 | 2026-11-04 | high | no |
-| F6.5 | Редакционный вывод с цитатой «По данным openradar…» уже реализован для бюджетов заказов по направлениям | repository | src/research/report.ts:720–740 | 2026-11 | high | no |
-| F6.6 | Практика проекта: официальные RSS включены даже при запрете robots (hh.ru, FL.ru, trudvsem помечены «запрещено», но «включён: да»); осознанные отступления фиксируются в журнале решений (прецедент GIG_SOURCES 2026-11-05) | document | docs/SOURCES_ROBOTS.md таблица; docs/GIG_SOURCES.md | 2026-11-04 | high | no |
+| F6.5 | Редакционный вывод с цитатой «По данным openradar…» уже реализован для бюджетов заказов по направлениям | repository | src/research/report.ts:720–740 | 2026-11-01 | high | no |
+| F6.7 | Релизная механика тег→автодеплой (PUBLISHING.md); поток PR расщеплён между репо: #94 (agent quickstart в llms.txt) OPEN в openradar, #107 и #115 OPEN в radar-oss, #117 MERGED в radar-oss 2026-11-19 | repository | gh pr view 94 --repo openradar; gh pr view 107/115/117 в radar-oss; docs/ROADMAP.md | 2026-11-19 | high | yes |
+| F6.8 | Ротации ключей decide (0.75.0) и extract (0.76.0) выпущены: пул ключей/провайдеров, парковка 401/402/403, остановка без сетевых вызовов когда все припаркованы — устойчивость к исчерпанию бесплатных кредитов | repository | CHANGELOG.md 0.75.0/0.76.0; docs/DECISIONS.md | 2026-11-18 | high | no |
 
 ### Интерпретация
 
@@ -329,7 +349,7 @@
 
 ### Пробелы
 
-- Нет журнала опубликованных вовне выводов и их эффектов (цитирований, переходов).
+- Нет решения владельца о синке двух репо и о переносе #94/#107/#115 (F6.7).
 
 ---
 
@@ -344,9 +364,11 @@
 
 | fact_id | fact | source_type | source_ref | source_date | confidence | critical |
 |---------|------|-------------|------------|-------------|------------|----------|
-| F7.1 | LLM-обогащение уже в пайплайне (GigaChat; лимиты 429); точность модели на золотой выборке: направление 70% на 27 постах, оплата — нет ответов; порог 85% не пройден | document | docs/RESEARCH_METHODOLOGY.md §6; docs/STATE_2026-11.md | 2026-11 | med | no |
-| F7.2 | MCP-дистрибуция работает: 6 инструментов, ответы 0,16 с; реальные клиенты-агенты есть; эпик #59 — стать стандартным источником джоб-данных для ИИ-агентов | document | docs/STATE_2026-11.md; docs/ROADMAP.md | 2026-11 | high | no |
-| F7.3 | План развития сбора: участники сети со своими аккаунтами расширяют охват (нужны согласие, проверка подлинности заказов, баллы за вклад); сейчас приём только от администратора | document | docs/GIG_SOURCES.md «Куда развивать» | 2026-11-05 | high | no |
+| F7.1 | LLM-обогащение уже в пайплайне (GigaChat; лимиты 429); точность модели на золотой выборке: направление 70% на 27 постах, оплата — нет ответов; порог 85% не пройден | document | docs/RESEARCH_METHODOLOGY.md §6; docs/STATE_2026-11.md | 2026-11-01 | med | no |
+| F7.2 | MCP-дистрибуция работает: 6 инструментов, ответы 0,16 с; реальные клиенты-агенты есть; эпик #59 — стать стандартным источником джоб-данных для ИИ-агентов | document | docs/STATE_2026-11.md; docs/ROADMAP.md | 2026-11-01 | high | no |
+| F7.4 | Jev shadow-bench на 301 ручной метке: junk recall 8/18 против SubQ 10/18, false-hide 3 против 3, kind-точность 77% против 87%, стоимость $0.0147/300 решений, p50 5.2s через treg; Jev не замена SubQ, годен как второе мнение в зоне неопределённости SubQ | experiment | C:\projects\bench-jev\results.jsonl и labels.jsonl, прогон 2026-11-19 | 2026-11-19 | high | yes |
+| F7.5 | Agent-surface Hirebase — зрелый паттерн для нашего /mcp: count_only бесплатно, usage-блок в каждом metered-ответе, filters_applied/filters_ignored, report_problem (feedback вендору), cost-confirmation, prompt-injection warnings в описаниях тулов | document | C:\projects\bench-hirebase\REPORT.md §7 | 2026-11-19 | med | no |
+| F7.6 | Каталоги агентов измеряют reliability/latency провайдеров и ранжируют по цене; catalog_request в treg — сигнал спроса «что листить дальше»; x402 позволяет оплату стабилькоинами без регистрации | document | C:\projects\treg-study\treg (docs/VENDORS.md, web/llms.txt); REPORT.md §7 | 2026-11-19 | med | no |
 
 ### Интерпретация
 
@@ -372,7 +394,7 @@
 
 ### Пробелы
 
-- Нет процесса editorial review; нет новой честной золотой выборки.
+- Калибровка вопросов Jev под наши пороги не сделана (F7.4): бенч готов к пере-гону, но формулировки дословно SubQ-шные.
 
 ---
 
@@ -387,10 +409,12 @@
 
 | fact_id | fact | source_type | source_ref | source_date | confidence | critical |
 |---------|------|-------------|------------|-------------|------------|----------|
-| F8.1 | Защита площадок усиливается: YouDo — бот-проверка, Profi/Яндекс — вход, Upwork — Cloudflare и запрет автоматизации | document | docs/GIG_SOURCES.md; внешний F5.4 | 2026-11 | high | no |
-| F8.2 | Этика проекта: robots.txt-дисциплина, не обходим логины/CAPTCHA/paywall; takedown по требованию площадки — критерий v1.0 | document | AGENTS.md §4; docs/SOURCES_ROBOTS.md; docs/ROADMAP.md | 2026-11 | high | no |
-| F8.3 | Сезонность рядов не убрана; для поправки нужно ≥2 лет наблюдений (методика); Indeed использует 3 года истории | document | docs/RESEARCH_METHODOLOGY.md §4; внешний F5.1 | 2026-11 | high | yes |
-| F8.4 | Канал цитирования ИИ-агентами растёт: MCP-каталоги, агентские токены; эпик #59 | document | docs/STATE_2026-11.md; docs/ROADMAP.md | 2026-11 | med | no |
+| F8.1 | Защита площадок усиливается: YouDo — бот-проверка, Profi/Яндекс — вход, Upwork — Cloudflare и запрет автоматизации | document | docs/GIG_SOURCES.md; внешний F5.4 | 2026-11-01 | high | no |
+| F8.2 | Этика проекта: robots.txt-дисциплина, не обходим логины/CAPTCHA/paywall; takedown по требованию площадки — критерий v1.0 | document | AGENTS.md §4; docs/SOURCES_ROBOTS.md; docs/ROADMAP.md | 2026-11-01 | high | no |
+| F8.3 | Сезонность рядов не убрана; для поправки нужно ≥2 лет наблюдений (методика); Indeed использует 3 года истории | document | docs/RESEARCH_METHODOLOGY.md §4; внешний F5.1 | 2026-11-01 | high | yes |
+| F8.5 | Внешние лицензии сужают открытость: Upwork API «personal and internal use only» (F5.10), Hibase ban на конкурирующие базы (F5.14); данные площадок становятся платным активом с юридическими границами | document | support.upwork.com (F5.10); hirebase.org/terms (F5.14) | 2026-11-19 | high | yes |
+| F8.6 | Agent-дистрибуция institutionalизируется: MCP-реестры обновляются при релизах, treg/Glama/Smithery/PulseMCP как витрины; листинг требует self-serve ключей или keyless-probe и публичного прайсинга | document | docs/STATE_2026-11.md; C:\projects\treg-study\treg docs/VENDORS.md | 2026-11-19 | med | no |
+| F8.7 | Гео-ограничения реальны: прямые вызовы части провайдеров из RU блокируются (OpenRouter 403), легальный обход — через релеи-посредники (treg); Jev-бенч прошёл через treg с локальной машины | experiment | C:\projects\bench-jev (прогон через treg 2026-11-19) | 2026-11-19 | med | no |
 
 ### Интерпретация
 
@@ -416,11 +440,227 @@
 
 ### Пробелы
 
-- Нет политики публикации динамических утверждений (минимальная история, оговорки, право на опровержение).
+- Юридические границы intl-данных (Hibase ToS, Upwork internal-only) не закрыты решением владельца (F8.5).
 
 ---
 
 ## Синтез
+
+### S1
+
+- facts: F2.7, F4.15, F5.12, F5.17, F7.6
+- contexts: C2, C4, C5, C7
+- interpretation: агенты уже читают ленту (2 реальных клиента), MCP-поверхность выросла до 9 тулов, а каталоги агентов (treg) ранжируют провайдеров по цене и измеренной надёжности; openradar с ценой $0 и keyless-probe выглядит аномально выгодным рядом, но листинг #1791 ещё не смержен и заявки в остальные каталоги не поданы.
+- contradiction: готовая агент-поверхность и уникальный free-ряд против незавершённой дистрибуции: каталоги не листят, install не доведён до одной команды, свежих замеров агент-usage нет.
+- opportunity: дешёвый процессный шаг (ответы на ревью treg + заявки в каталоги + one-command install) открывает канал измеримого спроса без нового кода данных.
+- mechanism: листинг в каталоге с measured reliability и ценой $0 → агент выбирает openradar как источник → первые вызовы без регистрации → рост активных агент-клиентов.
+- hypothesis: H1
+
+### S2
+
+- facts: F3.4, F3.5, F6.7
+- contexts: C3, C6
+- interpretation: один продукт живёт в двух публичных репо с разными звёздами, тегами и потоками PR; релизная механика тег→автодеплой при этом одна, а прод отстаёт от смерженных изменений (#117 смержен, прод ещё 0.78.1).
+- contradiction: расщеплённая поверхность контрибуций (31 stars против 1, эпики в одном репо, PR в другом) против единого релизного контура и единого бренда openradar.fun.
+- opportunity: решение владельца о каноническом репо и правиле зеркалирования снимает потери PR/issue и ускоряет релизы; это процессный шаг, не код.
+- mechanism: один канонический репо с синком PR/тегов → контрибьюторы и каталоги видят актуальную поверхность → меньше потерянных вкладов и быстрее доставка изменений в прод.
+- hypothesis: H2
+
+### S3
+
+- facts: F4.14, F4.5, F4.19, F6.2, F8.3
+- contexts: C4, C6, C8
+- interpretation: ряд вырос до 212k постов/30д и 281 источника, но база индекса всё ещё предварительная (19 дней), простой ленты считается нулём, а прецедент искусственных −70% уже случался и чинился винзоризацией; публичная доска здоровья (/sources, /health) существует, но аудит ряда не проводился.
+- contradiction: масштаб и амбиция рыночных утверждений против измерительной системы, которая пока не отличает движение рынка от движения пайплайна.
+- opportunity: аудит здоровья панели + правило «динамика только после аудита и двух полных месяцев базы» превращает хрупкость в дисциплину бренда данных; доска здоровья уже есть как поверхность.
+- mechanism: классификация дней ряда (здоров/артефакт) и публичная оговорка → отсутствие ложных сенсаций → доверие к цитатам openradar.
+- hypothesis: H3
+
+### S4
+
+- facts: F3.1, F5.13, F5.14, F8.5
+- contexts: C3, C5, C8
+- interpretation: миссия zero-paywall и CC BY сосуществует с рынком, где данные площадок стали платным активом с юридическими границами (Hibase ban на конкурирующие базы, Upwork internal-only); intl-масштаб (6.69M вакансий) доступен только за деньги или по лицензии, а операционные расходы проекта несёт владелец.
+- contradiction: открытая некоммерческая миссия против желания intl-данных и против необходимости чем-то покрывать сервер и LLM-кредиты.
+- opportunity: монетизация без paywall — партнёрские лицензии (intl-срез Hibase), спонсорство/гранты открытой инфраструктуры; internal-аналитика на insights разрешена ToS уже сейчас.
+- mechanism: внешние партнёрские/спонсорские деньги покрывают операционные расходы без нарушения zero-paywall → устойчивость ряда и миссии; лицензия легализует intl-срез.
+- hypothesis: H4
+
+### S5
+
+- facts: F1.3, F2.2, F4.16, F5.3
+- contexts: C1, C2, C4, C5
+- interpretation: спрос посетителей на заказы в ~10 раз выше, чем на вакансии, и RU-агрегаторы монетизируют именно заказы; но после ATS-масштабирования база стала job-heavy (88k вакансий против 9.5k заказов), а активация регистраций крайне низкая (2 из 50).
+- contradiction: продуктовый фокус «заказы главный экран» против фактического состава базы и против мёртвых регистраций без подписки/токена.
+- opportunity: главный экран и onboarding под реальный спрос (заказы) + вход не через GitHub; дешёвый тест — бумажный прототип и замер воронки по логам, до кода.
+- mechanism: экран и первый шаг соответствуют спросу → регистрация конвертируется в подписку/токен → активная аудитория вместо мёртвых аккаунтов.
+- hypothesis: H5
+
+### S6
+
+- facts: F3.2, F6.3, F7.3, F8.1
+- contexts: C3, C6, C7, C8
+- interpretation: один общий сервер без внешних бэкапов и админ-сбор закрытых площадок (Профи/Яндекс/YouDo через аккаунты владельца) упираются в одного человека; защита площадок усиливается, а план сети участников (согласие, подлинность, баллы) не запущен.
+- contradiction: амбиция всемирного охвата и устойчивости против операционной модели «один владелец + один сервер».
+- opportunity: витрина вклада и proof-of-contribution early access мотивируют участников делиться источниками; охват закрытых площадок растёт без серверного обхода.
+- mechanism: баллы/рейтинг за вклад + early access → участники приносят источники с согласием → охват и непрерывность ряда без единой точки отказа.
+- hypothesis: H6
+
+---
+
+## Гипотезы
+
+### H1
+
+- priority: 1
+- level: process
+- action: довести treg #1791 до merge (ответы на ревью), смержить agent quickstart (#94), подать заявки в Glama/Smithery/PulseMCP/mcp.so, довести подключение агента до одной команды
+- mechanism: агент выбирает источник в каталоге по цене $0 и измеренной надёжности → первый вызов без регистрации → рост активных агент-клиентов
+- metric: активные агент-клиенты в неделю (уникальные UA/токены, читающие ленту)
+- baseline: 2 клиента и 1 токен агента на 2026-11-05 (F2.7)
+- target: ≥10 клиентов/нед к 2026-12-31 (предложение, требует подтверждения владельца)
+- deadline: 2026-12-31
+- source_contexts: C2, C4, C5, C7
+- cheap_test: пройти install-петлю вручную как агент (curl /mcp initialize, tools/list, search_leads), замерить time-to-first-value; сверить 8 endpoint-требований treg живьём (уже 9/9 200)
+- success_criterion: treg #1791 смержен, ≥3 каталога листят openradar, ≥5 новых агент-клиентов за 2 недели после листинга
+- falsification_criterion: каталоги не листят keyless-free провайдеров или time-to-first-value > 10 минут и агенты не доходят до первого вызова
+- confidence: med
+
+### H2
+
+- priority: 2
+- level: process
+- action: владелец назначает канонический репо (openradar или radar-oss), синхронизирует открытые PR (#94, #107, #115) и теги; правило зеркалирования фиксируется в PUBLISHING.md
+- mechanism: один живой репо с 31 stars и эпиками вместо расщепления → контрибьюторы и агент-каталоги видят актуальную поверхность → меньше потерянных PR и быстрее релизы
+- metric: число открытых PR, расщеплённых между двумя репо
+- baseline: 3 (#94 в openradar; #107 и #115 в radar-oss)
+- target: 0 к 2026-12-05
+- deadline: 2026-12-05
+- source_contexts: C3, C6
+- cheap_test: инвентаризация git log и diff двух репо за 1 час: список расхождений коммитов/тегов/PR и план синка
+- success_criterion: canonical выбран, все открытые PR перенесены или закрыты, правило зеркалирования записано
+- falsification_criterion: репо сознательно разделены (prod против OSS-extract) и синк не нужен — тогда фиксируем правило зеркалирования вместо слияния
+- confidence: high
+
+### H3
+
+- priority: 3
+- level: process
+- action: аудит здоровья панели за 19+ дней (нулевые дни, всплески бэкфилла, перекос каналов) + публичная source-health доска на базе /sources и /health + правило: динамика публикуется только после аудита и ≥2 полных месяцев базы
+- mechanism: отделение артефактов сбора от движений рынка → честные воспроизводимые цитаты → доверие к бренду данных (прецедент −70% уже чинился винзоризацией)
+- metric: доля дней ряда, классифицированных аудитом как здоров/артефакт
+- baseline: 0% (аудит не проводился)
+- target: 100% дней 2026-10-30…2026-11-19 к 2026-12-01
+- deadline: 2026-12-01
+- source_contexts: C4, C6, C8
+- cheap_test: ретроспективный просмотр research_daily и логов опроса за 1 день ручной работы; сопоставление с известными поломками FL.ru, Telegram-папка, Jobspresso
+- success_criterion: известно, какие движения ряда объяснимы сбором; правило публикации динамики сформулировано и записано в методику
+- falsification_criterion: ряд чист, артефактов нет → ограничение снимается частично, но короткая история и сезонность остаются
+- confidence: med
+
+### H4
+
+- priority: 4
+- level: business-model
+- action: письмо Hibase о лицензии intl-среза и праве агрегатов + 3 спонсорских/грантовых питча на открытую инфраструктуру; paywall не вводить
+- mechanism: партнёрские/спонсорские деньги покрывают сервер и LLM-кредиты без нарушения zero-paywall → устойчивость ряда и миссии; лицензия легализует intl-срез
+- metric: число подтверждённых внешних источников покрытия операционных расходов
+- baseline: 0 подтверждённых (расходы несёт владелец, сумма не раскрыта)
+- target: ≥1 к 2027-01-31
+- deadline: 2027-01-31
+- source_contexts: C3, C5, C8
+- cheap_test: 4 письма за 1 день (Hibase + 3 спонсора/гранта); замер ответов за 2 недели
+- success_criterion: ≥1 предметный интерес: лицензия, спонсор или грант с суммой
+- falsification_criterion: все отказы или молчание → монетизация остаётся открытым вопросом владельца (C1), intl-данные только internal
+- confidence: low
+
+### H5
+
+- priority: 5
+- level: interface
+- action: заказы главным экраном + вход через Telegram + onboarding «подписка или токен агента за минуту» (рекомендации STATE/TASKS)
+- mechanism: спрос на заказы ×10 и не-GitHub аудитория → регистрация конвертируется в активацию (подписка/токен), а не в мёртвый аккаунт
+- metric: доля зарегистрированных с подпиской или токеном агента
+- baseline: 4% (2 из 50 аккаунтов на 2026-11-05)
+- target: ≥20% к 2026-12-31 (предложение)
+- deadline: 2026-12-31
+- source_contexts: C1, C2, C4, C5
+- cheap_test: замер воронки регистрация→первое действие по логам за 1 день + бумажный прототип главного экрана с заказами на 5 текущих пользователях
+- success_criterion: воронка измерена; прототип подтверждает интерес к заказам у ≥3 из 5
+- falsification_criterion: активные пользователи приходят за вакансиями (база job-heavy: 88k jobs против 9.5k gigs) → фокус «заказы главный» ошибочен, главный экран смешанный с фильтром
+- confidence: med
+
+### H6
+
+- priority: 6
+- level: motivation
+- action: витрина вклада + баллы/рейтинг за источники (эпик #60) и consent-фреймворк для участников-сборщиков закрытых площадок
+- mechanism: proof-of-contribution early access мотивирует делиться находками → охват закрытых площадок без серверного обхода robots/логинов
+- metric: активные участники-источники в неделю
+- baseline: 2 активных узла из 3 на 2026-11-05
+- target: ≥10 к 2027-01-31 (предложение)
+- deadline: 2027-01-31
+- source_contexts: C3, C6, C7, C8
+- cheap_test: вручную пригласить 3 текущих голосовавших (13 голосов от 3 человек) и замерить готовность делиться источником; черновик consent на бумаге
+- success_criterion: ≥1 участник готов делиться источником с согласием и проверкой подлинности
+- falsification_criterion: никто не готов → сеть остаётся админ-сбором, эпик #60 откладывается
+- confidence: low
+
+---
+
+## Пробелы в данных
+
+- Бизнес-результат, метрика baseline→target, срок и экономический эффект (C1) — блокер гейта; data-request обновлён.
+- Свежие замеры людей/активации и MCP-usage после 2026-11-05 (C1, C2): нужны логи nginx и /mcp за 30 дней.
+- Канонический репо и правило зеркалирования (C3, C6): решение владельца.
+- Операционные расходы и источники их покрытия (C1, C3): нет данных.
+- Аудит здоровья панели за 19+ дней (C4): измеряется дешёвым тестом H3.
+- Влияние soft archive #116 на полноту research_daily (C4): не проверено.
+- Судьба treg #1791 и ответы на ревью (C5): внешний процесс, не ускорить кодом.
+- Юридические границы intl-данных: Hibase ToS и Upwork internal-only (C5, C8): решение владельца или юр. review.
+- Baseline внешних цитирований и трафика /research (C2, C5): нет данных.
+- Калибровка Jev-вопросов и честная золотая выборка (C4, C7): не сделаны.
+
+## Запросы владельцу / документы
+
+- Обновлённый data-request.md: вопросы владельцу (метрика C1, canonical repo, монетизация без paywall, лицензия Hibase, приоритет агент-дистрибуции) + выгрузки логов nginx и /mcp.
+- Пакет заявки Upwork подготовлен ранее: docs/upwork-api-application.md (не подан; требуется аккаунт владельца).
+
+---
+
+## Насыщение
+
+- repeated_sources: yes
+- repetition_evidence: docs STATE/ROADMAP/AUDIT/COMPETITORS/DECISIONS/TASKS/SOURCES_COVERAGE и код research/mcp независимо подтверждают прежние ограничения (панельность, короткая история, артефакты, zero-paywall); живые пробы /health, report.json, index.json, llms.txt подтверждают рост и поверхности; внешние исследования treg/Hibase/Jev повторяют и уточняют известное, качественно иных ограничений не добавили
+- key_constraints_verified: yes
+- contradictions_identified: yes
+- missing_quantitative_data: бизнес-метрика C1; свежие замеры людей/активации и MCP-usage; baseline цитируемости; аудит здоровья панели; операционные расходы и покрытие
+- stop_reason: локальные и внешние источники насыщены; дальнейшее движение блокировано ответами владельца (C1, canonical repo, монетизация), а не поиском; остановка в точке насыщения по saturation-gate
+
+---
+
+## После CONTEXT_GATE: PASSED
+
+### Переформулированная задача
+
+- Не применимо: гейт BLOCKED. После ответов владельца — переформулировать ядро C1 и пересчитать синтез.
+
+### Карта системы
+
+- См. синтез S1–S6 и противоречия в C1–C8; краткая карта выдана lead в ответе 2026-11-19.
+
+### Implementation brief
+
+- Проверенная гипотеза: нет (H1–H6 — кандидаты с дешёвыми тестами, ни один тест в этом раунде не проведён)
+- Что строим / меняем: ничего до гейта (Phase 0)
+- Что не строим: публичный адаптер Hibase без лицензии; paywall; автопостинг громкой динамики до аудита панели
+- Критерии успеха: ответы владельца на data-request + проведённый дешёвый тест H1 или H3
+- Критерии остановки: saturation-gate выполнен; дальнейший поиск не меняет модель
+- План дешёвого теста или реализации: план доисследования в data-request.md, не план реализации
+
+---
+
+## Приложение A — синтез итерации 2026-11-18 (публикации в X)
 
 ### S1
 
@@ -474,7 +714,7 @@
 
 ---
 
-## Гипотезы
+## Приложение B — гипотезы итерации 2026-11-18
 
 ### H1
 
@@ -584,7 +824,7 @@
 
 ---
 
-## Пробелы в данных
+## Приложение C — пробелы итерации 2026-11-18
 
 - Бизнес-результат, метрика, срок, экономический эффект (C1) — критично, блокер гейта.
 - Что значит «максимально»: источники, частота, автоматизация, смелость формулировок (C1).
@@ -597,14 +837,14 @@
 - Честная точность классификации на новой золотой выборке (C4, F4.7).
 - Ответственный за тексты и частота публикаций (C3).
 
-## Запросы владельцу / документы
+### Запросы итерации 2026-11-18
 
 - См. [data-request.md](data-request.md): вопросы владельцу (метрика X, «максимально», бюджет/заявка Upwork, язык аудитории) + выгрузки логов.
 - Пакет заявки Upwork подготовлен: [upwork-api-application.md](upwork-api-application.md) (не подан; требуется аккаунт владельца).
 
 ---
 
-## Насыщение
+## Приложение D — насыщение итерации 2026-11-18
 
 - repeated_sources: yes
 - repetition_evidence: методика, ROADMAP, STATE, GIG_SOURCES и код research независимо подтверждают один и тот же набор ограничений (панельность, короткая история, артефакты, отсутствие Upwork); внешний поиск (robots.txt Upwork вживую, GraphQL SDK, гайды по alerts, X API) подтвердил закрытость серверного сбора и наличие трёх легальных путей; новые источники в основном повторяют известное.
@@ -615,7 +855,7 @@
 
 ---
 
-## После CONTEXT_GATE: PASSED
+## Приложение E — заготовка после гейта (итерация 2026-11-18)
 
 ### Переформулированная задача
 
