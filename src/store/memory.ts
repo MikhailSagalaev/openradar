@@ -24,6 +24,8 @@ import type {
   UserVoteResult,
   AdminStats,
   AdminUsersData,
+  AgentUsageStats,
+  ApiUsageDim,
   UserTelegramAccountInput,
   UserTelegramAccountRecord,
   UserSourceInput,
@@ -1094,6 +1096,50 @@ export class MemoryStore implements Store {
       },
       users,
       subscriptions: [],
+    };
+  }
+
+  private apiUsage = new Map<string, { dim: ApiUsageDim; calls: number }>();
+  private tokenDays = new Set<string>();
+
+  async bumpApiUsage(dim: ApiUsageDim, calls = 1): Promise<void> {
+    const key = [dim.day, dim.surface, dim.detail, dim.tier, dim.client, dim.via].join('\u0000');
+    const cell = this.apiUsage.get(key);
+    if (cell) cell.calls += calls;
+    else this.apiUsage.set(key, { dim, calls });
+  }
+
+  async touchTokenDay(userId: number, day = new Date().toISOString().slice(0, 10)): Promise<void> {
+    this.tokenDays.add(`${day}\u0000${userId}`);
+  }
+
+  async agentUsageStats(days = 14): Promise<AgentUsageStats> {
+    const window = lastDays(days);
+    const inWindow = Array.from(this.apiUsage.values()).filter((c) => window.includes(c.dim.day));
+    const perDay = (day: string, surface: string) =>
+      inWindow.filter((c) => c.dim.day === day && c.dim.surface === surface).reduce((a, c) => a + c.calls, 0);
+    const top = (pick: (c: { dim: ApiUsageDim; calls: number }) => string) => {
+      const by = new Map<string, number>();
+      for (const c of inWindow) by.set(pick(c), (by.get(pick(c)) ?? 0) + c.calls);
+      return [...by.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12);
+    };
+    return {
+      days: window.map((day) => ({
+        day,
+        api: perDay(day, 'api'),
+        mcp: perDay(day, 'mcp'),
+        research: perDay(day, 'research'),
+      })),
+      details: top((c) => `${c.dim.surface}:${c.dim.detail}`).map(([k, calls]) => {
+        const sep = k.indexOf(':');
+        return { surface: k.slice(0, sep), detail: k.slice(sep + 1), calls };
+      }),
+      tokens: window.map((day) => ({
+        day,
+        active: Array.from(this.tokenDays).filter((t) => t.startsWith(`${day}\u0000`)).length,
+      })),
+      via: top((c) => c.dim.via).map(([via, calls]) => ({ via: via || 'direct', calls })),
+      clients: top((c) => c.dim.client).map(([client, calls]) => ({ client, calls })),
     };
   }
 

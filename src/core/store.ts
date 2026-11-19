@@ -129,6 +129,29 @@ export interface AdminUsersData {
   subscriptions: Array<{ id: string; name: string; channel: string; paused: boolean; lastSentAt?: string }>;
 }
 
+/** One aggregated counter cell for agent analytics: day × surface × route/tool × tier × client × source. */
+export interface ApiUsageDim {
+  /** UTC date, YYYY-MM-DD. */
+  day: string;
+  surface: 'api' | 'mcp' | 'research';
+  /** Path template (`/api/leads/{id}`), MCP tool or method name, or the research file name. */
+  detail: string;
+  tier: 'guest' | 'member' | 'admin' | 'token';
+  /** User-Agent class: claude, codex, cursor, browser, bot, other. Never the raw string. */
+  client: string;
+  /** Attribution label from the whitelist ('' = direct/unknown). */
+  via: string;
+}
+
+/** The /admin/analytics view: counters and token actives, oldest day first, no gaps. */
+export interface AgentUsageStats {
+  days: Array<{ day: string; api: number; mcp: number; research: number }>;
+  details: Array<{ surface: string; detail: string; calls: number }>;
+  tokens: Array<{ day: string; active: number }>;
+  via: Array<{ via: string; calls: number }>;
+  clients: Array<{ client: string; calls: number }>;
+}
+
 /** The last `count` UTC dates ending today, oldest first. */
 export function lastDays(count: number, now: Date = new Date()): string[] {
   const out: string[] = [];
@@ -609,6 +632,12 @@ export interface Store extends HubStore {
   getAdminStats?(days?: number): Promise<AdminStats>;
   /** Operator view of the people on the service: who signed up, who acts, who consumes. */
   adminUsersOverview?(): Promise<AdminUsersData>;
+  /** Agent analytics: one aggregated counter upsert — never a per-call row, never an IP. */
+  bumpApiUsage?(dim: ApiUsageDim, calls?: number): Promise<void>;
+  /** Marks that this agent-token holder was active on the day (one row per token-day). */
+  touchTokenDay?(userId: number, day?: string): Promise<void>;
+  /** The /admin/analytics view over the counters for the last `days` days. */
+  agentUsageStats?(days?: number): Promise<AgentUsageStats>;
   /** Browser extension tokens, stored as SHA-256 hashes. */
   saveExtensionToken?(tokenHash: string, userId: number): Promise<void>;
   getUserByExtensionToken?(tokenHash: string): Promise<UserRecord | null>;
