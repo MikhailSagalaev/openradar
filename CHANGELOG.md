@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.81.0 — 2026-11-19
+
+- **+165 RU employer groups through the hh.ru company-name search feed** (five waves, PRs #101, #103, #104, #105, #106): one feed per group returns every hh account at once — «Сбербанк» alone brings «Сбер. IT», «Сбер. Работа с клиентами» and the rest of the subsidiaries. Banks (Сбер, ВТБ, Газпромбанк, ПСБ, МКБ, ОТП...), industry (Лукойл, Роснефть, Норникель, Газпром, Россети, Росатом, КАМАЗ, Ростсельмаш...), retail (Wildberries, Магнит, Лента, Спортмастер, Дикси...), IT (Софтлайн, Ланит, Крок, Nexign, Flant, Иннотех...), gamedev (Playrix, My Games, Gaijin), transport (РЖД, Аэрофлот, S7, Московский метрополитен), healthcare (МЕДСИ, Инвитро, Гемотест), insurers, developers, agro, media — each of the 165 feeds probed from production before it entered.
+- **BAE Systems Digital Intelligence joins the sitemap sources**: 83 vacancy URLs with a clean `/job/.+/(\\d+)/` pattern — the one directly convertible site of the hiring-without-whiteboards top domains.
+- Corporate Telegram channels of RU employers: «Яндекс нанимает», YandexCareers, MTS Digital, СИБУР, Lamoda Tech and two remote-work channels (v0.80.0).
+- СИБУР career site (sitemap-iblock-13) (v0.80.0).
+
 ## 0.80.0 — 2026-11-19
 
 - **Workday, the ATS of the largest employers, joins the adapters**: its career API takes a POST and pages by 20; the adapter reads the listing (title, place, requisition id), turns the relative «Posted N Days Ago» into dates, cleans «USA - Sunnyvale, CA» into a city, and feeds complete reads into the ghost-job diff. Boards live in one source as `tenant@wd5=Company|site` entries; the seed shard holds NVIDIA (2,000 live jobs), AstraZeneca (1,475), Boeing (893), Pfizer (723), GE Aerospace (612), TTM Technologies (311) and Unilever (284), all probed from production.
