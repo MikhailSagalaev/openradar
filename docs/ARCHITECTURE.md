@@ -268,7 +268,7 @@ const ok = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(req.headers
 - `GET|POST /extension/connect`, `/api/ext/me`, `/api/ext/submit`, `DELETE /api/ext/token` — вход расширения через GitHub: токен `ext_…` только на добавление заказов, хранится SHA-256, возвращается лишь на `https://<id>.chromiumapp.org/`.
 - `GET /me` — профиль вошедшего: уровень, задержка, рейтинг привязанного ключа, как подняться.
 - `GET /yandex_<код>.html` — подтверждение Яндекс Вебмастера, если задан `RADAR_YANDEX_VERIFICATION`. Счётчики Метрики и Google Analytics и мета-тег Search Console выводятся только при `RADAR_YANDEX_METRIKA_ID`, `RADAR_GA_ID`, `RADAR_GOOGLE_SITE_VERIFICATION`; CSP расширяется на их домены только тогда же.
-- `GET /og.png` — карточка для соцсетей; `og:image` и абсолютный `og:url` выводятся, когда задан `RADAR_PUBLIC_URL`.
+- `GET /og.png`, `GET /og-en.png` — карточки для соцсетей (RU/EN); `og:image` и абсолютный `og:url` выводятся, когда задан `RADAR_PUBLIC_URL`. Английскую карточку получают посетители с `lang=en` и кроулер X/Twitter (`Twitterbot`): `resolveLang` для него всегда возвращает `en`, поэтому сниппет ссылки в X английский.
 - `GET /assets/app.<hash>.css`, `GET /assets/logo.<hash>.svg` — стили и логотип с годовым кэшем; хэш меняется вместе с содержимым.
 - `GET /api/delta` — поток изменений для синхронизации узлов (JSON/NDJSON).
 - `GET /sources`, `/sources/new`, `/sources/:id`, `/sources/:id/edit` — дашборд источников.

@@ -2425,6 +2425,7 @@ export function layout(input: {
 }): string {
   const lang = input.lang ?? 'ru';
   const t = getTranslations(lang);
+  const ogImagePath = lang === 'en' ? '/og-en.png' : '/og.png';
   const nav = (key: 'leads' | 'sources' | 'extension' | 'research' | 'network' | 'employers', label: string, href: string): string =>
     `<a href="${href}"${input.active === key ? ' class="active"' : ''}>${label}</a>`;
 
@@ -2472,11 +2473,11 @@ export function layout(input: {
 <meta property="og:site_name" content="openradar">
 <meta property="og:title" content="${escapeHtml(input.title)} · openradar">
 <meta property="og:type" content="website">
-${publicBaseUrl ? `<meta property="og:image" content="${escapeHtml(publicBaseUrl)}/og.png">
+${publicBaseUrl ? `<meta property="og:image" content="${escapeHtml(publicBaseUrl)}${ogImagePath}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="${escapeHtml(publicBaseUrl)}/og.png">` : '<meta name="twitter:card" content="summary">'}
+<meta name="twitter:image" content="${escapeHtml(publicBaseUrl)}${ogImagePath}">` : '<meta name="twitter:card" content="summary">'}
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="alternate" type="application/rss+xml" title="${lang === 'en' ? 'openradar — fresh gigs and jobs' : 'openradar — свежие заказы и вакансии'}" href="/feed.rss">
 ${input.head ?? ''}

@@ -621,6 +621,9 @@ export function detectBrowserLang(header?: string): SupportedLang {
 }
 
 export function resolveLang(c: Context): SupportedLang {
+  // X/Twitter previews the link for an international audience: its crawler
+  // always gets the English card, whatever the cookie or Accept-Language says.
+  if (/(^|[\s/])Twitterbot([/\s]|$)/i.test(c.req.header('user-agent') ?? '')) return 'en';
   const queryLang = c.req.query('lang');
   if (queryLang === 'en' || queryLang === 'ru') {
     try {
