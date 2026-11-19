@@ -101,8 +101,10 @@ describe('/admin/analytics', () => {
 describe('model pay stats (план D3)', () => {
   it('counts leads with model facts and model pay per day', async () => {
     const runtime = makeTestRuntime({ RADAR_ADMIN_TOKEN: 'secret', RADAR_PUBLIC_READ: true });
+    // PostgreSQL enforces leads_source_id_fkey: the source row must exist first (memory does not).
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'Analytics test feed' });
     const today = new Date().toISOString();
-    const base = { sourceId: 's1', fingerprint: `fp-${today}`, titleKey: 'x', status: 'new', score: 50, reasons: [], createdAt: today };
+    const base = { sourceId: source.id, fingerprint: `fp-${today}`, titleKey: 'x', status: 'new', score: 50, reasons: [], createdAt: today };
     await runtime.store.insertLead({ ...base, id: 'l1', type: 'job', title: 'A', text: 'A' } as never);
     await runtime.store.insertLead({ ...base, id: 'l2', type: 'job', title: 'B', text: 'B', fingerprint: 'fp-2' } as never);
     await runtime.store.saveLeadModelFacts!('l1', { v: 2, model: 'm', at: today, facts: { isPost: true, confidence: 0.9, payMin: 100, payMax: 200, currency: 'USD', period: 'project', role: 'backend', skills: [] } } as never);
