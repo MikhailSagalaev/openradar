@@ -34,6 +34,7 @@ import { filterOptions, IT_SKILLS, matchesSavedFilters, parseFeedFilters, type F
 import { computeInsights, estimateMarket } from '../core/market.ts';
 import { COLLECTOR_MAX_ORDERS, COLLECTOR_PLATFORMS, collectedOrderToRaw, type CollectorPlatform, COLLECTOR_SITES, collectedVacancyToRaw, type CollectorSite } from './collector.ts';
 import { configureRateLimit, rateLimit } from './ratelimit.ts';
+import { countResearch, countTokenDay, countUsage, pathTemplate, tierOf, usageDim, viaFrom } from './usage.ts';
 import { indexCsv, openradarIndex } from '../research/index.ts';
 import { qualityFlagsOf } from '../core/quality.ts';
 import { explainLead } from '../core/explain.ts';
@@ -1032,6 +1033,24 @@ export function createApp(runtime: Runtime): Hono {
   // shrink 70–85% on the wire. Hono skips text/event-stream (the SSE feeds), already-encoded
   // bodies and clients without Accept-Encoding, so nothing else changes.
   app.use('*', compress());
+
+  // Agent analytics (план A): one aggregated counter per API/v2 call that answered below 400.
+  // Counted after the response, fire-and-forget — an analytics failure never breaks the reply.
+  // Known blind spot: nginx microcache serves some guest GETs without reaching the origin.
+  const apiUsageCounter = async (c: Context, next: Next): Promise<void> => {
+    await next();
+    if (c.res.status >= 400 || !runtime.store.bumpApiUsage) return;
+    const viewer = await viewerFromRequest(c, runtime);
+    countUsage(runtime, usageDim({
+      surface: 'api',
+      detail: pathTemplate(c.req.path),
+      tier: tierOf(viewer),
+      ua: c.req.header('user-agent'),
+      via: viaFrom(c),
+    }));
+  };
+  app.use('/api/*', apiUsageCounter);
+  app.use('/v2/*', apiUsageCounter);
 
   app.use('*', async (c, next) => {
     // frame-ancestors governs framing; X-Frame-Options only when nothing may frame us.
@@ -2729,6 +2748,18 @@ export function createApp(runtime: Runtime): Hono {
     }
     const { handleMcpRequest } = await import('../mcp/server.ts');
     const viewer = agent ? await viewerForUser(runtime, agent.id) : await viewerFromRequest(c, runtime);
+    // Agent analytics: every authorized JSON-RPC call counts; tools/call also names the tool.
+    const rpc = body as { method?: unknown; params?: { name?: unknown } | unknown[] };
+    const rpcMethod = typeof rpc.method === 'string' ? rpc.method : 'unknown';
+    const toolName = rpcMethod === 'tools/call' && rpc.params && !Array.isArray(rpc.params) && typeof rpc.params.name === 'string' ? `:${rpc.params.name}` : '';
+    countUsage(runtime, usageDim({
+      surface: 'mcp',
+      detail: `${rpcMethod}${toolName}`,
+      tier: agent ? 'token' : tierOf(viewer),
+      ua: c.req.header('user-agent'),
+      via: viaFrom(c),
+    }));
+    if (agent) countTokenDay(runtime, agent.id);
     const manageUrl = `${publicBaseUrl(c, runtime)}/me#subscriptions`;
     const resp = await handleMcpRequest(body, {
       subscriptions: agent
@@ -3433,11 +3464,13 @@ export function createApp(runtime: Runtime): Hono {
   });
   app.get('/research/index.json', async (c) => {
     const index = await openradarIndex(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+    countResearch(c, runtime, 'index.json');
     // The index is cached for an hour server-side; clients may hold it for 10 minutes.
     return c.json(index, 200, { 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=600' });
   });
   app.get('/research/index.csv', async (c) => {
     const index = await openradarIndex(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+    countResearch(c, runtime, 'index.csv');
     return c.body(indexCsv(index), 200, {
       'content-type': 'text/csv; charset=utf-8',
       'content-disposition': 'attachment; filename="openradar-index.csv"',
@@ -3469,11 +3502,13 @@ export function createApp(runtime: Runtime): Hono {
   app.get('/research/methodology', async (c) => toEnglish(c, '/research/methodology') ?? c.html(renderMethodologyPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime) })));
   app.get('/research/report.json', async (c) => {
     const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+    countResearch(c, runtime, 'report.json');
     // The report itself is rebuilt at most every 15 minutes; let clients hold it for 5.
     return c.json(report, 200, { 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=300' });
   });
   app.get('/research/dataset.csv', async (c) => {
     const { records } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+    countResearch(c, runtime, 'dataset.csv');
     return c.body(datasetCsv(records), 200, {
       'content-type': 'text/csv; charset=utf-8',
       'content-disposition': 'attachment; filename="openradar-dataset.csv"',
