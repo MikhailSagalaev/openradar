@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.79.6 — 2026-11-19
+
+- **`radar refilter` streams pages instead of loading the whole window**: a 30-day pass over hundreds of thousands of posts previously accumulated every lead in memory and exhausted the Node heap (OOM). It now processes each page as it arrives, retaining only seen ids for page-edge dedup, so a full-window retro pass runs in bounded memory.
+
 ## 0.79.5 — 2026-11-19
 
 - **GREY_FINANCE no longer hides legitimate posts via a bare «дроп» substring**: the stem matched «гидропроект», «недропользователь», «автогидроподъемник», «гидропресс», «дропшиппинг» and SEO dropped domains, rejecting engineering, e-commerce and SEO vacancies. It is replaced with the unambiguous money-mule term «дроповод». A production dry run exposed this; 58 wrongly-hidden leads were restored.
