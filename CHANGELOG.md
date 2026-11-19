@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.80.0 — 2026-11-19
+
+- **Workday, the ATS of the largest employers, joins the adapters**: its career API takes a POST and pages by 20; the adapter reads the listing (title, place, requisition id), turns the relative «Posted N Days Ago» into dates, cleans «USA - Sunnyvale, CA» into a city, and feeds complete reads into the ghost-job diff. Boards live in one source as `tenant@wd5=Company|site` entries; the seed shard holds NVIDIA (2,000 live jobs), AstraZeneca (1,475), Boeing (893), Pfizer (723), GE Aerospace (612), TTM Technologies (311) and Unilever (284), all probed from production.
+- **Corporate Telegram channels of RU employers**: «Яндекс нанимает» (@ya_jobs), YandexCareers, MTS Digital, СИБУР and Lamoda Tech now feed the hub alongside the niche remote-work channels @distantsiya and @remote_job_ru — each checked alive and absent from the catalog.
+- **СИБУР career site** joins the sitemap sources (sitemap-iblock-13, `/vacancies/{slug}`).
+- `postJsonText` helper in `sources/http.ts`: a JSON POST under the same SSRF, redirect and size rules as `fetchText`.
+
 ## 0.79.6 — 2026-11-19
 
 - **`radar refilter` streams pages instead of loading the whole window**: a 30-day pass over hundreds of thousands of posts previously accumulated every lead in memory and exhausted the Node heap (OOM). It now processes each page as it arrives, retaining only seen ids for page-edge dedup, so a full-window retro pass runs in bounded memory.
