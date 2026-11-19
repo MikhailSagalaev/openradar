@@ -306,6 +306,29 @@ export function renderAdminAnalyticsPage(data: AdminAnalyticsPageData): string {
     ? 'No counted calls yet. Counters start with the next API, MCP or research-file request after this release.'
     : 'Посчитанных вызовов ещё нет. Счётчики начнут заполняться с первым запросом API, MCP или research-файла после этого релиза.';
 
+  const goods = data.modelPay?.filter((d) => d.leads > 0) ?? [];
+  const goods7 = goods.slice(-7);
+  const goodsSum = (pick: (d: NonNullable<AdminAnalyticsPageData['modelPay']>[number]) => number) => goods7.reduce((acc, d) => acc + pick(d), 0);
+  const share = (part: number, whole: number): string => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : '—');
+  const goodsTiles: Array<[string, string]> = isEn
+    ? [
+        ['Model facts share, 7 days', share(goodsSum((d) => d.withFacts), goodsSum((d) => d.leads))],
+        ['Model pay share, 7 days', share(goodsSum((d) => d.withPay), goodsSum((d) => d.leads))],
+      ]
+    : [
+        ['Доля фактов от модели, 7 дней', share(goodsSum((d) => d.withFacts), goodsSum((d) => d.leads))],
+        ['Доля оплаты от модели, 7 дней', share(goodsSum((d) => d.withPay), goodsSum((d) => d.leads))],
+      ];
+  const goodsRows = goods
+    .slice(-14)
+    .map((d) => `<tr>
+      <td class="small muted">${escapeHtml(d.day)}</td>
+      <td class="num">${number(d.leads, lang)}</td>
+      <td class="num">${number(d.withFacts, lang)} <span class="muted small">(${share(d.withFacts, d.leads)})</span></td>
+      <td class="num">${number(d.withPay, lang)} <span class="muted small">(${share(d.withPay, d.leads)})</span></td>
+    </tr>`)
+    .join('');
+
   const body = `<div class="page-head"><div><h1>${isEn ? 'Agent Analytics' : 'Аналитика агентов'}</h1>
   <p class="muted small">${isEn
     ? 'Aggregated daily counters over the API, MCP and research surfaces. No per-call rows: a day × route × tier × client-class × via-label cell holds one number. Guest GETs served by the edge cache are not counted.'
@@ -331,7 +354,17 @@ ${renderAdminTabs('analytics', isEn)}
     <table><tbody>${viaRows || `<tr><td class="muted">—</td></tr>`}</tbody></table>
   </section>
 </div>
-<p class="muted small">${isEn ? 'Attribution: distribution links carry a whitelisted ?via= label; an absent or unknown label counts as direct.' : 'Атрибуция: ссылки дистрибуции несут метку ?via= из белого списка; без метки или с неизвестной — считается «напрямую».'}</p>`;
+<p class="muted small">${isEn ? 'Attribution: distribution links carry a whitelisted ?via= label; an absent or unknown label counts as direct.' : 'Атрибуция: ссылки дистрибуции несут метку ?via= из белого списка; без метки или с неизвестной — считается «напрямую».'}</p>
+${goodsRows ? `<div class="admin-tiles" style="margin-top:1rem">
+  ${goodsTiles.map(([label, value]) => `<div class="admin-tile"><div class="admin-tile-label">${escapeHtml(label)}</div><div class="admin-tile-value">${value}</div></div>`).join('')}
+</div>
+<section class="card" style="margin-top:1rem">
+  <h2>${isEn ? 'Data goods: model facts and pay (plan D3)' : 'Товар: факты и оплата от модели (план D3)'}</h2>
+  <table>
+    <thead><tr><th>${isEn ? 'Day' : 'День'}</th><th>${isEn ? 'Leads' : 'Лиды'}</th><th>${isEn ? 'With facts' : 'С фактами'}</th><th>${isEn ? 'With model pay' : 'С оплатой от модели'}</th></tr></thead>
+    <tbody>${goodsRows}</tbody>
+  </table>
+</section>` : ''}`;
 
   return layout({ title: isEn ? 'Agent Analytics' : 'Аналитика агентов', version: data.version, body, auth: data.auth, lang });
 }
@@ -340,4 +373,6 @@ export interface AdminAnalyticsPageData extends AgentUsageStats {
   version: string;
   auth?: AuthDisplay;
   lang?: SupportedLang;
+  /** План D3: the extract-goods rows, when the store serves them. */
+  modelPay?: Array<{ day: string; leads: number; withFacts: number; withPay: number }>;
 }

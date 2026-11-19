@@ -41,6 +41,7 @@ import type {
   AdminStats,
   AdminUsersData,
   AgentUsageStats,
+  ModelPayDay,
   ApiUsageDim,
   UserTelegramAccountInput,
   UserTelegramAccountRecord,
@@ -1504,6 +1505,24 @@ export class PostgresStore implements Store {
         lastSentAt: r.last_sent_at ? new Date(r.last_sent_at).toISOString() : undefined,
       })),
     };
+  }
+
+  async modelPayStats(days = 14): Promise<ModelPayDay[]> {
+    const window = lastDays(days);
+    const res = await this.pool.query(
+      `SELECT created_at::date::text AS day,
+              COUNT(*) AS leads,
+              COUNT(*) FILTER (WHERE metadata_json->'model'->'facts' IS NOT NULL) AS with_facts,
+              COUNT(*) FILTER (WHERE metadata_json->'model'->'facts'->>'payMin' IS NOT NULL
+                                OR metadata_json->'model'->'facts'->>'payMax' IS NOT NULL) AS with_pay
+         FROM leads
+        WHERE created_at >= $1::timestamptz AND status <> 'rejected'
+        GROUP BY 1`,
+      [`${window[0]}T00:00:00Z`],
+    );
+    const num = (v: unknown): number => parseInt(String(v ?? '0'), 10) || 0;
+    const byDay = new Map(res.rows.map((r) => [String(r.day), { leads: num(r.leads), withFacts: num(r.with_facts), withPay: num(r.with_pay) }]));
+    return window.map((day) => ({ day, ...(byDay.get(day) ?? { leads: 0, withFacts: 0, withPay: 0 }) }));
   }
 
   async bumpApiUsage(dim: ApiUsageDim, calls = 1): Promise<void> {

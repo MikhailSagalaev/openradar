@@ -97,3 +97,25 @@ describe('/admin/analytics', () => {
     await runtime.store.close();
   });
 });
+
+describe('model pay stats (план D3)', () => {
+  it('counts leads with model facts and model pay per day', async () => {
+    const runtime = makeTestRuntime({ RADAR_ADMIN_TOKEN: 'secret', RADAR_PUBLIC_READ: true });
+    const today = new Date().toISOString();
+    const base = { sourceId: 's1', fingerprint: `fp-${today}`, titleKey: 'x', status: 'new', score: 50, reasons: [], createdAt: today };
+    await runtime.store.insertLead({ ...base, id: 'l1', type: 'job', title: 'A', text: 'A' } as never);
+    await runtime.store.insertLead({ ...base, id: 'l2', type: 'job', title: 'B', text: 'B', fingerprint: 'fp-2' } as never);
+    await runtime.store.saveLeadModelFacts!('l1', { v: 2, model: 'm', at: today, facts: { isPost: true, confidence: 0.9, payMin: 100, payMax: 200, currency: 'USD', period: 'project', role: 'backend', skills: [] } } as never);
+
+    const stats = await runtime.store.modelPayStats!(3);
+    const day = stats.at(-1)!;
+    expect(day.leads).toBe(2);
+    expect(day.withFacts).toBe(1);
+    expect(day.withPay).toBe(1);
+
+    const app = createApp(runtime);
+    const page = await (await app.request('/admin/analytics', { headers: { authorization: 'Bearer secret' } })).text();
+    expect(page).toContain('Товар: факты и оплата от модели');
+    await runtime.store.close();
+  });
+});
