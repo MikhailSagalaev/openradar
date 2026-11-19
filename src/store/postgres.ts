@@ -1680,6 +1680,7 @@ export class PostgresStore implements Store {
       score: r.score,
       reasons: Array.isArray(r.reasons_json) ? r.reasons_json : JSON.parse(r.reasons_json || '[]'),
       createdAt: new Date(r.created_at).toISOString(),
+      archivedAt: r.archived_at ? new Date(r.archived_at).toISOString() : undefined,
       deliveredAt: r.delivered_at ? new Date(r.delivered_at).toISOString() : undefined,
       type: r.type === 'job' ? 'job' : 'gig',
       rawSalary: r.raw_salary || undefined,
@@ -2372,6 +2373,41 @@ export class PostgresStore implements Store {
       [retentionDays]
     );
     return res.rowCount ?? 0;
+  }
+
+  /** Soft archive: hide leads older than hotDays from the feed/API; nothing is deleted. */
+  async archiveOldLeads(hotDays: number): Promise<number> {
+    const res = await this.pool.query(
+      `UPDATE leads SET archived_at = NOW() WHERE archived_at IS NULL AND created_at < NOW() - ($1 || ' days')::interval`,
+      [hotDays],
+    );
+    return res.rowCount ?? 0;
+  }
+
+  /** Cold export: fully-archived months as gzipped JSONL, one file per month. */
+  async exportArchivedLeads(dir: string, hotDays: number): Promise<string[]> {
+    mkdirSync(dir, { recursive: true });
+    const hotEnd = new Date(Date.now() - (hotDays + 1) * 24 * 3600 * 1000).toISOString();
+    const res = await this.pool.query(
+      `SELECT * FROM leads
+       WHERE archived_at IS NOT NULL AND (date_trunc('month', created_at) + interval '1 month') <= $1::timestamptz
+       ORDER BY created_at, id`,
+      [hotEnd],
+    );
+    const byMonth = new Map<string, Lead[]>();
+    for (const r of res.rows) {
+      const lead = this.rowToLead(r);
+      const month = lead.createdAt.slice(0, 7);
+      byMonth.set(month, [...(byMonth.get(month) ?? []), lead]);
+    }
+    const written: string[] = [];
+    for (const [month, rows] of byMonth) {
+      const file = join(dir, `leads-${month}.jsonl.gz`);
+      if (existsSync(file)) continue;
+      writeFileSync(file, gzipSync(Buffer.from(rows.map((l) => JSON.stringify(l)).join('\n'), 'utf-8')));
+      written.push(file);
+    }
+    return written;
   }
 
   // --- radar/2 hub ---
