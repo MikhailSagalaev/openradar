@@ -73,6 +73,21 @@ describe('ATS source adapter', () => {
     expect(leads).toHaveLength(2);
   });
 
+  it('reads Workday boards through the POST listing, with relative dates and a cleaned city', async () => {
+    const source = makeSource({ kind: 'ats', config: { provider: 'workday', companies: ['crowdstrike@wd5=CrowdStrike|crowdstrikecareers'], perCompany: 5, maxAgeDays: 365, vendorPaceMs: 0 } });
+    const leads = await adapter.poll!(source, served({ '/wday/cxs/crowdstrike/crowdstrikecareers/jobs': fixture('ats-workday.json') }));
+    expect(leads.length).toBeGreaterThan(3);
+    const lead = leads[0]!;
+    expect(lead).toMatchObject({ type: 'job', author: 'CrowdStrike', isRemote: false });
+    expect(lead.city).toBeUndefined();
+    expect(lead.externalId).toBe('workday:crowdstrike:R30431');
+    expect(lead.url).toBe('https://crowdstrike.wd5.myworkdayjobs.com/en-US/crowdstrikecareers/job/USA---Sunnyvale-CA/Engineer-III--Cloud---Authentication---Authorization--Hybrid-_R30431');
+    // "Posted 2 Days Ago" counts from the fixed now of the test context.
+    expect(lead.publishedAt).toBe('2026-10-27T00:00:00.000Z');
+    // "USA - Sunnyvale, CA" names the city; "2 Locations" stays unnamed.
+    expect(leads[1]!.city).toBe('Sunnyvale');
+  });
+
   it('goes round the company list a few at a time and survives a missing board', async () => {
     const source = makeSource({ id: 'ats-round-robin', kind: 'ats', config: { provider: 'greenhouse', companies: 'gitlab, gone, bad/slug, other', perPoll: 2, maxAgeDays: 365, lightPoll: false, vendorPaceMs: 0 } });
     expect(companiesOf(source).map((c) => c.slug)).toEqual(['gitlab', 'gone', 'other']);

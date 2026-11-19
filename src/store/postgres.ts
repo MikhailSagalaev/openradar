@@ -40,6 +40,9 @@ import type {
   UserVoteResult,
   AdminStats,
   AdminUsersData,
+  AgentUsageStats,
+  ModelPayDay,
+  ApiUsageDim,
   UserTelegramAccountInput,
   UserTelegramAccountRecord,
   UserSourceInput,
@@ -1501,6 +1504,84 @@ export class PostgresStore implements Store {
         paused: Boolean(r.paused),
         lastSentAt: r.last_sent_at ? new Date(r.last_sent_at).toISOString() : undefined,
       })),
+    };
+  }
+
+  async modelPayStats(days = 14): Promise<ModelPayDay[]> {
+    const window = lastDays(days);
+    const res = await this.pool.query(
+      `SELECT created_at::date::text AS day,
+              COUNT(*) AS leads,
+              COUNT(*) FILTER (WHERE metadata_json->'model'->'facts' IS NOT NULL) AS with_facts,
+              COUNT(*) FILTER (WHERE metadata_json->'model'->'facts'->>'payMin' IS NOT NULL
+                                OR metadata_json->'model'->'facts'->>'payMax' IS NOT NULL) AS with_pay
+         FROM leads
+        WHERE created_at >= $1::timestamptz AND status <> 'rejected'
+        GROUP BY 1`,
+      [`${window[0]}T00:00:00Z`],
+    );
+    const num = (v: unknown): number => parseInt(String(v ?? '0'), 10) || 0;
+    const byDay = new Map(res.rows.map((r) => [String(r.day), { leads: num(r.leads), withFacts: num(r.with_facts), withPay: num(r.with_pay) }]));
+    return window.map((day) => ({ day, ...(byDay.get(day) ?? { leads: 0, withFacts: 0, withPay: 0 }) }));
+  }
+
+  async bumpApiUsage(dim: ApiUsageDim, calls = 1): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO api_usage_daily (day, surface, detail, tier, client, via, calls)
+       VALUES ($1::date, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (day, surface, detail, tier, client, via)
+       DO UPDATE SET calls = api_usage_daily.calls + EXCLUDED.calls`,
+      [dim.day, dim.surface, dim.detail, dim.tier, dim.client, dim.via, calls],
+    );
+  }
+
+  async touchTokenDay(userId: number, day = new Date().toISOString().slice(0, 10)): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO api_token_days (day, user_id) VALUES ($1::date, $2) ON CONFLICT DO NOTHING`,
+      [day, userId],
+    );
+  }
+
+  async agentUsageStats(days = 14): Promise<AgentUsageStats> {
+    const window = lastDays(days);
+    const since = window[0]!;
+    const num = (v: unknown): number => parseInt(String(v ?? '0'), 10) || 0;
+    const [byDay, details, tokens, via, clients] = await Promise.all([
+      this.pool.query(
+        `SELECT day::text, surface, SUM(calls) AS calls FROM api_usage_daily WHERE day >= $1::date GROUP BY 1, 2`,
+        [since],
+      ),
+      this.pool.query(
+        `SELECT surface, detail, SUM(calls) AS calls FROM api_usage_daily WHERE day >= $1::date
+         GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 12`,
+        [since],
+      ),
+      this.pool.query(
+        `SELECT day::text, COUNT(*) AS active FROM api_token_days WHERE day >= $1::date GROUP BY 1`,
+        [since],
+      ),
+      this.pool.query(
+        `SELECT via, SUM(calls) AS calls FROM api_usage_daily WHERE day >= $1::date GROUP BY 1 ORDER BY 2 DESC LIMIT 12`,
+        [since],
+      ),
+      this.pool.query(
+        `SELECT client, SUM(calls) AS calls FROM api_usage_daily WHERE day >= $1::date GROUP BY 1 ORDER BY 2 DESC LIMIT 12`,
+        [since],
+      ),
+    ]);
+    const dayCell = new Map(byDay.rows.map((r) => [`${r.day}:${r.surface}`, num(r.calls)]));
+    const tokenCell = new Map(tokens.rows.map((r) => [String(r.day), num(r.active)]));
+    return {
+      days: window.map((day) => ({
+        day,
+        api: dayCell.get(`${day}:api`) ?? 0,
+        mcp: dayCell.get(`${day}:mcp`) ?? 0,
+        research: dayCell.get(`${day}:research`) ?? 0,
+      })),
+      details: details.rows.map((r) => ({ surface: String(r.surface), detail: String(r.detail), calls: num(r.calls) })),
+      tokens: window.map((day) => ({ day, active: tokenCell.get(day) ?? 0 })),
+      via: via.rows.map((r) => ({ via: String(r.via) || 'direct', calls: num(r.calls) })),
+      clients: clients.rows.map((r) => ({ client: String(r.client), calls: num(r.calls) })),
     };
   }
 

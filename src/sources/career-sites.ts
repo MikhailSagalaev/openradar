@@ -53,6 +53,7 @@ const SITES: CareerSite[] = [
   { id: 'career-abbott', name: 'Abbott', sitemap: 'https://abbott.wd5.myworkdayjobs.com/abbottcareers/siteMap.xml', pattern: String.raw`/job/[^/]+/([^/]+)`, company: true },
   { id: 'career-elevance', name: 'Elevance Health', sitemap: 'https://elevancehealth.wd1.myworkdayjobs.com/ANT/siteMap.xml', pattern: String.raw`/job/[^/]+/([^/]+)`, company: true },
   { id: 'career-damate', name: 'Дамате', sitemap: 'https://www.acdamate.com/sitemap_000.xml', pattern: String.raw`/job/[^/]+/[^/]+/([a-z0-9-]+)`, company: true },
+  { id: 'career-sibur', name: 'СИБУР', sitemap: 'https://career.sibur.ru/sitemap-iblock-13.xml', pattern: String.raw`/vacancies/([a-z0-9_-]+)`, company: true },
   { id: 'career-cdek', name: 'СДЭК', list: 'https://rabota.cdek.ru/vacancies/', pattern: String.raw`/vacancies/item/(\d+)`, company: true },
   { id: 'career-azur', name: 'Azur Games', list: 'https://azurgames.com/ru/jobs/', pattern: String.raw`/ru/jobs/([a-z0-9-]+)/?$`, company: true },
   { id: 'career-kaspersky', name: 'Лаборатория Касперского', list: 'https://careers.kaspersky.ru/vacancy/', pattern: String.raw`/vacancy/(\d+)`, company: true },

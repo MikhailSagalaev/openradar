@@ -1,4 +1,4 @@
-import type { AdminStats, AdminUsersData } from '../core/store.ts';
+import type { AdminStats, AdminUsersData, AgentUsageStats } from '../core/store.ts';
 import { escapeHtml } from '../core/text.ts';
 import type { SourceHealth, Stats } from '../core/types.ts';
 import type { ServiceCheck } from '../core/services.ts';
@@ -21,12 +21,13 @@ const number = (value: number, lang: SupportedLang = 'ru'): string =>
   new Intl.NumberFormat(lang === 'en' ? 'en-US' : 'ru-RU').format(value);
 
 /** Operator dashboard: volume by day, sources, people, links to the analytics consoles. */
-export type AdminTab = 'overview' | 'users' | 'decisions' | 'labels' | 'sources';
+export type AdminTab = 'overview' | 'users' | 'analytics' | 'decisions' | 'labels' | 'sources';
 
 export function renderAdminTabs(active: AdminTab, isEn: boolean): string {
   const tabs = [
     { key: 'overview', href: '/admin', label: isEn ? 'Overview' : 'Обзор' },
     { key: 'users', href: '/admin/users', label: isEn ? 'Users' : 'Пользователи' },
+    { key: 'analytics', href: '/admin/analytics', label: isEn ? 'Agent analytics' : 'Аналитика агентов' },
     { key: 'decisions', href: '/admin/decisions', label: isEn ? 'Decisions' : 'Решения модели' },
     { key: 'labels', href: '/admin/labels', label: isEn ? 'Labels' : 'Ручная разметка' },
     { key: 'sources', href: '/sources/quality', label: isEn ? 'Source Quality' : 'Качество источников' },
@@ -246,4 +247,132 @@ export interface AdminUsersPageData extends AdminUsersData {
   version: string;
   auth?: AuthDisplay;
   lang?: SupportedLang;
+}
+
+/** Agent analytics (/admin/analytics): aggregated counters, no per-call rows exist. */
+export function renderAdminAnalyticsPage(data: AdminAnalyticsPageData): string {
+  const { days, details, tokens, via, clients } = data;
+  const lang = data.lang ?? 'ru';
+  const isEn = lang === 'en';
+  const last7 = days.slice(-7);
+  const sum = (pick: (d: AgentUsageStats['days'][number]) => number) => last7.reduce((acc, d) => acc + pick(d), 0);
+  const tokensToday = tokens.at(-1)?.active ?? 0;
+  const tokens7 = tokens.filter((t) => t.active > 0 && last7.some((d) => d.day === t.day)).length;
+
+  const tiles: Array<[string, string]> = isEn
+    ? [
+        ['API calls, 7 days', number(sum((d) => d.api), lang)],
+        ['MCP calls, 7 days', number(sum((d) => d.mcp), lang)],
+        ['Research files, 7 days', number(sum((d) => d.research), lang)],
+        ['Active agent tokens today', number(tokensToday, lang)],
+        ['Days with tokens, 7 days', `${number(tokens7, lang)} / 7`],
+      ]
+    : [
+        ['Вызовы API, 7 дней', number(sum((d) => d.api), lang)],
+        ['Вызовы MCP, 7 дней', number(sum((d) => d.mcp), lang)],
+        ['Research-файлы, 7 дней', number(sum((d) => d.research), lang)],
+        ['Активные токены агентов сегодня', number(tokensToday, lang)],
+        ['Дни с токенами, 7 дней', `${number(tokens7, lang)} / 7`],
+      ];
+
+  const maxTotal = Math.max(1, ...days.map((d) => d.api + d.mcp + d.research));
+  const dayRows = days
+    .map((d) => {
+      const total = d.api + d.mcp + d.research;
+      const pct = Math.round((total / maxTotal) * 100);
+      const bar = `<span aria-hidden="true" style="display:inline-block;width:120px;height:8px;background:rgba(127,127,127,.2);border-radius:4px;vertical-align:middle;overflow:hidden"><span style="display:block;height:8px;max-width:100%;width:${pct}%;background:#2dd4bf;border-radius:4px"></span></span>`;
+      return `<tr>
+        <td class="small muted">${escapeHtml(d.day)}</td>
+        <td class="num">${number(d.api, lang)}</td>
+        <td class="num">${number(d.mcp, lang)}</td>
+        <td class="num">${number(d.research, lang)}</td>
+        <td class="num">${number(tokens.find((t) => t.day === d.day)?.active ?? 0, lang)}</td>
+        <td>${bar}</td>
+      </tr>`;
+    })
+    .join('');
+
+  const detailRows = details
+    .map((d) => `<tr><td><span class="muted small">${escapeHtml(d.surface)}</span> <strong>${escapeHtml(d.detail)}</strong></td><td class="num">${number(d.calls, lang)}</td></tr>`)
+    .join('');
+  const viaRows = via
+    .map((v) => `<tr><td><strong>${escapeHtml(v.via === 'direct' ? (isEn ? 'direct / no label' : 'напрямую / без метки') : v.via)}</strong></td><td class="num">${number(v.calls, lang)}</td></tr>`)
+    .join('');
+  const clientRows = clients
+    .map((v) => `<tr><td><strong>${escapeHtml(v.client)}</strong></td><td class="num">${number(v.calls, lang)}</td></tr>`)
+    .join('');
+
+  const empty = isEn
+    ? 'No counted calls yet. Counters start with the next API, MCP or research-file request after this release.'
+    : 'Посчитанных вызовов ещё нет. Счётчики начнут заполняться с первым запросом API, MCP или research-файла после этого релиза.';
+
+  const goods = data.modelPay?.filter((d) => d.leads > 0) ?? [];
+  const goods7 = goods.slice(-7);
+  const goodsSum = (pick: (d: NonNullable<AdminAnalyticsPageData['modelPay']>[number]) => number) => goods7.reduce((acc, d) => acc + pick(d), 0);
+  const share = (part: number, whole: number): string => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : '—');
+  const goodsTiles: Array<[string, string]> = isEn
+    ? [
+        ['Model facts share, 7 days', share(goodsSum((d) => d.withFacts), goodsSum((d) => d.leads))],
+        ['Model pay share, 7 days', share(goodsSum((d) => d.withPay), goodsSum((d) => d.leads))],
+      ]
+    : [
+        ['Доля фактов от модели, 7 дней', share(goodsSum((d) => d.withFacts), goodsSum((d) => d.leads))],
+        ['Доля оплаты от модели, 7 дней', share(goodsSum((d) => d.withPay), goodsSum((d) => d.leads))],
+      ];
+  const goodsRows = goods
+    .slice(-14)
+    .map((d) => `<tr>
+      <td class="small muted">${escapeHtml(d.day)}</td>
+      <td class="num">${number(d.leads, lang)}</td>
+      <td class="num">${number(d.withFacts, lang)} <span class="muted small">(${share(d.withFacts, d.leads)})</span></td>
+      <td class="num">${number(d.withPay, lang)} <span class="muted small">(${share(d.withPay, d.leads)})</span></td>
+    </tr>`)
+    .join('');
+
+  const body = `<div class="page-head"><div><h1>${isEn ? 'Agent Analytics' : 'Аналитика агентов'}</h1>
+  <p class="muted small">${isEn
+    ? 'Aggregated daily counters over the API, MCP and research surfaces. No per-call rows: a day × route × tier × client-class × via-label cell holds one number. Guest GETs served by the edge cache are not counted.'
+    : 'Агрегированные дневные счётчики по поверхностям API, MCP и research. Почасовых строк нет: одна цифра на ячейку день × маршрут × уровень × класс клиента × метка источника. Гостевые GET из edge-кэша не считаются.'}</p></div></div>
+${renderAdminTabs('analytics', isEn)}
+<div class="admin-tiles">
+  ${tiles.map(([label, value]) => `<div class="admin-tile"><div class="admin-tile-label">${escapeHtml(label)}</div><div class="admin-tile-value">${value}</div></div>`).join('')}
+</div>
+<div class="admin-grid">
+  <section class="card">
+    <h2>${isEn ? 'By day (last 14)' : 'По дням (14 дней)'}</h2>
+    <table>
+      <thead><tr><th>${isEn ? 'Day' : 'День'}</th><th>API</th><th>MCP</th><th>Research</th><th>${isEn ? 'Tokens' : 'Токены'}</th><th></th></tr></thead>
+      <tbody>${dayRows || `<tr><td colspan="6" class="muted">${empty}</td></tr>`}</tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2>${isEn ? 'Top routes and tools' : 'Топ маршрутов и инструментов'}</h2>
+    <table><tbody>${detailRows || `<tr><td class="muted">${empty}</td></tr>`}</tbody></table>
+    <h2>${isEn ? 'Client classes' : 'Классы клиентов'}</h2>
+    <table><tbody>${clientRows || `<tr><td class="muted">—</td></tr>`}</tbody></table>
+    <h2>${isEn ? 'Where they came from' : 'Откуда пришли'}</h2>
+    <table><tbody>${viaRows || `<tr><td class="muted">—</td></tr>`}</tbody></table>
+  </section>
+</div>
+<p class="muted small">${isEn ? 'Attribution: distribution links carry a whitelisted ?via= label; an absent or unknown label counts as direct.' : 'Атрибуция: ссылки дистрибуции несут метку ?via= из белого списка; без метки или с неизвестной — считается «напрямую».'}</p>
+${goodsRows ? `<div class="admin-tiles" style="margin-top:1rem">
+  ${goodsTiles.map(([label, value]) => `<div class="admin-tile"><div class="admin-tile-label">${escapeHtml(label)}</div><div class="admin-tile-value">${value}</div></div>`).join('')}
+</div>
+<section class="card" style="margin-top:1rem">
+  <h2>${isEn ? 'Data goods: model facts and pay (plan D3)' : 'Товар: факты и оплата от модели (план D3)'}</h2>
+  <table>
+    <thead><tr><th>${isEn ? 'Day' : 'День'}</th><th>${isEn ? 'Leads' : 'Лиды'}</th><th>${isEn ? 'With facts' : 'С фактами'}</th><th>${isEn ? 'With model pay' : 'С оплатой от модели'}</th></tr></thead>
+    <tbody>${goodsRows}</tbody>
+  </table>
+</section>` : ''}`;
+
+  return layout({ title: isEn ? 'Agent Analytics' : 'Аналитика агентов', version: data.version, body, auth: data.auth, lang });
+}
+
+export interface AdminAnalyticsPageData extends AgentUsageStats {
+  version: string;
+  auth?: AuthDisplay;
+  lang?: SupportedLang;
+  /** План D3: the extract-goods rows, when the store serves them. */
+  modelPay?: Array<{ day: string; leads: number; withFacts: number; withPay: number }>;
 }
