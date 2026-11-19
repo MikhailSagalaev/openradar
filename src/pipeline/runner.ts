@@ -9,6 +9,7 @@ import { runDigestIfDue } from './digest.ts';
 import type { SubscriptionRound } from './subscriptions.ts';
 import { notifyPoints } from './points-notify.ts';
 import { auditSourceRobotsIfDue } from './robots-audit.ts';
+import { reportSilentDrops } from '../core/source-health.ts';
 import { checkLeadsLiveness } from './liveness.ts';
 import { recomputeRatings } from '../hub/rating.ts';
 import { parseModerators } from '../hub/service.ts';
@@ -20,6 +21,8 @@ import { newExtractProviders, type ExtractProviderPool } from '../research/provi
 import type { UserTelegramRound } from './user-telegram.ts';
 
 const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000;
+/** The silent-drop check scans two weeks of runs; every six hours is plenty. */
+const FLOW_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const BACKGROUND_INTERVAL_MS = 60 * 1000;
 const LIVENESS_INTERVAL_MS = 5 * 60 * 1000;
 const EXTRACTION_INTERVAL_MS = 2 * 60 * 1000;
@@ -43,6 +46,7 @@ export class PollRunner {
   private lastLivenessAt = 0;
   private livenessRunning = false;
   private lastMaintenanceAt = 0;
+  private lastFlowCheckAt = 0;
   private lastExtractionAt = 0;
   private extractionRunning = false;
   private decisionsRunning = false;
@@ -369,6 +373,14 @@ export class PollRunner {
       // храним их 30 дней, чтобы таблицы не росли бесконечно.
       const runs = await store.cleanupRuns?.(30);
       const sessions = await store.purgeExpiredSessions?.();
+      // A source that still answers but stopped bringing posts (a drifted feed URL) is invisible
+      // to the error-based hygiene: surface it separately, at most once every six hours.
+      if (Date.now() - this.lastFlowCheckAt >= FLOW_CHECK_INTERVAL_MS) {
+        this.lastFlowCheckAt = Date.now();
+        await reportSilentDrops(store, this.deps.services, this.logger).catch((error) => {
+          this.logger.warn('silent-drop check failed', { error: error instanceof Error ? error.message : String(error) });
+        });
+      }
       if (this.deps.env.RADAR_MODE === 'hub') {
         const secret = this.deps.env.RADAR_WEB_KEY_SECRET || this.deps.env.RADAR_ADMIN_TOKEN;
         const rating = await recomputeRatings(store, parseModerators(this.deps.env.RADAR_MODERATORS), new Date(), secret ? (id) => webPubkey(secret, id) : undefined);

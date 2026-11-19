@@ -51,6 +51,7 @@ import type { EmployerRow, EmployerSummary, SourceQualityInput, LeadFactsFill, L
 import type { PageFacts } from '../research/facts.ts';
 import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
 import { BROKEN_AFTER, countFailedInRow } from '../core/source-health.ts';
+import type { SourceFlowStats } from '../core/source-health.ts';
 import type { SubscriptionRecord } from '../core/subscriptions.ts';
 import type { VisaSponsorNote } from '../research/visa-sponsors.ts';
 
@@ -1101,6 +1102,36 @@ export class PostgresStore implements Store {
       unguard();
       client.release();
     }
+  }
+
+  async updateLeadStatusAndReasons(id: string, status: LeadStatus, reasons: string[]): Promise<void> {
+    await this.pool.query(
+      `UPDATE leads SET status = $1, reasons_json = $2::jsonb WHERE id = $3`,
+      [status, JSON.stringify(reasons), id],
+    );
+  }
+
+  async getFlowStats(days: number): Promise<SourceFlowStats[]> {
+    const res = await this.pool.query(
+      `SELECT s.id, s.title, s.enabled,
+         count(*) FILTER (WHERE r.started_at >= now() - ($1 || ' days')::interval) AS recent_runs,
+         count(*) FILTER (WHERE r.started_at >= now() - ($1 || ' days')::interval AND r.error IS NOT NULL) AS recent_errors,
+         COALESCE(sum(r.inserted) FILTER (WHERE r.started_at >= now() - ($1 || ' days')::interval), 0) AS recent_inserted,
+         count(*) FILTER (WHERE r.started_at < now() - ($1 || ' days')::interval) AS prev_runs,
+         count(*) FILTER (WHERE r.started_at < now() - ($1 || ' days')::interval AND r.error IS NOT NULL) AS prev_errors,
+         COALESCE(sum(r.inserted) FILTER (WHERE r.started_at < now() - ($1 || ' days')::interval), 0) AS prev_inserted
+       FROM sources s JOIN runs r ON r.source_id = s.id
+       WHERE r.started_at >= now() - ($2 || ' days')::interval
+       GROUP BY s.id, s.title, s.enabled`,
+      [days, days * 2],
+    );
+    return res.rows.map((r: any) => ({
+      sourceId: r.id,
+      title: r.title,
+      enabled: r.enabled,
+      recent: { runs: Number(r.recent_runs), errors: Number(r.recent_errors), inserted: Number(r.recent_inserted) },
+      previous: { runs: Number(r.prev_runs), errors: Number(r.prev_errors), inserted: Number(r.prev_inserted) },
+    }));
   }
 
   async recordVote(

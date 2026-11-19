@@ -1,6 +1,7 @@
 import type { LeadReview, ReviewBucket } from './reviews.ts';
 import type { LabelledDecision, ModelDecision } from './decisions.ts';
 import type { SourceQualityInput } from './source-quality.ts';
+import type { SourceFlowStats } from './source-health.ts';
 import type { PageFacts } from '../research/facts.ts';
 import type { WorkplaceType } from './text.ts';
 import type { SubscriptionRecord } from './subscriptions.ts';
@@ -452,6 +453,10 @@ export interface Store extends HubStore {
   listFxRates?(): Promise<Record<string, Record<string, number>>>;
   saveFxRates?(month: string, rates: Record<string, number>): Promise<void>;
   updateLeadStatus(id: string, status: LeadStatus, deliveredAt?: string, scoreDelta?: number): Promise<void>;
+  /** Retroactive spam rejection: status and the door reasons together (the refilter pass). */
+  updateLeadStatusAndReasons?(id: string, status: LeadStatus, reasons: string[]): Promise<void>;
+  /** Per-source poll flow over the last `days` and the `days` before them (silent-drop alert). */
+  getFlowStats?(days: number): Promise<SourceFlowStats[]>;
   /** Sets a recomputed base score; the stored score is the base plus the community vote adjustment. */
   updateLeadScore?(id: string, baseScore: number): Promise<number | undefined>;
   /** Leads whose stored title still opens with channel hashtags — the retitle pass's input. */

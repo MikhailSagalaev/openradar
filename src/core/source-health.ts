@@ -1,5 +1,6 @@
 import type { Store } from './store.ts';
-import type { SourceHealth } from './types.ts';
+import type { Logger, SourceHealth } from './types.ts';
+import type { ServiceMonitor } from './services.ts';
 
 /**
  * What a source is doing, in one word. «Broken» and «empty» are different answers: a feed that
@@ -134,4 +135,100 @@ export async function runSourceHygiene(store: Store, now = new Date()): Promise<
     backedOff,
     autoDisabled,
   };
+}
+
+/** One window of a source's poll flow: how many polls, how many failed, how many new posts. */
+export interface SourceFlowWindow {
+  runs: number;
+  errors: number;
+  inserted: number;
+}
+
+/** A source's flow over the last `days` (recent) and the `days` before them (previous). */
+export interface SourceFlowStats {
+  sourceId: string;
+  title: string;
+  enabled: boolean;
+  recent: SourceFlowWindow;
+  previous: SourceFlowWindow;
+}
+
+export interface SilentDrop {
+  sourceId: string;
+  title: string;
+  inserted: number;
+  previousInserted: number;
+  ratio: number;
+}
+
+/**
+ * A source that still answers but stopped bringing posts: the hh-1C case, where a feed URL
+ * drifted to a generic firehose and dedup absorbed everything, so inserts collapsed while
+ * polls stayed green. Errors are a different story (quarantine handles them); here the polls
+ * must be alive (few failures) and the previous window must have carried real volume, so a
+ * small or seasonal source is not cried wolf over. Only enabled sources count.
+ */
+export function detectSilentDrops(
+  stats: SourceFlowStats[],
+  opts: { minPrevious?: number; ratio?: number; minRuns?: number } = {},
+): SilentDrop[] {
+  const minPrevious = opts.minPrevious ?? 100;
+  const ratio = opts.ratio ?? 0.2;
+  const minRuns = opts.minRuns ?? 10;
+  const drops: SilentDrop[] = [];
+  for (const s of stats) {
+    if (!s.enabled) continue;
+    if (s.previous.inserted < minPrevious) continue;
+    if (s.recent.runs < minRuns) continue;
+    if (s.recent.errors > s.recent.runs * 0.2) continue;
+    if (s.recent.inserted < ratio * s.previous.inserted) {
+      drops.push({
+        sourceId: s.sourceId,
+        title: s.title,
+        inserted: s.recent.inserted,
+        previousInserted: s.previous.inserted,
+        ratio: s.recent.inserted / s.previous.inserted,
+      });
+    }
+  }
+  return drops.sort((a, b) => a.ratio - b.ratio);
+}
+
+/**
+ * Runs the silent-drop check and surfaces it: a warning per source, a degraded service entry
+ * the admin sees on /health, and one Telegram notice per day. Recording «ok» when nothing
+ * dropped clears a previous degraded entry. A store without getFlowStats is skipped.
+ */
+export async function reportSilentDrops(
+  store: Store,
+  services: ServiceMonitor | undefined,
+  logger: Logger,
+  opts: { days?: number; ratio?: number; minPrevious?: number } = {},
+): Promise<SilentDrop[]> {
+  if (!store.getFlowStats) return [];
+  const stats = await store.getFlowStats(opts.days ?? 7);
+  const drops = detectSilentDrops(stats, opts);
+  if (drops.length === 0) {
+    services?.record('source-flow', 'Поток источников', 'ok');
+    return drops;
+  }
+  for (const d of drops) {
+    logger.warn('source flow silently dropped', {
+      sourceId: d.sourceId,
+      title: d.title,
+      inserted: d.inserted,
+      previousInserted: d.previousInserted,
+      ratio: Number(d.ratio.toFixed(2)),
+    });
+  }
+  const summary = `${drops.length} источник(ов) тихо просели: ${drops
+    .slice(0, 5)
+    .map((d) => `${d.title} (${d.previousInserted}→${d.inserted})`)
+    .join('; ')}`;
+  services?.record('source-flow', 'Поток источников', 'degraded', { error: summary });
+  await services?.notify(
+    'source-flow',
+    `[openradar] Тихая просадка потока.\n${summary}\nОпросы живы, но новых постов почти нет — проверьте URL и выдачу источников.`,
+  );
+  return drops;
 }

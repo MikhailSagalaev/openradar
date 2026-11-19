@@ -38,6 +38,7 @@ import { computeSalaryMedians } from '../core/salary-sanity.ts';
 import { normalizeSalary } from '../core/salary.ts';
 import { MIN_CONFIDENCE, type ModelFacts } from '../research/model.ts';
 import { countFailedInRow } from '../core/source-health.ts';
+import type { SourceFlowStats } from '../core/source-health.ts';
 import type { SubscriptionRecord } from '../core/subscriptions.ts';
 import type { VisaSponsorNote } from '../research/visa-sponsors.ts';
 import type {
@@ -596,6 +597,36 @@ export class MemoryStore implements Store {
   async markLeadConfirmed(id: string, at: string): Promise<void> {
     const lead = this.leads.get(id);
     if (lead && !lead.confirmedAt) lead.confirmedAt = at;
+  }
+
+  async updateLeadStatusAndReasons(id: string, status: LeadStatus, reasons: string[]): Promise<void> {
+    const lead = this.leads.get(id);
+    if (lead) {
+      lead.status = status;
+      lead.reasons = reasons;
+    }
+  }
+
+  async getFlowStats(days: number): Promise<SourceFlowStats[]> {
+    const now = Date.now();
+    const recentSince = new Date(now - days * 86_400_000).toISOString();
+    const prevSince = new Date(now - 2 * days * 86_400_000).toISOString();
+    const agg = (arr: RunRecord[]) => ({
+      runs: arr.length,
+      errors: arr.filter((r) => Boolean(r.error)).length,
+      inserted: arr.reduce((acc, r) => acc + r.inserted, 0),
+    });
+    const sources = await this.listSources();
+    return sources.map((source) => {
+      const window = this.runs.filter((r) => r.sourceId === source.id && r.startedAt >= prevSince);
+      return {
+        sourceId: source.id,
+        title: source.title,
+        enabled: source.enabled,
+        recent: agg(window.filter((r) => r.startedAt >= recentSince)),
+        previous: agg(window.filter((r) => r.startedAt < recentSince)),
+      };
+    });
   }
 
   private checkedAt = new Map<string, number>();
