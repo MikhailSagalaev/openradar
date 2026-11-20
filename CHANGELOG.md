@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.82.1 — 2026-11-20
+
+- **Hourly maintenance runs through when the archive cannot be written** (#121): an unwritable archive dir (`EACCES` on a root-owned `./data` bind mount) aborted the whole pass, so since 0.79 the rating recompute, points notices, research daily counts, the monthly snapshot and the robots audit were skipped every hour. Archiving, export and retention now fail on their own; the openradar index backfills the missed days by itself. The container writes `./data` as uid 1000 — `chown 1000:1000 data` on a host where it belongs to root.
+
 ## 0.82.0 — 2026-11-20
 
 The 2026-11-19 audit (`plans/AUDIT_2026-11-19.md`): every confirmed finding fixed, 846 → 920 tests, and the Postgres/ParadeDB paths now run in CI.
