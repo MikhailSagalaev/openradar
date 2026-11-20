@@ -82,7 +82,7 @@ jobs:
 
   # The search path production runs: ParadeDB pg_search (BM25, `@@@`, paradedb.score).
   # Started by hand rather than as a service: the server needs
-  # shared_preload_libraries=pg_search, as in docker-compose.yml.
+  # shared_preload_libraries=pg_search,pg_cron, as in docker-compose.yml (the image init script creates pg_cron).
   paradedb:
     runs-on: ubuntu-latest
     env:
@@ -93,7 +93,7 @@ jobs:
         run: |
           docker run -d --name paradedb -p 5432:5432 --shm-size=512m \
             -e POSTGRES_DB=radar_test -e POSTGRES_USER=radar -e POSTGRES_PASSWORD=test_password \
-            "$PARADEDB_IMAGE" postgres -c shared_preload_libraries=pg_search
+            "$PARADEDB_IMAGE" postgres -c shared_preload_libraries=pg_search,pg_cron
       - uses: pnpm/action-setup@v6
         with:
           version: 12.16.1

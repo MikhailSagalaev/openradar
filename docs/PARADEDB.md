@@ -124,7 +124,7 @@ services:
     container_name: radar_postgres
     restart: unless-stopped
     mem_limit: ${RADAR_PG_MEM_LIMIT:-1g}
-    command: postgres -c shared_preload_libraries=pg_search
+    command: postgres -c shared_preload_libraries=pg_search,pg_cron
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-radar}
       POSTGRES_USER: ${POSTGRES_USER:-radar}

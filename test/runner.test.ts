@@ -34,6 +34,7 @@ interface Internals {
   lastExtractionAt: number;
   timer: unknown;
   backgroundTimer: unknown;
+  running: boolean;
 }
 
 const decideEnv = { RADAR_DECIDE_ENABLED: true, RADAR_DECIDE_KEY: 'k', RADAR_DECIDE_URL: 'https://d.test/v1', RADAR_DECIDE_MODEL: 'm', RADAR_DECIDE_PER_HOUR: 30 };
@@ -174,6 +175,9 @@ describe('PollRunner lifecycle', () => {
     expect(pollAll).toHaveBeenCalledTimes(1);
     expect(processOutbox).toHaveBeenCalledTimes(1);
     await vi.waitFor(() => expect(cleanup).toHaveBeenCalledTimes(1)); // maintenance is invoked
+    // The next tick is skipped while a run is active; on a real store (Postgres) the first run
+    // still awaits I/O here, so let it finish before advancing the clock.
+    await vi.waitFor(() => expect(internals.running).toBe(false));
 
     await vi.advanceTimersByTimeAsync(60_000);
     expect(pollAll).toHaveBeenCalledTimes(2);

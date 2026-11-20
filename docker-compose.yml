@@ -14,7 +14,8 @@ services:
     # such query fails with "could not resize shared memory segment ... No space
     # left on device" (review writes and the decisions worker included).
     shm_size: ${RADAR_PG_SHM_SIZE:-512m}
-    command: postgres -c shared_preload_libraries=pg_search
+    # pg_cron too: the image init script creates it, and a fresh volume fails to initialize without it.
+    command: postgres -c shared_preload_libraries=pg_search,pg_cron
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-radar}
       POSTGRES_USER: ${POSTGRES_USER:-radar}
