@@ -2860,26 +2860,34 @@ export function leadTitle(lead: Lead): string {
 /** The day counter counts up to this many leads; above it the page says «5 000+». */
 export const FOUND_TODAY_CAP = 5000;
 
-function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru', admin = true): string {
+/**
+ * The grey line under a lead title: type, source, category, place, pay, age. Shared by the feed
+ * and the SEO pages so both show the same thing; an absurd salary (salaryLooksWrong) is left out.
+ */
+export function leadMetaLine(lead: Lead, lang: SupportedLang = 'ru', source?: SourceRecord): string {
   const t = getTranslations(lang);
-  // An absurd salary stays off the feed: the row says «проверить» instead of the number.
-  const salarySuspect = salaryLooksWrong(lead);
   const money = typeof lead.budget === 'number' ? formatBudget(lead.budget, lead.currency) : lead.rawSalary;
   const displayCity = translateCity(lead.city, lang);
   const locationLabel = lead.workplaceType === 'hybrid'
     ? (displayCity ? `${displayCity} (${t.hybridFormat})` : t.hybridFormat)
     : (lead.isRemote ? (displayCity ?? t.remote) : displayCity);
-
-  const meta = [
+  return [
     lead.type === 'job' ? t.jobType : t.gigType,
     source?.title ? translateSourceTitle(source.title, lang) : undefined,
     lead.category ? translateSkill(lead.category, lang) : undefined,
     locationLabel,
-    salarySuspect ? undefined : money,
+    salaryLooksWrong(lead) ? undefined : money,
     formatRelative(lead.createdAt, lang),
   ]
     .filter(Boolean)
     .join(' · ');
+}
+
+function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru', admin = true): string {
+  const t = getTranslations(lang);
+  // An absurd salary stays off the feed: the row says «проверить» instead of the number.
+  const salarySuspect = salaryLooksWrong(lead);
+  const meta = leadMetaLine(lead, lang, source);
 
   const signals: string[] = [];
   if (salarySuspect) {

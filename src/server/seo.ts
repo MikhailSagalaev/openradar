@@ -1,9 +1,9 @@
 import { classifyRole, isPhysicalNonItWork } from '../research/derive.ts';
 import { escapeHtml, jsonForScript } from '../core/text.ts';
 import type { Lead, LeadType } from '../core/types.ts';
-import { layout, type AuthDisplay, formatBudget, salaryRange, safeHttpUrl, leadTitle, formatRelative } from './ui.ts';
+import { layout, type AuthDisplay, formatBudget, salaryRange, safeHttpUrl, leadTitle, formatRelative, leadMetaLine } from './ui.ts';
 import { formatLeadText } from './format.ts';
-import { translateCity, translateSkill, translateSourceTitle, type SupportedLang } from './i18n.ts';
+import { SEO_STRINGS, translateCity, translateSkill, translateSourceTitle, type SupportedLang } from './i18n.ts';
 import type { SourceQuality, SourceQualityInput } from '../core/source-quality.ts';
 import type { DecisionScore, FlagScore, ModelDecision } from '../core/decisions.ts';
 import { renderOpenApi } from './openapi.ts';
@@ -606,22 +606,13 @@ export function findCatalogEntry(slug: string): CatalogEntry | undefined {
 }
 
 function leadRow(lead: Lead, baseUrl: string, lang?: SupportedLang): string {
-  const ru = (lang ?? 'ru') !== 'en';
   // Rows open the lead page on the hub: it carries the details, the score and the link to the source.
   const href = `${baseUrl}/leads/${encodeURIComponent(lead.id)}`;
-  const meta = [
-    translateCity(lead.city, lang),
-    typeof lead.budget === 'number'
-      ? `${new Intl.NumberFormat(ru ? 'ru-RU' : 'en-US', { maximumFractionDigits: 0 }).format(lead.budget)} ${!lead.currency || lead.currency === 'RUB' ? (ru ? '₽' : 'RUB') : lead.currency}`
-      : undefined,
-    lead.type === 'job' ? (ru ? 'вакансия' : 'vacancy') : (ru ? 'заказ' : 'gig'),
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  // The same meta line as the feed: a salary the feed hides (salaryLooksWrong) is hidden here too.
   return `<a class="row" href="${escapeHtml(href)}">
         <div>
           <div class="row-title">${escapeHtml(lead.title)}</div>
-          <div class="row-meta">${escapeHtml(meta)}</div>
+          <div class="row-meta">${escapeHtml(leadMetaLine(lead, lang ?? 'ru'))}</div>
         </div>
         <div class="row-side">${escapeHtml(String(lead.score))}</div>
       </a>`;
@@ -638,7 +629,8 @@ function feedHrefOf(entry: CatalogEntry): string {
 /** Questions every catalog page answers; the FAQ page adds the project-wide ones. */
 function catalogFaq(entry: CatalogEntry, lang?: SupportedLang): Array<[string, string]> {
   const ru = (lang ?? 'ru') !== 'en';
-  const what = entry.type === 'job' ? (ru ? 'вакансии' : 'vacancies') : (ru ? 'заказы' : 'gigs');
+  const str = SEO_STRINGS[ru ? 'ru' : 'en'];
+  const what = entry.type === 'job' ? str.vacancies : str.gigs;
   if (!ru) {
     return [
       [
@@ -725,11 +717,12 @@ export function renderCatalogPage(options: {
   const { leads, baseUrl, version } = options;
   const entry = localizeCatalogEntry(options.entry, options.lang);
   const ru = (options.lang ?? 'ru') !== 'en';
+  const str = SEO_STRINGS[ru ? 'ru' : 'en'];
   const canonical = `${baseUrl}/catalog/${entry.slug}`;
   const feedHref = feedHrefOf(entry);
   const list = leads.length
     ? leads.map((lead) => leadRow(lead, baseUrl, options.lang)).join('')
-    : `<div class="empty"><h2>${ru ? 'Пока пусто' : 'No posts yet'}</h2><p>${ru ? 'Новые публикации появятся здесь в течение нескольких минут — источники опрашиваются автоматически.' : 'New listings will appear here within a few minutes — sources are polled automatically.'}</p></div>`;
+    : `<div class="empty"><h2>${str.noPostsYet}</h2><p>${str.newListingsWillAppearHere}</p></div>`;
   const faq = catalogFaq(entry, options.lang);
   // Same kind first, so a page on orders links to other orders before vacancies.
   const related = SEO_CATALOG.filter((other) => other.slug !== entry.slug)
@@ -738,28 +731,26 @@ export function renderCatalogPage(options: {
     .map((other) => localizeCatalogEntry(other, options.lang));
 
   const body = `
-<nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/">openradar</a> / <a href="/catalog">${ru ? 'Категории' : 'Categories'}</a> / ${escapeHtml(entry.h1)}</nav>
+<nav class="crumbs" aria-label="${str.navigation}"><a href="/">openradar</a> / <a href="/catalog">${str.categories}</a> / ${escapeHtml(entry.h1)}</nav>
 <div class="page-head">
   <div>
     <h1>${escapeHtml(entry.h1)}</h1>
     <p class="muted small">${escapeHtml(entry.intro)}</p>
   </div>
   <div class="actions">
-    <a class="btn ghost" href="${escapeHtml(feedHref)}" rel="noopener">${ru ? 'RSS-лента' : 'RSS feed'}</a>
-    <a class="btn" href="/">${entry.type === 'job' ? (ru ? 'Все вакансии' : 'All jobs') : (ru ? 'Все заказы' : 'All gigs')}</a>
+    <a class="btn ghost" href="${escapeHtml(feedHref)}" rel="noopener">${str.rssFeed}</a>
+    <a class="btn" href="/">${entry.type === 'job' ? str.allJobs : str.allGigs}</a>
   </div>
 </div>
 <div class="list">${list}</div>
 <section class="prose">
-  <h2>${ru ? 'Что здесь' : 'Overview'}</h2>
+  <h2>${str.overview}</h2>
   <p>${escapeHtml(entry.about)}</p>
-  <p>${ru
-    ? 'openradar — открытая база заказов и вакансий без платных тарифов. Код проекта открыт, любой может запустить свой узел и подключить свои источники. <a href="/about">Подробнее о проекте</a>.'
-    : 'openradar is an open base of freelance orders and vacancies with no paid plans. Open source, anyone can run a node and connect their own sources. <a href="/about">About the project</a>.'}</p>
-  <h2>${ru ? 'Вопросы' : 'Questions'}</h2>
+  <p>${str.openradarIsAnOpenBase}</p>
+  <h2>${str.questions}</h2>
   ${faqHtml(faq)}
-  <h2>${ru ? 'Похожие разделы' : 'Related categories'}</h2>
-  <div class="chip-links">${related.map((other) => `<a href="/catalog/${escapeHtml(other.slug)}">${escapeHtml(other.h1)}</a>`).join('')}<a href="/catalog">${ru ? 'Все категории' : 'All categories'}</a></div>
+  <h2>${str.relatedCategories}</h2>
+  <div class="chip-links">${related.map((other) => `<a href="/catalog/${escapeHtml(other.slug)}">${escapeHtml(other.h1)}</a>`).join('')}<a href="/catalog">${str.allCategories}</a></div>
 </section>`;
 
   const itemList = {
@@ -786,7 +777,7 @@ export function renderCatalogPage(options: {
 <link rel="canonical" href="${escapeHtml(canonical)}">
 <link rel="alternate" type="application/rss+xml" title="${escapeHtml(entry.h1)} — RSS" href="${escapeHtml(feedHref)}">
 ${ldScripts(
-  breadcrumbsJsonLd(baseUrl, [['openradar', '/'], [ru ? 'Категории' : 'Categories', '/catalog'], [entry.h1, `/catalog/${entry.slug}`]]),
+  breadcrumbsJsonLd(baseUrl, [['openradar', '/'], [str.categories, '/catalog'], [entry.h1, `/catalog/${entry.slug}`]]),
   ...(leads.length ? [itemList] : []),
   faqJsonLd(faq),
 )}`,
@@ -797,34 +788,33 @@ ${ldScripts(
 export function renderCatalogIndex(options: { baseUrl: string; version: string; auth?: AuthDisplay; lang?: SupportedLang }): string {
   const { baseUrl, version } = options;
   const ru = (options.lang ?? 'ru') !== 'en';
+  const str = SEO_STRINGS[ru ? 'ru' : 'en'];
   const card = (rawEntry: CatalogEntry): string => {
     const entry = localizeCatalogEntry(rawEntry, options.lang);
     return `<a class="catalog-card" href="/catalog/${escapeHtml(entry.slug)}"><span class="catalog-card-title">${escapeHtml(entry.h1)}</span><span class="catalog-card-desc">${escapeHtml(entry.intro)}</span></a>`;
   };
   const gigs = SEO_CATALOG.filter((entry) => entry.type !== 'job');
   const jobs = SEO_CATALOG.filter((entry) => entry.type === 'job');
-  const description = ru
-    ? 'Все разделы openradar: заказы для фрилансеров по направлениям и IT-вакансии по специальностям. У каждого раздела своя RSS-лента.'
-    : 'All openradar categories: freelance gigs by trade and IT vacancies by specialization. Each section has its own RSS feed.';
+  const description = str.allOpenradarCategoriesFreelanceGigs;
   const body = `
-<nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/">openradar</a> / ${ru ? 'Категории' : 'Categories'}</nav>
+<nav class="crumbs" aria-label="${str.navigation}"><a href="/">openradar</a> / ${str.categories}</nav>
 <div class="page-head"><div>
-  <h1>${ru ? 'Категории заказов и вакансий' : 'Categories of orders and vacancies'}</h1>
+  <h1>${str.categoriesOfOrdersAndVacancies}</h1>
   <p class="muted small">${escapeHtml(description)}</p>
 </div></div>
-<h2>${ru ? 'Заказы для фрилансеров' : 'Freelance gigs'}</h2>
+<h2>${str.freelanceGigs}</h2>
 <div class="catalog-grid">${gigs.map(card).join('')}</div>
-<h2 style="margin-top:32px">${ru ? 'Вакансии' : 'Vacancies'}</h2>
+<h2 style="margin-top:32px">${str.vacancies2}</h2>
 <div class="catalog-grid">${jobs.map(card).join('')}</div>`;
   return layout({
     auth: options.auth,
     lang: options.lang,
-    title: ru ? 'Категории заказов и вакансий' : 'Categories of orders and vacancies',
+    title: str.categoriesOfOrdersAndVacancies,
     version,
     body,
     head: `<meta name="description" content="${escapeHtml(description)}">
 <link rel="canonical" href="${escapeHtml(baseUrl)}/catalog">
-${ldScripts(breadcrumbsJsonLd(baseUrl, [['openradar', '/'], [ru ? 'Категории' : 'Categories', '/catalog']]))}`,
+${ldScripts(breadcrumbsJsonLd(baseUrl, [['openradar', '/'], [str.categories, '/catalog']]))}`,
   });
 }
 
@@ -1076,18 +1066,19 @@ export function renderParticipantPage(options: {
   posts: Lead[];
 }): string {
   const ru = options.lang !== 'en';
+  const str = SEO_STRINGS[ru ? 'ru' : 'en'];
   const handle = escapeHtml(options.handle);
-  const rows = options.posts.map((lead) => leadRow(lead, options.baseUrl)).join('\n');
+  const rows = options.posts.map((lead) => leadRow(lead, options.baseUrl, options.lang)).join('\n');
   const body = `
-<nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/network">${ru ? 'Участники' : 'Participants'}</a> / @${handle}</nav>
+<nav class="crumbs" aria-label="${str.navigation}"><a href="/network">${str.participants}</a> / @${handle}</nav>
 <div class="page-head"><div>
   <h1>@${handle}</h1>
-  <p class="muted small"><a href="https://github.com/${handle}" rel="noopener nofollow">GitHub</a> · ${ru ? 'в openradar с' : 'on openradar since'} ${escapeHtml(options.since.slice(0, 10))}</p>
+  <p class="muted small"><a href="https://github.com/${handle}" rel="noopener nofollow">GitHub</a> · ${str.onOpenradarSince} ${escapeHtml(options.since.slice(0, 10))}</p>
 </div></div>
 <section class="profile">
-  <p>${ru ? 'Постов принесено' : 'Posts brought'}: <strong>${options.total}</strong> · ${ru ? 'очков за 30 дней' : 'points over 30 days'}: <strong>${Math.round(options.points * 10)}</strong> · ${ru ? 'уровень' : 'tier'}: <strong>${escapeHtml(options.tier)}</strong></p>
-  <h2>${ru ? 'Последние публикации' : 'Latest posts'}</h2>
-  ${rows ? `<div class="list">${rows}</div>` : `<p class="muted">${ru ? 'Пока нет публикаций, открытых всем.' : 'No public posts yet.'}</p>`}
+  <p>${str.postsBrought}: <strong>${options.total}</strong> · ${str.pointsOver30Days}: <strong>${Math.round(options.points * 10)}</strong> · ${str.tier}: <strong>${escapeHtml(options.tier)}</strong></p>
+  <h2>${str.latestPosts}</h2>
+  ${rows ? `<div class="list">${rows}</div>` : `<p class="muted">${str.noPublicPostsYet}</p>`}
 </section>`;
   return layout({ title: `@${options.handle}`, version: options.version, body, auth: options.auth, lang: options.lang });
 }
@@ -1100,11 +1091,12 @@ export function renderSourceQualityPage(options: {
   rows: Array<{ id: string; title: string; enabled: boolean; quality: SourceQuality; input?: SourceQualityInput; issues?: number }>;
 }): string {
   const ru = options.lang !== 'en';
+  const str = SEO_STRINGS[ru ? 'ru' : 'en'];
   const percent = (value: number | undefined): string => (value === undefined ? '—' : `${Math.round(value * 100)}%`);
   const rows = options.rows.map(({ id, title, enabled, quality, input, issues }) => `<tr>
-    <td><a href="/sources/${escapeHtml(encodeURIComponent(id))}">${escapeHtml(translateSourceTitle(title, options.lang))}</a>${enabled ? '' : ` <span class="muted small">${ru ? 'выключен' : 'off'}</span>`}</td>
+    <td><a href="/sources/${escapeHtml(encodeURIComponent(id))}">${escapeHtml(translateSourceTitle(title, options.lang))}</a>${enabled ? '' : ` <span class="muted small">${str.off}</span>`}</td>
     <td class="num"><strong>${quality.score ?? '—'}</strong></td>
-    <td>${quality.grade === 'new' ? (ru ? 'мало данных' : 'too new') : quality.grade}</td>
+    <td>${quality.grade === 'new' ? str.tooNew : quality.grade}</td>
     <td class="num">${percent(quality.parts.access)}</td>
     <td class="num">${input?.inserted ?? 0}</td>
     <td class="num">${percent(quality.parts.alive)}</td>
@@ -1113,20 +1105,18 @@ export function renderSourceQualityPage(options: {
     <td class="num">${issues ?? 0}</td>
   </tr>`).join('\n');
   const body = `
-<nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/sources">${ru ? 'Источники' : 'Sources'}</a> / ${ru ? 'Качество' : 'Quality'}</nav>
+<nav class="crumbs" aria-label="${str.navigation}"><a href="/sources">${str.sources}</a> / ${str.quality}</nav>
 <div class="page-head"><div>
-  <h1>${ru ? 'Качество источников' : 'Source quality'}</h1>
-  <p class="muted small">${ru
-    ? `За ${options.days} дней: отвечает ли источник, приносит ли новое, живы ли посты, полны ли они и что сказали читатели.`
-    : `Over ${options.days} days: does a source answer, bring new posts, stay alive, carry full posts, and what readers said.`} <a href="https://github.com/MikhailSagalaev/openradar/blob/main/docs/QUALITY.md" rel="noopener">${ru ? 'Как считается' : 'How it is counted'}</a></p>
+  <h1>${str.sourceQuality}</h1>
+  <p class="muted small">${str.overDaysDoesASource(options.days)} <a href="https://github.com/MikhailSagalaev/openradar/blob/main/docs/QUALITY.md" rel="noopener">${str.howItIsCounted}</a></p>
 </div></div>
 <section class="profile">
   <table class="profile-table">
-    <thead><tr><th>${ru ? 'Источник' : 'Source'}</th><th>${ru ? 'Оценка' : 'Score'}</th><th>${ru ? 'Класс' : 'Grade'}</th><th>${ru ? 'Отвечает' : 'Answers'}</th><th>${ru ? 'Новых' : 'New'}</th><th>${ru ? 'Живых' : 'Alive'}</th><th>${ru ? 'Полнота' : 'Complete'}</th><th>${ru ? 'Читатели' : 'Readers'}</th><th>${ru ? 'Жалобы на сбор' : 'Reading issues'}</th></tr></thead>
+    <thead><tr><th>${str.source}</th><th>${str.score}</th><th>${str.grade}</th><th>${str.answers}</th><th>${str.new}</th><th>${str.alive}</th><th>${str.complete}</th><th>${str.readers}</th><th>${str.readingIssues}</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
 </section>`;
-  return layout({ title: ru ? 'Качество источников' : 'Source quality', version: options.version, active: 'sources', body, auth: options.auth, lang: options.lang });
+  return layout({ title: str.sourceQuality, version: options.version, active: 'sources', body, auth: options.auth, lang: options.lang });
 }
 
 export function renderLabelPage(options: {
@@ -1138,6 +1128,7 @@ export function renderLabelPage(options: {
   stats: Record<string, number>;
 }): string {
   const ru = options.lang !== 'en';
+  const str = SEO_STRINGS[ru ? 'ru' : 'en'];
   const names: Array<[string, string]> = ru
     ? [['good', 'Хороший пост'], ['closed', 'Уже закрыт'], ['wrong_type', 'Не тот тип'], ['junk', 'Мусор']]
     : [['good', 'Good post'], ['closed', 'Already closed'], ['wrong_type', 'Wrong type'], ['junk', 'Junk']];
@@ -1149,18 +1140,18 @@ export function renderLabelPage(options: {
     : '';
   const body = `
 <div class="page-head"><div>
-  <h1>${ru ? 'Ручная проверка постов' : 'Checking posts by hand'}</h1>
-  <p class="muted small">${ru ? `Проверено: ${total} из 300. ` : `Checked: ${total} of 300. `}${counts}</p>
+  <h1>${str.checkingPostsByHand}</h1>
+  <p class="muted small">${str.checkedOf300(total)}${counts}</p>
 </div></div>
 ${renderAdminTabs('labels', !ru)}
 <section class="profile">
   ${lead ? `
-  <p class="muted small">${escapeHtml(options.sourceTitle ?? '')} · ${lead.type === 'job' ? (ru ? 'вакансия' : 'vacancy') : (ru ? 'заказ' : 'order')}${lead.url ? ` · <a href="${escapeHtml(lead.url)}" target="_blank" rel="noopener noreferrer">${ru ? 'Открыть оригинал' : 'Open the original'}</a>` : ''}</p>
+  <p class="muted small">${escapeHtml(options.sourceTitle ?? '')} · ${lead.type === 'job' ? str.vacancy : str.order}${lead.url ? ` · <a href="${escapeHtml(lead.url)}" target="_blank" rel="noopener noreferrer">${str.openTheOriginal}</a>` : ''}</p>
   <h2>${escapeHtml(lead.title)}</h2>
   <p style="white-space:pre-wrap">${escapeHtml(lead.text.slice(0, 1500))}</p>
-  <form method="post" action="/admin/labels"><input type="hidden" name="id" value="${escapeHtml(lead.id)}">${buttons}</form>` : `<p class="muted">${ru ? 'Постов для проверки нет.' : 'Nothing to check.'}</p>`}
+  <form method="post" action="/admin/labels"><input type="hidden" name="id" value="${escapeHtml(lead.id)}">${buttons}</form>` : `<p class="muted">${str.nothingToCheck}</p>`}
 </section>`;
-  return layout({ title: ru ? 'Ручная проверка' : 'Hand check', version: options.version, body, auth: options.auth, lang: options.lang, head: '<meta name="robots" content="noindex">' });
+  return layout({ title: str.handCheck, version: options.version, body, auth: options.auth, lang: options.lang, head: '<meta name="robots" content="noindex">' });
 }
 
 export function renderDecisionsPage(options: {
@@ -1177,15 +1168,16 @@ export function renderDecisionsPage(options: {
 }): string {
   const { stats, score } = options;
   const ru = options.lang !== 'en';
-  const share = (part: number, whole: number): string => (whole ? `${Math.round((part / whole) * 100)}% (${part} ${ru ? 'из' : 'of'} ${whole})` : '—');
+  const str = SEO_STRINGS[ru ? 'ru' : 'en'];
+  const share = (part: number, whole: number): string => (whole ? `${Math.round((part / whole) * 100)}% (${part} ${str.of} ${whole})` : '—');
   const names: Record<string, string> = ru
     ? { closed: 'Похоже закрыт', scam: 'Похоже на мошенничество', other: 'Не работа', resume: 'Резюме', type: 'Другой тип' }
     : { closed: 'Likely closed', scam: 'Likely scam', other: 'Not work', resume: 'Resume', type: 'Different type' };
   const flags = ([
-    [ru ? 'Закрытые' : 'Closed', score.closed],
-    [ru ? 'Мусор' : 'Junk', score.junk],
-    [ru ? 'Мошенничество' : 'Scam', score.scam],
-    [ru ? 'Тип поста' : 'Post type', score.type],
+    [str.closed, score.closed],
+    [str.junk, score.junk],
+    [str.scam, score.scam],
+    [str.postType, score.type],
   ] as Array<[string, FlagScore]>)
     .map(([name, flag]) => `<tr><td>${name}</td><td class="num">${share(flag.right, flag.flagged)}</td><td class="num">${share(flag.caught, flag.actual)}</td></tr>`).join('\n');
   const rows = options.rows.map(({ lead, decision, reason }) => `<tr>
@@ -1198,8 +1190,8 @@ export function renderDecisionsPage(options: {
   const cost = (stats.tokens * 0.04) / 1_000_000;
   const body = `
 <div class="page-head"><div>
-  <h1>${ru ? 'Решения модели' : 'Model decisions'}</h1>
-  <p class="muted small">${ru ? 'Уверенные ответы убирают посты и меняют оценку. Любое действие можно вернуть.' : 'Sure answers hide posts and move scores. Any action can be overruled.'}</p>
+  <h1>${str.modelDecisions}</h1>
+  <p class="muted small">${str.sureAnswersHidePostsAnd}</p>
 </div></div>
 ${renderAdminTabs('decisions', !ru)}
 <section class="profile">
@@ -1248,6 +1240,7 @@ interface DirectionItem { slug: string; label: string; total?: number }
 /** The site's own dropdown, with a search box: long lists are read by typing. */
 function directionPicker(name: string, label: string, items: DirectionItem[], selected: string, asLink: boolean, lang?: SupportedLang): string {
   const ru = (lang ?? 'ru') !== 'en';
+  const str = SEO_STRINGS[ru ? 'ru' : 'en'];
   const current = items.find((item) => item.slug === selected);
   const rows = items.map((item) => {
     const text = `<span class="custom-dropdown-item-text">${escapeHtml(item.label)}</span>${item.total !== undefined ? `<span class="custom-dropdown-count">${item.total}</span>` : ''}`;
@@ -1260,7 +1253,7 @@ function directionPicker(name: string, label: string, items: DirectionItem[], se
     ${asLink ? '' : `<input type="hidden" name="${escapeHtml(name)}" value="">`}
     <button type="button" class="custom-dropdown-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="${escapeHtml(label)}"><span class="custom-dropdown-label">${escapeHtml(current?.label ?? label)}</span></button>
     <div class="custom-dropdown-menu" role="listbox" style="display:none">
-      <input type="search" class="review-picker-search" placeholder="${ru ? 'Найти' : 'Search'}" aria-label="${ru ? 'Найти' : 'Search'}">
+      <input type="search" class="review-picker-search" placeholder="${str.search}" aria-label="${str.search}">
       ${rows}
     </div>
   </div>`;
@@ -1432,14 +1425,15 @@ export function renderReviewPage(options: {
   last?: string;
 }): string {
   const ru = (options.lang ?? 'ru') !== 'en';
+  const str = SEO_STRINGS[ru ? 'ru' : 'en'];
   const { lead, directions } = options;
   const signedIn = Boolean(options.auth?.handle || options.auth?.isAdmin);
-  const shown = directions.find((item) => item.slug === lead?.direction)?.label ?? (ru ? 'Другое' : 'Other');
-  const typeName = lead?.type === 'job' ? (ru ? 'Вакансия' : 'Job') : (ru ? 'Заказ' : 'Gig');
+  const shown = directions.find((item) => item.slug === lead?.direction)?.label ?? str.other;
+  const typeName = lead?.type === 'job' ? str.job : str.gig2;
   const company = lead ? (lead.company ?? lead.author) : '';
   const salary = lead ? (salaryRange(lead, options.lang ?? 'ru') ?? (typeof lead.budget === 'number' ? formatBudget(lead.budget, lead.currency) : (lead.rawSalary ?? ''))) : '';
   const host = lead?.url ? safeHttpUrl(lead.url)?.replace(/^https?:\/\//, '')?.split('/')[0]?.replace(/^www\./, '') : '';
-  const remote = lead?.isRemote ? (ru ? 'Удалённо' : 'Remote') : '';
+  const remote = lead?.isRemote ? str.remote : '';
   const location = [lead?.city, remote].filter(Boolean).join(' · ');
   const relativeDate = lead ? formatRelative(lead.createdAt, options.lang ?? 'ru') : '';
   const metaLine = [host, salary, location, relativeDate].filter(Boolean).join(' · ');
@@ -1455,13 +1449,13 @@ export function renderReviewPage(options: {
     ${metaLine ? `<p class="muted small">${escapeHtml(metaLine)}</p>` : ''}
   </div>
   <div class="actions lead-actions">
-    ${lead.url ? `<a class="btn review-original" href="${escapeHtml(lead.url)}" target="_blank" rel="noopener noreferrer">${ru ? 'Открыть оригинал ↗' : 'Open original ↗'}</a>` : ''}
+    ${lead.url ? `<a class="btn review-original" href="${escapeHtml(lead.url)}" target="_blank" rel="noopener noreferrer">${str.openOriginal}</a>` : ''}
   </div>
 </div>
 
 <div class="detail-grid review-grid">
   <section class="review-lead-col">
-    <h2>${lead.type === 'job' ? (ru ? 'Текст вакансии' : 'Job description') : (ru ? 'Текст заказа' : 'Gig description')}</h2>
+    <h2>${lead.type === 'job' ? str.jobDescription : str.gigDescription}</h2>
     <div class="lead-text review-lead-scroll">${formatted.html}</div>
   </section>
 
@@ -1471,29 +1465,29 @@ export function renderReviewPage(options: {
       <input type="hidden" name="bucket" value="${escapeHtml(options.bucket ?? '')}">
       <input type="hidden" name="c" value="${escapeHtml(options.direction)}">
 
-      <h2>${ru ? 'Решение' : 'Verdict'}</h2>
+      <h2>${str.verdict}</h2>
       <div class="review-shown">
-        <div class="review-shown-line">${ru ? 'Мы показали это как:' : 'Shown as:'} <strong>${typeName}</strong> · <strong>${escapeHtml(shown)}</strong></div>
+        <div class="review-shown-line">${str.shownAs} <strong>${typeName}</strong> · <strong>${escapeHtml(shown)}</strong></div>
         <details class="review-fix">
-          <summary>${ru ? 'Исправить тип или направление' : 'Fix type or direction'}</summary>
+          <summary>${str.fixTypeOrDirection}</summary>
           <div class="review-fix-body">
             <div class="review-fix-row">
               <label class="review-fix-label">
                 <input type="checkbox" name="type_fix" value="${lead.type === 'job' ? 'gig' : 'job'}">
-                ${ru ? (lead.type === 'job' ? 'Это заказ' : 'Это вакансия') : (lead.type === 'job' ? 'This is a gig' : 'This is a job')}
+                ${lead.type === 'job' ? str.thisIsAGig : str.thisIsAJob}
               </label>
-              ${directionPicker('direction_fix', ru ? 'Другое направление' : 'Other direction', directions.filter((item) => item.slug), '', false, options.lang)}
+              ${directionPicker('direction_fix', str.otherDirection, directions.filter((item) => item.slug), '', false, options.lang)}
             </div>
           </div>
         </details>
       </div>
 
       <div class="review-answers">
-        <button class="review-ans-btn review-ans-btn-primary" name="verdict" value="ok" type="submit" title="${ru ? 'Реальная работа. Мало текста не беда, если оригинал в порядке.' : 'Legitimate work. Brief text is fine if the original is valid.'}">
+        <button class="review-ans-btn review-ans-btn-primary" name="verdict" value="ok" type="submit" title="${str.legitimateWorkBriefTextIs}">
           <span class="review-ans-num">1</span>
           <span class="review-ans-text">
-            <strong>${ru ? 'Всё верно' : 'Looks good'}</strong>
-            <small>${ru ? 'Реальная работа, верный тип · Enter' : 'Legitimate work, correct type · Enter'}</small>
+            <strong>${str.looksGood}</strong>
+            <small>${str.legitimateWorkCorrectTypeEnter}</small>
           </span>
         </button>
         ${reviewAnswers.map(([key, name, hint], index) => `
@@ -1504,16 +1498,16 @@ export function renderReviewPage(options: {
             <small>${escapeHtml(hint.slice(0, 38))}</small>
           </span>
         </button>`).join('')}
-        <button class="review-ans-btn review-ans-btn-skip" name="verdict" value="unsure" type="submit" title="${ru ? 'Пост пропускается, ответ не считается' : 'Skip this post without grading'}">
+        <button class="review-ans-btn review-ans-btn-skip" name="verdict" value="unsure" type="submit" title="${str.skipThisPostWithoutGrading}">
           <span class="review-ans-num">5</span>
           <span class="review-ans-text">
-            <strong>${ru ? 'Не знаю' : 'Skip'}</strong>
-            <small>${ru ? 'Пропустить без оценки' : 'Skip without grading'}</small>
+            <strong>${str.skip}</strong>
+            <small>${str.skipWithoutGrading}</small>
           </span>
         </button>
       </div>
 
-      <h2 class="review-issues-title">${ru ? 'Что не так со сбором' : 'Ingestion issues'}</h2>
+      <h2 class="review-issues-title">${str.ingestionIssues}</h2>
       <div class="review-chips">
         ${Object.entries(issueNames).map(([key, name]) => `
         <label class="review-chip">
@@ -1521,26 +1515,26 @@ export function renderReviewPage(options: {
           <span>${escapeHtml(name)}</span>
         </label>`).join('')}
       </div>
-      <input type="text" name="note" class="review-note" maxlength="300" placeholder="${ru ? 'Комментарий к сбору, если нужно' : 'Optional note about parsing issues'}" aria-label="${ru ? 'Комментарий' : 'Comment'}">
+      <input type="text" name="note" class="review-note" maxlength="300" placeholder="${str.optionalNoteAboutParsingIssues}" aria-label="${str.comment}">
     </form>
   </aside>
 </div>` : `
 <div class="empty review-empty">
-  <h2>${ru ? 'Пока нечего разбирать' : 'Nothing to review yet'}</h2>
-  <p>${ru ? 'В этом направлении все посты разобраны. Выберите другое направление выше или загляните позже.' : 'All posts in this direction have been reviewed. Choose another direction above or check back later.'}</p>
+  <h2>${str.nothingToReviewYet}</h2>
+  <p>${str.allPostsInThisDirection}</p>
 </div>`;
 
   const body = `
 <div class="review-nav">
   <div class="review-nav-left">
-    <a class="back" href="/">${ru ? '← Все заказы' : '← All leads'}</a>
+    <a class="back" href="/">${str.allLeads}</a>
     <span class="review-nav-sep">·</span>
-    ${directionPicker('c', ru ? 'Все направления' : 'All directions', [{ slug: '', label: ru ? 'Все направления' : 'All directions' }, ...directions], options.direction, true, options.lang)}
+    ${directionPicker('c', str.allDirections, [{ slug: '', label: str.allDirections }, ...directions], options.direction, true, options.lang)}
   </div>
   <div class="review-nav-right">
-    ${signedIn ? `<span class="review-counter">${ru ? `Вы разобрали: <strong>${options.mine}</strong>` : `You reviewed: <strong>${options.mine}</strong>`}</span>` : `<span class="review-counter">${ru ? 'Разбор постов' : 'Post review'}</span>`}
-    <button type="button" class="link-btn review-help-trigger" title="${ru ? 'Справка по оценке (?)' : 'Review guide (?)'}">${ru ? 'Как оценивать (?)' : 'How to review (?)'}</button>
-    ${options.last ? `<form method="post" action="/review/undo" class="review-undo-inline"><input type="hidden" name="id" value="${escapeHtml(options.last)}"><button class="link-btn review-undo-btn" type="submit" title="${ru ? 'Отменить последний ответ (Z)' : 'Undo last answer (Z)'}">${ru ? 'Отменить ответ (Z)' : 'Undo answer (Z)'}</button></form>` : ''}
+    ${signedIn ? `<span class="review-counter">${str.youReviewed(options.mine)}</span>` : `<span class="review-counter">${str.postReview}</span>`}
+    <button type="button" class="link-btn review-help-trigger" title="${str.reviewGuide}">${str.howToReview}</button>
+    ${options.last ? `<form method="post" action="/review/undo" class="review-undo-inline"><input type="hidden" name="id" value="${escapeHtml(options.last)}"><button class="link-btn review-undo-btn" type="submit" title="${str.undoLastAnswerZ}">${str.undoAnswerZ}</button></form>` : ''}
   </div>
 </div>
 ${content}
@@ -1548,22 +1542,22 @@ ${content}
   <div class="review-modal-backdrop"></div>
   <div class="review-modal-card">
     <div class="review-modal-head">
-      <h3>${ru ? 'Как оценивать' : 'How to review'}</h3>
-      <button type="button" class="link-btn review-modal-close">${ru ? 'Закрыть' : 'Close'}</button>
+      <h3>${str.howToReview2}</h3>
+      <button type="button" class="link-btn review-modal-close">${str.close}</button>
     </div>
     <ul class="review-help-list">
-      <li>${ru ? 'Оценивайте саму работу, а не то, как мы её показали.' : 'Evaluate the job/gig itself, not how openradar rendered it.'}</li>
-      <li>${ru ? 'Если текста мало, сначала откройте оригинал.' : 'If the description is brief, check the original link first.'}</li>
-      <li>${ru ? 'Оригинал хороший, а у нас плохо считалось: это «Всё верно», а что не так, отметьте в проблемах сбора.' : 'If the original is legitimate but openradar parsed it poorly, select "Looks good" and mark parsing issues below.'}</li>
-      <li>${ru ? '<strong>Не работа:</strong> реклама, курс, резюме, новость.' : '<strong>Not work:</strong> ads, courses, resumes, news, promos.'}</li>
-      <li>${ru ? '<strong>Подозрительно:</strong> деньги вперёд, большой заработок без навыков, накрутки, подделка документов.' : '<strong>Suspicious:</strong> upfront fees, high pay with no skills, fake reviews, scam.'}</li>
-      <li>${ru ? '<strong>Уже закрыта:</strong> на оригинале снята, заказ занят или страница не открывается.' : '<strong>Already closed:</strong> position filled, listing archived, or link dead.'}</li>
-      <li>${ru ? 'Сомневаетесь? Нажмите «Не знаю»: это честнее, чем угадывать.' : 'Unsure? Click "Skip": it is better than guessing.'}</li>
-      <li>${ru ? 'Клавиши 1–5 или Enter выбирают ответ, стрелки ↑↓ переключают, О открывает оригинал, Z отменяет, ? открывает эту справку.' : 'Keys 1–5 or Enter choose an answer, ↑↓ arrows switch, O opens original, Z undoes, ? toggles this help.'}</li>
+      <li>${str.evaluateTheJobGigItself}</li>
+      <li>${str.ifTheDescriptionIsBrief}</li>
+      <li>${str.ifTheOriginalIsLegitimate}</li>
+      <li>${str.notWorkAdsCoursesResumes}</li>
+      <li>${str.suspiciousUpfrontFeesHighPay}</li>
+      <li>${str.alreadyClosedPositionFilledListing}</li>
+      <li>${str.unsureClickSkipItIs}</li>
+      <li>${str.keys15OrEnter}</li>
     </ul>
   </div>
 </div>`;
-  const pageTitle = lead ? `${leadTitle(lead)} · ${ru ? 'Разбор постов' : 'Post review'}` : (ru ? 'Разбор постов' : 'Post review');
+  const pageTitle = lead ? `${leadTitle(lead)} · ${str.postReview}` : str.postReview;
   return layout({ title: pageTitle, version: options.version, body, auth: options.auth, lang: options.lang, head: '<meta name="robots" content="noindex">', script: REVIEW_SCRIPT, bodyClass: 'page-review' });
 }
 
@@ -1581,28 +1575,27 @@ export function renderEmployersPage(options: {
   query?: string;
 }): string {
   const ru = options.lang !== 'en';
+  const str = SEO_STRINGS[ru ? 'ru' : 'en'];
   const rows = options.employers.map((e, index) => `<tr><td>${index + 1}</td><td><a href="${escapeHtml(employerPath(e.key))}">${escapeHtml(e.name)}</a></td><td class="num">${e.active}</td><td>${escapeHtml(e.lastAt.slice(0, 10))}</td></tr>`).join('\n');
-  const description = ru
-    ? 'Компании с открытыми вакансиями: сколько позиций открыто сейчас и когда появилась последняя. Каждая страница собирает вакансии компании с разных площадок.'
-    : 'Companies with open vacancies: how many roles are open now and when the latest appeared. Each page gathers the company\'s vacancies from every board.';
+  const description = str.companiesWithOpenVacanciesHow;
   const body = `
 <div class="page-head"><div>
-  <h1>${ru ? 'Работодатели' : 'Employers'}</h1>
+  <h1>${str.employers}</h1>
   <p class="muted small">${escapeHtml(description)}</p>
 </div></div>
 <section class="profile">
   <form method="get" action="/employers" class="form" role="search">
-    <input type="search" name="q" value="${escapeHtml(options.query ?? '')}" placeholder="${ru ? 'Название компании' : 'Company name'}" aria-label="${ru ? 'Поиск компании' : 'Find a company'}">
+    <input type="search" name="q" value="${escapeHtml(options.query ?? '')}" placeholder="${str.companyName}" aria-label="${str.findACompany}">
   </form>
   ${rows ? `<table class="profile-table">
-    <thead><tr><th>#</th><th>${ru ? 'Компания' : 'Company'}</th><th>${ru ? 'Открыто' : 'Open'}</th><th>${ru ? 'Последняя' : 'Latest'}</th></tr></thead>
+    <thead><tr><th>#</th><th>${str.company}</th><th>${str.open}</th><th>${str.latest}</th></tr></thead>
     <tbody>${rows}</tbody>
-  </table>` : `<p class="muted">${ru ? 'Таких компаний пока нет.' : 'No such companies yet.'}</p>`}
+  </table>` : `<p class="muted">${str.noSuchCompaniesYet}</p>`}
 </section>`;
   const head = options.query
     ? '<meta name="robots" content="noindex">'
     : `<link rel="canonical" href="${escapeHtml(`${options.baseUrl}/employers`)}">\n<meta name="description" content="${escapeHtml(description)}">`;
-  return layout({ title: `${ru ? 'Работодатели' : 'Employers'}`, version: options.version, active: 'employers', body, auth: options.auth, lang: options.lang, head });
+  return layout({ title: `${str.employers}`, version: options.version, active: 'employers', body, auth: options.auth, lang: options.lang, head });
 }
 
 export function renderEmployerPage(options: {
@@ -1626,6 +1619,7 @@ export function renderEmployerPage(options: {
   signedIn: boolean;
 }): string {
   const ru = options.lang !== 'en';
+  const str = SEO_STRINGS[ru ? 'ru' : 'en'];
   const name = escapeHtml(options.name);
   const url = `${options.baseUrl}${employerPath(options.employerKey)}`;
   const rows = options.posts.map((lead) => leadRow(lead, options.baseUrl, options.lang)).join('\n');
@@ -1633,31 +1627,29 @@ export function renderEmployerPage(options: {
   const displayCities = options.cities.map((c) => translateCity(c, options.lang) ?? c);
   const hiring = displaySkills.slice(0, 3).join(', ');
   const description = options.active
-    ? (ru
-        ? `Открытые вакансии ${options.name}: ${options.active} сейчас${hiring ? `, чаще всего ${hiring}` : ''}.`
-        : `Open vacancies at ${options.name}: ${options.active} now${hiring ? `, mostly ${hiring}` : ''}.`)
-    : (ru ? `Сейчас у ${options.name} нет открытых вакансий.` : `${options.name} has no open vacancies now.`);
+    ? (str.openVacanciesAtNow(options.name, options.active, hiring ? `, чаще всего ${hiring}` : '', hiring ? `, mostly ${hiring}` : ''))
+    : (str.hasNoOpenVacanciesNow(options.name));
   const tile = (value: string | number, label: string): string => `<div class="employer-stat"><strong>${escapeHtml(String(value))}</strong><span>${escapeHtml(label)}</span></div>`;
   const stats = options.active
     ? `<div class="employer-stats">
-    ${tile(options.active, ru ? 'открыто сейчас' : 'open now')}
-    ${tile(options.fresh, ru ? 'новых за 7 дней' : 'new in 7 days')}
-    ${tile(`${options.remoteShare}%`, ru ? 'удалённо' : 'remote')}
-    ${tile(options.boards, ru ? 'источников' : 'sources')}
+    ${tile(options.active, str.openNow)}
+    ${tile(options.fresh, str.newIn7Days)}
+    ${tile(`${options.remoteShare}%`, str.remote2)}
+    ${tile(options.boards, str.sources2)}
   </div>`
     : '';
   const facts = [
-    displaySkills.length ? `<div><dt>${ru ? 'Чаще всего ищут' : 'Mostly hiring for'}</dt><dd>${escapeHtml(displaySkills.join(', '))}</dd></div>` : '',
-    displayCities.length ? `<div><dt>${ru ? 'Города' : 'Cities'}</dt><dd>${escapeHtml(displayCities.join(', '))}</dd></div>` : '',
+    displaySkills.length ? `<div><dt>${str.mostlyHiringFor}</dt><dd>${escapeHtml(displaySkills.join(', '))}</dd></div>` : '',
+    displayCities.length ? `<div><dt>${str.cities}</dt><dd>${escapeHtml(displayCities.join(', '))}</dd></div>` : '',
   ].filter(Boolean).join('\n');
   const later = options.later > 0
-    ? `<p class="muted">${ru ? `Ещё свежих вакансий: ${options.later}.` : `${options.later} more fresh vacancies.`} ${options.signedIn ? (ru ? 'Они откроются чуть позже.' : 'They open a little later.') : `<a href="/login?returnTo=${escapeHtml(encodeURIComponent(employerPath(options.employerKey)))}">${ru ? 'Войдите, чтобы видеть их раньше' : 'Sign in to see them sooner'}</a>.`}</p>`
+    ? `<p class="muted">${str.moreFreshVacancies(options.later)} ${options.signedIn ? str.theyOpenALittleLater : `<a href="/login?returnTo=${escapeHtml(encodeURIComponent(employerPath(options.employerKey)))}">${str.signInToSeeThem}</a>.`}</p>`
     : '';
-  const empty = !options.active ? `<p class="muted">${ru ? 'Сейчас открытых вакансий нет.' : 'No open vacancies now.'}</p>` : '';
+  const empty = !options.active ? `<p class="muted">${str.noOpenVacanciesNow}</p>` : '';
   const body = `
-<nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/employers">${ru ? 'Работодатели' : 'Employers'}</a> / ${name}</nav>
+<nav class="crumbs" aria-label="${str.navigation}"><a href="/employers">${str.employers}</a> / ${name}</nav>
 <div class="page-head"><div>
-  <h1>${ru ? 'Вакансии' : 'Vacancies at'} ${name}</h1>
+  <h1>${str.vacanciesAt} ${name}</h1>
 </div></div>
 <section class="profile">
   ${stats}
@@ -1669,7 +1661,7 @@ export function renderEmployerPage(options: {
   const list = {
     '@context': 'https://schema.org',
     '@type': 'ItemList',
-    name: `${ru ? 'Вакансии' : 'Vacancies at'} ${options.name}`,
+    name: `${str.vacanciesAt} ${options.name}`,
     itemListElement: options.posts.slice(0, 20).map((lead, index) => ({
       '@type': 'ListItem',
       position: index + 1,
@@ -1684,7 +1676,7 @@ export function renderEmployerPage(options: {
 ${jsonForScript(list)}
 </script>`
     : '<meta name="robots" content="noindex">';
-  return layout({ title: `${ru ? 'Вакансии' : 'Vacancies at'} ${options.name}`, version: options.version, active: 'employers', body, auth: options.auth, lang: options.lang, head });
+  return layout({ title: `${str.vacanciesAt} ${options.name}`, version: options.version, active: 'employers', body, auth: options.auth, lang: options.lang, head });
 }
 
 export function renderNetworkPage(options: {
@@ -1699,6 +1691,7 @@ export function renderNetworkPage(options: {
 }): string {
   const { baseUrl, version } = options;
   const ru = options.lang !== 'en';
+  const str = SEO_STRINGS[ru ? 'ru' : 'en'];
   const totalPoints = Math.round(options.participants.reduce((sum, p) => sum + p.points, 0) * 10);
   const totalLeads = options.totalWeekLeads ?? options.sources.reduce((sum, s) => sum + s.leads, 0);
 
@@ -1715,52 +1708,44 @@ export function renderNetworkPage(options: {
   }).join('\n');
 
   const body = `
-<nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/">openradar</a> / ${ru ? 'Сеть' : 'Network'}</nav>
+<nav class="crumbs" aria-label="${str.navigation}"><a href="/">openradar</a> / ${str.network}</nav>
 <div class="page-head"><div>
-  <h1>${ru ? 'Сеть openradar' : 'The openradar network'}</h1>
-  <p class="muted small">${ru
-    ? `Участники пополняют общую базу через расширение браузера, Telegram-каналы и узлы сети. Очки — рейтинг за ${options.windowDays} дней: кто первым обнаружил подтверждённый заказ, подтвердил публикацию или чей сигнал помог очистить ленту.`
-    : `Participants contribute to the shared feed via the browser extension, Telegram channels, and network nodes. Points reflect the ${options.windowDays}-day rating: who discovered a confirmed lead first, confirmed a post, or helped clean the feed.`}</p>
+  <h1>${str.theOpenradarNetwork}</h1>
+  <p class="muted small">${str.participantsContributeToTheShared(options.windowDays)}</p>
 </div></div>
 
 <div class="detail-grid" style="grid-template-columns: 1.4fr 1fr;">
   <section>
-    <h2>${ru ? 'Участники' : 'Participants'}</h2>
+    <h2>${str.participants}</h2>
     ${options.participants.length ? `
     <table class="profile-table">
-      <thead><tr><th>#</th><th>${ru ? 'Участник' : 'Participant'}</th><th>${ru ? 'Постов' : 'Posts'}</th><th>${ru ? 'Очки' : 'Points'}</th><th>${ru ? 'Уровень' : 'Tier'}</th></tr></thead>
+      <thead><tr><th>#</th><th>${str.participant}</th><th>${str.posts}</th><th>${str.points}</th><th>${str.tier2}</th></tr></thead>
       <tbody>${participantRows}</tbody>
     </table>
-    <p class="muted small">${ru
-      ? 'Для участников с привязанным GitHub отображается @handle; для независимых узлов сети — криптографический ключ (hex-подпись). Закрытые каналы здесь не раскрываются.'
-      : 'Participants with a linked GitHub account appear by their @handle; independent network nodes appear by their cryptographic signing key. Private channels are never disclosed here.'}</p>`
-    : `<p class="muted">${ru ? 'Пока никто не получал очков — самые первые подтверждения появятся здесь.' : 'Nobody has earned points yet — the first confirmations will show up here.'}</p>`}
+    <p class="muted small">${str.participantsWithALinkedGithub}</p>`
+    : `<p class="muted">${str.nobodyHasEarnedPointsYet}</p>`}
   </section>
   <section>
-    <h2>${ru ? 'Источники недели' : 'Sources of the week'}</h2>
+    <h2>${str.sourcesOfTheWeek}</h2>
     ${options.sources.length ? `
     <table class="profile-table">
-      <thead><tr><th>${ru ? 'Источник' : 'Source'}</th><th>${ru ? 'Лидов' : 'Leads'}</th></tr></thead>
+      <thead><tr><th>${str.source}</th><th>${str.leads}</th></tr></thead>
       <tbody>${sourceRows}</tbody>
     </table>
-    <p class="muted small">${ru ? `Всего за неделю: ${totalLeads.toLocaleString('ru-RU')} публикаций (автоматические парсеры и участники). Полный список с состояниями — на <a href="/sources">странице источников</a>.` : `${totalLeads.toLocaleString('en-US')} posts this week across automated parsers and participants. The full list with states lives on the <a href="/sources">sources page</a>.`}</p>`
-    : `<p class="muted">${ru ? 'Пока нет данных за неделю.' : 'No data for the week yet.'}</p>`}
-    <details class="score-help"><summary>${ru ? 'Как попасть в рейтинг' : 'How to get on the leaderboard'}</summary>
-      <p>${ru
-        ? `Установите расширение для браузера, отправляйте публикации или подключите источник (публичный канал, RSS или свой узел с флагом share). Суммарно участники сети набрали ${totalPoints} очков за ${options.windowDays} дней.`
-        : `Install the browser extension, submit posts, or connect a source (public channel, RSS, or your own node with the share flag). The network has earned ${totalPoints} points in ${options.windowDays} days.`}</p>
+    <p class="muted small">${str.postsThisWeekAcrossAutomated(totalLeads.toLocaleString('ru-RU'), totalLeads.toLocaleString('en-US'))}</p>`
+    : `<p class="muted">${str.noDataForTheWeek}</p>`}
+    <details class="score-help"><summary>${str.howToGetOnThe}</summary>
+      <p>${str.installTheBrowserExtensionSubmit(totalPoints, options.windowDays)}</p>
     </details>
   </section>
 </div>`;
 
-  const description = ru
-    ? 'Участники и источники openradar: рейтинг за 30 дней, источники недели, как подключить свой.'
-    : 'openradar participants and sources: the 30-day rating, sources of the week, how to connect yours.';
+  const description = str.openradarParticipantsAndSourcesThe;
 
   return layout({
     auth: options.auth,
     lang: options.lang,
-    title: ru ? 'Сеть' : 'Network',
+    title: str.network,
     version,
     body,
     head: `<meta name="description" content="${escapeHtml(description)}">
@@ -1777,6 +1762,7 @@ export function renderContributePage(options: {
 }): string {
   const { baseUrl, version } = options;
   const ru = options.lang !== 'en';
+  const str = SEO_STRINGS[ru ? 'ru' : 'en'];
   const card = (icon: string, title: string, minutes: string, text: string, snippet: string, gain: string): string => `
   <div class="path">
     <div class="path-head"><span class="path-icon" aria-hidden="true">${icon}</span>${escapeHtml(title)}<span class="path-time">${escapeHtml(minutes)}</span></div>
@@ -1786,71 +1772,59 @@ export function renderContributePage(options: {
   </div>`;
 
   const body = `
-<nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/">openradar</a> / ${ru ? 'Участвовать' : 'Contribute'}</nav>
+<nav class="crumbs" aria-label="${str.navigation}"><a href="/">openradar</a> / ${str.contribute}</nav>
 <div class="page-head"><div>
-  <h1>${ru ? 'Подключите источник за 10 минут' : 'Connect a source in 10 minutes'}</h1>
-  <p class="muted small">${ru
-    ? 'Приведите заказы, которые видите только вы. Кто делится — тот видит ленту первым: без задержки и с контактами. Рейтинг привязан к вашему ключу, атрибуция — к вашему каналу.'
-    : 'Bring the orders only you can see. Those who share see the feed first: no delay, contacts included. The rating belongs to your key, the attribution to your channel.'}</p>
+  <h1>${str.connectASourceIn10}</h1>
+  <p class="muted small">${str.bringTheOrdersOnlyYou}</p>
 </div></div>
 
 <div class="paths">
-  ${card('①', ru ? 'Telegram-канал' : 'A Telegram channel', ru ? '10 минут' : '10 minutes',
-    ru ? 'Публичный или ваш закрытый канал — через ваш аккаунт (MTProto), сессия живёт у вас.'
-       : 'A public or your private channel — through your own account (MTProto); the session stays with you.',
-    ru ? `radar telegram login --save ./session\nradar telegram scan\nradar source add --kind telegram-account --folder "Заказы"`
-       : `radar telegram login --save ./session\nradar telegram scan\nradar source add --kind telegram-account --folder "Orders"`,
-    ru ? '<b>×1.5 к рейтингу</b> за закрытый канал' : '<b>×1.5 rating</b> for a private channel')}
-  ${card('②', ru ? 'Свой парсер' : 'Your own parser', ru ? '5 минут' : '5 minutes',
-    ru ? 'Любой скрипт на любом языке: NDJSON-наблюдения в webhook-источник.'
-       : 'Any script in any language: NDJSON observations into a webhook source.',
-    ru ? `radar source add --kind webhook --title "Мой парсер"\npython parser.py | radar push --source <id>`
-       : `radar source add --kind webhook --title "My parser"\npython parser.py | radar push --source <id>`,
-    ru ? '<b>Скор лида</b> считают правила; LLM опционален' : '<b>The score</b> comes from rules; LLM optional')}
-  ${card('③', ru ? 'Готовый узел' : 'A full node', ru ? '15 минут' : '15 minutes',
-    ru ? 'Своя лента целиком: Docker, PostgreSQL, свои источники и уведомления.'
-       : 'A feed of your own: Docker, PostgreSQL, your sources and notifications.',
-    ru ? `git clone ${REPO_URL}.git && cd openradar\ndocker compose run --rm radar migrate\ndocker compose up -d`
-       : `git clone ${REPO_URL}.git && cd openradar\ndocker compose run --rm radar migrate\ndocker compose up -d`,
-    ru ? '<b>share</b>-флаг отправляет лиды в сеть' : 'the <b>share</b> flag sends leads to the network')}
+  ${card('①', str.aTelegramChannel, str.t10Minutes,
+    str.aPublicOrYourPrivate,
+    str.radarTelegramLoginSaveSession,
+    str.t15RatingForA)}
+  ${card('②', str.yourOwnParser, str.t5Minutes,
+    str.anyScriptInAnyLanguage,
+    str.radarSourceAddKindWebhook,
+    str.theScoreComesFromRules)}
+  ${card('③', str.aFullNode, str.t15Minutes,
+    str.aFeedOfYourOwn,
+    str.gitCloneGitCdOpenradar(REPO_URL),
+    str.theShareFlagSendsLeads)}
 </div>
 
 <div class="detail-grid" style="grid-template-columns: 1.2fr 1fr;">
   <section class="prose" style="margin-top:14px">
-    <h2>${ru ? 'Что даёт вклад' : 'What contribution gives'}</h2>
+    <h2>${str.whatContributionGives}</h2>
     <ul>
-      <li>${ru ? '<b>Ранний доступ:</b> Active видит лиды через 30 минут, Core — сразу же.' : '<b>Early access:</b> Active sees leads after 30 minutes, Core instantly.'}</li>
-      <li>${ru ? '<b>Рейтинг:</b> +1.0 за первого, ×1.5 закрытый канал, ×1.5 эксклюзив за 6 часов.' : '<b>Rating:</b> +1.0 for the first sighting, ×1.5 private channel, ×1.5 for a 6-hour exclusive.'}</li>
-      <li>${ru ? '<b>Атрибуция:</b> источники недели — на странице <a href="/network">Сети</a>.' : '<b>Attribution:</b> sources of the week live on the <a href="/network">Network</a> page.'}</li>
-      <li>${ru ? '<b>Стена историй:</b> нашли заказ — <a href="' + REPO_URL + '/issues/new?template=i-found-work.yml" target="_blank" rel="noopener">расскажите</a>, ваша история появится в README.' : '<b>Story wall:</b> found work through openradar? <a href="' + REPO_URL + '/issues/new?template=i-found-work.yml" target="_blank" rel="noopener">Tell the story</a> — it lands in the README.'}</li>
+      <li>${str.earlyAccessActiveSeesLeads}</li>
+      <li>${str.rating10ForThe}</li>
+      <li>${str.attributionSourcesOfTheWeek}</li>
+      <li>${str.storyWall(REPO_URL)}</li>
     </ul>
-    <p class="muted small">${ru
-      ? 'Не готовы делиться? Подпишитесь на RSS любого запроса — это тоже участие. Публичный список уже подключённых площадок — на <a href="/sources">странице источников</a>.'
-      : 'Not ready to share? Subscribe to the RSS of any query — that counts too. The public list of connected boards is on the <a href="/sources">sources page</a>.'}</p>
+    <p class="muted small">${str.notReadyToShareSubscribe}</p>
   </section>
   <section class="prose" style="margin-top:14px">
-    <h2>${ru ? 'Уровни доступа' : 'Access tiers'}</h2>
+    <h2>${str.accessTiers}</h2>
     <table class="profile-table">
-      <thead><tr><th>${ru ? 'Уровень' : 'Tier'}</th><th>${ru ? 'Как получить' : 'How'}</th><th>${ru ? 'Задержка' : 'Delay'}</th></tr></thead>
+      <thead><tr><th>${str.tier2}</th><th>${str.how}</th><th>${str.delay}</th></tr></thead>
       <tbody>
-        <tr><td>Guest</td><td>${ru ? 'без входа' : 'not signed in'}</td><td>12 ч</td></tr>
+        <tr><td>Guest</td><td>${str.notSignedIn}</td><td>12 ч</td></tr>
         <tr><td>Member</td><td>GitHub</td><td>3 ч</td></tr>
-        <tr><td>Active</td><td>${ru ? 'рейтинг ≥ 10' : 'rating ≥ 10'}</td><td>30 ${ru ? 'мин' : 'min'}</td></tr>
-        <tr><td>Core</td><td>${ru ? 'рейтинг ≥ 50' : 'rating ≥ 50'}</td><td>—</td></tr>
+        <tr><td>Active</td><td>${str.rating10}</td><td>30 ${str.min}</td></tr>
+        <tr><td>Core</td><td>${str.rating50}</td><td>—</td></tr>
       </tbody>
     </table>
-    <p class="muted small">${ru ? 'Подробности протокола: ' : 'Protocol details: '}<a href="${REPO_URL}/blob/main/docs/PROTOCOL.md" target="_blank" rel="noopener">docs/PROTOCOL.md</a></p>
+    <p class="muted small">${str.protocolDetails}<a href="${REPO_URL}/blob/main/docs/PROTOCOL.md" target="_blank" rel="noopener">docs/PROTOCOL.md</a></p>
   </section>
 </div>`;
 
-  const description = ru
-    ? 'Подключите свой Telegram-канал, парсер или узел к openradar: без задержки, с контактами и рейтингом участника.'
-    : 'Connect your Telegram channel, parser or node to openradar: no delay, contacts, participant rating.';
+  const description = str.connectYourTelegramChannelParser;
 
   return layout({
     auth: options.auth,
     lang: options.lang,
-    title: ru ? 'Участвовать' : 'Contribute',
+    title: str.contribute,
     version,
     body,
     head: `<meta name="description" content="${escapeHtml(description)}">
@@ -1868,6 +1842,7 @@ export function renderApiDocsPage(options: {
 }): string {
   const { baseUrl, version } = options;
   const ru = options.lang !== 'en';
+  const str = SEO_STRINGS[ru ? 'ru' : 'en'];
   const spec = renderOpenApi(baseUrl) as {
     info: { title: string; description: string };
     paths: Record<string, Record<string, {
@@ -1894,7 +1869,7 @@ export function renderApiDocsPage(options: {
     Object.entries(methods).map(([method, op]) => {
       const params = (op.parameters ?? [])
         .map((param) => {
-          const req = param.required ? (ru ? 'обязательный' : 'required') : (ru ? 'опциональный' : 'optional');
+          const req = param.required ? str.required : str.optional;
           const type = schemaType(param.schema);
           return `<tr><td><code>${escapeHtml(param.name)}</code></td><td>${escapeHtml(param.in)}</td><td>${escapeHtml(req)}</td><td>${escapeHtml(type)}</td><td>${escapeHtml(param.description ?? '')}</td></tr>`;
         })
@@ -1908,14 +1883,14 @@ export function renderApiDocsPage(options: {
   <h2><code class="api-method">${escapeHtml(method.toUpperCase())}</code> <code>${escapeHtml(path)}</code></h2>
   <p>${escapeHtml(op.summary ?? '')}</p>
   ${op.description ? `<p class="muted">${escapeHtml(op.description)}</p>` : ''}
-  ${params ? `<h3>${ru ? 'Параметры' : 'Parameters'}</h3>
+  ${params ? `<h3>${str.parameters}</h3>
   <div class="table-wrap"><table class="api-params">
-    <thead><tr><th>${ru ? 'Имя' : 'Name'}</th><th>${ru ? 'Где' : 'In'}</th><th>${ru ? 'Обязательность' : 'Required'}</th><th>${ru ? 'Тип' : 'Type'}</th><th>${ru ? 'Описание' : 'Description'}</th></tr></thead>
+    <thead><tr><th>${str.name}</th><th>${str.in}</th><th>${str.required2}</th><th>${str.type}</th><th>${str.description}</th></tr></thead>
     <tbody>${params}</tbody>
   </table></div>` : ''}
-  ${op.requestBody?.description ? `<p><strong>${ru ? 'Тело запроса:' : 'Request body:'}</strong> ${escapeHtml(op.requestBody.description)}</p>` : ''}
-  ${responses ? `<h3>${ru ? 'Ответы' : 'Responses'}</h3><ul>${responses}</ul>` : ''}
-  <p class="muted small"><a href="${escapeHtml(baseUrl)}${escapeHtml(path.split('{')[0]!)}">${ru ? 'Открыть на сайте' : 'Try on the live site'}</a></p>
+  ${op.requestBody?.description ? `<p><strong>${str.requestBody}</strong> ${escapeHtml(op.requestBody.description)}</p>` : ''}
+  ${responses ? `<h3>${str.responses}</h3><ul>${responses}</ul>` : ''}
+  <p class="muted small"><a href="${escapeHtml(baseUrl)}${escapeHtml(path.split('{')[0]!)}">${str.tryOnTheLiveSite}</a></p>
 </article>`;
     }),
   ).join('\n');
@@ -1928,30 +1903,26 @@ export function renderApiDocsPage(options: {
     })
     .join('');
 
-  const title = ru ? 'HTTP API' : 'HTTP API';
-  const description = ru
-    ? 'Публичный REST API openradar: эндпоинты, параметры и ответы. Без ключа. OpenAPI 3.1: /openapi.json.'
-    : 'openradar public REST API: endpoints, parameters and responses. No API key. OpenAPI 3.1 at /openapi.json.';
+  const title = str.httpApi;
+  const description = str.openradarPublicRestApiEndpoints;
   const body = `
-<nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/">openradar</a> / API</nav>
+<nav class="crumbs" aria-label="${str.navigation}"><a href="/">openradar</a> / API</nav>
 <div class="page-head"><div>
   <h1>${escapeHtml(spec.info.title)}</h1>
   <p class="muted small">${escapeHtml(spec.info.description)}</p>
 </div></div>
 <section class="prose" style="margin-top:0">
-  <p>${ru
-    ? 'Ключ не нужен. Гости видят ленту с задержкой и без контактов — та же проекция, что на сайте. Машиночитаемая схема: '
-    : 'No API key. Guests see the feed with a delay and without contacts — the same projection as the website. Machine-readable schema: '}<a href="/openapi.json"><code>/openapi.json</code></a>${ru ? '; каталог RFC 9727: ' : '; RFC 9727 catalog: '}<a href="/.well-known/api-catalog"><code>/.well-known/api-catalog</code></a>; MCP: <a href="/mcp"><code>/mcp</code></a>.</p>
-  <h2>${ru ? 'Быстрый старт' : 'Quick start'}</h2>
+  <p>${str.noApiKeyGuestsSee}<a href="/openapi.json"><code>/openapi.json</code></a>${str.rfc9727Catalog}<a href="/.well-known/api-catalog"><code>/.well-known/api-catalog</code></a>; MCP: <a href="/mcp"><code>/mcp</code></a>.</p>
+  <h2>${str.quickStart}</h2>
   <pre><code>curl "${escapeHtml(baseUrl)}/api/leads?q=python&amp;type=gig&amp;limit=5"
 curl "${escapeHtml(baseUrl)}/api/market?title=python%20backend&amp;type=job"
 curl "${escapeHtml(baseUrl)}/v2/feed?limit=20"</code></pre>
-  <h2>${ru ? 'Эндпоинты' : 'Endpoints'}</h2>
+  <h2>${str.endpoints}</h2>
   ${endpoints}
-  <h2>${ru ? 'Схема Lead' : 'Lead schema'}</h2>
+  <h2>${str.leadSchema}</h2>
   <p>${escapeHtml(spec.components?.schemas?.Lead?.description ?? '')}</p>
   <div class="table-wrap"><table class="api-params">
-    <thead><tr><th>${ru ? 'Поле' : 'Field'}</th><th>${ru ? 'Тип' : 'Type'}</th><th>${ru ? 'Описание' : 'Description'}</th></tr></thead>
+    <thead><tr><th>${str.field}</th><th>${str.type}</th><th>${str.description}</th></tr></thead>
     <tbody>${leadProps}</tbody>
   </table></div>
 </section>
@@ -1983,38 +1954,31 @@ export function renderTrustPage(options: {
 }): string {
   const { baseUrl, version } = options;
   const ru = options.lang !== 'en';
+  const str = SEO_STRINGS[ru ? 'ru' : 'en'];
   const body = `
-<nav class="crumbs" aria-label="${ru ? 'Навигация' : 'Navigation'}"><a href="/">openradar</a> / Trust</nav>
+<nav class="crumbs" aria-label="${str.navigation}"><a href="/">openradar</a> / Trust</nav>
 <div class="page-head"><div>
   <h1>Trust &amp; data</h1>
-  <p class="muted small">${ru ? 'Что собирает openradar, чего не собирает никогда и как удалить данные.' : 'What openradar collects, what it never does, and how to get data removed.'}</p>
+  <p class="muted small">${str.whatOpenradarCollectsWhatIt}</p>
 </div></div>
 <section class="prose" style="margin-top:0">
-  <h2>${ru ? 'Что собирается' : 'What we collect'}</h2>
-  <p>${ru
-    ? 'Только публичные постинги: открытые ленты бирж, официальные API, публичные страницы Telegram и письма-оповещения, которые оператор узла получил сам. Каждый источник объявляет уровень доступа и риски — это часть кода адаптера.'
-    : 'Public postings only: open board feeds, official APIs, public Telegram pages and job-alert mail the node operator received themselves. Every source declares its access level and risks — it is part of the adapter code.'}</p>
-  <h2>${ru ? 'Чего здесь нет и не будет' : 'What is never here'}</h2>
+  <h2>${str.whatWeCollect}</h2>
+  <p>${str.publicPostingsOnlyOpenBoard}</p>
+  <h2>${str.whatIsNeverHere}</h2>
   <ul>
-    <li>${ru ? 'Резюме и профилей кандидатов.' : 'Resumes and candidate profiles.'}</li>
-    <li>${ru ? 'Контактных данных людей, кроме тех, что написаны в самом посте; гостям они скрыты.' : 'People contact details beyond those written in the post itself; guests never see them.'}</li>
-    <li>${ru ? 'Обхода входа, капчи или платного доступа — это правило адаптеров, закреплённое в тестах.' : 'Login, CAPTCHA or paywall bypass — an adapter rule enforced in tests.'}</li>
-    <li>${ru ? 'Платного доступа: тарифов нет и не планируется.' : 'Paid access: there is no paid tier and none is planned.'}</li>
+    <li>${str.resumesAndCandidateProfiles}</li>
+    <li>${str.peopleContactDetailsBeyondThose}</li>
+    <li>${str.loginCaptchaOrPaywallBypass}</li>
+    <li>${str.paidAccessThereIsNo}</li>
   </ul>
-  <h2>${ru ? 'Безопасность' : 'Security'}</h2>
-  <p>${ru
-    ? 'Секреты только в переменных окружения узла. Запросы к источникам идут через SSRF-guard с проверкой адреса в момент соединения. События участников подписаны (BIP-340), HTTP-подписи одноразовые. HTML источников не рендерится, текст передаётся моделям как данные, скрытые Unicode-инструкции вырезаются на приёме.'
-    : 'Secrets live in node environment variables only. Outbound requests go through an SSRF guard that checks the address at connect time. Participant events are signed (BIP-340); HTTP signatures are single-use. Source HTML is never rendered; text is handed to models as data, and hidden Unicode instructions are stripped at intake.'}</p>
-  <h2>${ru ? 'Удаление' : 'Removal'}</h2>
-  <p>${ru
-    ? 'Площадка может потребовать убрать свой источник — он отключается из конфигурации, посты канала скрываются модератором. Участник удаляет свои посты событием kind 4042. По вопросам: '
-    : 'A board can ask to remove its source: it is disabled in the configuration and its posts are hidden by a moderator. A participant deletes their posts with a kind 4042 event. Questions: '}${'<a href="' + REPO_URL + '/issues" target="_blank" rel="noopener">GitHub issues</a>.'}</p>
-  <p class="muted small">${ru ? 'Статус сервиса: ' : 'Service status: '}<a href="/health">/health</a> · ${ru ? 'Документация API: ' : 'API docs: '}<a href="/docs">/docs</a> · <a href="/openapi.json">/openapi.json</a></p>
+  <h2>${str.security}</h2>
+  <p>${str.secretsLiveInNodeEnvironment}</p>
+  <h2>${str.removal}</h2>
+  <p>${str.aBoardCanAskTo}${'<a href="' + REPO_URL + '/issues" target="_blank" rel="noopener">GitHub issues</a>.'}</p>
+  <p class="muted small">${str.serviceStatus}<a href="/health">/health</a> · ${str.apiDocs}<a href="/docs">/docs</a> · <a href="/openapi.json">/openapi.json</a></p>
 </section>`;
 
-  const description = ru
-    ? 'Что собирает openradar (только публичные постинги), чего не собирает никогда, как обеспечивается безопасность и как удалить данные.'
-    : 'What openradar collects (public postings only), what it never does, how it is secured, and how to get data removed.';
+  const description = str.whatOpenradarCollectsPublicPostings;
 
   return layout({
     auth: options.auth,

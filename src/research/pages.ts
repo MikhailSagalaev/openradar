@@ -6,8 +6,9 @@ import { escapeHtml, jsonForScript } from '../core/text.ts';
 import { layout, type AuthDisplay } from '../server/ui.ts';
 import { RESEARCH_ENHANCE_HEAD, renderResearchEnhancements } from './enhance.ts';
 import { translateCity, translateSkill, translateSourceTitle, type SupportedLang } from '../server/i18n.ts';
-import { periodEn } from './pages-en.ts';
+import { ROLE_EN, periodEn } from './pages-en.ts';
 import { GRADE_LABELS, MIN_CONFIDENCE, ROLES, roleLabel } from './derive.ts';
+import type { EffectMagnitude } from './stats.ts';
 
 const MIN_CONFIDENCE_PCT = Math.round(MIN_CONFIDENCE * 100);
 import {
@@ -37,14 +38,17 @@ import {
   type Slice,
 } from './report.ts';
 
-const REPO_URL = 'https://github.com/MikhailSagalaev/openradar';
-const ORIGIN_LABELS: Record<string, string> = {
-  page: 'разметка страницы вакансии',
-  text: 'текст публикации',
-  budget: 'бюджет, указанный площадкой',
-  model: 'разбор текста моделью',
+export const REPO_URL = 'https://github.com/MikhailSagalaev/openradar';
+export const ORIGIN_LABELS: Record<SupportedLang, Record<string, string>> = {
+  ru: {
+    page: 'разметка страницы вакансии',
+    text: 'текст публикации',
+    budget: 'бюджет, указанный площадкой',
+    model: 'разбор текста моделью',
+  },
+  en: { page: 'vacancy page markup', text: 'post text', budget: "the board's budget", model: 'language model' },
 };
-const LICENSE = 'CC BY 4.0';
+export const LICENSE = 'CC BY 4.0';
 
 interface BarRow {
   label: string;
@@ -53,11 +57,15 @@ interface BarRow {
   pay: Dist;
 }
 
-const num = (value: number): string => new Intl.NumberFormat('ru-RU').format(value).replace(/ /g, ' ');
+/** Thousands separated: «12 345» in Russian, «12,345» in English. */
+export function formatNum(value: number, lang: SupportedLang = 'ru'): string {
+  return lang === 'en' ? new Intl.NumberFormat('en-US').format(value) : new Intl.NumberFormat('ru-RU').format(value).replace(/ /g, ' ');
+}
+const num = (value: number): string => formatNum(value);
 const short = (rub: number): string => (rub >= 1000 ? `${num(Math.round(rub / 1000))} тыс.` : num(rub));
 
 /** Median with its 95% interval on the middle half of pay. Rows below the threshold are left out. */
-function rangeChart(rows: BarRow[], options: { unit?: (v: number) => string; caption?: string; lang?: SupportedLang } = {}): string {
+export function rangeChart(rows: Array<Omit<BarRow, 'n'> & { n?: number }>, options: { unit?: (v: number) => string; caption?: string; lang?: SupportedLang } = {}): string {
   const en = options.lang === 'en';
   const shown = rows.filter((row) => row.pay.median !== undefined);
   if (!shown.length) return `<p class="muted small">${en ? `Not enough data yet: at least ${MIN_MEDIAN} posts with stated pay are needed in a group.` : `Пока мало данных: нужна хотя бы ${MIN_MEDIAN} публикаций с оплатой в группе.`}</p>`;
@@ -95,8 +103,9 @@ function rangeChart(rows: BarRow[], options: { unit?: (v: number) => string; cap
 <p class="rs-legend"><span class="rs-dot-key"></span> ${en ? 'median' : 'медиана'} <span class="rs-ci-key"></span> ${en ? '95% CI of median' : '95% интервал медианы'} <span class="rs-band-key"></span> ${en ? 'middle half (25th to 75th percentile)' : 'половина публикаций (от 25-го до 75-го процентиля)'}${options.caption ? ` · ${escapeHtml(options.caption)}` : ''}</p>`;
 }
 
-function countBars(rows: Array<{ label: string; n: number; note?: string }>): string {
+export function countBars(rows: Array<{ label: string; n: number; note?: string }>, lang: SupportedLang = 'ru'): string {
   if (!rows.length) return '';
+  const num = (value: number): string => formatNum(value, lang);
   const max = Math.max(...rows.map((row) => row.n));
   return `<div class="rs-chart">${rows
     .map((row) => `<div class="rs-row">
@@ -136,7 +145,7 @@ function weekly(rows: Report['jobs']['weekly'], indexed?: Report['jobs']['weekly
 ${indexed && indexed.length >= 2 ? `<p class="muted small">Индекс состава, 100 = первая неделя корзины: ${indexed.map((row) => `${row.week.slice(8, 10)}.${row.week.slice(5, 7)} — ${row.index}`).join('; ')}. В корзине роли с 30 и более оплачиваемыми вакансиями за период; неделя роли берётся, если в ней 10 и более.</p>` : ''}`;
 }
 
-function kpi(value: string, label: string): string {
+export function kpi(value: string, label: string): string {
   return `<div class="rs-kpi"><b>${escapeHtml(value)}</b><span>${escapeHtml(label)}</span></div>`;
 }
 
@@ -144,27 +153,65 @@ function sliceRows(slices: Slice[], href?: (key: string) => string | undefined):
   return slices.map((s) => ({ label: s.label, href: href?.(s.key), n: s.n, pay: s.pay }));
 }
 
-function quoteButton(quote: string, lang: SupportedLang = 'ru'): string {
+export function quoteButton(quote: string, lang: SupportedLang = 'ru'): string {
   return `<button type="button" class="rs-quote" data-quote="${escapeHtml(quote)}">${lang === 'en' ? 'Copy quote' : 'Скопировать цитату'}</button>`;
 }
 
-function renderEditorialInsight(insight?: Report['editorialInsight']): string {
+const TASK_EN: Record<string, string> = {
+  'Базовый копирайтинг и рерайт текстов': 'Basic copywriting and rewriting',
+  'Шаблонная вёрстка и типовые сайты': 'Template markup and stock websites',
+  'Типовой перевод документации и статей': 'Routine translation of documents and articles',
+  'Типовые баннеры, креативы и карточки': 'Stock banners, ad creatives and product cards',
+  'Интеграция AI-агентов, RAG & n8n/Make': 'AI agent integration, RAG and n8n/Make',
+  'Рефакторинг кода после AI (Cursor/Lovable)': 'Fixing AI-generated code (Cursor/Lovable)',
+  'Обучение LoRA и ComfyUI пайплайны': 'LoRA training and ComfyUI pipelines',
+  'Telegram Mini Apps и AI-боты': 'Telegram Mini Apps and AI bots',
+};
+const PERIOD_EN: Record<string, string> = {
+  'Пн (Старт)': 'Mon (start)',
+  'Вт–Ср (Пик)': 'Tue–Wed (peak)',
+  'Чт–Пт (Спад)': 'Thu–Fri (decline)',
+  'Сб–Вс (Уикенд)': 'Sat–Sun (weekend)',
+};
+
+/**
+ * The report stores Russian labels (roles by their Russian name, task groups, bump periods);
+ * English pages translate them here, so frozen reports read in English too.
+ */
+export function researchLabel(label: string, lang: SupportedLang): string {
+  if (lang !== 'en') return label;
+  if (label === 'Другие направления') return 'Other roles';
+  const role = ROLES.find((r) => r.label === label);
+  if (role) return ROLE_EN[role.slug] ?? label;
+  if (label === 'Другое') return ROLE_EN.other ?? 'Other';
+  const week = /^Неделя (\d)(.*)$/.exec(label);
+  if (week) return `Week ${week[1]}${week[2]}`;
+  return TASK_EN[label] ?? PERIOD_EN[label] ?? label;
+}
+
+const EMBED_LABEL: Record<SupportedLang, string> = { ru: 'Встроить', en: 'Embed' };
+
+export function renderEditorialInsight(insight?: Report['editorialInsight'], lang: SupportedLang = 'ru'): string {
   if (!insight) return '';
+  const en = lang === 'en';
   return `<div class="rs-insight-card">
   <div class="rs-insight-head">
-    <span class="rs-insight-tag">Редакционный вывод openradar</span>
-    <button type="button" class="rs-quote" data-quote="${escapeHtml(insight.quote)}">Скопировать для СМИ</button>
+    <span class="rs-insight-tag">${en ? 'openradar editorial takeaway' : 'Редакционный вывод openradar'}</span>
+    <button type="button" class="rs-quote" data-quote="${escapeHtml(insight.quote)}">${en ? 'Copy for the press' : 'Скопировать для СМИ'}</button>
   </div>
   <p class="rs-insight-text">
-    <b>Факт:</b> ${escapeHtml(insight.fact)}<br>
-    <b>Контраст:</b> ${escapeHtml(insight.contrast)}<br>
-    <b>Вывод:</b> ${escapeHtml(insight.conclusion)}
+    <b>${en ? 'Fact' : 'Факт'}:</b> ${escapeHtml(insight.fact)}<br>
+    <b>${en ? 'Contrast' : 'Контраст'}:</b> ${escapeHtml(insight.contrast)}<br>
+    <b>${en ? 'Takeaway' : 'Вывод'}:</b> ${escapeHtml(insight.conclusion)}
   </p>
 </div>`;
 }
 
-function renderCartaSection(rows?: Report['cartaCapital'], baseUrl = ''): string {
+export function renderCartaSection(rows?: Report['cartaCapital'], baseUrl = '', lang: SupportedLang = 'ru'): string {
   if (!rows || !rows.length) return '';
+  const en = lang === 'en';
+  const num = (value: number): string => formatNum(value, lang);
+  const share = (value: number): string => (en ? `${value}%` : formatShare(value));
   const embedCode = `<iframe src="${baseUrl}/embed/carta" width="100%" height="380" frameborder="0"></iframe>`;
   const maxVol = Math.max(...rows.map((r) => r.nShare), 1);
   const maxCap = Math.max(...rows.map((r) => r.capitalShare), 1);
@@ -173,73 +220,81 @@ function renderCartaSection(rows?: Report['cartaCapital'], baseUrl = ''): string
   return `<section class="rs-section">
   <div class="rs-section-head">
     <div>
-      <h2>Заказы на фрилансе: число против суммы бюджетов</h2>
-      <p class="muted small">Русскоязычные заказы с указанным бюджетом. Слева — их число, справа — доля в сумме этих бюджетов. Сумма чувствительна к отдельным крупным заказам.</p>
+      <h2>${en ? 'Freelance orders: count versus total budget' : 'Заказы на фрилансе: число против суммы бюджетов'}</h2>
+      <p class="muted small">${en
+        ? 'Russian-language orders that state a budget. Left: how many there are; right: their share of the sum of those budgets. The sum is sensitive to single large orders.'
+        : 'Русскоязычные заказы с указанным бюджетом. Слева — их число, справа — доля в сумме этих бюджетов. Сумма чувствительна к отдельным крупным заказам.'}</p>
     </div>
-    <button type="button" class="btn ghost btn-sm rs-embed-btn" data-embed="${escapeHtml(embedCode)}">&lt;/&gt; Встроить</button>
+    <button type="button" class="btn ghost btn-sm rs-embed-btn" data-embed="${escapeHtml(embedCode)}">&lt;/&gt; ${EMBED_LABEL[lang]}</button>
   </div>
   <div class="rs-dual-table">
     <div class="rs-dual-head">
-      <div>Специализация</div>
-      <div style="text-align:right">Заказов</div>
-      <div style="text-align:right">Доля суммы бюджетов</div>
+      <div>${en ? 'Specialisation' : 'Специализация'}</div>
+      <div style="text-align:right">${en ? 'Orders' : 'Заказов'}</div>
+      <div style="text-align:right">${en ? 'Share of total budget' : 'Доля суммы бюджетов'}</div>
     </div>
     ${rows.map((r) => `<div class="rs-dual-row">
-      <div class="rs-dual-name font-medium">${escapeHtml(r.label)}</div>
+      <div class="rs-dual-name font-medium">${escapeHtml(researchLabel(r.label, lang))}</div>
       <div class="rs-dual-vol">
         <div class="rs-bar-vol-wrap"><div class="rs-bar-vol" style="width:${Math.min(100, Math.round((r.nShare / maxVol) * 100))}%"></div></div>
-        <span class="rs-mono">${num(r.n)} <span class="muted small">(${formatShare(r.nShare)})</span></span>
+        <span class="rs-mono">${num(r.n)} <span class="muted small">(${share(r.nShare)})</span></span>
       </div>
       <div class="rs-dual-cap">
         <div class="rs-bar-cap-wrap"><div class="rs-bar-cap" style="width:${Math.min(100, Math.round((r.capitalShare / maxCap) * 100))}%"></div></div>
-        <span class="rs-mono" style="font-weight:700">${formatShare(r.capitalShare)}</span>
+        <span class="rs-mono" style="font-weight:700">${share(r.capitalShare)}</span>
       </div>
     </div>`).join('')}
   </div>
-  <p class="muted small" style="margin-top:8px;text-align:right">Всего ${num(totalN)} заказов с бюджетом</p>
+  <p class="muted small" style="margin-top:8px;text-align:right">${en ? `${num(totalN)} orders with a budget in total` : `Всего ${num(totalN)} заказов с бюджетом`}</p>
 </section>`;
 }
 
 const signedPct = (value: number): string => (value > 0 ? `+${value}%` : `${value}%`);
 
-function renderTaskTransformationSection(data?: Report['taskTransformation'], baseUrl = ''): string {
+export function renderTaskTransformationSection(data?: Report['taskTransformation'], baseUrl = '', lang: SupportedLang = 'ru'): string {
   if (!data) return '';
+  const en = lang === 'en';
+  const num = (value: number): string => formatNum(value, lang);
+  const money = (value: number): string => (en ? `₽${num(value)}` : formatRub(value));
   const embedCode = `<iframe src="${baseUrl}/embed/task-transformation" width="100%" height="420" frameborder="0"></iframe>`;
-  const sample = data.totalMatched ? ` (выборка: ${num(data.totalMatched)} заказов)` : '';
+  const sample = data.totalMatched ? (en ? ` (sample: ${num(data.totalMatched)} orders)` : ` (выборка: ${num(data.totalMatched)} заказов)`) : '';
   const subTitle = data.netShiftPct === undefined
-    ? `Русскоязычные заказы: для сравнения бюджетов пока мало заказов с суммой${sample}`
-    : `Русскоязычные заказы: медианный бюджет новых задач ${signedPct(data.netShiftPct)} к типовым${sample}. Это разница в цене разных работ, а не надбавка за навык.`;
+    ? (en ? `Russian-language orders: too few orders with a budget to compare yet${sample}` : `Русскоязычные заказы: для сравнения бюджетов пока мало заказов с суммой${sample}`)
+    : en
+      ? `Russian-language orders: the median budget of new tasks is ${signedPct(data.netShiftPct)} against routine ones${sample}. This is a price gap between different jobs, not a premium for a skill.`
+      : `Русскоязычные заказы: медианный бюджет новых задач ${signedPct(data.netShiftPct)} к типовым${sample}. Это разница в цене разных работ, а не надбавка за навык.`;
+  const median = en ? 'median' : 'медиана';
 
   return `<section class="rs-section">
   <div class="rs-section-head">
     <div>
-      <h2>Типовые задачи и новые AI-задачи в заказах</h2>
+      <h2>${en ? 'Routine tasks and new AI tasks in freelance orders' : 'Типовые задачи и новые AI-задачи в заказах'}</h2>
       <p class="muted small">${escapeHtml(subTitle)}</p>
     </div>
-    <button type="button" class="btn ghost btn-sm rs-embed-btn" data-embed="${escapeHtml(embedCode)}">&lt;/&gt; Встроить</button>
+    <button type="button" class="btn ghost btn-sm rs-embed-btn" data-embed="${escapeHtml(embedCode)}">&lt;/&gt; ${EMBED_LABEL[lang]}</button>
   </div>
   <div class="rs-transform-grid">
     <div class="rs-transform-col">
       <div class="rs-transform-title">
-        <span>Типовые задачи</span>
-        <span class="rs-mono text-muted">${data.routineMedian ? `медиана ${formatRub(data.routineMedian)}` : 'базовые задачи'}</span>
+        <span>${en ? 'Routine tasks' : 'Типовые задачи'}</span>
+        <span class="rs-mono text-muted">${data.routineMedian ? `${median} ${money(data.routineMedian)}` : en ? 'baseline tasks' : 'базовые задачи'}</span>
       </div>
       <ul class="rs-transform-list">
         ${data.routine.map((item) => `<li>
-          <span>${escapeHtml(item.label)} <span class="muted small">(n = ${num(item.n)})</span></span>
-          <span class="rs-mono rs-diff-down">${item.medianPay ? formatRub(item.medianPay) : '—'}</span>
+          <span>${escapeHtml(researchLabel(item.label, lang))} <span class="muted small">(n = ${num(item.n)})</span></span>
+          <span class="rs-mono rs-diff-down">${item.medianPay ? money(item.medianPay) : '—'}</span>
         </li>`).join('')}
       </ul>
     </div>
     <div class="rs-transform-col">
       <div class="rs-transform-title">
-        <span>Новые AI-задачи</span>
-        <span class="rs-mono ${(data.netShiftPct ?? 0) < 0 ? 'rs-diff-down' : 'rs-diff-up'}">${data.emergingMedian ? `медиана ${formatRub(data.emergingMedian)}` : 'AI-компетенции'}</span>
+        <span>${en ? 'New AI tasks' : 'Новые AI-задачи'}</span>
+        <span class="rs-mono ${(data.netShiftPct ?? 0) < 0 ? 'rs-diff-down' : 'rs-diff-up'}">${data.emergingMedian ? `${median} ${money(data.emergingMedian)}` : en ? 'AI skills' : 'AI-компетенции'}</span>
       </div>
       <ul class="rs-transform-list">
         ${data.emerging.map((item) => `<li>
-          <span>${escapeHtml(item.label)} <span class="muted small">(n = ${num(item.n)})</span></span>
-          <span class="rs-mono ${item.changePct !== undefined && item.changePct < 0 ? 'rs-diff-down' : 'rs-diff-up'}">${item.medianPay ? formatRub(item.medianPay) : '—'}${item.changePct !== undefined ? ` · ${signedPct(item.changePct)}` : ''}</span>
+          <span>${escapeHtml(researchLabel(item.label, lang))} <span class="muted small">(n = ${num(item.n)})</span></span>
+          <span class="rs-mono ${item.changePct !== undefined && item.changePct < 0 ? 'rs-diff-down' : 'rs-diff-up'}">${item.medianPay ? money(item.medianPay) : '—'}${item.changePct !== undefined ? ` · ${signedPct(item.changePct)}` : ''}</span>
         </li>`).join('')}
       </ul>
     </div>
@@ -255,8 +310,10 @@ function bumpSpline(r0: number, r1: number, r2: number, r3: number): string {
   return `M 60 ${y0} C 155 ${y0}, 155 ${y1}, 250 ${y1} S 345 ${y2}, 440 ${y2} S 535 ${y3}, 630 ${y3}`;
 }
 
-function renderBumpChartSection(bump?: Report['bumpChart'], baseUrl = ''): string {
+export function renderBumpChartSection(bump?: Report['bumpChart'], baseUrl = '', lang: SupportedLang = 'ru'): string {
   if (!bump || bump.quarters.length < 4 || bump.months.length < 4) return '';
+  const en = lang === 'en';
+  const label = (text: string): string => researchLabel(text, lang);
   const embedCode = `<iframe src="${baseUrl}/embed/bump" width="100%" height="380" frameborder="0"></iframe>`;
 
   const getLines = (snapshots: BumpSnapshot[]) => {
@@ -270,7 +327,7 @@ function renderBumpChartSection(bump?: Report['bumpChart'], baseUrl = ''): strin
       const r3 = item.rank;
       const cy = 50 + (r3 - 1) * 40;
       return {
-        name: item.name,
+        name: label(item.name),
         rank: r3,
         d: bumpSpline(r0, r1, r2, r3),
         cy,
@@ -291,18 +348,18 @@ function renderBumpChartSection(bump?: Report['bumpChart'], baseUrl = ''): strin
     { stroke: 'var(--line-strong)', fill: 'var(--line-strong)', width: 2, fontColor: 'var(--muted)', weight: '500' },
   ];
 
-  const p0 = bump.quarters[0]?.period ?? '';
-  const p1 = bump.quarters[1]?.period ?? '';
-  const p2 = bump.quarters[2]?.period ?? '';
-  const p3 = bump.quarters[3]?.period ?? '';
+  const p0 = label(bump.quarters[0]?.period ?? '');
+  const p1 = label(bump.quarters[1]?.period ?? '');
+  const p2 = label(bump.quarters[2]?.period ?? '');
+  const p3 = label(bump.quarters[3]?.period ?? '');
 
   const clientData = {
     weeks: {
-      periods: bump.quarters.map((q) => q.period),
+      periods: bump.quarters.map((q) => label(q.period)),
       lines: weeklyLines,
     },
     days: {
-      periods: bump.months.map((m) => m.period),
+      periods: bump.months.map((m) => label(m.period)),
       lines: rhythmLines,
     },
   };
@@ -310,15 +367,15 @@ function renderBumpChartSection(bump?: Report['bumpChart'], baseUrl = ''): strin
   return `<section class="rs-section">
   <div class="rs-section-head">
     <div>
-      <h2>Эволюция позиций направлений в рейтинге спроса</h2>
-      <p class="muted small">S-образные кривые отслеживают смену мест ключевых специализаций по неделям и дням недели</p>
+      <h2>${en ? 'How roles move in the demand ranking' : 'Эволюция позиций направлений в рейтинге спроса'}</h2>
+      <p class="muted small">${en ? 'S-curves track how the leading specialisations change places by week and by day of the week' : 'S-образные кривые отслеживают смену мест ключевых специализаций по неделям и дням недели'}</p>
     </div>
     <div class="rs-head-actions">
       <div class="rs-toggle-group">
-        <button type="button" class="rs-toggle-pill active" id="btn-bump-w" onclick="switchBump('weeks')">По неделям</button>
-        <button type="button" class="rs-toggle-pill" id="btn-bump-d" onclick="switchBump('days')">По дням недели</button>
+        <button type="button" class="rs-toggle-pill active" id="btn-bump-w" onclick="switchBump('weeks')">${en ? 'By week' : 'По неделям'}</button>
+        <button type="button" class="rs-toggle-pill" id="btn-bump-d" onclick="switchBump('days')">${en ? 'By day of week' : 'По дням недели'}</button>
       </div>
-      <button type="button" class="btn ghost btn-sm rs-embed-btn" data-embed="${escapeHtml(embedCode)}">&lt;/&gt; Встроить</button>
+      <button type="button" class="btn ghost btn-sm rs-embed-btn" data-embed="${escapeHtml(embedCode)}">&lt;/&gt; ${EMBED_LABEL[lang]}</button>
     </div>
   </div>
   <div class="rs-bump-box">
@@ -352,7 +409,27 @@ function renderBumpChartSection(bump?: Report['bumpChart'], baseUrl = ''): strin
 </section>`;
 }
 
-const QUOTE_SCRIPT = `<script>
+/** The dialog the «Embed» buttons open; QUOTE_SCRIPT fills and copies it. */
+export function renderEmbedDialog(lang: SupportedLang = 'ru'): string {
+  const en = lang === 'en';
+  return `<dialog id="embed-dialog" class="auth-dialog">
+  <div class="auth-card" style="max-width:520px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 style="margin:0;font-size:16px;font-weight:600">${en ? 'Embed the chart' : 'Встроить график'}</h3>
+      <button type="button" class="modal-close-btn" onclick="document.getElementById('embed-dialog').close()" aria-label="${en ? 'Close' : 'Закрыть окно'}">×</button>
+    </div>
+    <p class="muted small" style="margin-bottom:12px">${en
+      ? 'Paste this HTML into your site, article or blog. The chart is responsive and carries the openradar attribution (CC BY 4.0).'
+      : 'Вставьте этот HTML-код на свой сайт, в статью на Habr/VC или в блог. График адаптивен и содержит атрибуцию openradar (CC BY 4.0).'}</p>
+    <textarea id="embed-code-textarea" readonly rows="3" style="width:100%;font-family:monospace;font-size:12px;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--soft);resize:none"></textarea>
+    <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px">
+      <button type="button" class="btn" onclick="copyEmbedCode(this)">${en ? 'Copy code' : 'Скопировать код'}</button>
+    </div>
+  </div>
+</dialog>`;
+}
+
+export const QUOTE_SCRIPT = `<script>
 document.addEventListener('click', (event) => {
   const quoteBtn = event.target.closest('[data-quote]');
   if (quoteBtn) {
@@ -956,6 +1033,20 @@ export function renderFormulaGallerySection(lang: SupportedLang = "ru"): string 
 </div>`;
 }
 
+const MAGNITUDE_TEXT: Record<SupportedLang, Record<EffectMagnitude, string>> = {
+  ru: { negligible: "пренебрежимый", small: "малый", medium: "средний", large: "большой" },
+  en: { negligible: "negligible", small: "small", medium: "medium", large: "large" },
+};
+
+function magnitudeText(m: EffectMagnitude, lang: SupportedLang): string {
+  return MAGNITUDE_TEXT[lang][m];
+}
+
+/** "< 0.001" stays as is; "0.042" reads "= 0.042". */
+function pText(formatted: string): string {
+  return formatted.startsWith("<") ? formatted : `= ${formatted}`;
+}
+
 export function renderScientificSection(scientific: ScientificAnalysis | undefined, lang: SupportedLang = "ru"): string {
   if (!scientific) return "";
   const { mincer, varianceDecomposition, hypotheses, oaxaca } = scientific;
@@ -1047,8 +1138,8 @@ export function renderScientificSection(scientific: ScientificAnalysis | undefin
   <p class="rs-legend">
     <span><b>${en ? "Model diagnostics:" : "Диагностика модели:"}</b> N = ${num(mincer.n)}</span>
     <span>· R² = <b>${mincer.r2.toFixed(3)}</b> (${en ? "adj. R²" : "скорр. R²"} = <b>${mincer.adjR2.toFixed(3)}</b>)</span>
-    <span>· ${en ? "Fisher F-statistic" : "F-статистика Фишера"} = <b>${mincer.fStat}</b> (p &lt; 0.001)</span>
-    <span class="muted">· *** p &lt; 0.001, ** p &lt; 0.01, * p &lt; 0.05</span>
+    <span>· ${en ? "Fisher F-statistic" : "F-статистика Фишера"} = <b>${mincer.fStat}</b>${mincer.fPValue ? ` (p ${escapeHtml(pText(mincer.fPValue))})` : ""}</span>
+    <span class="muted">· *** p &lt; 0.001, ** p &lt; 0.01, * p &lt; 0.05${mincer.df !== undefined ? (en ? `; t-test with df = ${num(mincer.df)}` : `; t-критерий, df = ${num(mincer.df)}`) : ""}</span>
   </p>` : ""}
   ${varianceDecomposition.length ? `<h3 style="margin-top:20px">${en ? "Table 2. ANOVA decomposition of log-wage variance (η² Eta-squared)" : "Таблица 2. Декомпозиция дисперсии логарифма зарплат (ANOVA η²)"}</h3>
   <p class="muted small">${en
@@ -1084,8 +1175,8 @@ export function renderScientificSection(scientific: ScientificAnalysis | undefin
   </div>` : ""}
   ${hypotheses.length ? `<h3 style="margin-top:20px">${en ? "Table 3. Formal hypothesis testing summary (H1–H4)" : "Таблица 3. Сводка проверки статистических гипотез (H1–H4)"}</h3>
   <p class="muted small">${en
-    ? "Distribution-free rank tests (Mann–Whitney U, Kruskal–Wallis H, Spearman ρ_s) and standardized effect sizes."
-    : "Непараметрические ранговые критерии (Манна — Уитни U, Краскела — Уоллиса H, корреляция Спирмена ρ_s), защищённые от правосторонней асимметрии и выбросов."}</p>
+    ? "Distribution-free rank tests (Mann–Whitney U, Kruskal–Wallis H, Spearman ρ_s) and standardized effect sizes. Exact p-values; Holm–Bonferroni adjustment across H1–H4. A hypothesis is confirmed only when the adjusted p &lt; 0.05 and the effect is at least small: with thousands of observations almost any difference is significant."
+    : "Непараметрические ранговые критерии (Манна — Уитни U, Краскела — Уоллиса H, корреляция Спирмена ρ_s), защищённые от правосторонней асимметрии и выбросов. p-значения точные, поправка Холма — Бонферрони на четыре гипотезы. Гипотеза подтверждена, только если скорректированное p &lt; 0,05 и эффект не меньше малого: на тысячах наблюдений значимой оказывается почти любая разница."}</p>
   <div style="overflow-x:auto">
     <table class="table">
       <thead>
@@ -1096,7 +1187,9 @@ export function renderScientificSection(scientific: ScientificAnalysis | undefin
           <th>n</th>
           <th>${en ? "Test statistic" : "Статистика"}</th>
           <th>p-value</th>
+          <th>${en ? "p (Holm)" : "p (Холм)"}</th>
           <th>${en ? "Effect size" : "Размер эффекта"}</th>
+          <th>${en ? "Verdict" : "Вывод"}</th>
         </tr>
       </thead>
       <tbody>
@@ -1109,8 +1202,10 @@ export function renderScientificSection(scientific: ScientificAnalysis | undefin
               <td class="small">${escapeHtml(tr?.method ?? h.method)}</td>
               <td>${num(h.n)}</td>
               <td><code>${escapeHtml(h.statValue)}</code></td>
-              <td><b>${escapeHtml(h.pValue)}</b></td>
-              <td><b>${escapeHtml(tr?.effectLabel ?? h.effectLabel)}: ${escapeHtml(h.effectValue)}</b></td>
+              <td>${escapeHtml(h.pValue)}</td>
+              <td><b>${h.pAdjustedLabel ? escapeHtml(h.pAdjustedLabel) : "—"}</b></td>
+              <td><b>${escapeHtml(tr?.effectLabel ?? h.effectLabel)}: ${escapeHtml(h.effectValue)}</b>${h.effectMagnitude ? ` <span class="muted small">(${escapeHtml(magnitudeText(h.effectMagnitude, lang))})</span>` : ""}</td>
+              <td>${h.confirmed ? `<b style="color:var(--emerald)">${en ? "confirmed" : "подтверждена"}</b>` : `<span class="muted">${en ? "not confirmed" : "не подтверждена"}</span>`}</td>
             </tr>`;
           })
           .join("")}
@@ -1213,7 +1308,9 @@ export function renderReportPage(options: {
     jobs.roles.some((r) => r.slug === slug) ? `/research/roles/${slug}` : undefined;
   const intlMedian = jobs.intl.median;
   const usd = report.fx?.USD;
-  const oldMethod = report.version < REPORT_VERSION
+  const oldMethod = report.version === 2 && REPORT_VERSION > 2
+    ? `<p class="notice">Отчёт зафиксирован по версии методики 2: p-значения в блоке проверки гипотез там приблизительные, без поправки на множественные сравнения и без порога размера эффекта. Остальные цифры считаются так же. <a href="/research/methodology#versions">Что изменилось</a>.</p>`
+    : report.version < REPORT_VERSION
     ? `<p class="notice">Отчёт зафиксирован по прежней версии методики (${report.version}): в нём заказы смешаны с зарубежными, а «денежная масса» складывает зарплаты с бюджетами проектов. Цифры не менялись, чтобы ссылки на них оставались верными, но эти разделы цитировать не стоит. <a href="/research/methodology#versions">Что изменилось</a>.</p>`
     : '';
 
@@ -1330,7 +1427,7 @@ ${renderIntlResearchSection(report, (slug) => (jobs.roles.some((r) => r.slug ===
 <section class="rs-section">
   <h2>Откуда данные</h2>
   ${countBars(totals.platforms.slice(0, 12).map((p) => ({ label: p.key, n: p.n })))}
-  ${totals.payOrigins && Object.keys(totals.payOrigins).length ? `<p class="small">Откуда взята оплата: ${Object.entries(totals.payOrigins).map(([origin, n]) => `${escapeHtml(ORIGIN_LABELS[origin] ?? origin)} — ${num(n)}`).join(', ')}.${totals.excluded ? ` Модель отсеяла ${num(totals.excluded)} рекламных и нерелевантных публикаций.` : ''}</p>` : ''}
+  ${totals.payOrigins && Object.keys(totals.payOrigins).length ? `<p class="small">Откуда взята оплата: ${Object.entries(totals.payOrigins).map(([origin, n]) => `${escapeHtml(ORIGIN_LABELS.ru[origin] ?? origin)} — ${num(n)}`).join(', ')}.${totals.excluded ? ` Модель отсеяла ${num(totals.excluded)} рекламных и нерелевантных публикаций.` : ''}</p>` : ''}
   ${jobs.byPlatform?.length ? `<h3>Медиана зависит от площадки</h3><p class="small">На площадках разные вакансии, поэтому общая медиана меняется вместе с составом источников.</p>${rangeChart(sliceRows(jobs.byPlatform))}` : ''}
   ${jobs.bounds ? `<p class="small">Как указана сумма: вилка — ${num(jobs.bounds.range)}, только «от» — ${num(jobs.bounds.from)}, только «до» — ${num(jobs.bounds.to)}, одна сумма — ${num(jobs.bounds.single)}.${jobs.bounds.rangeMedian ? ` Медиана только по вилкам — ${formatRub(jobs.bounds.rangeMedian)}.` : ''}${totals.foreignPayJobs ? ` Ещё ${num(totals.foreignPayJobs)} русскоязычных вакансий платят в долларах или евро и в рублёвую медиану не входят.` : ''}</p>` : ''}
 </section>
@@ -1350,19 +1447,7 @@ ${renderIntlResearchSection(report, (slug) => (jobs.roles.some((r) => r.slug ===
   ${jobs.roles.length ? `<h2>По направлениям</h2><div class="chip-links">${jobs.roles.map((r) => `<a href="/research/roles/${escapeHtml(r.slug)}">${escapeHtml(r.label)}</a>`).join('')}</div>` : ''}
 </section>
 
-<dialog id="embed-dialog" class="auth-dialog">
-  <div class="auth-card" style="max-width:520px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <h3 style="margin:0;font-size:16px;font-weight:600">Встроить график</h3>
-      <button type="button" class="modal-close-btn" onclick="document.getElementById('embed-dialog').close()" aria-label="Закрыть окно">×</button>
-    </div>
-    <p class="muted small" style="margin-bottom:12px">Вставьте этот HTML-код на свой сайт, в статью на Habr/VC или в блог. График адаптивен и содержит атрибуцию openradar (CC BY 4.0).</p>
-    <textarea id="embed-code-textarea" readonly rows="3" style="width:100%;font-family:monospace;font-size:12px;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--soft);resize:none"></textarea>
-    <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px">
-      <button type="button" class="btn" onclick="copyEmbedCode(this)">Скопировать код</button>
-    </div>
-  </div>
-</dialog>`;
+${renderEmbedDialog('ru')}`;
 
   const dataset = {
     '@context': 'https://schema.org',
@@ -1988,8 +2073,8 @@ export function renderIntlResearchSection(
 
   ${sci?.mincer ? `<h3 style="margin-top:20px" id="intl-mincer">${en ? "Global Mincerian log-wage OLS regression (ln USD/year, White HC1 robust SEs)" : "Глобальное уравнение Минсера (МНК для ln USD/год с робастными ошибками Уайта HC1)"}</h3>
   <p class="muted small">${en
-    ? `Estimated across N = ${num(sci.mincer.n)} graded international IT vacancies (R² = ${sci.mincer.r2.toFixed(3)}, F = ${sci.mincer.fStat}, p < 0.001). Baseline β₀ represents a Junior/Intern engineer in Central/Eastern Europe without AI skill requirements.`
-    : `Оценка по N = ${num(sci.mincer.n)} международным IT-вакансиям с указанным грейдом (R² = ${sci.mincer.r2.toFixed(3)}, F = ${sci.mincer.fStat}, p < 0.001). Базовая категория (β₀) — специалист уровня Junior/Intern в хабе ЦВЕ без требований AI.`}</p>
+    ? `Estimated across N = ${num(sci.mincer.n)} graded international IT vacancies (R² = ${sci.mincer.r2.toFixed(3)}, F = ${sci.mincer.fStat}${sci.mincer.fPValue ? `, p ${escapeHtml(pText(sci.mincer.fPValue))}` : ""}). Baseline β₀ represents a Junior/Intern engineer in Central/Eastern Europe without AI skill requirements.`
+    : `Оценка по N = ${num(sci.mincer.n)} международным IT-вакансиям с указанным грейдом (R² = ${sci.mincer.r2.toFixed(3)}, F = ${sci.mincer.fStat}${sci.mincer.fPValue ? `, p ${escapeHtml(pText(sci.mincer.fPValue))}` : ""}). Базовая категория (β₀) — специалист уровня Junior/Intern в хабе ЦВЕ без требований AI.`}</p>
   <div style="overflow-x:auto">
     <table class="table">
       <thead>
@@ -2183,7 +2268,7 @@ ${quote ? `<p class="small">${escapeHtml(quote)} ${quoteButton(quote, options.la
 ${detail.byLanguage.some((s) => s.pay.median) ? `<section class="rs-section"><h2>${ru ? 'По языку' : 'By language'}</h2>${rangeChart(sliceRows(detail.byLanguage), { lang: options.lang })}</section>` : ''}
 <section class="rs-section"><h2>${ru ? 'По городам' : 'By city'}</h2>${rangeChart(regionRows, { lang: options.lang })}</section>
 ${skillRows.length ? `<section class="rs-section"><h2>${ru ? 'Навыки' : 'Skills'}</h2>${rangeChart(skillRows, { lang: options.lang })}</section>` : ''}
-${detail.companies.length ? `<section class="rs-section"><h2>${ru ? 'Кто нанимает' : 'Who is hiring'}</h2>${countBars(detail.companies.map((c) => ({ label: translateSourceTitle(c.name, options.lang), n: c.n })))}` + '</section>' : ''}
+${detail.companies.length ? `<section class="rs-section"><h2>${ru ? 'Кто нанимает' : 'Who is hiring'}</h2>${countBars(detail.companies.map((c) => ({ label: translateSourceTitle(c.name, options.lang), n: c.n })), options.lang)}` + '</section>' : ''}
 <section class="rs-section prose" style="margin-top:36px">
   <p>${ru
     ? 'Свежие вакансии этого направления — в <a href="/?type=job">ленте вакансий</a>. Как считаются цифры — в <a href="/research/methodology">методике</a>. Все направления — в <a href="/research">общем отчёте</a>.'
@@ -2286,6 +2371,7 @@ export function renderMethodologyPage(options: { baseUrl: string; version: strin
       <p><code>ln(W_i) = β₀ + β₁·Middle_i + β₂·Senior_i + β₃·Lead_i + γ₁·Moscow_i + γ₂·SPb_i + γ₃·Remote_i + δ·AI_i + ε_i</code></p>
       Стандартные ошибки коэффициентов оцениваются в гетероскедастично-робастной форме Уайта <code>HC1: V_HC1 = (n / (n − k)) · (XᵀX)⁻¹ · (∑ e_i² x_i x_iᵀ) · (XᵀX)⁻¹</code>, а точный процентный вклад бинарного фактора вычисляется по формуле Халворсена — Палмквиста: <code>Δ% = (exp(β_j) − 1) × 100%</code>.</li>
     <li><b>Дисперсионный анализ (ANOVA η²) и непараметрические ранговые критерии:</b> доля общей дисперсии логарифма зарплат, объясняемая каждым институциональным фактором (грейд, география, направление, язык программирования), рассчитывается как <code>η² = SS_between / SS_total</code>. Проверка статистических гипотез выполняется непараметрическими критериями Манна — Уитни (<code>U</code>-тест с поправкой на связки и рангово-бисериальной дельтой Клиффа <code>δ = 2U / (n₁n₂) − 1</code>), Краскела — Уоллиса (<code>H</code>-тест и <code>ε² = H / (N − 1)</code>) и ранговой корреляцией Спирмена (<code>ρ_s</code>).</li>
+    <li><b>Статистический вывод (версия отчёта 3):</b> все p-значения точные, а не по таблице критических значений. Для H-критерия Краскела — Уоллиса p берётся из распределения χ² с фактическим числом степеней свободы df = k − 1 (группы меньше пяти наблюдений отбрасываются, поэтому df меняется), H делится на поправку на связанные ранги <code>1 − Σ(t³ − t) / (N³ − N)</code>; размер эффекта <code>ε² = H / (N − 1)</code> (0,01 — малый, 0,08 — средний, 0,26 — большой; Tomczak &amp; Tomczak, 2014). Для U-критерия Манна — Уитни p из нормального приближения с поправкой на связи, размер эффекта — дельта Клиффа (0,147 / 0,33 / 0,474; Romano и соавт., 2006). Для корреляции Спирмена <code>t = ρ·√((k − 2)/(1 − ρ²))</code> и распределение Стьюдента с k − 2 степенями свободы, пороги |ρ| 0,1 / 0,3 / 0,5 (Cohen, 1988). Коэффициенты уравнения Минсера: <code>t = β / SE(HC1)</code>, p из распределения Стьюдента с df = n − k, звёзды выводятся из p (*** &lt; 0,001, ** &lt; 0,01, * &lt; 0,05). F-критерии ANOVA и регрессии — по распределению Фишера. Гипотезы H1–H4 проверяются на одних данных, поэтому к ним применяется поправка Холма — Бонферрони; публикуются и исходное, и скорректированное p. Гипотеза считается подтверждённой, только если скорректированное p &lt; 0,05, эффект не меньше малого и направление совпадает с ожидаемым. На десятках тысяч наблюдений значимой оказывается почти любая разница, поэтому значимость без размера эффекта ничего не доказывает. p записываются по APA: «&lt; 0,001» или три знака после запятой. Попарные сравнения Данна после H-критерия не публикуются.</li>
   </ul>
 
   ${renderFormulaGallerySection('ru')}
@@ -2310,6 +2396,7 @@ export function renderMethodologyPage(options: { baseUrl: string; version: strin
   </ul>
 
   <h2 id="versions">11. История версий методики</h2>
+  <p><b>Отчёт, версия 3 (ноябрь 2026).</b> Точные p-значения вместо таблиц критических значений: χ² с фактическим df для H-критерия (раньше всегда брались пороги для df = 3), распределение Стьюдента для коэффициентов Минсера и корреляции Спирмена (раньше нормальные пороги и всегда «*** p &lt; 0,001» для константы), распределение Фишера для F. Поправка Холма — Бонферрони на семейство гипотез H1–H4 и решение «подтверждена» только при скорректированном p &lt; 0,05 и эффекте не меньше малого. Остальные цифры отчёта не изменились.</p>
   <p><b>Отчёт, версия 2, и индекс, версия 2 (ноябрь 2026).</b> Заказы считаются только по русскоязычному рынку (исключение англоязычных заказов убрало смещение медианы на +40%). Сравнение объёма бюджетов и AI-задач изолировано внутри проектных заказов. Введены курсы Банка России, непараметрические 95% ДИ медиан, стратифицированная поправка Кохрана — Мантеля — Хензеля на состав ролей и грейдов, матрица «Направление × Грейд», расчёт зарплатных премий навыков и очистка лестницы грейдов от не-IT розницы. В индексе введена фиксированная панель лент, фильтр поднятых вакансий по номеру публикации и защита 7-дневного среднего от залповых выгрузок при старте лент. Отчёт за октябрь 2026 сохранён в версии 1 для неизменности цитат.</p>
 
     <h2>12. Открытые данные и словарь переменных (Codebook / Data Dictionary)</h2>

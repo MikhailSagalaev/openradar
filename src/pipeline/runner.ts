@@ -140,7 +140,7 @@ export class PollRunner {
       const fxCheckDue = Date.now() - this.lastFxCheckAt >= FX_RATES_CHECK_MS;
       if (fxCheckDue) {
         this.lastFxCheckAt = Date.now();
-        void ensureFxRates(this.deps.store).catch((error: unknown) => {
+        void ensureFxRates(this.deps.store, new Date(), this.deps.fetchImpl ?? fetch).catch((error: unknown) => {
           // The reference rates stand in until the Bank of Russia answers.
           this.logger.warn('Bank of Russia rates not saved', { error: error instanceof Error ? error.message : String(error) });
         });
@@ -226,7 +226,7 @@ export class PollRunner {
     if (perHour <= 0 || this.enrichmentRunning || Date.now() < this.nextEnrichmentAt) return;
     this.nextEnrichmentAt = Date.now() + EXTRACTION_INTERVAL_MS;
     this.enrichmentRunning = true;
-    void runEnrichment({ store: this.deps.store, env, logger: this.deps.logger.child('enrich'), fetchImpl: fetch }, Math.max(1, Math.round(perHour / BATCHES_PER_HOUR)))
+    void runEnrichment({ store: this.deps.store, env, logger: this.deps.logger.child('enrich'), fetchImpl: this.deps.fetchImpl ?? fetch }, Math.max(1, Math.round(perHour / BATCHES_PER_HOUR)))
       .then((summary) => {
         if (summary.checked) this.logger.info('pages read', { ...summary });
       })
@@ -270,7 +270,7 @@ export class PollRunner {
     this.nextDecisionsAt = Date.now() + EXTRACTION_INTERVAL_MS;
     this.decisionsRunning = true;
     this.decisionKeys ??= newDecisionKeys(env);
-    void runDecisions({ store: this.deps.store, env, logger: this.deps.logger.child('decide'), fetchImpl: fetch, replay: this.decisionReplay, keys: this.decisionKeys }, Math.max(1, Math.round(perHour / BATCHES_PER_HOUR)))
+    void runDecisions({ store: this.deps.store, env, logger: this.deps.logger.child('decide'), fetchImpl: this.deps.fetchImpl ?? fetch, replay: this.decisionReplay, keys: this.decisionKeys }, Math.max(1, Math.round(perHour / BATCHES_PER_HOUR)))
       .then((summary) => {
         if (summary.asked) this.logger.info('decisions finished', { ...summary });
         if (this.deps.services) {
@@ -296,7 +296,7 @@ export class PollRunner {
             this.deps.services.record('subq', 'SubQ AI (классификация)', 'ok');
           }
         }
-        return applyDecisions({ store: this.deps.store, env, logger: this.deps.logger.child('decide'), fetchImpl: fetch }, 500).then((done) => {
+        return applyDecisions({ store: this.deps.store, env, logger: this.deps.logger.child('decide'), fetchImpl: this.deps.fetchImpl ?? fetch }, 500).then((done) => {
           if (done.hidden || done.closed || done.moved || done.directed) this.logger.info('decisions applied', { ...done });
           return summary;
         });
@@ -362,13 +362,34 @@ export class PollRunner {
 
     const store = this.deps.store;
     try {
-      const leads = await store.cleanupOldLeads?.(this.deps.env.RADAR_RETENTION_DAYS);
-      // Soft archive (hot/warm/cold): старые лиды прячутся из фида и сжимаются, но данные
-      // остаются на диске — ни одного удаления, вся история ссылок сохраняется.
-      const archived = await store.archiveOldLeads?.(this.deps.env.RADAR_LEADS_HOT_DAYS ?? 60);
+      // Lead lifecycle: hot (0..HOT_DAYS) — в фиде; warm — archived_at, скрыт из фида/API,
+      // строка целиком; месяц, целиком ушедший в warm, выгружается в RADAR_ARCHIVE_DIR
+      // (leads-YYYY-MM.jsonl.gz). Cold (> RETENTION_DAYS) — только для уже выгруженных
+      // месяцев: compact (по умолчанию) сжимает строку на месте — id, голоса, рейтинг,
+      // показы и доставки остаются для статистики; delete (явный выбор) удаляет строки
+      // каскадом вместе с гроссбухом и доставками; off — ничего не делает.
+      const env = this.deps.env;
+      const hotDays = env.RADAR_LEADS_HOT_DAYS ?? 60;
+      const archiveDir = env.RADAR_ARCHIVE_DIR ?? 'data/archives';
+      const retentionMode = env.RADAR_RETENTION_MODE ?? 'compact';
+      if (retentionMode !== 'off' && hotDays >= env.RADAR_RETENTION_DAYS) {
+        this.logger.warn('RADAR_LEADS_HOT_DAYS >= RADAR_RETENTION_DAYS: leads reach retention only once archived and exported', {
+          hotDays,
+          retentionDays: env.RADAR_RETENTION_DAYS,
+        });
+      }
+      const archived = await store.archiveOldLeads?.(hotDays);
       if (archived) this.logger.info('leads archived', { archived });
-      const exported = await store.exportArchivedLeads?.(this.deps.env.RADAR_ARCHIVE_DIR ?? 'data/archives', this.deps.env.RADAR_LEADS_HOT_DAYS ?? 60);
+      const exported = await store.exportArchivedLeads?.(archiveDir, hotDays);
       if (exported?.length) this.logger.info('archive exported', { files: exported });
+      let leads: number | undefined;
+      if (retentionMode === 'compact') {
+        const compacted = await store.compactOldLeads?.(env.RADAR_RETENTION_DAYS, archiveDir);
+        if (compacted) this.logger.info('leads compacted', { compacted });
+      } else if (retentionMode === 'delete') {
+        // Only months already exported: the archive file keeps the full copy.
+        leads = await store.cleanupOldLeads?.(env.RADAR_RETENTION_DAYS, archiveDir);
+      }
       // Голоса-события и история запусков нужны для health (24ч) и аудита;
       // храним их 30 дней, чтобы таблицы не росли бесконечно.
       const runs = await store.cleanupRuns?.(30);

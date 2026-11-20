@@ -2,7 +2,10 @@ services:
   postgres:
     # A new major version takes a new volume: scripts/pg-upgrade.sh moves the data over.
     # ParadeDB bundles Tantivy BM25 (pg_search), pg_analytics and pgvector in PostgreSQL.
-    image: ${RADAR_PG_IMAGE:-paradedb/paradedb:latest-pg18}
+    # Pinned, not latest-pg18: a pg_search upgrade can need `ALTER EXTENSION pg_search UPDATE`
+    # or a BM25 reindex, so it should land deliberately, not with whatever image was pulled. CI tests this same tag
+    # (PARADEDB_IMAGE in .github/workflows/ci.yml); bump both together.
+    image: ${RADAR_PG_IMAGE:-paradedb/paradedb:0.26.8-pg18}
     container_name: radar_postgres
     restart: unless-stopped
     mem_limit: ${RADAR_PG_MEM_LIMIT:-1g}

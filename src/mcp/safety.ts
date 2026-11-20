@@ -44,6 +44,7 @@ export type LadderOutcome<T = unknown> = HeldAction | ExecutedReceipt<T>;
 
 interface Pending {
   tool: string;
+  /** Hash of the payload bound to the caller identity (see boundHash). */
   argsHash: string;
   expiresAt: number;
 }
@@ -56,6 +57,15 @@ interface Receipt {
   at: number;
 }
 
+interface InFlight {
+  tool: string;
+  argsHash: string;
+  promise: Promise<unknown>;
+}
+
+/** Hard cap on outstanding held actions; the oldest are evicted first. */
+const MAX_PENDING = 5000;
+
 /** Stable hash of the action's arguments (key order independent). */
 export function argsHash(tool: string, args: Record<string, unknown>): string {
   const clean: Record<string, unknown> = {};
@@ -64,6 +74,14 @@ export function argsHash(tool: string, args: Record<string, unknown>): string {
     clean[key] = args[key];
   }
   return sha256(`${tool}\n${JSON.stringify(clean)}`);
+}
+
+/**
+ * The payload hash bound to the caller: a token held for one caller (agent user, web viewer,
+ * the local stdio operator) cannot be confirmed by another, even with identical arguments.
+ */
+export function boundHash(tool: string, args: Record<string, unknown>, identity = ''): string {
+  return sha256(`${identity}\n${argsHash(tool, args)}`);
 }
 
 /** A one-line summary of the pending action for the confirmation prompt. */
@@ -92,6 +110,7 @@ export function summarizeAction(tool: string, args: Record<string, unknown>): st
  */
 export class ConfirmationLadder {
   private readonly pending = new Map<string, Pending>();
+  private readonly inFlight = new Map<string, InFlight>();
   private readonly receipts = new Map<string, Receipt>();
   private readonly windowMs: number;
   private readonly now: () => number;
@@ -102,36 +121,59 @@ export class ConfirmationLadder {
   }
 
   /**
-   * Decides what a write call should do. Without a valid token + identical args it returns a
-   * `held` action (no side effect). With them it returns `execute` (the caller runs the action
-   * once and records the receipt) or a replayed receipt.
+   * Runs a write call through the ladder. Without a valid token + identical args (from the
+   * same caller identity) it returns a `held` action and `execute` is not called. With them
+   * the pending entry is consumed synchronously, before any await, so concurrent duplicate
+   * confirmations cannot both execute: they share the one in-flight execution and get its
+   * receipt as a replay. If `execute` throws, the hold is re-armed so the user can retry.
    */
-  check(tool: string, args: Record<string, unknown>): { kind: 'held'; held: HeldAction } | { kind: 'execute'; token: string } | { kind: 'replay'; receipt: ExecutedReceipt } {
-    const hash = argsHash(tool, args);
+  async run(tool: string, args: Record<string, unknown>, execute: () => Promise<unknown>, identity = ''): Promise<LadderOutcome> {
+    const hash = boundHash(tool, args, identity);
     const token = typeof args.confirmation_token === 'string' ? args.confirmation_token : '';
     const confirmed = args.confirm === true && token.length > 0;
+    if (!confirmed) return this.hold(tool, hash, args);
 
-    if (confirmed) {
-      const receipt = this.receipts.get(token);
-      // A receipt only replays for the identical tool AND payload; altered args re-arm a hold.
-      if (receipt && receipt.tool === tool && receipt.argsHash === hash && this.now() - receipt.at <= this.windowMs) {
-        return { kind: 'replay', receipt: { status: 'executed', tool, replayed: true, result: receipt.result, actedOnBehalfOfUser: true } };
-      }
-      const pending = this.pending.get(token);
-      if (pending && pending.tool === tool && pending.argsHash === hash && pending.expiresAt > this.now()) {
-        return { kind: 'execute', token };
-      }
-      // A token without a matching held action (expired, foreign, or altered args) is refused.
-      return { kind: 'held', held: this.hold(tool, args, 'The confirmation token is invalid, expired, or the arguments changed. Review and confirm again.') };
+    const receipt = this.receipts.get(token);
+    // A receipt only replays for the identical tool AND payload AND caller; altered args re-arm a hold.
+    if (receipt && receipt.tool === tool && receipt.argsHash === hash && this.now() - receipt.at <= this.windowMs) {
+      return replayOf(tool, receipt.result);
     }
-    return { kind: 'held', held: this.hold(tool, args) };
+    const running = this.inFlight.get(token);
+    if (running && running.tool === tool && running.argsHash === hash) {
+      return replayOf(tool, await running.promise);
+    }
+    const pending = this.pending.get(token);
+    if (!pending || pending.tool !== tool || pending.argsHash !== hash || pending.expiresAt <= this.now()) {
+      // A token without a matching held action (expired, foreign, or altered args) is refused.
+      return this.hold(tool, hash, args, 'The confirmation token is invalid, expired, or the arguments changed. Review and confirm again.');
+    }
+    // Consume synchronously: from here on a duplicate sees the in-flight entry, not the hold.
+    this.pending.delete(token);
+    const promise = Promise.resolve().then(execute);
+    this.inFlight.set(token, { tool, argsHash: hash, promise });
+    try {
+      const result = await promise;
+      this.receipts.set(token, { tool, argsHash: hash, result, at: this.now() });
+      this.evict();
+      return { status: 'executed', tool, replayed: false, result, actedOnBehalfOfUser: true };
+    } catch (error) {
+      // Re-arm: the action failed, so the same token stays confirmable until it expires.
+      this.pending.set(token, pending);
+      throw error;
+    } finally {
+      this.inFlight.delete(token);
+    }
   }
 
-  private hold(tool: string, args: Record<string, unknown>, note?: string): HeldAction {
-    this.evict();
-    const hash = argsHash(tool, args);
+  /** Outstanding held actions (bounded; for tests and introspection). */
+  get pendingCount(): number {
+    return this.pending.size;
+  }
+
+  private hold(tool: string, hash: string, args: Record<string, unknown>, note?: string): HeldAction {
     const token = sha256(`${tool}\n${hash}\n${this.now()}\n${Math.random()}`);
     this.pending.set(token, { tool, argsHash: hash, expiresAt: this.now() + this.windowMs });
+    this.evict();
     return {
       status: 'held',
       tool,
@@ -144,21 +186,25 @@ export class ConfirmationLadder {
     };
   }
 
-  /** Records the result of an executed action so a replayed confirmation dedups. */
-  record(token: string, tool: string, result: unknown, argsHash: string): void {
-    this.pending.delete(token);
-    this.receipts.set(token, { tool, argsHash, result, at: this.now() });
-    this.evict();
-  }
-
   private evict(): void {
-    const cutoff = this.now() - this.windowMs;
-    for (const [k, v] of this.pending) if (v.expiresAt < this.now()) this.pending.delete(k);
+    const now = this.now();
+    const cutoff = now - this.windowMs;
+    for (const [k, v] of this.pending) if (v.expiresAt <= now) this.pending.delete(k);
     for (const [k, v] of this.receipts) if (v.at < cutoff) this.receipts.delete(k);
-    while (this.receipts.size > MAX_RECEIPTS) {
-      const oldest = this.receipts.keys().next().value;
-      if (oldest === undefined) break;
-      this.receipts.delete(oldest);
-    }
+    trimOldest(this.pending, MAX_PENDING);
+    trimOldest(this.receipts, MAX_RECEIPTS);
+  }
+}
+
+function replayOf(tool: string, result: unknown): ExecutedReceipt {
+  return { status: 'executed', tool, replayed: true, result, actedOnBehalfOfUser: true };
+}
+
+/** Maps iterate in insertion order, so the first keys are the oldest. */
+function trimOldest(map: Map<string, unknown>, max: number): void {
+  while (map.size > max) {
+    const oldest = map.keys().next().value;
+    if (oldest === undefined) break;
+    map.delete(oldest);
   }
 }

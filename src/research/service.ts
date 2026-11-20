@@ -35,6 +35,7 @@ let cached: { at: number; report: Report; records: ResearchRecord[] } | undefine
 export function resetResearchCache(): void {
   cached = undefined;
   building = undefined;
+  csvCache = undefined;
 }
 
 function withRates(report: Report, fx: Record<string, Record<string, number>> | undefined, at: string): Report {
@@ -73,6 +74,22 @@ async function buildLive(store: Store, now: Date, options: DeriveOptions): Promi
   const report = withRates(buildReport(records, period, 'live', now), await store.listFxRates?.(), period.to);
   cached = { at: now.getTime(), report, records };
   return cached;
+}
+
+/** The dataset CSV of one live build: built once per report build, not per request. */
+let csvCache: { build: object; csv: string } | undefined;
+
+/**
+ * The live dataset as CSV, cached next to the live report and rebuilt only when the report
+ * is. The held-back day is measured from the build time, the moment the records were read.
+ */
+export async function liveDatasetCsv(store: Store, now: Date = new Date(), options: DeriveOptions = {}): Promise<string> {
+  const build = await liveReport(store, now, options);
+  if (csvCache?.build === build) return csvCache.csv;
+  const at = 'at' in build && typeof build.at === 'number' ? new Date(build.at) : now;
+  const csv = datasetCsv(build.records, at);
+  csvCache = { build, csv };
+  return csv;
 }
 
 export function previousMonth(now: Date): string {

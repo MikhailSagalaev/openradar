@@ -122,9 +122,15 @@ const STOP = new Set([401, 402, 403, 429]);
  * a retry or an overlapping round replays the cached answer instead of double-charging. The
  * durable answer lives in the store; this guards the in-flight window before it is saved.
  * The runner shares one cache across rounds; a caller without one gets a fresh cache.
+ * Only answers are remembered: an HTTP status (a 429 above all) or an unparsable reply must
+ * not stop every round for the whole window — the next round asks again.
  */
 export function newDecisionReplay(): ReplayCache<ModelDecision | number | undefined> {
-  return new ReplayCache<ModelDecision | number | undefined>({ windowMs: 10 * 60_000, maxEntries: 5000 });
+  return new ReplayCache<ModelDecision | number | undefined>({
+    windowMs: 10 * 60_000,
+    maxEntries: 5000,
+    shouldCache: (value) => typeof value === 'object' && value !== null,
+  });
 }
 
 async function askOne(lead: { id: string; title: string; text: string }, deps: DecideDeps): Promise<ModelDecision | number | undefined> {
@@ -235,7 +241,12 @@ export async function runDecisions(deps: DecideDeps, limit: number): Promise<Dec
           if (STOP.has(answer)) summary.stopped = answer;
           else deps.logger.warn('decision refused', { status: answer });
         } else if (answer) {
-          await deps.store.saveModelDecision!(answer);
+          // The cached answer is about the text, not the post: another post with the same
+          // text gets it under its own id, so neither post stays undecided.
+          const decision = answer.leadId === lead.id
+            ? answer
+            : { ...answer, leadId: lead.id, decidedAt: (deps.now?.() ?? new Date()).toISOString() };
+          await deps.store.saveModelDecision!(decision);
           summary.saved++;
           summary.tokens += answer.tokens;
         } else {

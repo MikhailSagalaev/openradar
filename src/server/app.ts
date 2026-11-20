@@ -7,7 +7,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { escapeHtml, extractSkills, stripInvisible } from '../core/text.ts';
+import { escapeHtml, stripInvisible } from '../core/text.ts';
 import { emitLeadDeleted } from '../core/events.ts';
 import { renderRssFeed } from './feed.ts';
 import type { ParticipantRecord, UserRecord } from '../core/store.ts';
@@ -30,11 +30,12 @@ import { VERSION } from '../version.ts';
 import { githubOAuthConfigured, startGitHubOAuth, handleGitHubCallback, secureCookie } from './auth.ts';
 import { renderAdminAnalyticsPage, renderAdminPage, renderAdminUsersPage } from './admin.ts';
 import { analyticsFromEnv, contentSecurityPolicy } from './analytics.ts';
-import { filterOptions, IT_SKILLS, matchesSavedFilters, parseFeedFilters, type FeedFilters } from './filters.ts';
+import { filterOptions, IT_SKILLS, parseFeedFilters, type FeedFilters } from './filters.ts';
 import { computeInsights, estimateMarket } from '../core/market.ts';
 import { COLLECTOR_MAX_ORDERS, COLLECTOR_PLATFORMS, collectedOrderToRaw, type CollectorPlatform, COLLECTOR_SITES, collectedVacancyToRaw, type CollectorSite } from './collector.ts';
 import { configureRateLimit, rateLimit } from './ratelimit.ts';
 import { countResearch, countTokenDay, countUsage, pathTemplate, tierOf, usageDim, viaFrom } from './usage.ts';
+import { createPopularCounters } from './popular.ts';
 import { indexCsv, openradarIndex } from '../research/index.ts';
 import { qualityFlagsOf } from '../core/quality.ts';
 import { explainLead } from '../core/explain.ts';
@@ -110,7 +111,7 @@ import {
   renderSitemapXml,
 } from './seo.ts';
 import { renderApiCatalog, renderOpenApi } from './openapi.ts';
-import { datasetCsv, liveReport, monthSnapshot } from '../research/service.ts';
+import { liveDatasetCsv, liveReport, monthSnapshot } from '../research/service.ts';
 import { renderAcademicPaperLatex, renderEmbedPage, renderMethodologyPage, renderReportPage, renderRolePage } from '../research/pages.ts';
 import { extractPreviewFromHtml, validateSubmissionUrl } from './preview.ts';
 import { renderLogo, LOGO_SVG, LOGO_ASSET_PATH, FAVICON_SVG } from './logo.ts';
@@ -149,7 +150,28 @@ function isGitHubAdmin(user: UserRecord | undefined, runtime: Runtime): boolean 
     .some((entry) => (/^\d+$/.test(entry) ? Number(entry) === user.githubId : entry === user.handle.toLowerCase()));
 }
 
-async function isAdmin(c: Context, runtime: Runtime): Promise<boolean> {
+/**
+ * Per-request memo of the auth lookups: the viewer, the session user and the admin check are
+ * each resolved at most once per request, however many handlers and middlewares ask.
+ */
+declare module 'hono' {
+  interface ContextVariableMap {
+    radarCurrentUser: Promise<UserRecord | undefined>;
+    radarIsAdmin: Promise<boolean>;
+    radarViewer: Promise<Viewer>;
+  }
+}
+
+function isAdmin(c: Context, runtime: Runtime): Promise<boolean> {
+  let memo = c.get('radarIsAdmin');
+  if (!memo) {
+    memo = resolveIsAdmin(c, runtime);
+    c.set('radarIsAdmin', memo);
+  }
+  return memo;
+}
+
+async function resolveIsAdmin(c: Context, runtime: Runtime): Promise<boolean> {
   const env = runtime.env;
   if (env.RADAR_ADMIN_GITHUB && isGitHubAdmin(await currentUser(c, runtime), runtime)) return true;
   if (!env.RADAR_ADMIN_TOKEN) return false;
@@ -176,11 +198,18 @@ async function canRead(c: Context, runtime: Runtime): Promise<boolean> {
 }
 
 /** GitHub-authenticated user of this session, if any. */
-async function currentUser(c: Context, runtime: Runtime): Promise<UserRecord | undefined> {
-  const sessionId = getCookie(c, 'radar_session');
-  if (!sessionId || !runtime.store.getUserBySession) return undefined;
-  const user = await runtime.store.getUserBySession(sessionId);
-  return user ?? undefined;
+function currentUser(c: Context, runtime: Runtime): Promise<UserRecord | undefined> {
+  let memo = c.get('radarCurrentUser');
+  if (!memo) {
+    memo = (async () => {
+      const sessionId = getCookie(c, 'radar_session');
+      if (!sessionId || !runtime.store.getUserBySession) return undefined;
+      const user = await runtime.store.getUserBySession(sessionId);
+      return user ?? undefined;
+    })();
+    c.set('radarCurrentUser', memo);
+  }
+  return memo;
 }
 
 /** A lead card that does not exist (or is not visible): the cached renderer signals 404 with it. */
@@ -306,7 +335,16 @@ function invalidProxyUrl(config: Record<string, unknown>): string | null {
  * Admin sees everything; a logged-in GitHub user is a member; everyone else
  * is a guest. In hub mode the tier sets the feed delay; guests never see contacts.
  */
-async function viewerFromRequest(c: Context, runtime: Runtime): Promise<Viewer> {
+function viewerFromRequest(c: Context, runtime: Runtime): Promise<Viewer> {
+  let memo = c.get('radarViewer');
+  if (!memo) {
+    memo = resolveViewer(c, runtime);
+    c.set('radarViewer', memo);
+  }
+  return memo;
+}
+
+async function resolveViewer(c: Context, runtime: Runtime): Promise<Viewer> {
   // A GitHub administrator is still a user: the profile keeps their subscriptions and Telegram.
   if (await isAdmin(c, runtime)) return { tier: 'admin', userId: (await currentUser(c, runtime))?.id };
   const moderators = parseModerators(runtime.env.RADAR_MODERATORS);
@@ -1042,14 +1080,19 @@ export function createApp(runtime: Runtime): Hono {
   const apiUsageCounter = async (c: Context, next: Next): Promise<void> => {
     await next();
     if (c.res.status >= 400 || !runtime.store.bumpApiUsage) return;
-    const viewer = await viewerFromRequest(c, runtime);
-    countUsage(runtime, usageDim({
-      surface: 'api',
-      detail: pathTemplate(c.req.path),
-      tier: tierOf(viewer),
-      ua: c.req.header('user-agent'),
-      via: viaFrom(c),
-    }));
+    // The response is already decided: nothing here (a failing viewer lookup included) may change it.
+    try {
+      const viewer = await viewerFromRequest(c, runtime);
+      countUsage(runtime, usageDim({
+        surface: 'api',
+        detail: pathTemplate(c.req.path),
+        tier: tierOf(viewer),
+        ua: c.req.header('user-agent'),
+        via: viaFrom(c),
+      }));
+    } catch (error) {
+      runtime.logger.warn(`usage count failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   };
   app.use('/api/*', apiUsageCounter);
   app.use('/v2/*', apiUsageCounter);
@@ -1297,54 +1340,20 @@ export function createApp(runtime: Runtime): Hono {
   });
 
   // Search suggestions and dynamic filter skills: dictionary skills of recent leads (up to 30),
-  // filtered for significance (count >= 2), refreshed every 10 minutes.
-  const popularCaches = new Map<string, { at: number; items: Array<{ name: string; count: number }> }>();
-  const popularSkills = async (filters: SavedFilters): Promise<Array<{ name: string; count: number }>> => {
-    const key = [filters.type ?? '', filters.it ? '1' : '0', filters.remote ? '1' : '0', filters.language ?? '', filters.budgetRub ?? ''].join('|');
-    const cached = popularCaches.get(key);
-    if (cached && Date.now() - cached.at < 10 * 60_000) return cached.items;
-    const recent = await runtime.store.getLeadsForFeed({
+  // filtered for significance (count >= 2), refreshed every 10 minutes. One recent-window fetch
+  // per 10 minutes serves every filter combination and the directions count (src/server/popular.ts).
+  const popular = createPopularCounters({
+    loadRecent: () => runtime.store.getLeadsForFeed({
       limit: 2000,
       createdAfter: new Date(Date.now() - 14 * 24 * 3600_000).toISOString(),
-    });
-    const scope: SavedFilters = { type: filters.type, it: filters.it, remote: filters.remote, language: filters.language, budgetRub: filters.budgetRub };
-    const counts = new Map<string, number>();
-    for (const lead of recent.filter((lead) => matchesSavedFilters(lead, scope))) {
-      const skills = lead.skills?.length ? lead.skills : extractSkills(lead.title, lead.text);
-      for (const skill of skills) {
-        counts.set(skill, (counts.get(skill) ?? 0) + 1);
-      }
-    }
-    const items = [...counts.entries()]
-      .filter(([, count]) => count >= 2)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 30)
-      .map(([name, count]) => ({ name, count }));
-    popularCaches.set(key, { at: Date.now(), items });
-    return items;
-  };
-
-  let directionsCache: { at: number; items: Array<{ slug: string; count: number }> } | undefined;
+    }),
+  });
+  const popularSkills = popular.popularSkills;
   const popularDirections = async (lang: SupportedLang): Promise<Array<{ slug: string; label: string; count?: number }>> => {
-    if (directionsCache && Date.now() - directionsCache.at < 10 * 60_000) {
-      return directionsCache.items.map((i) => ({ slug: i.slug, label: roleLabel(i.slug, lang), count: i.count || undefined }));
-    }
-    const recent = await runtime.store.getLeadsForFeed({
-      limit: 2000,
-      createdAfter: new Date(Date.now() - 14 * 24 * 3600_000).toISOString(),
-    });
-    const counts = new Map<string, number>();
-    for (const lead of recent) {
-      if (lead.direction) {
-        counts.set(lead.direction, (counts.get(lead.direction) ?? 0) + 1);
-      }
-    }
-    const items = ROLES.map((r) => ({
-      slug: r.slug,
-      count: counts.get(r.slug) ?? 0,
-    })).sort((a, b) => b.count - a.count);
-    directionsCache = { at: Date.now(), items };
-    return items.map((i) => ({ slug: i.slug, label: roleLabel(i.slug, lang), count: i.count || undefined }));
+    const counts = await popular.directionCounts();
+    return ROLES.map((r) => ({ slug: r.slug, count: counts.get(r.slug) ?? 0 }))
+      .sort((a, b) => b.count - a.count)
+      .map((i) => ({ slug: i.slug, label: roleLabel(i.slug, lang), count: i.count || undefined }));
   };
 
   // Public feeds: generous per-IP limits, so a scraper loop cannot pin the database.
@@ -2757,15 +2766,13 @@ export function createApp(runtime: Runtime): Hono {
     if (!body || typeof body !== 'object') {
       return c.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, 400);
     }
-    const { handleMcpRequest } = await import('../mcp/server.ts');
+    const { handleMcpRequest, mcpUsageDetail } = await import('../mcp/server.ts');
     const viewer = agent ? await viewerForUser(runtime, agent.id) : await viewerFromRequest(c, runtime);
     // Agent analytics: every authorized JSON-RPC call counts; tools/call also names the tool.
-    const rpc = body as { method?: unknown; params?: { name?: unknown } | unknown[] };
-    const rpcMethod = typeof rpc.method === 'string' ? rpc.method : 'unknown';
-    const toolName = rpcMethod === 'tools/call' && rpc.params && !Array.isArray(rpc.params) && typeof rpc.params.name === 'string' ? `:${rpc.params.name}` : '';
+    // Labels come from an allowlist of methods and tool names, never raw from the body.
     countUsage(runtime, usageDim({
       surface: 'mcp',
-      detail: `${rpcMethod}${toolName}`,
+      detail: mcpUsageDetail(body),
       tier: agent ? 'token' : tierOf(viewer),
       ua: c.req.header('user-agent'),
       via: viaFrom(c),
@@ -2819,6 +2826,9 @@ export function createApp(runtime: Runtime): Hono {
         if (result) await recordWebSignal(runtime, id, agent.id, result.myVote ?? null);
         return { ok: Boolean(result), myVote: result?.myVote ?? undefined };
       },
+    }, {
+      // Write confirmations are bound to the caller: another caller cannot confirm this token.
+      identity: agent ? `agent:${agent.id}` : viewer.userId !== undefined ? `user:${viewer.userId}` : viewer.pubkey ? `key:${viewer.pubkey}` : 'guest',
     });
     if (resp === null) return c.body(null, 202);
     return c.json(resp);
@@ -3518,9 +3528,9 @@ export function createApp(runtime: Runtime): Hono {
     return c.json(report, 200, { 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=300' });
   });
   app.get('/research/dataset.csv', async (c) => {
-    const { records } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+    const csv = await liveDatasetCsv(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
     countResearch(c, runtime, 'dataset.csv');
-    return c.body(datasetCsv(records), 200, {
+    return c.body(csv, 200, {
       'content-type': 'text/csv; charset=utf-8',
       'content-disposition': 'attachment; filename="openradar-dataset.csv"',
       'access-control-allow-origin': '*',

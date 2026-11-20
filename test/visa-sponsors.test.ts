@@ -152,11 +152,11 @@ describe('visa sponsor matching', () => {
     expect(summary).toEqual({ checked: 4, matched: 3 });
 
     const monzo = await runtime.store.getLead('monzo');
-    expect((monzo?.metadata as Record<string, any>).visaSponsor).toMatchObject({ register: 'uk', name: 'Monzo Bank Ltd', route: 'Skilled Worker', matched: 'employer', registerDate: '2026-11-12' });
+    expect((monzo!.metadata as Record<string, any>).visaSponsor).toMatchObject({ register: 'uk', name: 'Monzo Bank Ltd', route: 'Skilled Worker', matched: 'employer', registerDate: '2026-11-12' });
     const deliveroo = await runtime.store.getLead('deliveroo');
-    expect((deliveroo?.metadata as Record<string, any>).visaSponsor.name).toBe('Roofoods Ltd t/a Deliveroo');
+    expect((deliveroo!.metadata as Record<string, any>).visaSponsor.name).toBe('Roofoods Ltd t/a Deliveroo');
     const boardJob = await runtime.store.getLead('board-job');
-    expect((boardJob?.metadata as Record<string, any>).visaSponsor.matched).toBe('board');
+    expect((boardJob!.metadata as Record<string, any>).visaSponsor.matched).toBe('board');
     // Absence from the register is not a verdict: no note, no "does not sponsor".
     const unknown = await runtime.store.getLead('unknown');
     expect((unknown?.metadata as Record<string, any>)?.visaSponsor).toBeUndefined();

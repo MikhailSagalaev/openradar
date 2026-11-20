@@ -527,6 +527,8 @@ function workdayCity(location: string | undefined): string | undefined {
   return part.split(',')[0]!.trim() || undefined;
 }
 
+const WORKDAY_PAGE = 20;
+
 export function workdayBoardOf(slug: string, name: string | undefined): { tenant: string; wd: string; site: string; company: string } {
   const [tenant, wd = 'wd5'] = slug.split('@');
   const [label, site = tenant!] = (name ?? '').split('|');
@@ -545,7 +547,7 @@ function fromWorkday(source: SourceRecord, slug: string, name: string | undefine
       return {
         sourceId: source.id,
         type: 'job',
-        externalId: `workday:${tenant}:${requisition || p.externalPath}`,
+        externalId: `${boardIdPrefix('workday', slug)}${requisition || p.externalPath}`,
         url: `https://${tenant}.${wd}.myworkdayjobs.com/en-US/${site}${p.externalPath}`,
         title,
         text: text(title, [
@@ -573,21 +575,25 @@ async function pollWorkday(
   const { tenant, wd, site } = workdayBoardOf(slug, name);
   const url = `https://${tenant}.${wd}.myworkdayjobs.com/wday/cxs/${tenant}/${site}/jobs`;
   const leads: RawLead[] = [];
-  let total = Infinity;
+  // The CXS listing reports the real total only on the first page; later pages commonly say
+  // 0. So the total is taken once (and only ever raised), and the offset advances by the raw
+  // page size — fromWorkday drops postings without a title or path, which must not shift it.
+  let total: number | undefined;
   let offset = 0;
-  while (offset < perCompany && offset < total) {
-    const json = await postJsonText(ctx, url, { appliedFacets: {}, limit: 20, offset, searchText: '' });
+  while (offset < perCompany && (total === undefined || offset < total)) {
+    const json = await postJsonText(ctx, url, { appliedFacets: {}, limit: WORKDAY_PAGE, offset, searchText: '' });
     const page = JSON.parse(json) as { total?: number; jobPostings?: WorkdayPosting[] };
-    if (typeof page.total === 'number') total = page.total;
-    const found = fromWorkday(source, slug, name, json, ctx.now());
-    if (!found.length) break;
-    leads.push(...found);
-    offset += found.length;
-    if (found.length < 20) break;
+    if (typeof page.total === 'number' && page.total > 0 && (total === undefined || page.total > total)) total = page.total;
+    const raw = page.jobPostings?.length ?? 0;
+    if (!raw) break;
+    leads.push(...fromWorkday(source, slug, name, json, ctx.now()));
+    offset += raw;
+    if (raw < WORKDAY_PAGE) break;
   }
-  // The full board was read only when nothing was cut by the cap: a capped list would
-  // look like removals to the ghost-job diff.
-  const complete = offset >= total;
+  // The full board was read only when every posting of the first page's total came through:
+  // a read cut by the cap, cut short by an empty page, or with no total at all would look
+  // like removals to the ghost-job diff.
+  const complete = total !== undefined && offset >= total;
   return { leads, present: complete ? new Set(leads.map((l) => l.externalId!).filter(Boolean)) : undefined };
 }
 
@@ -730,6 +736,15 @@ export interface BoardDiffSummary {
   reopened: number;
 }
 
+/**
+ * The externalId prefix every job of one board carries — derived exactly as the parsers
+ * build the ids. Workday ids name the tenant without its "@wdN" host, so its prefix does too.
+ */
+export function boardIdPrefix(provider: AtsProvider, slug: string): string {
+  if (provider === 'workday') return `workday:${workdayBoardOf(slug, undefined).tenant}:`;
+  return `${provider}:${slug}:`;
+}
+
 const DIFF_WINDOW_MULT = 2;
 const DIFF_MAX_LEADS = 5000;
 
@@ -744,7 +759,7 @@ export async function diffBoard(
 ): Promise<BoardDiffSummary> {
   const summary: BoardDiffSummary = { closed: 0, reopened: 0 };
   if (!store.listBoardLeads || !store.updateLeadState) return summary;
-  const prefix = `${provider}:${slug}:`;
+  const prefix = boardIdPrefix(provider, slug);
   const createdAfter = new Date(now.getTime() - maxAgeDays * DIFF_WINDOW_MULT * 86_400_000).toISOString();
   const stored = await store.listBoardLeads({ sourceId: source.id, externalIdPrefix: prefix, createdAfter, limit: DIFF_MAX_LEADS });
   for (const lead of stored) {
@@ -800,6 +815,10 @@ export const atsSource: SourceAdapter = {
     // burst of shards never trips the vendor's rate limits.
     const paceMs = Math.max(0, Math.min(Number(source.config.vendorPaceMs ?? 500), 5_000));
     const vendorKey = `ats:${provider}`;
+    // Two boards whose ids share a prefix (one Workday tenant on two sites) cannot be told
+    // apart by the diff: each would close the other's jobs, so neither is diffed.
+    const prefixCount = new Map<string, number>();
+    for (const c of companies) prefixCount.set(boardIdPrefix(provider, c.slug), (prefixCount.get(boardIdPrefix(provider, c.slug)) ?? 0) + 1);
     for (const { slug, name } of nextBatch(source.id, companies, perPoll, hour * perPoll)) {
       const parkKey = `${provider}:${slug}`;
       const parkedUntil = vendorParked.get(parkKey);
@@ -826,7 +845,7 @@ export const atsSource: SourceAdapter = {
           // A complete read: every job the board lists right now, before the freshness cut.
           present = new Set(parsed.map((lead) => lead.externalId).filter((id): id is string => Boolean(id)));
         }
-        if (ghostCheck && present) {
+        if (ghostCheck && present && prefixCount.get(boardIdPrefix(provider, slug)) === 1) {
           const diff = await diffBoard(ctx.store!, source, provider, slug, present, maxAgeDays, ctx.now());
           if (diff.closed || diff.reopened) ctx.logger.info('ATS board diff', { provider, slug, ...diff });
         }

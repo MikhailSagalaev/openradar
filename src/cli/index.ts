@@ -23,6 +23,7 @@ import { pollUserTelegramSources } from '../pipeline/user-telegram.ts';
 import { deliverDueSubscriptions, deliverLeadClosedToSubscriptions } from '../pipeline/subscriptions.ts';
 import { leadEvents } from '../core/events.ts';
 import { startServer } from '../server/index.ts';
+import { flushUsage, stopUsageFlush } from '../server/usage.ts';
 import { SOURCE_PRESETS } from '../sources/presets.ts';
 import { loadEnv } from '../config.ts';
 import { runMigrations } from '../store/migrator.ts';
@@ -842,6 +843,9 @@ function buildProgram(): Command {
         runner?.stop();
         server.close(async () => {
           try {
+            // Buffered agent-usage counters go to the store before it closes.
+            stopUsageFlush(runtime);
+            await flushUsage(runtime);
             await runtime.store.close();
           } finally {
             process.exit(0);

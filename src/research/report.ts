@@ -4,9 +4,27 @@
  * behind it (MIN_MEDIAN); quartiles need more (MIN_QUARTILES).
  */
 import { GRADE_LABELS, GRADE_ORDER, OTHER_ROLE, ROLES, RUB_PER, roleDef, type ResearchRecord } from './derive.ts';
+import {
+  chiSquareSf,
+  cliffsDeltaMagnitude,
+  correlationMagnitude,
+  epsilonSqMagnitude,
+  fSf,
+  formatP,
+  holmAdjust,
+  isConfirmed,
+  normalTwoSidedP,
+  starsOf,
+  studentTTwoSidedP,
+  type EffectMagnitude,
+  type Stars,
+} from './stats.ts';
 
-/** Bump when the rules change what a figure means; snapshots keep the version they were built with. */
-export const REPORT_VERSION = 2;
+/**
+ * Bump when the rules change what a figure means; snapshots keep the version they were built with.
+ * 3: exact p-values (χ², t, F, normal), Holm across the hypothesis family, effect-size-gated verdicts.
+ */
+export const REPORT_VERSION = 3;
 export const MIN_MEDIAN = 10;
 export const MIN_QUARTILES = 20;
 export const RELIABLE = 30;
@@ -148,8 +166,11 @@ export interface MincerCoefficient {
   beta: number;
   se: number;
   tStat: number;
-  stars: "***" | "**" | "*" | "";
+  stars: Stars;
+  /** APA-formatted two-sided p from Student t with df = n − k. */
   pValue: string;
+  /** Unrounded two-sided p (version 3+). */
+  p?: number;
   effectPct?: number;
   baselineRub?: number;
 }
@@ -159,6 +180,10 @@ export interface MincerRegression {
   r2: number;
   adjR2: number;
   fStat: number;
+  /** Residual degrees of freedom n − k (version 3+). */
+  df?: number;
+  /** APA-formatted p of the overall F test, F(k − 1, n − k) (version 3+). */
+  fPValue?: string;
   baselineRub: number;
   coefficients: MincerCoefficient[];
 }
@@ -170,7 +195,10 @@ export interface VarianceFactorRow {
   groups: number;
   etaSqPct: number;
   fStat: number;
+  /** APA-formatted p from F(G − 1, N − G). */
   pValue: string;
+  /** Unrounded p (version 3+). */
+  p?: number;
 }
 
 export interface HypothesisTestRow {
@@ -180,9 +208,20 @@ export interface HypothesisTestRow {
   n: number;
   statLabel: string;
   statValue: string;
+  /** APA-formatted raw (unadjusted) two-sided p. */
   pValue: string;
+  /** Unrounded raw p (version 3+). */
+  p?: number;
+  /** Holm–Bonferroni adjusted p across the H1…Hn family of this analysis (version 3+). */
+  pAdjusted?: number;
+  /** APA-formatted Holm-adjusted p (version 3+). */
+  pAdjustedLabel?: string;
+  /** Name of the effect-size measure (ε², Cliff's δ, ρ_s). */
   effectLabel: string;
   effectValue: string;
+  /** Conventional magnitude of the effect size (version 3+). */
+  effectMagnitude?: EffectMagnitude;
+  /** Holm-adjusted p < 0.05, effect at least "small", and the predicted direction (see stats.isConfirmed). */
   confirmed: boolean;
 }
 
@@ -452,6 +491,19 @@ export interface Report {
     conclusion: string;
     quote: string;
   };
+}
+
+/** One pass over the records instead of a filter per group; insertion order is kept. */
+function groupBy<K>(records: ResearchRecord[], key: (r: ResearchRecord) => K | undefined): Map<K, ResearchRecord[]> {
+  const out = new Map<K, ResearchRecord[]>();
+  for (const r of records) {
+    const k = key(r);
+    if (k === undefined) continue;
+    const list = out.get(k);
+    if (list) list.push(r);
+    else out.set(k, [r]);
+  }
+  return out;
 }
 
 function quantile(sorted: number[], q: number): number {
@@ -1192,7 +1244,8 @@ function solveOlsWhiteHc1(y: number[], X: number[][]): { beta: number[]; se: num
   return { beta, se, r2, adjR2, fStat };
 }
 
-function mannWhitneyTest(a: number[], b: number[]): { u: number; z: number; cliffsDelta: number; pValue: string } | undefined {
+/** Mann–Whitney U with the tie-corrected normal approximation; two-sided p from N(0, 1). */
+function mannWhitneyTest(a: number[], b: number[]): { u: number; z: number; cliffsDelta: number; p: number } | undefined {
   const n1 = a.length;
   const n2 = b.length;
   if (n1 < 5 || n2 < 5) return undefined;
@@ -1215,12 +1268,14 @@ function mannWhitneyTest(a: number[], b: number[]): { u: number; z: number; clif
   const sigma = Math.sqrt(((n1 * n2) / 12) * (N + 1 - tieSum / (N * (N - 1))));
   const z = sigma > 0 ? (u1 - mu) / sigma : 0;
   const cliffsDelta = (2 * u1) / (n1 * n2) - 1;
-  const absZ = Math.abs(z);
-  const pValue = absZ >= 3.291 ? "< 0.001" : absZ >= 2.576 ? "< 0.01" : absZ >= 1.96 ? "< 0.05" : "n.s.";
-  return { u: Math.round(u1), z: Math.round(z * 100) / 100, cliffsDelta: Math.round(cliffsDelta * 1000) / 1000, pValue };
+  return { u: Math.round(u1), z: Math.round(z * 100) / 100, cliffsDelta: Math.round(cliffsDelta * 1000) / 1000, p: normalTwoSidedP(z) };
 }
 
-function kruskalWallisTest(groups: number[][]): { h: number; df: number; epsilonSq: number; pValue: string; n: number } | undefined {
+/**
+ * Kruskal–Wallis H with the tie correction. Groups under five observations are dropped, so the
+ * degrees of freedom are (groups kept − 1) and p is the exact χ²(df) upper tail. ε² = H / (N − 1).
+ */
+function kruskalWallisTest(groups: number[][]): { h: number; df: number; epsilonSq: number; p: number; n: number } | undefined {
   const valid = groups.filter((g) => g.length >= 5);
   if (valid.length < 2) return undefined;
   const combined: Array<{ v: number; idx: number }> = [];
@@ -1248,8 +1303,75 @@ function kruskalWallisTest(groups: number[][]): { h: number; df: number; epsilon
   if (tieCorr > 0) H /= tieCorr;
   const df = valid.length - 1;
   const epsilonSq = Math.max(0, Math.min(1, H / (N - 1)));
-  const pValue = H >= 16.27 ? "< 0.001" : H >= 11.34 ? "< 0.01" : H >= 7.81 ? "< 0.05" : "n.s.";
-  return { h: Math.round(H * 10) / 10, df, epsilonSq: Math.round(epsilonSq * 1000) / 1000, pValue, n: N };
+  return { h: Math.round(H * 10) / 10, df, epsilonSq: Math.round(epsilonSq * 1000) / 1000, p: chiSquareSf(H, df), n: N };
+}
+
+interface MincerSpec {
+  key: string;
+  label: string;
+  fn: (r: ResearchRecord) => number;
+}
+
+/**
+ * Coefficient table of a fitted Mincer equation: HC1 standard errors, t = β / SE and two-sided
+ * p from Student t with df = n − k (k parameters including the intercept); stars come from p.
+ */
+function mincerFromOls(
+  ols: { beta: number[]; se: number[]; r2: number; adjR2: number; fStat: number },
+  specs: MincerSpec[],
+  n: number,
+  intercept: { label: string; baselineRub: number },
+): MincerRegression {
+  const k = specs.length + 1;
+  const df = n - k;
+  const coefficient = (key: string, label: string, b: number, s: number) => {
+    const t = b / s;
+    const p = studentTTwoSidedP(t, df);
+    return {
+      key,
+      label,
+      beta: Math.round(b * 1000) / 1000,
+      se: Math.round(s * 1000) / 1000,
+      tStat: Math.round(t * 100) / 100,
+      stars: starsOf(p),
+      pValue: formatP(p),
+      p,
+    };
+  };
+  const coefficients: MincerCoefficient[] = [
+    { ...coefficient("intercept", intercept.label, ols.beta[0]!, ols.se[0]!), baselineRub: intercept.baselineRub },
+    ...specs.map((spec, idx) => {
+      const b = ols.beta[idx + 1]!;
+      return { ...coefficient(spec.key, spec.label, b, ols.se[idx + 1]!), effectPct: Math.round((Math.exp(b) - 1) * 1000) / 10 };
+    }),
+  ];
+  return {
+    n,
+    r2: Math.round(ols.r2 * 1000) / 1000,
+    adjR2: Math.round(ols.adjR2 * 1000) / 1000,
+    fStat: Math.round(ols.fStat * 10) / 10,
+    df,
+    fPValue: formatP(fSf(ols.fStat, k - 1, df)),
+    baselineRub: intercept.baselineRub,
+    coefficients,
+  };
+}
+
+/**
+ * Holm–Bonferroni across the hypothesis family of one analysis, then the single decision rule
+ * (stats.isConfirmed): adjusted p < 0.05, effect at least "small", predicted direction.
+ */
+function adjustHypothesisFamily(rows: Array<HypothesisTestRow & { p: number; directionHolds: boolean }>): HypothesisTestRow[] {
+  const adjusted = holmAdjust(rows.map((r) => r.p));
+  return rows.map(({ directionHolds, ...row }, i) => {
+    const pAdjusted = adjusted[i]!;
+    return {
+      ...row,
+      pAdjusted,
+      pAdjustedLabel: formatP(pAdjusted),
+      confirmed: isConfirmed(pAdjusted, row.effectMagnitude ?? "negligible", directionHolds),
+    };
+  });
 }
 
 function computeScientificAnalysis(jobs: ResearchRecord[], ruJobs: ResearchRecord[], roles: RoleDetail[]): ScientificAnalysis {
@@ -1259,7 +1381,7 @@ function computeScientificAnalysis(jobs: ResearchRecord[], ruJobs: ResearchRecor
   // 1. Mincer Log-Wage Regression
   let mincer: MincerRegression | undefined;
   if (gradedIt.length >= 12) {
-    const candidateSpecs: Array<{ key: string; label: string; fn: (r: ResearchRecord) => number }> = [
+    const candidateSpecs: MincerSpec[] = [
       { key: "middle", label: "Грейд: Middle (к базе Junior/Intern)", fn: (r) => (r.grade === "middle" ? 1 : 0) },
       { key: "senior", label: "Грейд: Senior (к базе Junior/Intern)", fn: (r) => (r.grade === "senior" ? 1 : 0) },
       { key: "lead", label: "Грейд: Lead / Staff (к базе Junior/Intern)", fn: (r) => (r.grade === "lead" ? 1 : 0) },
@@ -1281,45 +1403,7 @@ function computeScientificAnalysis(jobs: ResearchRecord[], ruJobs: ResearchRecor
       const X = gradedIt.map((r) => [1, ...activeSpecs.map((spec) => spec.fn(r))]);
       const ols = solveOlsWhiteHc1(y, X);
       if (ols) {
-        const baselineRub = round(Math.exp(ols.beta[0]!));
-        const coefficients: MincerCoefficient[] = [
-          {
-            key: "intercept",
-            label: "Константа β₀ (Junior/Intern, офис в регионе)",
-            beta: Math.round(ols.beta[0]! * 1000) / 1000,
-            se: Math.round(ols.se[0]! * 1000) / 1000,
-            tStat: Math.round((ols.beta[0]! / ols.se[0]!) * 100) / 100,
-            stars: "***",
-            pValue: "< 0.001",
-            baselineRub,
-          },
-          ...activeSpecs.map((spec, idx) => {
-            const b = ols.beta[idx + 1]!;
-            const s = ols.se[idx + 1]!;
-            const t = b / s;
-            const absT = Math.abs(t);
-            const stars: "***" | "**" | "*" | "" = absT >= 3.291 ? "***" : absT >= 2.576 ? "**" : absT >= 1.96 ? "*" : "";
-            const pValue = absT >= 3.291 ? "< 0.001" : absT >= 2.576 ? "< 0.01" : absT >= 1.96 ? "< 0.05" : "n.s.";
-            return {
-              key: spec.key,
-              label: spec.label,
-              beta: Math.round(b * 1000) / 1000,
-              se: Math.round(s * 1000) / 1000,
-              tStat: Math.round(t * 100) / 100,
-              stars,
-              pValue,
-              effectPct: Math.round((Math.exp(b) - 1) * 1000) / 10,
-            };
-          }),
-        ];
-        mincer = {
-          n: gradedIt.length,
-          r2: Math.round(ols.r2 * 1000) / 1000,
-          adjR2: Math.round(ols.adjR2 * 1000) / 1000,
-          fStat: Math.round(ols.fStat * 10) / 10,
-          baselineRub,
-          coefficients,
-        };
+        mincer = mincerFromOls(ols, activeSpecs, gradedIt.length, { label: "Константа β₀ (Junior/Intern, офис в регионе)", baselineRub: round(Math.exp(ols.beta[0]!)) });
       }
     }
   }
@@ -1359,9 +1443,9 @@ function computeScientificAnalysis(jobs: ResearchRecord[], ruJobs: ResearchRecor
     if (ssTot <= 0) return undefined;
     const ssWithin = Math.max(1e-9, ssTot - ssBetween);
     const etaSqPct = Math.round((ssBetween / ssTot) * 1000) / 10;
-    const fStat = Math.round(((ssBetween / (G - 1)) / (ssWithin / (N - G))) * 10) / 10;
-    const pValue = fStat >= 10 ? "< 0.001" : fStat >= 4.5 ? "< 0.01" : fStat >= 3.0 ? "< 0.05" : "n.s.";
-    return { key, label, n: N, groups: G, etaSqPct, fStat, pValue };
+    const f = (ssBetween / (G - 1)) / (ssWithin / (N - G));
+    const p = fSf(f, G - 1, N - G);
+    return { key, label, n: N, groups: G, etaSqPct, fStat: Math.round(f * 10) / 10, pValue: formatP(p), p };
   };
 
   const varianceDecomposition = [
@@ -1374,7 +1458,8 @@ function computeScientificAnalysis(jobs: ResearchRecord[], ruJobs: ResearchRecor
     .sort((a, b) => b.etaSqPct - a.etaSqPct);
 
   // 3. Formal Hypothesis Testing Suite
-  const hypotheses: HypothesisTestRow[] = [];
+  // Raw p first; Holm across the family and the verdict come once all tests are in.
+  const hypotheses: Array<HypothesisTestRow & { p: number; directionHolds: boolean }> = [];
 
   const remItPays = itPaid.filter((r) => r.remote).map((r) => r.pay!);
   const regItPays = itPaid.filter((r) => !r.remote && r.region === "Другие города").map((r) => r.pay!);
@@ -1387,10 +1472,13 @@ function computeScientificAnalysis(jobs: ResearchRecord[], ruJobs: ResearchRecor
       n: remItPays.length + regItPays.length,
       statLabel: "z-статистика",
       statValue: `z = ${mw.z > 0 ? "+" : ""}${mw.z}`,
-      pValue: mw.pValue,
+      pValue: formatP(mw.p),
+      p: mw.p,
       effectLabel: "Дельта Клиффа δ",
       effectValue: `${mw.cliffsDelta > 0 ? "+" : ""}${mw.cliffsDelta}`,
-      confirmed: mw.z > 1.96,
+      effectMagnitude: cliffsDeltaMagnitude(mw.cliffsDelta),
+      confirmed: false,
+      directionHolds: mw.z > 0,
     });
   }
 
@@ -1405,10 +1493,13 @@ function computeScientificAnalysis(jobs: ResearchRecord[], ruJobs: ResearchRecor
       n: kwGeo.n,
       statLabel: `H (df = ${kwGeo.df})`,
       statValue: `H = ${kwGeo.h}`,
-      pValue: kwGeo.pValue,
+      pValue: formatP(kwGeo.p),
+      p: kwGeo.p,
       effectLabel: "Доля дисперсии ε²",
       effectValue: `${(kwGeo.epsilonSq * 100).toFixed(1)}%`,
-      confirmed: kwGeo.h > 7.81,
+      effectMagnitude: epsilonSqMagnitude(kwGeo.epsilonSq),
+      confirmed: false,
+      directionHolds: true,
     });
   }
 
@@ -1422,10 +1513,13 @@ function computeScientificAnalysis(jobs: ResearchRecord[], ruJobs: ResearchRecor
       n: kwGrade.n,
       statLabel: `H (df = ${kwGrade.df})`,
       statValue: `H = ${kwGrade.h}`,
-      pValue: kwGrade.pValue,
+      pValue: formatP(kwGrade.p),
+      p: kwGrade.p,
       effectLabel: "Доля дисперсии ε²",
       effectValue: `${(kwGrade.epsilonSq * 100).toFixed(1)}%`,
-      confirmed: kwGrade.h > 7.81,
+      effectMagnitude: epsilonSqMagnitude(kwGrade.epsilonSq),
+      confirmed: false,
+      directionHolds: true,
     });
   }
 
@@ -1458,20 +1552,24 @@ function computeScientificAnalysis(jobs: ResearchRecord[], ruJobs: ResearchRecor
     }
     if (dx > 0 && dy > 0) {
       const rho = Math.round((numSum / Math.sqrt(dx * dy)) * 1000) / 1000;
-      const tStat = Math.abs(rho) < 1 ? Math.round(rho * Math.sqrt((k - 2) / (1 - rho * rho)) * 100) / 100 : 0;
-      const absT = Math.abs(tStat);
-      const pValue = absT >= 3.291 ? "< 0.001" : absT >= 2.576 ? "< 0.01" : absT >= 1.96 ? "< 0.05" : "n.s.";
+      // t = ρ·√((k − 2) / (1 − ρ²)) ~ Student t(k − 2) under H0; |ρ| = 1 has p = 0.
+      const tRaw = Math.abs(rho) < 1 ? rho * Math.sqrt((k - 2) / (1 - rho * rho)) : rho * Infinity;
+      const tStat = Number.isFinite(tRaw) ? Math.round(tRaw * 100) / 100 : 0;
+      const p = Number.isFinite(tRaw) ? studentTTwoSidedP(tRaw, k - 2) : 0;
       hypotheses.push({
         id: "H4",
         title: "Смещение сокрытия окладов в высокооплачиваемых специализациях",
         method: "Ранговая корреляция Спирмена (ρ_s) между медианой и % вилок",
         n: k,
         statLabel: `t (df = ${k - 2})`,
-        statValue: `t = ${tStat}`,
-        pValue,
+        statValue: Number.isFinite(tRaw) ? `t = ${tStat}` : `ρ_s = ${rho}`,
+        pValue: formatP(p),
+        p,
         effectLabel: "Корреляция ρ_s",
         effectValue: `${rho}`,
-        confirmed: rho < 0 && absT >= 1.96,
+        effectMagnitude: correlationMagnitude(rho),
+        confirmed: false,
+        directionHolds: rho < 0,
       });
     }
   }
@@ -1550,7 +1648,7 @@ function computeScientificAnalysis(jobs: ResearchRecord[], ruJobs: ResearchRecor
   return {
     mincer,
     varianceDecomposition,
-    hypotheses,
+    hypotheses: adjustHypothesisFamily(hypotheses),
     oaxaca,
   };
 }
@@ -1596,10 +1694,11 @@ function computeRegionalComparison(jobs: ResearchRecord[], ruJobs: ResearchRecor
 }
 
 function computeRegionalMatrix(roles: RoleDetail[], jobs: ResearchRecord[], paid: (r: ResearchRecord) => boolean): RegionalMatrixRow[] {
+  const paidByRole = groupBy(jobs.filter(paid), (j) => j.role);
   return roles
     .filter((r) => r.pay.median !== undefined && r.withPay >= 15)
     .map((r) => {
-      const rolePaid = jobs.filter((j) => j.role === r.slug && paid(j));
+      const rolePaid = paidByRole.get(r.slug) ?? [];
       const msk = rolePaid.filter((j) => j.region === "Москва" && !j.remote).map((j) => j.pay!);
       const spb = rolePaid.filter((j) => j.region === "Санкт-Петербург" && !j.remote).map((j) => j.pay!);
       const reg = rolePaid.filter((j) => j.region === "Другие города" && !j.remote).map((j) => j.pay!);
@@ -1667,11 +1766,11 @@ function computeLanguageMatrix(jobs: ResearchRecord[], paid: (r: ResearchRecord)
 }
 
 function computeGradeMatrix(roles: RoleDetail[], jobs: ResearchRecord[], paid: (r: ResearchRecord) => boolean): GradeMatrixRow[] {
+  const paidByRole = groupBy(jobs.filter(paid), (j) => j.role);
   return roles
     .filter((r) => r.pay.median !== undefined)
     .map((r) => {
-      const roleJobs = jobs.filter((j) => j.role === r.slug);
-      const rolePaid = roleJobs.filter(paid);
+      const rolePaid = paidByRole.get(r.slug) ?? [];
       const gradeMed = (g: string): number | undefined => {
         const vals = rolePaid.filter((j) => j.grade === g).map((j) => j.pay!);
         return dist(vals, 5).median;
@@ -1774,10 +1873,9 @@ function computeIntlMarketResearch(
   const intlPaid = intlAll.filter(intlPaidPred);
   if (intlPaid.length < 10) return undefined;
 
-  const roleSlugs = new Set(intlAll.map((r) => r.role));
-  const intlRoles = [...roleSlugs]
-    .filter((slug) => slug !== OTHER_ROLE.slug)
-    .map((slug) => roleDetail(slug, intlAll.filter((r) => r.role === slug), intlPaidPred))
+  const intlRoles = [...groupBy(intlAll, (r) => r.role)]
+    .filter(([slug]) => slug !== OTHER_ROLE.slug)
+    .map(([slug, list]) => roleDetail(slug, list, intlPaidPred))
     .filter((detail) => detail.pay.median !== undefined)
     .sort((a, b) => b.withPay - a.withPay);
 
@@ -1832,7 +1930,7 @@ function computeIntlMarketResearch(
   const gradedIntl = intlPaid.filter((r) => r.role !== OTHER_ROLE.slug && r.grade !== undefined);
   let mincer: MincerRegression | undefined;
   if (gradedIntl.length >= 12) {
-    const candidateSpecs: Array<{ key: string; label: string; fn: (r: ResearchRecord) => number }> = [
+    const candidateSpecs: MincerSpec[] = [
       { key: "middle", label: "Грейд: Middle (к базе Junior/Intern)", fn: (r) => (r.grade === "middle" ? 1 : 0) },
       { key: "senior", label: "Грейд: Senior (к базе Junior/Intern)", fn: (r) => (r.grade === "senior" ? 1 : 0) },
       { key: "lead", label: "Грейд: Lead / Staff / Principal (к базе Junior/Intern)", fn: (r) => (r.grade === "lead" ? 1 : 0) },
@@ -1854,45 +1952,7 @@ function computeIntlMarketResearch(
       const X = gradedIntl.map((r) => [1, ...activeSpecs.map((spec) => spec.fn(r))]);
       const ols = solveOlsWhiteHc1(y, X);
       if (ols) {
-        const baselineRub = Math.round(Math.exp(ols.beta[0]!) / 100) * 100;
-        const coefficients: MincerCoefficient[] = [
-          {
-            key: "intercept",
-            label: "Константа β₀ (Junior/Intern, базовая локация, $/год)",
-            beta: Math.round(ols.beta[0]! * 1000) / 1000,
-            se: Math.round(ols.se[0]! * 1000) / 1000,
-            tStat: Math.round((ols.beta[0]! / ols.se[0]!) * 100) / 100,
-            stars: "***",
-            pValue: "< 0.001",
-            baselineRub,
-          },
-          ...activeSpecs.map((spec, idx) => {
-            const b = ols.beta[idx + 1]!;
-            const s = ols.se[idx + 1]!;
-            const t = b / s;
-            const absT = Math.abs(t);
-            const stars: "***" | "**" | "*" | "" = absT >= 3.291 ? "***" : absT >= 2.576 ? "**" : absT >= 1.96 ? "*" : "";
-            const pValue = absT >= 3.291 ? "< 0.001" : absT >= 2.576 ? "< 0.01" : absT >= 1.96 ? "< 0.05" : "n.s.";
-            return {
-              key: spec.key,
-              label: spec.label,
-              beta: Math.round(b * 1000) / 1000,
-              se: Math.round(s * 1000) / 1000,
-              tStat: Math.round(t * 100) / 100,
-              stars,
-              pValue,
-              effectPct: Math.round((Math.exp(b) - 1) * 1000) / 10,
-            };
-          }),
-        ];
-        mincer = {
-          n: gradedIntl.length,
-          r2: Math.round(ols.r2 * 1000) / 1000,
-          adjR2: Math.round(ols.adjR2 * 1000) / 1000,
-          fStat: Math.round(ols.fStat * 10) / 10,
-          baselineRub,
-          coefficients,
-        };
+        mincer = mincerFromOls(ols, activeSpecs, gradedIntl.length, { label: "Константа β₀ (Junior/Intern, базовая локация, $/год)", baselineRub: Math.round(Math.exp(ols.beta[0]!) / 100) * 100 });
       }
     }
   }
@@ -2144,10 +2204,9 @@ export function buildReport(
   for (const r of jobs) weekCounts.set(mondayOf(r.date), (weekCounts.get(mondayOf(r.date)) ?? 0) + 1);
   for (const r of ruJobs) weeks.set(mondayOf(r.date), [...(weeks.get(mondayOf(r.date)) ?? []), r.pay!]);
 
-  const roleSlugs = new Set(jobs.map((r) => r.role));
-  const roles = [...roleSlugs]
-    .filter((slug) => slug !== OTHER_ROLE.slug)
-    .map((slug) => roleDetail(slug, jobs.filter((r) => r.role === slug), ruPaid))
+  const roles = [...groupBy(jobs, (r) => r.role)]
+    .filter(([slug]) => slug !== OTHER_ROLE.slug)
+    .map(([slug, list]) => roleDetail(slug, list, ruPaid))
     .filter((detail) => detail.pay.median !== undefined)
     .sort((a, b) => b.withPay - a.withPay);
 
@@ -2166,6 +2225,7 @@ export function buildReport(
   const intlResearch = computeIntlMarketResearch(intlScope, intlJobs, usdRate);
   const crossMarket = computeCrossMarketComparison(ruItByGrade, ruByRole, ruEcon, ruSci, intlResearch, intlByGrade, intlByRole, usdRate);
   const intlGigsPaid = intlGigsScope.filter(projectPaid);
+  const itPaidByCity = groupBy(jobs.filter((r) => TECH_ROLES.has(r.role) && ruPaid(r)), (r) => r.city);
 
   const report: Report = {
     version: REPORT_VERSION,
@@ -2217,7 +2277,7 @@ export function buildReport(
         .sort((a, b) => b.withPay - a.withPay || b.n - a.n)
         .slice(0, 20)
         .map((s): CitySlice => {
-          const itVals = jobs.filter((r) => r.city === s.key && TECH_ROLES.has(r.role) && ruPaid(r)).map((r) => r.pay!);
+          const itVals = (itPaidByCity.get(s.key) ?? []).map((r) => r.pay!);
           const itPay = dist(itVals, 5);
           return itPay.median !== undefined ? { ...s, itPay } : s;
         })

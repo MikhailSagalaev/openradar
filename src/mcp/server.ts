@@ -16,7 +16,7 @@ import { buildXRayResult } from '../core/xray.ts';
 import { computeInsights, estimateMarket } from '../core/market.ts';
 import { VERSION } from '../version.ts';
 import type { Lead, LeadType } from '../core/types.ts';
-import { argsHash, ConfirmationLadder, WRITE_TOOLS } from './safety.ts';
+import { ConfirmationLadder, WRITE_TOOLS } from './safety.ts';
 import { explainLead } from '../core/explain.ts';
 
 export interface McpBackend {
@@ -343,17 +343,42 @@ async function runWrite(
   tool: string,
   args: Record<string, unknown>,
   execute: () => Promise<unknown>,
+  identity: string,
 ): Promise<McpResponse> {
-  const decision = ladder.check(tool, args);
-  if (decision.kind === 'held') return text(id, decision.held);
-  if (decision.kind === 'replay') return text(id, decision.receipt);
-  const result = await execute();
-  ladder.record(decision.token, tool, result, argsHash(tool, args));
-  return text(id, { status: 'executed', tool, replayed: false, result, actedOnBehalfOfUser: true });
+  return text(id, await ladder.run(tool, args, execute, identity));
 }
 
-export async function handleMcpRequest(req: McpRequest, backend: McpBackend, options: { ladder?: ConfirmationLadder } = {}): Promise<McpResponse | null> {
+/** JSON-RPC methods handleMcpRequest answers (plus the client's initialized notification). */
+const MCP_METHODS = new Set(['initialize', 'ping', 'tools/list', 'tools/call', 'notifications/initialized']);
+const MCP_TOOL_NAMES = new Set(MCP_TOOLS.map((tool) => tool.name));
+
+/**
+ * The analytics label of one JSON-RPC message, from an allowlist only: a known method, and for
+ * tools/call a known tool name. Anything else collapses to `unknown` / `tools/call:unknown`,
+ * so request bodies can never mint new counter dimensions.
+ */
+export function mcpUsageDetail(body: unknown): string {
+  const rpc = (body && typeof body === 'object' ? body : {}) as { method?: unknown; params?: unknown };
+  const method = typeof rpc.method === 'string' && MCP_METHODS.has(rpc.method) ? rpc.method : 'unknown';
+  if (method !== 'tools/call') return method;
+  const params = rpc.params && typeof rpc.params === 'object' && !Array.isArray(rpc.params) ? (rpc.params as { name?: unknown }) : {};
+  const name = typeof params.name === 'string' && MCP_TOOL_NAMES.has(params.name) ? params.name : 'unknown';
+  return `tools/call:${name}`;
+}
+
+export interface McpRequestOptions {
+  ladder?: ConfirmationLadder;
+  /**
+   * The caller's identity (e.g. `agent:42`, `user:7`, `stdio`): write confirmations are bound
+   * to it, so one caller's token cannot be confirmed by another. Defaults to a single
+   * anonymous identity (stdio has exactly one local operator).
+   */
+  identity?: string;
+}
+
+export async function handleMcpRequest(req: McpRequest, backend: McpBackend, options: McpRequestOptions = {}): Promise<McpResponse | null> {
   const ladder = options.ladder ?? defaultLadder;
+  const identity = options.identity ?? '';
   const isNotification = req.id === undefined;
   const id = req.id ?? null;
   if (req?.jsonrpc !== '2.0' || typeof req.method !== 'string') {
@@ -477,7 +502,7 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend, opt
       const remote = typeof args.remote === 'boolean' ? args.remote : undefined;
       const author = typeof args.author === 'string' ? args.author.trim() : undefined;
       const city = typeof args.city === 'string' ? args.city.trim() : undefined;
-      return runWrite(id, ladder, 'submit_lead', args, () => backend.submitLead!({
+      return await runWrite(id, ladder, 'submit_lead', args, () => backend.submitLead!({
         url,
         title: title || textContent.slice(0, 100),
         text: textContent || title,
@@ -488,7 +513,7 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend, opt
         remote,
         author,
         city,
-      }));
+      }), identity);
     }
 
     if (name === 'vote_lead') {
@@ -500,7 +525,7 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend, opt
       }
       if (!backend.voteLead) return fail(id, -32001, 'Voting requires personal agent token (Authorization: Bearer mcp_…)');
       const reason = typeof args.reason === 'string' ? args.reason.trim() : undefined;
-      return runWrite(id, ladder, 'vote_lead', args, () => backend.voteLead!(leadId, verdict as 'useful' | 'junk' | 'scam' | 'closed', reason));
+      return await runWrite(id, ladder, 'vote_lead', args, () => backend.voteLead!(leadId, verdict as 'useful' | 'junk' | 'scam' | 'closed', reason), identity);
     }
 
     if (name === 'get_lead_details') {
@@ -548,7 +573,7 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend, opt
       });
       // Reject an empty search before holding: there is nothing valid to confirm.
       if (isEmptyFilter(filters)) return fail(id, -32602, 'Give at least one filter: query, skill, type, it, remote or budget');
-      return runWrite(id, ladder, 'save_search', args, async () => {
+      return await runWrite(id, ladder, 'save_search', args, async () => {
         const saved = await backend.subscriptions!.save(filters);
         if ('error' in saved) throw new Error(saved.error);
         return {
@@ -557,7 +582,7 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend, opt
             ? 'New matching leads will arrive in the user\'s Telegram.'
             : `The user has not linked Telegram yet: they open ${saved.manageUrl} and press «Подключить Telegram», or set a webhook there.`,
         };
-      });
+      }, identity);
     }
 
     if (name === 'list_saved_searches') {
@@ -596,7 +621,7 @@ export function startMcpStdio(backend: McpBackend): Promise<void> {
       process.stdout.write(`${JSON.stringify(fail(null, -32700, 'Parse error: invalid JSON'))}\n`);
       return;
     }
-    const resp = await handleMcpRequest(parsed, backend);
+    const resp = await handleMcpRequest(parsed, backend, { identity: 'stdio' });
     if (resp) process.stdout.write(`${JSON.stringify(resp)}\n`);
   });
   return new Promise((resolve) => rl.on('close', () => resolve()));

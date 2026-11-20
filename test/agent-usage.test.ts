@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../src/server/app.ts';
-import { classifyUa, pathTemplate, usageDim } from '../src/server/usage.ts';
+import { classifyUa, flushUsage, pathTemplate, usageDim } from '../src/server/usage.ts';
 import { MemoryStore } from '../src/store/memory.ts';
 import { makeTestRuntime } from './helpers.ts';
 
@@ -69,6 +69,9 @@ describe('agent analytics counting', () => {
     const denied = await app.request('/api/leads/00000000-0000-0000-0000-000000000000', { headers: { 'user-agent': 'curl/8' } });
     expect(denied.status).toBe(404);
 
+    // Counters are buffered in memory; nothing is written per call until a flush.
+    expect((await runtime.store.agentUsageStats!(3)).days.at(-1)!.api).toBe(0);
+    await flushUsage(runtime);
     const stats = await runtime.store.agentUsageStats!(3);
     const today = stats.days.at(-1)!;
     expect(today.api).toBe(1);
@@ -86,6 +89,7 @@ describe('/admin/analytics', () => {
     const runtime = makeTestRuntime({ RADAR_ADMIN_TOKEN: 'secret', RADAR_PUBLIC_READ: true });
     const app = createApp(runtime);
     await app.request('/api/leads?limit=1&via=treg', { headers: { 'user-agent': 'claude-ai-agent/1.0' } });
+    await flushUsage(runtime);
 
     const anon = await app.request('/admin/analytics');
     expect(anon.status).toBe(302);

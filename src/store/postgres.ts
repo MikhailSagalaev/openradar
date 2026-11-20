@@ -1,9 +1,8 @@
 import pg from 'pg';
 import { randomUUID } from 'node:crypto';
-import { gzipSync } from 'node:zlib';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync } from 'node:fs';
 import { recalculateVoteScoreAndStatus } from '../core/rules.ts';
+import { matchesOccupationCodes } from '../core/isco.ts';
 import { normalizeTechTokens, type WorkplaceType } from '../core/text.ts';
 import { mergeContacts } from '../core/contacts.ts';
 import type {
@@ -52,7 +51,8 @@ import { TRUST_MIN_AGREEMENT, TRUST_MIN_CONTROLS, type LeadReview, type ReviewBu
 import { DECISION_VERSION, disagreement, type LabelledDecision, type ModelDecision } from '../core/decisions.ts';
 import type { EmployerRow, EmployerSummary, SourceQualityInput, LeadFactsFill, LeadMoney, LeadSighting, ResearchDailyRow, SourceActivity } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
-import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
+import { COMPACT_DROP_METADATA_KEYS, lastDays, RESEARCH_TEXT_HEAD, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
+import { ARCHIVE_PAGE_SIZE, archiveFileOf, archivedMonthWrittenAt, EXPORT_CLOCK_SLACK_MS, LIFECYCLE_BATCH_SIZE, utcMonthBounds, utcMonthEndsBy, utcMonthOf, writeJsonlGzAtomic } from './archive-file.ts';
 import { BROKEN_AFTER, countFailedInRow } from '../core/source-health.ts';
 import type { SourceFlowStats } from '../core/source-health.ts';
 import type { SubscriptionRecord } from '../core/subscriptions.ts';
@@ -1245,6 +1245,7 @@ export class PostgresStore implements Store {
   }
 
   async getLeadsForFeed(options: FeedOptions = {}): Promise<Lead[]> {
+    if (options.occupationCodes?.length) return this.feedByOccupation(options);
     return this.queryLeads(options, true);
   }
 
@@ -1793,6 +1794,7 @@ export class PostgresStore implements Store {
       reasons: Array.isArray(r.reasons_json) ? r.reasons_json : JSON.parse(r.reasons_json || '[]'),
       createdAt: new Date(r.created_at).toISOString(),
       archivedAt: r.archived_at ? new Date(r.archived_at).toISOString() : undefined,
+      compactedAt: r.compacted_at ? new Date(r.compacted_at).toISOString() : undefined,
       deliveredAt: r.delivered_at ? new Date(r.delivered_at).toISOString() : undefined,
       type: r.type === 'job' ? 'job' : 'gig',
       rawSalary: r.raw_salary || undefined,
@@ -2471,12 +2473,16 @@ export class PostgresStore implements Store {
     return (res.rowCount ?? 0) > 0;
   }
 
-  async cleanupOldLeads(retentionDays: number): Promise<number> {
-    const res = await this.pool.query(
-      `DELETE FROM leads WHERE created_at < NOW() - ($1 || ' days')::interval`,
-      [retentionDays]
-    );
-    return res.rowCount ?? 0;
+  async cleanupOldLeads(retentionDays: number, archiveDir?: string): Promise<number> {
+    if (archiveDir === undefined) {
+      const res = await this.pool.query(
+        `DELETE FROM leads WHERE created_at < NOW() - ($1 || ' days')::interval`,
+        [retentionDays]
+      );
+      return res.rowCount ?? 0;
+    }
+    // RADAR_RETENTION_MODE=delete: only exported months, in batches (each DELETE cascades).
+    return this.forEachExportedBatch(retentionDays, archiveDir, (ids) => `DELETE FROM leads WHERE id IN (${ids})`);
   }
 
   async cleanupRuns(retentionDays: number): Promise<number> {
@@ -2487,39 +2493,170 @@ export class PostgresStore implements Store {
     return res.rowCount ?? 0;
   }
 
-  /** Soft archive: hide leads older than hotDays from the feed/API; nothing is deleted. */
+  /**
+   * Warm step: hide leads older than hotDays from the feed/API; the full row stays.
+   * Batched so a first run over a large table does not hold one huge transaction. The UPDATE
+   * does not touch `text`, so its TOAST value is kept as is (no lz4 recompression here —
+   * only compaction, which rewrites `text`, recompresses it).
+   */
   async archiveOldLeads(hotDays: number): Promise<number> {
-    const res = await this.pool.query(
-      `UPDATE leads SET archived_at = NOW() WHERE archived_at IS NULL AND created_at < NOW() - ($1 || ' days')::interval`,
-      [hotDays],
-    );
-    return res.rowCount ?? 0;
+    let archived = 0;
+    for (;;) {
+      const res = await this.pool.query(
+        `UPDATE leads SET archived_at = NOW()
+          WHERE id IN (
+            SELECT id FROM leads
+             WHERE archived_at IS NULL AND created_at < NOW() - make_interval(days => $1::int)
+             LIMIT $2)`,
+        [hotDays, LIFECYCLE_BATCH_SIZE],
+      );
+      const count = res.rowCount ?? 0;
+      archived += count;
+      if (count < LIFECYCLE_BATCH_SIZE) return archived;
+    }
   }
 
-  /** Cold export: fully-archived months as gzipped JSONL, one file per month. */
+  /** The oldest archived month, cached per process: the lower bound of export and compaction. */
+  private archiveFloorMonth?: string;
+  /** Months whose cold rows are all compacted already: skipped until the process restarts. */
+  private compactedMonths = new Set<string>();
+  private embeddingColumn?: Promise<boolean>;
+
+  private async oldestArchivedMonth(): Promise<string | undefined> {
+    if (this.archiveFloorMonth) return this.archiveFloorMonth;
+    const res = await this.pool.query(`SELECT min(created_at) AS oldest FROM leads WHERE archived_at IS NOT NULL`);
+    const oldest = res.rows[0]?.oldest;
+    if (!oldest) return undefined;
+    this.archiveFloorMonth = utcMonthOf(new Date(oldest).toISOString());
+    return this.archiveFloorMonth;
+  }
+
+  /** UTC months from the oldest archived one up to (not including) the month of `before`. */
+  private async archiveMonthsBefore(before: number): Promise<string[]> {
+    const floor = await this.oldestArchivedMonth();
+    if (!floor) return [];
+    const months: string[] = [];
+    for (let month = floor; utcMonthEndsBy(month, before); month = utcMonthOf(utcMonthBounds(month).end)) {
+      months.push(month);
+    }
+    return months;
+  }
+
+  /**
+   * Cold export: fully-archived UTC months as gzipped JSONL, one file per month. Months
+   * already on disk cost no query; a missing month streams in keyset pages to a temp file
+   * that is renamed into place only once complete.
+   */
   async exportArchivedLeads(dir: string, hotDays: number): Promise<string[]> {
     mkdirSync(dir, { recursive: true });
-    const hotEnd = new Date(Date.now() - (hotDays + 1) * 24 * 3600 * 1000).toISOString();
-    const res = await this.pool.query(
-      `SELECT * FROM leads
-       WHERE archived_at IS NOT NULL AND (date_trunc('month', created_at) + interval '1 month') <= $1::timestamptz
-       ORDER BY created_at, id`,
-      [hotEnd],
-    );
-    const byMonth = new Map<string, Lead[]>();
-    for (const r of res.rows) {
-      const lead = this.rowToLead(r);
-      const month = lead.createdAt.slice(0, 7);
-      byMonth.set(month, [...(byMonth.get(month) ?? []), lead]);
-    }
+    const hotEnd = Date.now() - (hotDays + 1) * 24 * 3600 * 1000;
     const written: string[] = [];
-    for (const [month, rows] of byMonth) {
-      const file = join(dir, `leads-${month}.jsonl.gz`);
-      if (existsSync(file)) continue;
-      writeFileSync(file, gzipSync(Buffer.from(rows.map((l) => JSON.stringify(l)).join('\n'), 'utf-8')));
+    for (const month of await this.archiveMonthsBefore(hotEnd)) {
+      if (archivedMonthWrittenAt(dir, month)) continue;
+      const { start, end } = utcMonthBounds(month);
+      const any = await this.pool.query(
+        `SELECT 1 FROM leads WHERE archived_at IS NOT NULL AND created_at >= $1::timestamptz AND created_at < $2::timestamptz LIMIT 1`,
+        [start, end],
+      );
+      if (!any.rowCount) continue;
+      const file = archiveFileOf(dir, month);
+      await writeJsonlGzAtomic(file, this.archivedMonthRows(start, end));
       written.push(file);
     }
     return written;
+  }
+
+  private async *archivedMonthRows(start: string, end: string): AsyncGenerator<Lead> {
+    let afterId: string | null = null;
+    for (;;) {
+      const res: pg.QueryResult = await this.pool.query(
+        `SELECT * FROM leads
+          WHERE archived_at IS NOT NULL AND created_at >= $1::timestamptz AND created_at < $2::timestamptz
+            AND ($3::text IS NULL OR id > $3::text)
+          ORDER BY id
+          LIMIT $4`,
+        [start, end, afterId, ARCHIVE_PAGE_SIZE],
+      );
+      for (const row of res.rows) yield this.rowToLead(row);
+      if (res.rows.length < ARCHIVE_PAGE_SIZE) return;
+      afterId = res.rows[res.rows.length - 1].id as string;
+    }
+  }
+
+  /**
+   * Runs `statement` (given the id subquery) in batches over leads older than retentionDays
+   * whose full copy is on disk: the month file exists and the lead was archived before it
+   * was written. Unexported months are never touched.
+   */
+  private async forEachExportedBatch(
+    retentionDays: number,
+    archiveDir: string,
+    statement: (idsSubquery: string) => string,
+    extraWhere = '',
+    extraParams: unknown[] = [],
+  ): Promise<number> {
+    const cutoff = Date.now() - retentionDays * 24 * 3600 * 1000;
+    let total = 0;
+    // Months that started before the cutoff: a month straddling it is handled up to the cutoff.
+    const months = await this.archiveMonthsBefore(Date.parse(utcMonthBounds(utcMonthOf(new Date(cutoff).toISOString())).end));
+    for (const month of months) {
+      if (this.compactedMonths.has(month)) continue;
+      const writtenAt = archivedMonthWrittenAt(archiveDir, month);
+      if (!writtenAt) continue;
+      const { start, end } = utcMonthBounds(month);
+      const until = Math.min(cutoff, Date.parse(end));
+      const ids = `SELECT id FROM leads
+             WHERE created_at >= $1::timestamptz AND created_at < $2::timestamptz
+               AND archived_at IS NOT NULL AND archived_at <= $3::timestamptz${extraWhere}
+             LIMIT $4`;
+      for (;;) {
+        const res = await this.pool.query(statement(ids), [
+          start,
+          new Date(until).toISOString(),
+          new Date(writtenAt.getTime() + EXPORT_CLOCK_SLACK_MS).toISOString(),
+          LIFECYCLE_BATCH_SIZE,
+          ...extraParams,
+        ]);
+        const count = res.rowCount ?? 0;
+        total += count;
+        if (count < LIFECYCLE_BATCH_SIZE) break;
+      }
+      // A month wholly past the cutoff is done for this process (compaction is idempotent).
+      if (until === Date.parse(end) && extraWhere) this.compactedMonths.add(month);
+    }
+    return total;
+  }
+
+  private hasEmbeddingColumn(): Promise<boolean> {
+    // pgvector is optional (migration 003 skips the column without it).
+    this.embeddingColumn ??= this.pool
+      .query(`SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'leads' AND column_name = 'embedding'`)
+      .then((res) => (res.rowCount ?? 0) > 0)
+      .catch(() => false);
+    return this.embeddingColumn;
+  }
+
+  /**
+   * Cold step (RADAR_RETENTION_MODE=compact): exported leads older than retentionDays shrink
+   * in place — text cut to the research head (the same RESEARCH_TEXT_HEAD and left() as
+   * listLeadsForResearch, so the report reads them identically), contacts and the embedding
+   * cleared, bulky metadata keys dropped. Rewriting `text` also recompresses it with lz4.
+   */
+  async compactOldLeads(retentionDays: number, archiveDir: string): Promise<number> {
+    const embedding = (await this.hasEmbeddingColumn()) ? 'embedding = NULL,' : '';
+    return this.forEachExportedBatch(
+      retentionDays,
+      archiveDir,
+      (ids) => `UPDATE leads SET
+           text = left(text, CASE WHEN source_id IN (SELECT id FROM sources WHERE kind = 'ats') THEN $5::int ELSE $6::int END),
+           contacts_json = '[]'::jsonb,
+           metadata_json = COALESCE(metadata_json, '{}'::jsonb) - $7::text[],
+           ${embedding}
+           compacted_at = NOW()
+         WHERE id IN (${ids})`,
+      ' AND compacted_at IS NULL',
+      [RESEARCH_TEXT_HEAD.ats, RESEARCH_TEXT_HEAD.other, [...COMPACT_DROP_METADATA_KEYS]],
+    );
   }
 
   // --- radar/2 hub ---
@@ -2896,9 +3033,10 @@ export class PostgresStore implements Store {
   async listBoardLeads(options: { sourceId: string; externalIdPrefix: string; createdAfter: string; limit: number }): Promise<Array<Pick<Lead, 'id' | 'externalId' | 'state'>>> {
     const result = await this.pool.query(
       `SELECT id, external_id, state FROM leads
-        WHERE source_id = $1 AND external_id LIKE $2 || '%' AND created_at >= $3::timestamptz
+        WHERE source_id = $1 AND external_id LIKE $2 ESCAPE '\\' AND created_at >= $3::timestamptz
         ORDER BY created_at DESC LIMIT $4`,
-      [options.sourceId, options.externalIdPrefix, options.createdAfter, options.limit],
+      // A literal prefix: `_` and `%` in it are characters, not LIKE wildcards.
+      [options.sourceId, `${options.externalIdPrefix.replace(/[\\%_]/g, '\\$&')}%`, options.createdAfter, options.limit],
     );
     return result.rows.map((r) => ({ id: r.id, externalId: r.external_id || undefined, state: (r.state as LeadState) || 'active' }));
   }
@@ -2937,7 +3075,7 @@ export class PostgresStore implements Store {
     const result = await this.pool.query(
       // Company career pages are many and long, and only their head matters to the report.
       `SELECT id, source_id, external_id, url, canonical_url, title,
-              left(text, CASE WHEN source_id IN (SELECT id FROM sources WHERE kind = 'ats') THEN 600 ELSE 3000 END) AS text, author, city,
+              left(text, CASE WHEN source_id IN (SELECT id FROM sources WHERE kind = 'ats') THEN $5::int ELSE $6::int END) AS text, author, city,
               budget, currency, category, skills_json, is_remote, workplace_type, metadata_json, published_at, fingerprint,
               title_key, status, score, reasons_json, created_at, delivered_at, type, raw_salary, payment_period,
               normalized_usd_min, normalized_usd_max, state, contacts_json, source_platform, source_channel,
@@ -2956,7 +3094,8 @@ export class PostgresStore implements Store {
           AND ($4::text IS NULL OR id > $4::text)
         ORDER BY id
         LIMIT $3`,
-      [options.from, options.to, options.limit, options.afterId ?? null],
+      // The same head cold compaction keeps (RESEARCH_TEXT_HEAD): compacted leads read identically.
+      [options.from, options.to, options.limit, options.afterId ?? null, RESEARCH_TEXT_HEAD.ats, RESEARCH_TEXT_HEAD.other],
     );
     return result.rows.map((r) => ({ ...this.rowToLead(r), seenBy: (r.seen_by as string[] | null) ?? [] }));
   }
@@ -3166,6 +3305,43 @@ export class PostgresStore implements Store {
     return result.rows.map((r) => ({ period: r.period, createdAt: new Date(r.created_at).toISOString() }));
   }
 
+
+  /**
+   * The feed filtered by ISCO-08 occupation. The occupation is a heuristic over title, skills
+   * and direction (classifyIsco08) with no column behind it, so the predicate runs here, inside
+   * the store, over the same SQL filters and order, scanning batch by batch until the page is
+   * full: LIMIT, OFFSET and the cursor apply to the matching rows, not to a raw prefix. The
+   * cursor mode walks a keyset (created_at, id); other orders page by OFFSET (capped at 10k).
+   */
+  private async feedByOccupation(options: FeedOptions): Promise<Lead[]> {
+    const codes = options.occupationCodes ?? [];
+    const limit = Math.max(1, Math.min(options.limit ?? 50, 5000));
+    let skip = Math.max(0, Math.min(Math.floor(options.offset ?? 0), 10_000));
+    const batch = 1000;
+    const maxScanned = 20_000;
+    const out: Lead[] = [];
+    let after = options.after;
+    let offset = 0;
+    for (let scanned = 0; scanned < maxScanned && out.length < limit;) {
+      const rows = await this.queryLeads({ ...options, occupationCodes: undefined, limit: batch, offset: after ? 0 : offset, after }, true);
+      scanned += rows.length;
+      for (const lead of rows) {
+        if (!matchesOccupationCodes(lead, codes)) continue;
+        if (skip > 0) { skip--; continue; }
+        out.push(lead);
+        if (out.length >= limit) break;
+      }
+      if (rows.length < batch) break;
+      if (after) {
+        const last = rows.at(-1)!;
+        after = { createdAt: last.createdAt, id: last.id };
+      } else {
+        offset += rows.length;
+        if (offset > 10_000) break;
+      }
+    }
+    return out;
+  }
 }
 
 function parseJsonArray(value: unknown): any[] {

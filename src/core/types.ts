@@ -115,8 +115,10 @@ export interface Env {
   RADAR_DIGEST_CHAT_ID?: string;
   RADAR_DIGEST_INTERVAL_HOURS: number;
   RADAR_RETENTION_DAYS: number;
-  /** Leads older than this hide from the feed/API (soft archive, nothing is deleted). */
+  /** Leads older than this hide from the feed/API (warm: archived_at, full row kept). */
   RADAR_LEADS_HOT_DAYS: number;
+  /** What happens past RADAR_RETENTION_DAYS: compact (default), delete (legacy) or off. */
+  RADAR_RETENTION_MODE?: 'compact' | 'delete' | 'off';
   /** Where the monthly gz JSONL exports of archived leads land. */
   RADAR_ARCHIVE_DIR: string;
   RADAR_CHECK_CLOSED: boolean;
@@ -252,6 +254,8 @@ export interface Lead extends RawLead {
   deliveredAt?: string;
   /** Soft archive: set once the lead leaves the hot window (feed/API hide it, data stays). */
   archivedAt?: string;
+  /** Cold compaction: text cut to the research head, contacts/embedding cleared (full copy in the month file). */
+  compactedAt?: string;
   votes_up?: number;
   votes_down?: number;
   votes_scam?: number;

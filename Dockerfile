@@ -13,6 +13,11 @@ RUN pnpm install --frozen-lockfile
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
 RUN pnpm build
+# extension.zip (served at /extension) is packed from extension/ here, never committed,
+# so the download always matches the extension sources of this image.
+COPY extension ./extension
+COPY scripts/pack-extension.js ./scripts/pack-extension.js
+RUN node scripts/pack-extension.js
 
 FROM node:24-trixie-slim AS runtime
 WORKDIR /app
@@ -28,7 +33,7 @@ COPY README.md LICENSE ./
 COPY assets/og.png ./assets/og.png
 COPY assets/og-en.png ./assets/og-en.png
 COPY docs/stories.json ./docs/stories.json
-COPY extension.zip* ./
+COPY --from=build /app/extension.zip ./extension.zip
 COPY extension ./extension
 RUN mkdir -p /app/data && chown -R node:node /app
 

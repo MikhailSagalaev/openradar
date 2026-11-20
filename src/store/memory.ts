@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { gzipSync } from 'node:zlib';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync } from 'node:fs';
 import { recalculateVoteScoreAndStatus } from '../core/rules.ts';
+import { matchesOccupationCodes } from '../core/isco.ts';
 import { isRemoteLead, normalizeTechTokens, titleForLanguage } from '../core/text.ts';
 import { contactKey, mergeContacts } from '../core/contacts.ts';
 import type {
@@ -36,7 +35,8 @@ import type { LeadReview, ReviewBucket } from '../core/reviews.ts';
 import { disagreement, type LabelledDecision, type ModelDecision } from '../core/decisions.ts';
 import type { EmployerRow, EmployerSummary, SourceQualityInput, LeadFactsFill, LeadMoney, LeadSighting, ResearchDailyRow, SourceActivity } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
-import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
+import { COMPACT_DROP_METADATA_KEYS, lastDays, researchTextHead, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
+import { archiveFileOf, archivedMonthWrittenAt, EXPORT_CLOCK_SLACK_MS, utcMonthEndsBy, utcMonthOf, writeJsonlGzAtomic } from './archive-file.ts';
 import { computeSalaryMedians } from '../core/salary-sanity.ts';
 import { normalizeSalary } from '../core/salary.ts';
 import { MIN_CONFIDENCE, type ModelFacts } from '../research/model.ts';
@@ -714,14 +714,17 @@ export class MemoryStore implements Store {
   }
 
   async listBoardLeads(options: { sourceId: string; externalIdPrefix: string; createdAfter: string; limit: number }): Promise<Array<Pick<Lead, 'id' | 'externalId' | 'state'>>> {
-    const out: Array<Pick<Lead, 'id' | 'externalId' | 'state'>> = [];
+    // Newest first, like PostgreSQL's ORDER BY created_at DESC LIMIT n.
+    const matched: Lead[] = [];
     for (const lead of this.leads.values()) {
       if (lead.sourceId !== options.sourceId || !lead.externalId?.startsWith(options.externalIdPrefix)) continue;
       if (lead.createdAt < options.createdAfter) continue;
-      out.push({ id: lead.id, externalId: lead.externalId, state: lead.state ?? 'active' });
-      if (out.length >= options.limit) break;
+      matched.push(lead);
     }
-    return out;
+    return matched
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, options.limit)
+      .map((lead) => ({ id: lead.id, externalId: lead.externalId, state: lead.state ?? 'active' }));
   }
 
   async saveLeadFacts(id: string, facts: PageFacts, fill: LeadFactsFill): Promise<void> {
@@ -755,7 +758,7 @@ export class MemoryStore implements Store {
       })
       .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
       .slice(0, options.limit)
-      .map((l) => ({ ...l, text: l.text.slice(0, 3000), seenBy: (this.sightings.get(l.id) ?? []).map((s) => s.sourceId) }));
+      .map((l) => ({ ...l, text: researchTextHead(l.text, this.sources.get(l.sourceId)?.kind), seenBy: (this.sightings.get(l.id) ?? []).map((s) => s.sourceId) }));
   }
 
   private researchDaily = new Map<string, ResearchDailyRow[]>();
@@ -997,6 +1000,10 @@ export class MemoryStore implements Store {
     if (options.directionsAny?.length) {
       const wanted = new Set(options.directionsAny.map((d) => d.toLowerCase()));
       result = result.filter((l) => l.direction && wanted.has(l.direction.toLowerCase()));
+    }
+    if (options.occupationCodes?.length) {
+      const codes = options.occupationCodes;
+      result = result.filter((l) => matchesOccupationCodes(l, codes));
     }
     if (options.query?.trim()) {
       const q = options.query.trim().toLowerCase();
@@ -1585,11 +1592,11 @@ export class MemoryStore implements Store {
     return this.leads.delete(id);
   }
 
-  async cleanupOldLeads(retentionDays: number): Promise<number> {
+  async cleanupOldLeads(retentionDays: number, archiveDir?: string): Promise<number> {
     const cutoff = new Date(Date.now() - retentionDays * 24 * 3600 * 1000).toISOString();
     let removed = 0;
     for (const [id, lead] of this.leads.entries()) {
-      if (lead.createdAt < cutoff) {
+      if (lead.createdAt < cutoff && (archiveDir === undefined || this.isExported(lead, archiveDir))) {
         this.leadsByFingerprint.delete(lead.fingerprint);
         if (lead.externalId) {
           this.leadsByExternal.delete(`${lead.sourceId}:${lead.externalId}`);
@@ -1608,7 +1615,7 @@ export class MemoryStore implements Store {
     return before - this.runs.length;
   }
 
-  /** Soft archive: hide leads older than hotDays from the feed/API; nothing is deleted. */
+  /** Warm step: hide leads older than hotDays from the feed/API; the full row stays. */
   async archiveOldLeads(hotDays: number): Promise<number> {
     const cutoff = Date.now() - hotDays * 24 * 3600 * 1000;
     let archived = 0;
@@ -1621,29 +1628,54 @@ export class MemoryStore implements Store {
     return archived;
   }
 
-  /** Cold export: fully-archived months as gzipped JSONL, one file per month. */
+  /** Cold export: fully-archived UTC months as gzipped JSONL, one file per month. */
   async exportArchivedLeads(dir: string, hotDays: number): Promise<string[]> {
     mkdirSync(dir, { recursive: true });
     const byMonth = new Map<string, Lead[]>();
     const hotEnd = Date.now() - (hotDays + 1) * 24 * 3600 * 1000;
     for (const lead of this.leads.values()) {
       if (!lead.archivedAt) continue;
-      const created = new Date(lead.createdAt);
-      const monthEnd = new Date(created);
-      monthEnd.setDate(1);
-      monthEnd.setMonth(monthEnd.getMonth() + 1);
-      if (monthEnd.getTime() > hotEnd) continue;
-      const month = lead.createdAt.slice(0, 7);
-      byMonth.set(month, [...(byMonth.get(month) ?? []), lead]);
+      const month = utcMonthOf(lead.createdAt);
+      if (!utcMonthEndsBy(month, hotEnd)) continue;
+      const rows = byMonth.get(month);
+      if (rows) rows.push(lead);
+      else byMonth.set(month, [lead]);
     }
     const written: string[] = [];
-    for (const [month, rows] of byMonth) {
-      const file = join(dir, `leads-${month}.jsonl.gz`);
-      if (existsSync(file)) continue;
-      writeFileSync(file, gzipSync(Buffer.from(rows.map((l) => JSON.stringify(l)).join('\n'), 'utf-8')));
+    for (const [month, rows] of [...byMonth].sort(([a], [b]) => a.localeCompare(b))) {
+      if (archivedMonthWrittenAt(dir, month)) continue;
+      const file = archiveFileOf(dir, month);
+      rows.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      await writeJsonlGzAtomic(file, (async function* () { yield* rows; })());
       written.push(file);
     }
     return written;
+  }
+
+  /** Cold step: shrink exported leads older than retentionDays in place (see Store.compactOldLeads). */
+  async compactOldLeads(retentionDays: number, archiveDir: string): Promise<number> {
+    const cutoff = new Date(Date.now() - retentionDays * 24 * 3600 * 1000).toISOString();
+    let compacted = 0;
+    for (const lead of this.leads.values()) {
+      if (lead.compactedAt || lead.createdAt >= cutoff || !this.isExported(lead, archiveDir)) continue;
+      lead.text = researchTextHead(lead.text, this.sources.get(lead.sourceId)?.kind);
+      lead.contacts = [];
+      if (lead.metadata) {
+        const metadata = { ...lead.metadata };
+        for (const key of COMPACT_DROP_METADATA_KEYS) delete metadata[key];
+        lead.metadata = metadata;
+      }
+      lead.compactedAt = new Date().toISOString();
+      compacted++;
+    }
+    return compacted;
+  }
+
+  /** The lead's full copy is on disk: archived, and archived before its month file was written. */
+  private isExported(lead: Lead, archiveDir: string): boolean {
+    if (!lead.archivedAt) return false;
+    const writtenAt = archivedMonthWrittenAt(archiveDir, utcMonthOf(lead.createdAt));
+    return writtenAt !== undefined && Date.parse(lead.archivedAt) <= writtenAt.getTime() + EXPORT_CLOCK_SLACK_MS;
   }
 
   async getLeadsForFeed(options: FeedOptions = {}): Promise<Lead[]> {

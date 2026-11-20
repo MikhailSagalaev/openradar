@@ -115,8 +115,11 @@ const envSchema = z.object({
   RADAR_PROXY_URL: optionalString,
   RADAR_DIGEST_CHAT_ID: optionalString,
   RADAR_DIGEST_INTERVAL_HOURS: z.coerce.number().int().positive().default(6),
+  // Lead lifecycle: hot (0..HOT_DAYS) в фиде; warm (archived_at) — скрыт, строка целиком;
+  // cold (> RETENTION_DAYS) — после выгрузки месяца в RADAR_ARCHIVE_DIR строка сжимается
+  // (compact) или, по явному выбору, удаляется (delete). off — ни того, ни другого.
   RADAR_RETENTION_DAYS: z.coerce.number().int().positive().default(180),
-  // Soft archive (hot/warm/cold): старые лиды прячутся из фида и сжимаются, ничего не удаляется.
+  RADAR_RETENTION_MODE: z.enum(['compact', 'delete', 'off']).default('compact'),
   RADAR_LEADS_HOT_DAYS: z.coerce.number().int().positive().default(60),
   RADAR_ARCHIVE_DIR: z.string().default('data/archives'),
   // Closed-post checks against the boards, and feed age limits (0 turns a limit off).

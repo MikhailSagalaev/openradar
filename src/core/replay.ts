@@ -8,12 +8,18 @@ import { sha256 } from './fingerprint.ts';
  * a retry or a concurrent round could otherwise double-charge before the answer is saved.
  */
 
-export interface ReplayOptions {
+export interface ReplayOptions<T = unknown> {
   /** How long a result is replayable. Default 10 minutes. */
   windowMs?: number;
   /** Hard cap on remembered keys; the oldest are evicted first. Default 5000. */
   maxEntries?: number;
   now?: () => number;
+  /**
+   * Whether a resolved value is a success worth replaying. A call may report failure as a
+   * value (an HTTP status, an unparsable answer) rather than by throwing; such values are
+   * handed to concurrent waiters but never remembered. Default: every resolved value.
+   */
+  shouldCache?: (value: T) => boolean;
 }
 
 interface Entry<T> {
@@ -29,7 +35,8 @@ export function idempotencyKey(actor: string, request: unknown): string {
 /**
  * Runs `call` once per key within the window. A replay returns the cached value without
  * invoking `call`; a concurrent replay awaits the same in-flight promise, so two rounds
- * never pay for the same answer. Failures are not cached: the next round may retry.
+ * never pay for the same answer. Failures are not cached: a thrown error, or a value the
+ * `shouldCache` predicate rejects, is not remembered, so the next round may retry.
  */
 export class ReplayCache<T> {
   private readonly done = new Map<string, Entry<T>>();
@@ -37,11 +44,13 @@ export class ReplayCache<T> {
   private readonly windowMs: number;
   private readonly maxEntries: number;
   private readonly now: () => number;
+  private readonly shouldCache: (value: T) => boolean;
 
-  constructor(options: ReplayOptions = {}) {
+  constructor(options: ReplayOptions<T> = {}) {
     this.windowMs = options.windowMs ?? 10 * 60_000;
     this.maxEntries = options.maxEntries ?? 5000;
     this.now = options.now ?? Date.now;
+    this.shouldCache = options.shouldCache ?? (() => true);
   }
 
   /** True when a fresh result is already cached for the key (no call would be made). */
@@ -67,7 +76,7 @@ export class ReplayCache<T> {
     this.inflight.set(key, promise);
     try {
       const value = await promise;
-      this.remember(key, value);
+      if (this.shouldCache(value)) this.remember(key, value);
       return { value, replayed: false };
     } finally {
       this.inflight.delete(key);

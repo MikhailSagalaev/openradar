@@ -20,3 +20,6 @@ __pycache__/
 # Never commit: contains third-party code with mixed/absent licenses.
 .research/
 .firecrawl/
+
+# Built at image build time (Dockerfile) or by `pnpm pack:extension`; never committed.
+extension.zip

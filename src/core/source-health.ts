@@ -20,6 +20,14 @@ export const QUARANTINE_MIN_RUNS_24H = 12;
 /** Minimum failed polls over the last 24h for permanent HTTP 404/410/DNS dead endpoints. */
 export const DEAD_ENDPOINT_MIN_RUNS_24H = 6;
 
+/** The poller's failure backoff: the multiplier tops out here, and the stretched interval at the cap. */
+export const MAX_BACKOFF_FACTOR = 8;
+export const MAX_BACKOFF_INTERVAL_SEC = 6 * 3600;
+/** The interval a failing source with no interval of its own backs off from. */
+export const DEFAULT_ERROR_BASE_INTERVAL_SEC = 300;
+
+const DAY_MS = 86_400_000;
+
 /** Answers that mean «the site refuses us», not «the site is down». */
 const BLOCKED_ERROR = /HTTP\s+(?:401|403|429|451)\b|captcha|cloudflare|access\s+denied|forbidden|too\s+many\s+requests|FLOOD_WAIT|AUTH_KEY|SESSION_REVOKED/i;
 
@@ -60,17 +68,35 @@ export function pollBackoffFactor(health?: Pick<SourceHealth, 'failedInRow' | 'l
   if (failed === 1) return 2;
   if (failed === 2) return 3;
   if (health.last24h.runs >= DEAD_ENDPOINT_MIN_RUNS_24H && health.last24h.errors === health.last24h.runs) {
-    return 8;
+    return MAX_BACKOFF_FACTOR;
   }
   return 4;
 }
 
 /**
+ * How many polls a source that fails all day is sure to make in 24 hours, once the backoff
+ * has stretched its interval as far as it goes (less one for where the window falls).
+ */
+export function failingRunsPerDay(baseIntervalSec: number): number {
+  const stretched = Math.min((baseIntervalSec || DEFAULT_ERROR_BASE_INTERVAL_SEC) * MAX_BACKOFF_FACTOR, MAX_BACKOFF_INTERVAL_SEC);
+  return Math.floor(DAY_MS / 1000 / stretched) - 1;
+}
+
+/**
  * Decides whether a source should be automatically disabled (quarantined) because it has been
  * continuously failing with 0 leads found over the last 24h.
+ *
+ * The run minimums assume a source polled every few minutes. The backoff stretches a failing
+ * source's interval up to 8× (at most six hours), so a source polled every 15 minutes or
+ * slower could never make 12 polls a day while failing, and was never quarantined. With its
+ * base interval known, the minimum is scaled to the polls it is sure to make in a day of
+ * failures (never under BROKEN_AFTER). That lower bar applies only to a source older than a
+ * day: every poll of the last 24 hours must have failed, so a healthy-but-slow source, or one
+ * that broke a few hours ago, still has its good runs in the window and is never caught.
  */
 export function shouldQuarantineSource(
   health: Pick<SourceHealth, 'source' | 'failedInRow' | 'lastRun' | 'last24h'>,
+  options: { baseIntervalSec?: number; now?: Date } = {},
 ): { quarantine: boolean; reason?: string } {
   if (!health.source.enabled) return { quarantine: false };
   if (health.source.config?.hygieneExempt === true) return { quarantine: false };
@@ -80,10 +106,20 @@ export function shouldQuarantineSource(
   const err = health.lastRun?.error ?? '';
   const allFailed24h = health.last24h.runs > 0 && health.last24h.errors === health.last24h.runs && health.last24h.found === 0;
 
-  if (allFailed24h && DEAD_SOURCE_ERROR.test(err) && health.last24h.runs >= DEAD_ENDPOINT_MIN_RUNS_24H) {
+  let deadMin = DEAD_ENDPOINT_MIN_RUNS_24H;
+  let chronicMin = QUARANTINE_MIN_RUNS_24H;
+  const createdAt = Date.parse(health.source.createdAt ?? '');
+  const dayOld = Number.isFinite(createdAt) && (options.now ?? new Date()).getTime() - createdAt >= DAY_MS;
+  if (options.baseIntervalSec !== undefined && dayOld) {
+    const sure = Math.max(BROKEN_AFTER, failingRunsPerDay(options.baseIntervalSec));
+    deadMin = Math.min(deadMin, sure);
+    chronicMin = Math.min(chronicMin, sure);
+  }
+
+  if (allFailed24h && DEAD_SOURCE_ERROR.test(err) && health.last24h.runs >= deadMin) {
     return { quarantine: true, reason: `dead_endpoint: ${err.slice(0, 120)}` };
   }
-  if (allFailed24h && health.last24h.runs >= QUARANTINE_MIN_RUNS_24H) {
+  if (allFailed24h && health.last24h.runs >= chronicMin) {
     return { quarantine: true, reason: `chronic_failure_24h (${health.last24h.errors}/${health.last24h.runs} failed): ${err.slice(0, 120)}` };
   }
   return { quarantine: false };
@@ -106,7 +142,8 @@ export async function runSourceHygiene(store: Store, now = new Date()): Promise<
 
   for (const h of healthList) {
     if (!h.source.enabled) continue;
-    const q = shouldQuarantineSource(h);
+    // No adapter registry here: the source's own interval, when it sets one.
+    const q = shouldQuarantineSource(h, { baseIntervalSec: Number(h.source.config.intervalSec) || undefined, now });
     if (q.quarantine && q.reason) {
       await store.updateSource(h.source.id, {
         enabled: false,

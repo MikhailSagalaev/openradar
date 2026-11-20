@@ -45,6 +45,22 @@ export type LeadSort = 'new' | 'score' | 'budget' | 'relevance';
  */
 export const SCORE_DECAY_PER_HOUR = 1 / 6;
 
+/**
+ * How much of a lead's text the research report reads (listLeadsForResearch): company
+ * career pages (ATS) are many and long and only their head matters. Cold compaction cuts
+ * text to exactly this head, so research gives the same answer for a compacted lead —
+ * both use this one constant and must never drift apart.
+ */
+export const RESEARCH_TEXT_HEAD = { ats: 600, other: 3000 } as const;
+
+/** The research head of a lead's text for a source of this kind (see RESEARCH_TEXT_HEAD). */
+export function researchTextHead(text: string, sourceKind: string | undefined): string {
+  return text.slice(0, sourceKind === 'ats' ? RESEARCH_TEXT_HEAD.ats : RESEARCH_TEXT_HEAD.other);
+}
+
+/** Metadata keys cold compaction drops: free-form prose no research or scoring path reads. */
+export const COMPACT_DROP_METADATA_KEYS = ['summary', 'retitle_from'] as const;
+
 export interface ListLeadsOptions {
   limit?: number;
   /** Only leads first seen at or before this instant (tier delay, walking a long window). */
@@ -78,6 +94,11 @@ export interface ListLeadsOptions {
   language?: 'ru' | 'en';
   /** Leads to skip, for paging the HTML feed (the v2 API pages with a cursor). */
   offset?: number;
+  /**
+   * Only leads whose ISCO-08 occupation (classifyIsco08) starts with one of these 2–4 digit
+   * codes. Applied before LIMIT/OFFSET/cursor, so pages stay full when matches are sparse.
+   */
+  occupationCodes?: string[];
 }
 
 export interface LeadDeliveryRecord {
@@ -705,13 +726,26 @@ export interface Store extends HubStore {
   countLeads?(options: FeedOptions & { feedOnly?: boolean }): Promise<number>;
 
   deleteLead?(id: string): Promise<boolean>;
-  cleanupOldLeads?(retentionDays: number): Promise<number>;
+  /**
+   * Legacy retention (RADAR_RETENTION_MODE=delete): hard-deletes leads older than
+   * retentionDays, cascading their ledger, deliveries and sightings. With archiveDir only
+   * leads whose month file already exists there (see exportArchivedLeads) are deleted.
+   */
+  cleanupOldLeads?(retentionDays: number, archiveDir?: string): Promise<number>;
   cleanupRuns?(retentionDays: number): Promise<number>;
-  /** Soft archive (hot/warm/cold): leads older than hotDays hide from feed/API and their
-   * text rewrites under zstd TOAST; nothing is deleted, the reference history survives. */
+  /** Lead lifecycle, step 1 (warm): leads older than hotDays hide from feed/API (archived_at);
+   * the full row stays. Batched. Nothing is deleted. */
   archiveOldLeads?(hotDays: number): Promise<number>;
-  /** Monthly gz JSONL export of fully-archived months, for research without the DB. */
+  /** Step 2: monthly gz JSONL export (`leads-YYYY-MM.jsonl.gz`, UTC months) of fully-archived
+   * months not exported yet; returns the files written. */
   exportArchivedLeads?(dir: string, hotDays: number): Promise<string[]>;
+  /**
+   * Step 3 (cold, RADAR_RETENTION_MODE=compact): leads older than retentionDays whose month
+   * file already exists in archiveDir shrink in place — text cut to the research head
+   * (researchTextHead), contacts and the embedding cleared, bulky metadata dropped,
+   * compacted_at set. Ids, votes, rating, sightings and deliveries stay. Idempotent.
+   */
+  compactOldLeads?(retentionDays: number, archiveDir: string): Promise<number>;
 
   close(): Promise<void>;
 }
