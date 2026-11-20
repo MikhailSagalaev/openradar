@@ -26,3 +26,25 @@ jobs:
         run: ./mcp-publisher login github-oidc
       - name: Publish
         run: ./mcp-publisher publish
+      # A green "publish" is not proof: the v0.62.0 run once wrote a stale server.json
+      # version (registry issue #1871), and the job stayed green. Asserting that the
+      # pushed tag exists in the registry turns that into a red build.
+      - name: Verify the released version landed in the registry
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          v="${TAG#v}"
+          cursor=""
+          for _ in $(seq 1 10); do
+            url="https://registry.modelcontextprotocol.io/v0.1/servers?search=openradar&limit=100${cursor:+&cursor=$cursor}"
+            page=$(curl -fsSL "$url")
+            if printf '%s' "$page" | jq -e --arg v "$v" '.servers[] | select(.server.version == $v)' >/dev/null; then
+              echo "Registry carries ${TAG} ✓"
+              exit 0
+            fi
+            next=$(printf '%s' "$page" | jq -r '.metadata.nextCursor // empty')
+            [ -z "$next" ] && break
+            cursor=$(printf '%s' "$next" | jq -rR @uri)
+          done
+          echo "::error::Version ${TAG} not found in the MCP registry after publishing — the publish likely sent a stale server.json version (see modelcontextprotocol/registry#1871)."
+          exit 1
