@@ -45,6 +45,8 @@ const envSchema = z.object({
   RADAR_EXTRACT_MODEL: optionalString,
   RADAR_EXTRACT_FALLBACK_MODEL: optionalString,
   RADAR_EXTRACT_PER_HOUR: z.coerce.number().int().nonnegative().default(300),
+  // Group N posts into one extraction request (plan 021E/D2); 0 or 1 keeps one lead per call.
+  RADAR_EXTRACT_BATCH: z.coerce.number().int().nonnegative().max(16).default(0),
   // Ordered pool of OpenAI-compatible endpoints: [{"baseUrl","apiKey","model","fallbackModel"?,"pauseMs"?,"concurrency"?}].
   // The legacy OPENAI_* provider joins last unless the same baseUrl+key is already listed.
   RADAR_EXTRACT_PROVIDERS: z.string().optional().transform((value, ctx) => {
