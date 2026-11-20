@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.83.0 — 2026-11-20
+
+- **Batched model extraction (`RADAR_EXTRACT_BATCH`, plan 021E/D2)**: one LLM call now answers a whole chunk of leads instead of one, multiplying extract coverage within the same hourly provider budget. A malformed batch answer falls back to the proven single-lead path, so coverage never regresses; the summary reports the ids it actually saved. Off by default — set `RADAR_EXTRACT_BATCH=N` (2–10) to arm it.
+
 ## 0.82.1 — 2026-11-20
 
 - **Hourly maintenance runs through when the archive cannot be written** (#121): an unwritable archive dir (`EACCES` on a root-owned `./data` bind mount) aborted the whole pass, so since 0.79 the rating recompute, points notices, research daily counts, the monthly snapshot and the robots audit were skipped every hour. Archiving, export and retention now fail on their own; the openradar index backfills the missed days by itself. The container writes `./data` as uid 1000 — `chown 1000:1000 data` on a host where it belongs to root.
