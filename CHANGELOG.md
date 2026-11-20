@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.82.0 — 2026-11-20
+
+The 2026-11-19 audit (`plans/AUDIT_2026-11-19.md`): every confirmed finding fixed, 846 → 920 tests, and the Postgres/ParadeDB paths now run in CI.
+
+- **Old leads stay in the statistics without eating the server**: past `RADAR_RETENTION_DAYS` a lead is no longer deleted with its rating ledger and deliveries. Once its month is exported to `RADAR_ARCHIVE_DIR`, the row is compacted in place — text cut to exactly the head `/research` reads, embedding and contacts cleared — so the report reads it identically. `RADAR_RETENTION_MODE=compact` (default) | `delete` | `off`; migration 043 adds `compacted_at`. The hourly cold export streams month by month to an atomic file instead of loading every archived lead, with UTC month bounds, and the archive UPDATE runs in batches.
+- **Research statistics by the book**: exact p-values from χ²(df) and Student t (a df=3 lookup table and a hardcoded `***` before), Holm correction across the hypothesis family, and «confirmed» needs an adjusted p < 0.05 and at least a small effect, since at tens of thousands of posts nearly everything is significant. Report version 3; the methodology says so in both languages. The English report renders the four sections only the Russian one had.
+- **MCP safety ladder executes a confirmed write once**: concurrent confirmations with one token share one result (a second `vote_lead` used to cancel the vote), tokens are bound to the caller, and a failed write can be confirmed again. Usage analytics only count known methods and tools.
+- **Workday closes the jobs a board removed**: the ghost-job diff matched no Workday lead, and board completeness no longer trusts a per-page `total`.
+- **Model decisions**: a 429 or 5xx is no longer cached for ten minutes, and two posts with the same text each get their own decision.
+- Slow sources that keep failing are quarantined despite the failure backoff.
+- Faster pages: the viewer is resolved once per request, usage counters are buffered and flushed every 15 s, popular skills share one bounded cache, `dataset.csv` is built once per report, and `occupation_code` filters before paging.
+- SEO pages hide the suspicious salaries the feed hides.
+- ParadeDB pinned to `0.26.5-pg18` (the image production runs) and preloads `pg_cron`, which a fresh volume needs to initialize; CI tests it, plus Node 22. `extension.zip` is built with the image instead of committed.
+
 ## 0.81.0 — 2026-11-19
 
 - **+165 RU employer groups through the hh.ru company-name search feed** (five waves, PRs #101, #103, #104, #105, #106): one feed per group returns every hh account at once — «Сбербанк» alone brings «Сбер. IT», «Сбер. Работа с клиентами» and the rest of the subsidiaries. Banks (Сбер, ВТБ, Газпромбанк, ПСБ, МКБ, ОТП...), industry (Лукойл, Роснефть, Норникель, Газпром, Россети, Росатом, КАМАЗ, Ростсельмаш...), retail (Wildberries, Магнит, Лента, Спортмастер, Дикси...), IT (Софтлайн, Ланит, Крок, Nexign, Flant, Иннотех...), gamedev (Playrix, My Games, Gaijin), transport (РЖД, Аэрофлот, S7, Московский метрополитен), healthcare (МЕДСИ, Инвитро, Гемотест), insurers, developers, agro, media — each of the 165 feeds probed from production before it entered.
