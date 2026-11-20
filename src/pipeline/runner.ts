@@ -368,27 +368,34 @@ export class PollRunner {
       // месяцев: compact (по умолчанию) сжимает строку на месте — id, голоса, рейтинг,
       // показы и доставки остаются для статистики; delete (явный выбор) удаляет строки
       // каскадом вместе с гроссбухом и доставками; off — ничего не делает.
+      // Its own try/catch: an unwritable archive dir (EACCES on a root-owned ./data bind mount)
+      // used to abort the whole pass — rating recompute, research daily counts and robots audit
+      // below were skipped every hour. Archiving, export and retention fail alone now.
       const env = this.deps.env;
-      const hotDays = env.RADAR_LEADS_HOT_DAYS ?? 60;
-      const archiveDir = env.RADAR_ARCHIVE_DIR ?? 'data/archives';
-      const retentionMode = env.RADAR_RETENTION_MODE ?? 'compact';
-      if (retentionMode !== 'off' && hotDays >= env.RADAR_RETENTION_DAYS) {
-        this.logger.warn('RADAR_LEADS_HOT_DAYS >= RADAR_RETENTION_DAYS: leads reach retention only once archived and exported', {
-          hotDays,
-          retentionDays: env.RADAR_RETENTION_DAYS,
-        });
-      }
-      const archived = await store.archiveOldLeads?.(hotDays);
-      if (archived) this.logger.info('leads archived', { archived });
-      const exported = await store.exportArchivedLeads?.(archiveDir, hotDays);
-      if (exported?.length) this.logger.info('archive exported', { files: exported });
       let leads: number | undefined;
-      if (retentionMode === 'compact') {
-        const compacted = await store.compactOldLeads?.(env.RADAR_RETENTION_DAYS, archiveDir);
-        if (compacted) this.logger.info('leads compacted', { compacted });
-      } else if (retentionMode === 'delete') {
-        // Only months already exported: the archive file keeps the full copy.
-        leads = await store.cleanupOldLeads?.(env.RADAR_RETENTION_DAYS, archiveDir);
+      try {
+        const hotDays = env.RADAR_LEADS_HOT_DAYS ?? 60;
+        const archiveDir = env.RADAR_ARCHIVE_DIR ?? 'data/archives';
+        const retentionMode = env.RADAR_RETENTION_MODE ?? 'compact';
+        if (retentionMode !== 'off' && hotDays >= env.RADAR_RETENTION_DAYS) {
+          this.logger.warn('RADAR_LEADS_HOT_DAYS >= RADAR_RETENTION_DAYS: leads reach retention only once archived and exported', {
+            hotDays,
+            retentionDays: env.RADAR_RETENTION_DAYS,
+          });
+        }
+        const archived = await store.archiveOldLeads?.(hotDays);
+        if (archived) this.logger.info('leads archived', { archived });
+        const exported = await store.exportArchivedLeads?.(archiveDir, hotDays);
+        if (exported?.length) this.logger.info('archive exported', { files: exported });
+        if (retentionMode === 'compact') {
+          const compacted = await store.compactOldLeads?.(env.RADAR_RETENTION_DAYS, archiveDir);
+          if (compacted) this.logger.info('leads compacted', { compacted });
+        } else if (retentionMode === 'delete') {
+          // Only months already exported: the archive file keeps the full copy.
+          leads = await store.cleanupOldLeads?.(env.RADAR_RETENTION_DAYS, archiveDir);
+        }
+      } catch (error) {
+        this.logger.warn('lead lifecycle failed', { error: error instanceof Error ? error.message : String(error) });
       }
       // Голоса-события и история запусков нужны для health (24ч) и аудита;
       // храним их 30 дней, чтобы таблицы не росли бесконечно.

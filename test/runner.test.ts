@@ -36,6 +36,7 @@ interface Internals {
   backgroundTimer: unknown;
   running: boolean;
   backgroundRunning: boolean;
+  runMaintenanceIfDue(): Promise<void>;
 }
 
 const decideEnv = { RADAR_DECIDE_ENABLED: true, RADAR_DECIDE_KEY: 'k', RADAR_DECIDE_URL: 'https://d.test/v1', RADAR_DECIDE_MODEL: 'm', RADAR_DECIDE_PER_HOUR: 30 };
@@ -194,6 +195,28 @@ describe('PollRunner lifecycle', () => {
     expect(pollAll).toHaveBeenCalledTimes(2);
     expect(processOutbox).toHaveBeenCalledTimes(2);
     expect(globalFetch).not.toHaveBeenCalled();
+    await runtime.store.close();
+  });
+});
+
+describe('PollRunner maintenance', () => {
+  it('keeps running the rest of the pass when the lead lifecycle fails (unwritable archive dir)', async () => {
+    const { runtime, internals } = await runnerWith({}, vi.fn() as unknown as typeof fetch, false);
+    runtime.store.exportArchivedLeads = vi.fn(async () => {
+      throw Object.assign(new Error("EACCES: permission denied, mkdir 'data/archives'"), { code: 'EACCES' });
+    });
+    const compact = vi.fn(async () => 0);
+    runtime.store.compactOldLeads = compact;
+    const cleanupRuns = vi.fn(async () => 0);
+    runtime.store.cleanupRuns = cleanupRuns;
+    const purge = vi.fn(async () => 0);
+    runtime.store.purgeExpiredSessions = purge;
+
+    await internals.runMaintenanceIfDue();
+
+    expect(compact).not.toHaveBeenCalled(); // retention never runs past a failed export
+    expect(cleanupRuns).toHaveBeenCalledWith(30);
+    expect(purge).toHaveBeenCalled();
     await runtime.store.close();
   });
 });
