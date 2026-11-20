@@ -45,7 +45,7 @@ describe('batched model extraction (план 021E/D2)', () => {
     expect(calls).toBe(1);
     expect(summary.saved).toBe(3);
     expect(summary.failed).toBe(0);
-    expect(summary.ids).toEqual(['m0', 'm1', 'm2']);
+    expect([...summary.ids].sort()).toEqual(['m0', 'm1', 'm2']); // the pick order depends on the store
     await runtime.store.close();
   });
 
