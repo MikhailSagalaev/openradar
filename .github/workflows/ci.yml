@@ -10,7 +10,7 @@ permissions:
 
 # The ParadeDB image of the paradedb job; docker-compose.yml pins the same tag.
 env:
-  PARADEDB_IMAGE: paradedb/paradedb:0.26.8-pg18
+  PARADEDB_IMAGE: paradedb/paradedb:0.26.5-pg18
 
 jobs:
   test:
