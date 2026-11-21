@@ -65,30 +65,7 @@ const ENHANCE_STYLE = `<style id="rs-enhance-style">
   font-size: 15px;
 }
 .rs-theme-group {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid var(--line);
-  border-radius: 9999px;
-  padding: 2px;
-  background: var(--surface);
-  gap: 2px;
-}
-.rs-theme-btn {
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  border-radius: 9999px;
-  padding: 3px 9px;
-  font-size: 11px;
-  font-family: inherit;
-  cursor: pointer;
-  line-height: 1.3;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-.rs-theme-btn[aria-pressed="true"] {
-  background: var(--ink);
-  color: var(--bg);
-  font-weight: 600;
+  display: none;
 }
 #rs-tt {
   position: fixed;
@@ -115,6 +92,36 @@ const ENHANCE_STYLE = `<style id="rs-enhance-style">
   .rs-table-scroll > table th {
     white-space: normal;
   }
+  /* Mobile layout fixes: section heads stack, charts and cards breathe. */
+  .rs-section-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .rs-head-actions {
+    flex-wrap: wrap;
+  }
+  .rs-bump-box {
+    padding: 8px;
+  }
+  .rs-hist {
+    height: 140px;
+  }
+  .page-head {
+    align-items: flex-start;
+  }
+  .rs-kpi b {
+    font-size: 18px;
+  }
+  td {
+    overflow-wrap: anywhere;
+  }
+}
+/* Long tokens (ids, formula names, URLs) must never stretch a page sideways. */
+h1, h2, h3 {
+  overflow-wrap: break-word;
+}
+.rs-formula-math code, td code, li code {
+  overflow-wrap: anywhere;
 }
 @media (prefers-reduced-motion: reduce) {
   #rs-progress-bar {
@@ -131,10 +138,6 @@ const ENHANCE_STYLE = `<style id="rs-enhance-style">
 export function renderResearchEnhancements(lang: SupportedLang = 'ru'): string {
   const en = lang === 'en';
   const labels = JSON.stringify({
-    auto: en ? 'Auto' : 'Авто',
-    light: en ? 'Light' : 'Светлая',
-    dark: en ? 'Dark' : 'Тёмная',
-    themeAria: en ? 'Color theme' : 'Цветовая тема',
     showTable: en ? 'Show data table ↓' : 'Показать таблицу данных ↓',
     hideTable: en ? 'Hide data table ↑' : 'Скрыть таблицу ↑',
   });
@@ -160,45 +163,7 @@ export function renderResearchEnhancements(lang: SupportedLang = 'ru'): string {
   window.addEventListener('resize', onScroll);
   updateProgress();
 
-  // 2. Native pill theme switcher inside .page-head .actions
-  var actions = document.querySelector('.page-head .actions');
-  if (actions && !document.querySelector('.rs-theme-group')) {
-    var group = document.createElement('div');
-    group.className = 'rs-theme-group';
-    group.setAttribute('role', 'group');
-    group.setAttribute('aria-label', L.themeAria);
-    var current = 'auto';
-    try {
-      var saved = localStorage.getItem('openradar-theme');
-      if (saved === 'light' || saved === 'dark') current = saved;
-    } catch (e) {}
-
-    [['auto', L.auto], ['light', L.light], ['dark', L.dark]].forEach(function(pair) {
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'rs-theme-btn';
-      btn.textContent = pair[1];
-      btn.setAttribute('data-theme-choice', pair[0]);
-      btn.setAttribute('aria-pressed', String(current === pair[0]));
-      btn.addEventListener('click', function() {
-        var mode = pair[0];
-        if (mode === 'auto') {
-          document.documentElement.removeAttribute('data-theme');
-          try { localStorage.removeItem('openradar-theme'); } catch (e) {}
-        } else {
-          document.documentElement.setAttribute('data-theme', mode);
-          try { localStorage.setItem('openradar-theme', mode); } catch (e) {}
-        }
-        group.querySelectorAll('.rs-theme-btn').forEach(function(b) {
-          b.setAttribute('aria-pressed', String(b.getAttribute('data-theme-choice') === mode));
-        });
-      });
-      group.appendChild(btn);
-    });
-    actions.appendChild(group);
-  }
-
-  // 3. Wrap wide tables inside .rs-table-scroll for zero horizontal page overflow on mobile
+  // 2. Wrap wide tables inside .rs-table-scroll for zero horizontal page overflow on mobile
   document.querySelectorAll('table.table').forEach(function(tbl) {
     if (tbl.parentElement && (tbl.parentElement.classList.contains('rs-table-scroll') || tbl.parentElement.style.overflowX === 'auto')) {
       tbl.parentElement.classList.add('rs-table-scroll');
