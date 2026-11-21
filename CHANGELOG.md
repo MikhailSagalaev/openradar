@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.84.0 — 2026-11-21
+
+- **One color-theme button in the site header** — a circular sun/moon toggle next to the sign-in area switches light ↔ dark and remembers the choice on every page (the feed had no toggle before; only research pages did, buried in their page head as a three-button pill that has now been removed).
+- **Research pages on mobile**: section heads stack, chart boxes and history bars shrink, table cells and headings wrap long tokens instead of stretching the page sideways.
+
 ## 0.83.0 — 2026-11-20
 
 - **Batched model extraction (`RADAR_EXTRACT_BATCH`, plan 021E/D2)**: one LLM call now answers a whole chunk of leads instead of one, multiplying extract coverage within the same hourly provider budget. A malformed batch answer falls back to the proven single-lead path, so coverage never regresses; the summary reports the ids it actually saved. Off by default — set `RADAR_EXTRACT_BATCH=N` (2–10) to arm it.
