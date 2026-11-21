@@ -471,6 +471,31 @@ main {
 }
 .nav a:hover { color: var(--ink); text-decoration: none; }
 .nav a.active { color: var(--ink); border-color: var(--ink); }
+/* One-button color theme toggle in the header: shows the icon of the theme a click leads to. */
+.theme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 9999px;
+  background: var(--bg);
+  color: var(--muted);
+  cursor: pointer;
+  flex: none;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.theme-btn:hover { border-color: var(--line-strong); color: var(--ink); background: var(--surface-hover); }
+.theme-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.theme-icon-moon { display: none; }
+:root[data-theme="dark"] .theme-icon-moon { display: block; }
+:root[data-theme="dark"] .theme-icon-sun { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-icon-moon { display: block; }
+  :root:not([data-theme="light"]) .theme-icon-sun { display: none; }
+}
 .actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 .btn-submit {
   height: 34px;
@@ -2405,6 +2430,30 @@ export function setAnalytics(config: AnalyticsConfig): void {
   analyticsBodyHtml = analyticsBody(config);
 }
 
+/**
+ * Color theme: an early bootstrap that applies the saved choice before first paint
+ * (no flash), and a one-button toggle in the header — light ↔ dark, persisted under
+ * the same 'openradar-theme' key the research pages' bootstrap reads.
+ */
+const THEME_HEAD = `<script>
+(function(){
+  try {
+    var t = localStorage.getItem('openradar-theme');
+    if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+function toggleTheme() {
+  var doc = document.documentElement;
+  var mode = doc.getAttribute('data-theme');
+  var darkNow = mode === 'dark' || (mode !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  var next = darkNow ? 'light' : 'dark';
+  doc.setAttribute('data-theme', next);
+  try { localStorage.setItem('openradar-theme', next); } catch (e) {}
+  var b = document.getElementById('theme-toggle');
+  if (b) b.setAttribute('aria-label', next === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
+}
+</script>`;
+
 /** Absolute public URL (RADAR_PUBLIC_URL) for og:image and og:url; unset on a private node. */
 let publicBaseUrl: string | undefined;
 export function setPublicBaseUrl(url: string | undefined): void {
@@ -2490,6 +2539,7 @@ export function layout(input: {
 <meta property="og:site_name" content="openradar">
 <meta property="og:title" content="${escapeHtml(input.title)} · openradar">
 <meta property="og:type" content="website">
+${THEME_HEAD}
 ${publicBaseUrl ? `<meta property="og:image" content="${escapeHtml(publicBaseUrl)}${ogImagePath}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -2514,7 +2564,13 @@ ${analyticsBodyHtml}
     ${nav('sources', t.navSources, '/sources')}
     ${nav('network', lang === 'ru' ? 'Участники' : 'Participants', '/network')}
   </nav>
-  <div class="actions">${input.actions ?? ''}${authWidget}</div>
+  <div class="actions">
+    <button type="button" id="theme-toggle" class="theme-btn" onclick="toggleTheme()" aria-label="${lang === 'ru' ? 'Переключить светлую и тёмную тему' : 'Switch between light and dark theme'}" title="${lang === 'ru' ? 'Тема' : 'Theme'}">
+      <svg class="theme-icon theme-icon-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      <svg class="theme-icon theme-icon-moon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>
+    ${input.actions ?? ''}${authWidget}
+  </div>
 </header>
 <main class="main-content" id="main" tabindex="-1">
 ${input.body}
