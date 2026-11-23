@@ -1166,6 +1166,27 @@ const BASE_PRESETS: SourcePreset[] = [
   { id: 'tg-project-manager-pm-vakansii', kind: 'telegram', title: 'Telegram — @project_manager_pm_vakansii: Project Manager', description: 'Публичный TG-канал с вакансиями для Project Manager-ов', config: { channel: 'project_manager_pm_vakansii' } },
   { id: 'tg-product-manager-vakansii', kind: 'telegram', title: 'Telegram — @product_manager_vakansii: Product Manager', description: 'Публичный TG-канал с вакансиями для Product Manager-ов', config: { channel: 'product_manager_vakansii' } },
   { id: 'tg-hr-it-rekruter-jobs-vakansii', kind: 'telegram', title: 'Telegram — @hr_it_rekruter_jobs_vakansii: HR/Recruiter', description: 'Публичный TG-канал с вакансиями для HR и IT-рекрутеров', config: { channel: 'hr_it_rekruter_jobs_vakansii' } },
+  // Tilda, No-code, Web design & Freelance gigs cluster
+  { id: 'tg-tilda-experts', kind: 'telegram', title: 'Telegram — @tilda_experts: Tilda Experts — вакансии и проекты', description: 'Официальный публичный канал сообщества экспертов Tilda', config: { channel: 'tilda_experts' } },
+  { id: 'tg-tildoshnaya', kind: 'telegram', title: 'Telegram — @tildoshnaya: Тильдошная — дизайн и разработка', description: 'Публичный канал и заказы сообщества Тильдошная', config: { channel: 'tildoshnaya' } },
+  { id: 'tg-mari-vakansii', kind: 'telegram', title: 'Telegram — @mari_vakansii: Мари про вакансии — инфобизнес и сайты', description: 'Заказы и вакансии на сайты, лендинги и инфобизнес', config: { channel: 'mari_vakansii' } },
+  { id: 'tg-job-webdev', kind: 'telegram', title: 'Telegram — @job_webdev: Работа — вёрстка и фронтенд', description: 'Заказы и вакансии по веб-разработке, сайтам и вёрстке', config: { channel: 'job_webdev' } },
+  { id: 'tg-design-jobs-uxui', kind: 'telegram', title: 'Telegram — @design_jobs_uxui: UX/UI & Web Design', description: 'Вакансии и проекты по веб-дизайну и интерфейсам', config: { channel: 'design_jobs_uxui' } },
+  { id: 'tg-figma-jobs', kind: 'telegram', title: 'Telegram — @figma_jobs: Figma & UI/UX вакансии', description: 'Канал вакансий и заказов для дизайнеров в Figma', config: { channel: 'figma_jobs' } },
+  { id: 'tg-dribbble-jobs', kind: 'telegram', title: 'Telegram — @dribbble_jobs: Дизайн и креатив', description: 'Вакансии для веб- и графических дизайнеров', config: { channel: 'dribbble_jobs' } },
+  { id: 'tg-freelance-rabota', kind: 'telegram', title: 'Telegram — @freelance_rabota: Фриланс: проекты и заказы', description: 'Проектная работа, фриланс-заказы и разработка под ключ', config: { channel: 'freelance_rabota' } },
+  { id: 'tg-zakazy-freelance', kind: 'telegram', title: 'Telegram — @zakazy_freelance: Заказы фриланс', description: 'Биржа фриланс-заказов и задач на разработку', config: { channel: 'zakazy_freelance' } },
+  { id: 'tg-nocode-jobs', kind: 'telegram', title: 'Telegram — @nocode_jobs: No-Code вакансии и проекты', description: 'Вакансии и заказы по разработке без кода (Tilda, Webflow, Bubble)', config: { channel: 'nocode_jobs' } },
+  { id: 'tg-webflow-ru', kind: 'telegram', title: 'Telegram — @webflow_ru: Webflow Russia', description: 'Заказы и вакансии сообщества Webflow и no-code веб-разработки', config: { channel: 'webflow_ru' } },
+  { id: 'tg-digital-rabota', kind: 'telegram', title: 'Telegram — @digital_rabota: Digital & IT вакансии', description: 'Вакансии и проекты в диджитал-агентствах и IT-компаниях', config: { channel: 'digital_rabota' } },
+  { id: 'tg-distantsiya', kind: 'telegram', title: 'Telegram — @distantsiya: Дистанция — удаленная работа', description: 'Удаленная работа, фриланс и проектные задачи', config: { channel: 'distantsiya' } },
+  { id: 'tg-normrabota', kind: 'telegram', title: 'Telegram — @normrabota: Норм работа', description: 'Качественные удаленные вакансии и проектные контракты', config: { channel: 'normrabota' } },
+  { id: 'tg-finder-vc', kind: 'telegram', title: 'Telegram — @finder_vc: Finder.vc — вакансии и проекты', description: 'Удаленная работа для разработчиков, дизайнеров и маркетологов', config: { channel: 'finder_vc' } },
+  { id: 'tg-theyseeku', kind: 'telegram', title: 'Telegram — @theyseeku: They Seek You — креативные вакансии', description: 'Вакансии для креаторов, дизайнеров и продуктовых команд', config: { channel: 'theyseeku' } },
+  { id: 'tg-workinhead', kind: 'telegram', title: 'Telegram — @workinhead: Work in Head', description: 'Вакансии и фриланс в IT и digital', config: { channel: 'workinhead' } },
+  { id: 'tg-seojobs', kind: 'telegram', title: 'Telegram — @seojobs: SEO & Маркетинг', description: 'Вакансии и заказы по SEO-оптимизации, сайтам и аналитике', config: { channel: 'seojobs' } },
+  { id: 'tg-marketer-jobs', kind: 'telegram', title: 'Telegram — @marketer_jobs: Вакансии для маркетологов', description: 'Проекты и вакансии в интернет-маркетинге и лидогенерации', config: { channel: 'marketer_jobs' } },
+  { id: 'tg-it-jobs-freelance', kind: 'telegram', title: 'Telegram — @it_jobs_freelance: IT & Freelance вакансии', description: 'Фриланс-заказы и проектная разработка', config: { channel: 'it_jobs_freelance' } },
 ];
 
 /** An ATS preset with the boards found since: a slug listed twice is read once. */

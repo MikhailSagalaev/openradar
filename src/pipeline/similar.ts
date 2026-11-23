@@ -1,4 +1,9 @@
-import { computeMinHashBands, estimateJaccardFromSketches } from '../core/fingerprint.ts';
+import {
+  computeMinHashBands,
+  decodeMinHashSketch,
+  estimateJaccardFromSketches,
+  estimateJaccardFromUint16,
+} from '../core/fingerprint.ts';
 import type { Store } from '../core/store.ts';
 
 /** Rule 4 of docs/PROTOCOL.md: texts this similar within this window are one lead. */
@@ -11,6 +16,7 @@ interface Entry {
   id: string;
   createdAtMs: number;
   sketch: string;
+  uint16?: Uint16Array;
 }
 
 function isEmptySketch(sketch: string): boolean {
@@ -125,6 +131,9 @@ export class SimilarIndex {
     await this.ensureLoaded(now);
     this.prune(now);
 
+    const probe = decodeMinHashSketch(sketch);
+    if (!probe) return undefined;
+
     const cutoff = now.getTime() - SIMILAR_WINDOW_MS;
     const bands = computeMinHashBands(sketch);
     if (!bands.length) return undefined;
@@ -146,7 +155,8 @@ export class SimilarIndex {
 
     let best: { id: string; j: number } | undefined;
     for (const e of candidates) {
-      const j = estimateJaccardFromSketches(sketch, e.sketch);
+      e.uint16 ??= decodeMinHashSketch(e.sketch) ?? undefined;
+      const j = e.uint16 ? estimateJaccardFromUint16(probe, e.uint16) : estimateJaccardFromSketches(sketch, e.sketch);
       if (j >= threshold && (!best || j > best.j)) {
         best = { id: e.id, j };
       }
@@ -156,12 +166,16 @@ export class SimilarIndex {
 
   private async findShared(sketch: string, now: Date, threshold: number): Promise<string | undefined> {
     await this.ensureShared(now);
+    const probe = decodeMinHashSketch(sketch);
+    if (!probe) return undefined;
+
     const bands = computeMinHashBands(sketch);
     if (!bands.length) return undefined;
     const since = new Date(now.getTime() - SIMILAR_WINDOW_MS).toISOString();
     let best: { id: string; j: number } | undefined;
     for (const candidate of await this.store.findBandCandidates!(bands, since, MAX_CANDIDATES)) {
-      const j = estimateJaccardFromSketches(sketch, candidate.minhash);
+      const target = decodeMinHashSketch(candidate.minhash);
+      const j = target ? estimateJaccardFromUint16(probe, target) : estimateJaccardFromSketches(sketch, candidate.minhash);
       if (j >= threshold && (!best || j > best.j)) best = { id: candidate.id, j };
     }
     return best?.id;

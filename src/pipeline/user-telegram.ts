@@ -141,13 +141,23 @@ async function readSource(
     let found = 0;
     let skippedChats = 0;
     const failedChats: string[] = [];
-    for (const chat of chats) {
+    for (let i = 0; i < chats.length; i++) {
+      const chat = chats[i]!;
+      if (i > 0 && process.env.NODE_ENV !== 'test') {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
       let history: UserTelegramMessage[];
       try {
         history = await client.getHistory(normalizeChat(chat), { limit: MESSAGES_PER_CHAT, minId: cursors[chat] ?? 0 });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (DEAD_SESSION_RE.test(message)) throw error;
+        const isFloodWait = /FLOOD_WAIT_?(\d+)/i.test(message) || /wait of (\d+) seconds/i.test(message);
+        if (isFloodWait) {
+          deps.logger.warn('personal Telegram source: hit FloodWait, aborting round to protect account', { source: source.id, error: message });
+          break;
+        }
         failedChats.push(chat);
         deps.logger.warn('personal Telegram source: chat skipped', { source: source.id, error: message });
         continue;
@@ -167,8 +177,10 @@ async function readSource(
         round.found++;
         try {
           const outcome = await ingestRawLead(raw, shared, deps.ingest);
-          if (outcome.status === 'inserted' || outcome.status === 'delivered') round.inserted++;
-          if (outcome.status !== 'rejected') await deps.credit?.(source.userId, outcome);
+          if (outcome.status === 'inserted' || outcome.status === 'delivered') {
+            round.inserted++;
+            await deps.credit?.(source.userId, outcome);
+          }
         } catch (error) {
           round.failed++;
           deps.logger.warn('personal Telegram source: post not saved', { source: source.id, error: error instanceof Error ? error.message : String(error) });

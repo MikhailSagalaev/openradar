@@ -90,4 +90,8 @@ describe('Telegram account source', () => {
     expect(folderOf(makeSource({ kind: 'telegram-account', config: { folder: ' openradar ' } }))).toBe('openradar');
     expect(folderOf(makeSource({ kind: 'telegram-account', config: {} }))).toBeUndefined();
   });
+
+  it('has a default poll interval of 10 minutes to protect account limits', () => {
+    expect(telegramAccountSource.defaultPollIntervalSec).toBe(600);
+  });
 });

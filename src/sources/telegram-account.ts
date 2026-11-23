@@ -237,6 +237,7 @@ export const telegramAccountSource: SourceAdapter = {
     'posts from private chats become visible on the feed of this node; add only chats meant for job posts',
     'the session string grants full access to the account: keep it only in .env',
   ],
+  defaultPollIntervalSec: 600, // 10 minutes: protects MTProto account from FloodWait
   async poll(source: SourceRecord, ctx: PollContext): Promise<RawLead[]> {
     const folder = folderOf(source);
     if (!chatsOf(source).length && !folder) throw new Error('Telegram account source requires config.chats or config.folder');
@@ -246,24 +247,56 @@ export const telegramAccountSource: SourceAdapter = {
     const chats = [...new Set([...chatsOf(source), ...fromFolder])];
     const limit = Math.max(1, Math.min(Number(source.config.limit ?? 30), 100));
 
+    const sourceCursors = (typeof source.config.cursors === 'object' && source.config.cursors !== null
+      ? { ...(source.config.cursors as Record<string, number>) }
+      : {}) as Record<string, number>;
+    let cursorsChanged = false;
+
     const leads: RawLead[] = [];
-    for (const chat of chats) {
+    for (let i = 0; i < chats.length; i++) {
+      const chat = chats[i]!;
       const key = `${sessionEnv}:${chat}`;
+      const minId = lastSeen.get(key) ?? (typeof sourceCursors[chat] === 'number' ? sourceCursors[chat] : 0);
+
+      // Polite pause between chats to avoid MTProto FLOOD_WAIT if reading multiple chats
+      if (i > 0 && process.env.NODE_ENV !== 'test') {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
       try {
-        const history = await client.getHistory(normalizeChat(chat), { limit, minId: lastSeen.get(key) ?? 0 });
+        const history = await client.getHistory(normalizeChat(chat), { limit, minId });
         for (const message of history) {
-          lastSeen.set(key, Math.max(lastSeen.get(key) ?? 0, message.id));
+          const newMax = Math.max(lastSeen.get(key) ?? 0, message.id);
+          lastSeen.set(key, newMax);
+          if (newMax !== sourceCursors[chat]) {
+            sourceCursors[chat] = newMax;
+            cursorsChanged = true;
+          }
           if (message.isOutgoing) continue;
           const lead = messageToRawLead(toAccountMessage(message), source);
           if (lead) leads.push(lead);
         }
       } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        const isFloodWait = /FLOOD_WAIT_?(\d+)/i.test(errorMsg) || /wait of (\d+) seconds/i.test(errorMsg);
         ctx.logger.warn('Telegram account: chat skipped', {
           chat,
-          error: error instanceof Error ? error.message : String(error),
+          error: errorMsg,
         });
+        if (isFloodWait) {
+          ctx.logger.warn('Telegram account: FloodWait detected, aborting poll cycle to protect account');
+          break;
+        }
       }
     }
+
+    if (cursorsChanged && ctx.store?.updateSource) {
+      const fresh = (await ctx.store.getSource?.(source.id)) ?? source;
+      await ctx.store.updateSource(source.id, {
+        config: { ...fresh.config, cursors: sourceCursors },
+      }).catch(() => {});
+    }
+
     return leads;
   },
 };

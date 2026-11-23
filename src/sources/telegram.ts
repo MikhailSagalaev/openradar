@@ -23,6 +23,7 @@ export const telegramSource: SourceAdapter = {
     'private channels are not readable this way',
     'the preview is a sample, not a guaranteed full history',
   ],
+  defaultPollIntervalSec: 1800, // 30 minutes: telegram channels post a few times a day; avoids 429 rate limits
   async poll(source, ctx): Promise<RawLead[]> {
     const rawChannel =
       typeof source.config.channel === 'string'

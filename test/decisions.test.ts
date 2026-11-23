@@ -113,6 +113,13 @@ describe('asking the model', () => {
     expect(await runtime.store.listLeadsToDecide!(10)).toHaveLength(0);
   });
 
+  it('excludes rejected spam leads from LLM decision queue', async () => {
+    const runtime = await withLeads(['good', 'spam']);
+    await runtime.store.updateLeadStatusAndReasons!('spam', 'rejected', ['spam:FAKE_REVIEWS']);
+    const toDecide = await runtime.store.listLeadsToDecide!(10);
+    expect(toDecide.map((l) => l.id)).toEqual(['good']);
+  });
+
   it('stops when the service says no credits', async () => {
     const runtime = await withLeads(['a', 'b', 'c', 'd', 'e', 'f']);
     let calls = 0;
