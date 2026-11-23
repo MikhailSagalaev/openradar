@@ -1639,6 +1639,8 @@ export class MemoryStore implements Store {
     return count;
   }
 
+  async vacuumLeads(): Promise<void> {}
+
   /** Warm step: hide leads older than hotDays from the feed/API; the full row stays. */
   async archiveOldLeads(hotDays: number): Promise<number> {
     const cutoff = Date.now() - hotDays * 24 * 3600 * 1000;

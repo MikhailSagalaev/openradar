@@ -2752,6 +2752,11 @@ export function createApp(runtime: Runtime): Hono {
     const directionsAny = rawDirection ? [rawDirection] : undefined;
     // The viewer's tier (delay, contacts) applies to the API just like the UI.
     const viewer = await viewerFromRequest(c, runtime);
+    const anonymous = viewer.tier === 'guest' && !getCookie(c, 'radar_session');
+    if (anonymous && runtime.env.RADAR_LEAD_CACHE_SEC > 0) {
+      c.header('Cache-Control', `public, max-age=${runtime.env.RADAR_LEAD_CACHE_SEC}`);
+      c.header('Vary', 'Accept-Encoding, Cookie, Authorization, X-Radar-Token');
+    }
     const leads = await leadsFor(runtime, viewer, {
       limit, status, sourceId, query, type, workplaceType, directionsAny,
       ...filterOptions(parseFeedFilters(c)),
@@ -2765,6 +2770,11 @@ export function createApp(runtime: Runtime): Hono {
     const viewer = await viewerFromRequest(c, runtime);
     const stored = await runtime.store.getLead(c.req.param('id') as string);
     if (!stored || !(viewerCanSeeLead(viewer, stored, runtime.access) || await broughtBy(viewer, stored.id))) return c.json({ error: 'not_found' }, 404);
+    const anonymous = viewer.tier === 'guest' && !getCookie(c, 'radar_session');
+    if (anonymous && runtime.env.RADAR_LEAD_CACHE_SEC > 0) {
+      c.header('Cache-Control', `public, max-age=${runtime.env.RADAR_LEAD_CACHE_SEC}`);
+      c.header('Vary', 'Accept-Encoding, Cookie, Authorization, X-Radar-Token');
+    }
     return c.json(viewer.tier === 'admin' ? stored : toPublicLead(projectContacts(stored, viewer)));
   });
 

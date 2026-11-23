@@ -924,6 +924,31 @@ describe('http server', () => {
     expect(guestOff.headers.get('cache-control') ?? '').not.toContain('public');
   });
 
+  it('marks anonymous /api/leads and /api/leads/:id public for edge microcache, signed-in private', async () => {
+    const runtime = makeRuntime({ RADAR_PUBLIC_READ: true, RADAR_LEAD_CACHE_SEC: 60 });
+    const app = createApp(runtime);
+    const source = await runtime.store.createSource({ kind: 'rss', title: 'Feed' });
+    await runtime.store.insertLead({
+      id: 'api-cached-card', sourceId: source.id, externalId: 'api-cached-card', titleKey: 'api-cached-card', fingerprint: 'fp-api-cached-card',
+      title: 'Python разработчик', text: 'Ищем Python разработчика.',
+      status: 'new', score: 60, reasons: [], createdAt: new Date(Date.now() - 86_400_000).toISOString(),
+    });
+
+    const guestLeads = await app.request('/api/leads');
+    expect(guestLeads.status).toBe(200);
+    expect(guestLeads.headers.get('cache-control')).toBe('public, max-age=60');
+    expect(guestLeads.headers.get('vary') ?? '').toContain('Authorization');
+
+    const guestLead = await app.request('/api/leads/api-cached-card');
+    expect(guestLead.status).toBe(200);
+    expect(guestLead.headers.get('cache-control')).toBe('public, max-age=60');
+
+    const session = await makeUserSession(runtime, 'api-reader');
+    const memberLeads = await app.request('/api/leads', { headers: { cookie: `radar_session=${session}` } });
+    expect(memberLeads.status).toBe(200);
+    expect(memberLeads.headers.get('cache-control') ?? '').not.toContain('public');
+  });
+
   it('adds analytics and console verification only when configured', async () => {
     const plain = createApp(makeRuntime({ RADAR_PUBLIC_READ: true }));
     const plainRes = await plain.request('/', { headers: { accept: 'text/html' } });

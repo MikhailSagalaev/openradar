@@ -9,7 +9,7 @@ import { runDigestIfDue } from './digest.ts';
 import type { SubscriptionRound } from './subscriptions.ts';
 import { notifyPoints } from './points-notify.ts';
 import { auditSourceRobotsIfDue } from './robots-audit.ts';
-import { reportSilentDrops } from '../core/source-health.ts';
+import { reportSilentDrops, runSourceHygiene } from '../core/source-health.ts';
 import { checkLeadsLiveness } from './liveness.ts';
 import { recomputeRatings } from '../hub/rating.ts';
 import { parseModerators } from '../hub/service.ts';
@@ -23,6 +23,7 @@ import type { UserTelegramRound } from './user-telegram.ts';
 const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000;
 /** The silent-drop check scans two weeks of runs; every six hours is plenty. */
 const FLOW_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const HYGIENE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const BACKGROUND_INTERVAL_MS = 60 * 1000;
 const LIVENESS_INTERVAL_MS = 5 * 60 * 1000;
 const EXTRACTION_INTERVAL_MS = 2 * 60 * 1000;
@@ -47,6 +48,7 @@ export class PollRunner {
   private livenessRunning = false;
   private lastMaintenanceAt = 0;
   private lastFlowCheckAt = 0;
+  private lastHygieneCheckAt = 0;
   private lastExtractionAt = 0;
   private extractionRunning = false;
   private decisionsRunning = false;
@@ -403,6 +405,9 @@ export class PollRunner {
       const deliveries = await store.cleanupLeadDeliveries?.(14);
       if (runs) this.logger.info('old runs cleaned up', { runs });
       if (deliveries) this.logger.info('old lead deliveries cleaned up', { deliveries });
+      await store.vacuumLeads?.().catch((error) => {
+        this.logger.warn('vacuum leads failed', { error: error instanceof Error ? error.message : String(error) });
+      });
       const sessions = await store.purgeExpiredSessions?.();
       // A source that still answers but stopped bringing posts (a drifted feed URL) is invisible
       // to the error-based hygiene: surface it separately, at most once every six hours.
@@ -411,6 +416,20 @@ export class PollRunner {
         await reportSilentDrops(store, this.deps.services, this.logger).catch((error) => {
           this.logger.warn('silent-drop check failed', { error: error instanceof Error ? error.message : String(error) });
         });
+      }
+      if (Date.now() - this.lastHygieneCheckAt >= HYGIENE_INTERVAL_MS) {
+        this.lastHygieneCheckAt = Date.now();
+        const hygiene = await runSourceHygiene(store, new Date()).catch((error) => {
+          this.logger.warn('source hygiene check failed', { error: error instanceof Error ? error.message : String(error) });
+          return null;
+        });
+        if (hygiene && hygiene.autoDisabled.length > 0) {
+          this.logger.warn('sources auto-disabled by hygiene', { count: hygiene.autoDisabled.length, sources: hygiene.autoDisabled });
+          await this.deps.services?.notify(
+            'source-hygiene',
+            `[openradar] Источники переведены в карантин:\n${hygiene.autoDisabled.map((s) => `- ${s.title}: ${s.reason}`).join('\n')}`,
+          );
+        }
       }
       if (this.deps.env.RADAR_MODE === 'hub') {
         const secret = this.deps.env.RADAR_WEB_KEY_SECRET || this.deps.env.RADAR_ADMIN_TOKEN;

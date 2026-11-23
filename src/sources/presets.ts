@@ -326,6 +326,7 @@ const BASE_PRESETS: SourcePreset[] = [
     config: {
       provider: 'greenhouse',
       perPoll: 5,
+      timeoutMs: 10_000,
       maxAgeDays: 30,
       companies: [
         'sportygroup=Sporty Group',
@@ -421,6 +422,7 @@ const BASE_PRESETS: SourcePreset[] = [
     config: {
       provider: 'ashby',
       perPoll: 5,
+      timeoutMs: 10_000,
       maxAgeDays: 30,
       companies: [
         'harvey=Harvey',
@@ -487,6 +489,7 @@ const BASE_PRESETS: SourcePreset[] = [
     config: {
       provider: 'lever',
       perPoll: 5,
+      timeoutMs: 10_000,
       maxAgeDays: 30,
       companies: [
         'palantir=Palantir',
@@ -510,6 +513,7 @@ const BASE_PRESETS: SourcePreset[] = [
     config: {
       provider: 'workable',
       perPoll: 3,
+      timeoutMs: 10_000,
       maxAgeDays: 30,
       companies: ['huggingface=Hugging Face', 'modash=Modash', 'blueground=Blueground', 'the-vault-2=The Vault', 'mythwright=Mythwright', 'staygenki=StayGenki'],
     },
@@ -522,6 +526,7 @@ const BASE_PRESETS: SourcePreset[] = [
     config: {
       provider: 'workday',
       perPoll: 2,
+      timeoutMs: 15_000,
       maxAgeDays: 30,
       companies: [
         'nvidia@wd5=NVIDIA|NVIDIAExternalCareerSite',

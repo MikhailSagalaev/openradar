@@ -2523,6 +2523,10 @@ export class PostgresStore implements Store {
     return total;
   }
 
+  async vacuumLeads(): Promise<void> {
+    await this.pool.query('VACUUM ANALYZE leads;');
+  }
+
   /**
    * Warm step: hide leads older than hotDays from the feed/API; the full row stays.
    * Batched so a first run over a large table does not hold one huge transaction. The UPDATE

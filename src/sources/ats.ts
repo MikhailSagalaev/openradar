@@ -804,7 +804,7 @@ export const atsSource: SourceAdapter = {
     const since = new Date(ctx.now().getTime() - maxAgeDays * 86_400_000).toISOString();
 
     // Through a slow proxy a large board needs longer than a page does: config.timeoutMs.
-    const timeoutMs = Math.min(Math.max(Number(source.config.timeoutMs) || ctx.timeoutMs, ctx.timeoutMs), 120_000);
+    const timeoutMs = Math.min(Math.max(1000, Number(source.config.timeoutMs) || ctx.timeoutMs), 120_000);
     const boardCtx = { ...ctx, timeoutMs };
 
     const leads: RawLead[] = [];
