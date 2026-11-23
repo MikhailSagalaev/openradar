@@ -1,5 +1,110 @@
 # Changelog
 
+## 0.84.0 — 2026-11-21
+
+- **One color-theme button in the site header** — a circular sun/moon toggle next to the sign-in area switches light ↔ dark and remembers the choice on every page (the feed had no toggle before; only research pages did, buried in their page head as a three-button pill that has now been removed).
+- **Research pages on mobile**: section heads stack, chart boxes and history bars shrink, table cells and headings wrap long tokens instead of stretching the page sideways.
+
+## 0.83.0 — 2026-11-20
+
+- **Batched model extraction (`RADAR_EXTRACT_BATCH`, plan 021E/D2)**: one LLM call now answers a whole chunk of leads instead of one, multiplying extract coverage within the same hourly provider budget. A malformed batch answer falls back to the proven single-lead path, so coverage never regresses; the summary reports the ids it actually saved. Off by default — set `RADAR_EXTRACT_BATCH=N` (2–10) to arm it.
+
+## 0.82.1 — 2026-11-20
+
+- **Hourly maintenance runs through when the archive cannot be written** (#121): an unwritable archive dir (`EACCES` on a root-owned `./data` bind mount) aborted the whole pass, so since 0.79 the rating recompute, points notices, research daily counts, the monthly snapshot and the robots audit were skipped every hour. Archiving, export and retention now fail on their own; the openradar index backfills the missed days by itself. The container writes `./data` as uid 1000 — `chown 1000:1000 data` on a host where it belongs to root.
+
+## 0.82.0 — 2026-11-20
+
+The 2026-11-19 audit (`plans/AUDIT_2026-11-19.md`): every confirmed finding fixed, 846 → 920 tests, and the Postgres/ParadeDB paths now run in CI.
+
+- **Old leads stay in the statistics without eating the server**: past `RADAR_RETENTION_DAYS` a lead is no longer deleted with its rating ledger and deliveries. Once its month is exported to `RADAR_ARCHIVE_DIR`, the row is compacted in place — text cut to exactly the head `/research` reads, embedding and contacts cleared — so the report reads it identically. `RADAR_RETENTION_MODE=compact` (default) | `delete` | `off`; migration 043 adds `compacted_at`. The hourly cold export streams month by month to an atomic file instead of loading every archived lead, with UTC month bounds, and the archive UPDATE runs in batches.
+- **Research statistics by the book**: exact p-values from χ²(df) and Student t (a df=3 lookup table and a hardcoded `***` before), Holm correction across the hypothesis family, and «confirmed» needs an adjusted p < 0.05 and at least a small effect, since at tens of thousands of posts nearly everything is significant. Report version 3; the methodology says so in both languages. The English report renders the four sections only the Russian one had.
+- **MCP safety ladder executes a confirmed write once**: concurrent confirmations with one token share one result (a second `vote_lead` used to cancel the vote), tokens are bound to the caller, and a failed write can be confirmed again. Usage analytics only count known methods and tools.
+- **Workday closes the jobs a board removed**: the ghost-job diff matched no Workday lead, and board completeness no longer trusts a per-page `total`.
+- **Model decisions**: a 429 or 5xx is no longer cached for ten minutes, and two posts with the same text each get their own decision.
+- Slow sources that keep failing are quarantined despite the failure backoff.
+- Faster pages: the viewer is resolved once per request, usage counters are buffered and flushed every 15 s, popular skills share one bounded cache, `dataset.csv` is built once per report, and `occupation_code` filters before paging.
+- SEO pages hide the suspicious salaries the feed hides.
+- ParadeDB pinned to `0.26.5-pg18` (the image production runs) and preloads `pg_cron`, which a fresh volume needs to initialize; CI tests it, plus Node 22. `extension.zip` is built with the image instead of committed.
+
+## 0.81.0 — 2026-11-19
+
+- **+165 RU employer groups through the hh.ru company-name search feed** (five waves, PRs #101, #103, #104, #105, #106): one feed per group returns every hh account at once — «Сбербанк» alone brings «Сбер. IT», «Сбер. Работа с клиентами» and the rest of the subsidiaries. Banks (Сбер, ВТБ, Газпромбанк, ПСБ, МКБ, ОТП...), industry (Лукойл, Роснефть, Норникель, Газпром, Россети, Росатом, КАМАЗ, Ростсельмаш...), retail (Wildberries, Магнит, Лента, Спортмастер, Дикси...), IT (Софтлайн, Ланит, Крок, Nexign, Flant, Иннотех...), gamedev (Playrix, My Games, Gaijin), transport (РЖД, Аэрофлот, S7, Московский метрополитен), healthcare (МЕДСИ, Инвитро, Гемотест), insurers, developers, agro, media — each of the 165 feeds probed from production before it entered.
+- **BAE Systems Digital Intelligence joins the sitemap sources**: 83 vacancy URLs with a clean `/job/.+/(\\d+)/` pattern — the one directly convertible site of the hiring-without-whiteboards top domains.
+- Corporate Telegram channels of RU employers: «Яндекс нанимает», YandexCareers, MTS Digital, СИБУР, Lamoda Tech and two remote-work channels (v0.80.0).
+- СИБУР career site (sitemap-iblock-13) (v0.80.0).
+
+## 0.80.0 — 2026-11-19
+
+- **Workday, the ATS of the largest employers, joins the adapters**: its career API takes a POST and pages by 20; the adapter reads the listing (title, place, requisition id), turns the relative «Posted N Days Ago» into dates, cleans «USA - Sunnyvale, CA» into a city, and feeds complete reads into the ghost-job diff. Boards live in one source as `tenant@wd5=Company|site` entries; the seed shard holds NVIDIA (2,000 live jobs), AstraZeneca (1,475), Boeing (893), Pfizer (723), GE Aerospace (612), TTM Technologies (311) and Unilever (284), all probed from production.
+- **Corporate Telegram channels of RU employers**: «Яндекс нанимает» (@ya_jobs), YandexCareers, MTS Digital, СИБУР and Lamoda Tech now feed the hub alongside the niche remote-work channels @distantsiya and @remote_job_ru — each checked alive and absent from the catalog.
+- **СИБУР career site** joins the sitemap sources (sitemap-iblock-13, `/vacancies/{slug}`).
+- `postJsonText` helper in `sources/http.ts`: a JSON POST under the same SSRF, redirect and size rules as `fetchText`.
+
+## 0.79.6 — 2026-11-19
+
+- **`radar refilter` streams pages instead of loading the whole window**: a 30-day pass over hundreds of thousands of posts previously accumulated every lead in memory and exhausted the Node heap (OOM). It now processes each page as it arrives, retaining only seen ids for page-edge dedup, so a full-window retro pass runs in bounded memory.
+
+## 0.79.5 — 2026-11-19
+
+- **GREY_FINANCE no longer hides legitimate posts via a bare «дроп» substring**: the stem matched «гидропроект», «недропользователь», «автогидроподъемник», «гидропресс», «дропшиппинг» and SEO dropped domains, rejecting engineering, e-commerce and SEO vacancies. It is replaced with the unambiguous money-mule term «дроповод». A production dry run exposed this; 58 wrongly-hidden leads were restored.
+- **`radar refilter` tests only the exact audit-added patterns by default** (`auditSpamReasons`: the mass «отправка личных сообщений» branch and social-account recovery), not whole spam categories whose older broad stems (COLD_CALLING on sales jobs) would retroactively hide legitimate vacancies. `--all` re-runs every category explicitly.
+
+## 0.79.4 — 2026-11-19
+
+- **`radar refilter` scoped to the audit additions by default**: it now acts only on MASS_MESSAGING and GREY_FINANCE (the categories tightened by the 2026-11 audit), not every spam rule. Re-running older, broader rules over stored leads would retroactively reject legitimate vacancies — the COLD_CALLING pattern matches ordinary sales-manager jobs («менеджер по продажам», «без холодных звонков») — which is an operator product decision, not a cleanup. `--all` re-runs every category explicitly. A dry run on production surfaced this before any lead was hidden.
+
+## 0.79.3 — 2026-11-19
+
+- **Tighter door spam patterns**: MASS_MESSAGING now catches «массовая/массой отправка личных сообщений» (the typo that slipped past the old «рассылка»-only pattern), and GREY_FINANCE catches social-account recovery/unban gigs (RU + ES/EN: Instagram, Facebook, WhatsApp, TikTok, VK). The spam loop is extracted into a shared `spamReasons()` so ingest and the retro pass judge by the same patterns; legitimate bulk-email dev tasks and cloud-account recovery are kept.
+- **`radar refilter`**: re-runs the door spam patterns over still-visible leads (default 30 days), dry run unless `--apply`; rejects only new matches, never restores, records the reasons. Archived rows are untouched.
+- **Silent-drop alert**: a source that still answers but stopped bringing posts (the hh-1C feed-URL drift, where dedup absorbed a generic firehose) is now surfaced — `getFlowStats()` compares the last 7 days with the 7 before, `detectSilentDrops()` flags live polls whose inserts fell below 20% of a ≥100-post baseline, the hourly maintenance (6h gate) records a degraded `source-flow` service on `/health` and sends one Telegram notice per day. `radar source drops` runs the check on demand.
+
+## 0.79.2 — 2026-11-19
+
+- **Deploy: English social card actually reaches X**: the Docker image now ships `assets/og-en.png` (the runtime stage copied only `og.png`, so `/og-en.png` 404'd in production), and `docs/nginx-bots.conf` lets the token-bounded `Twitterbot` UA bypass the anonymous microcache both ways — the shared cache previously served the crawler the cached RU variant. Telegram and human traffic keep the cache unchanged.
+
+## 0.79.1 — 2026-11-19
+
+- **Postgres soft-archive parity**: `archiveOldLeads` and `exportArchivedLeads` now exist on the PostgreSQL store (the 041 column already hid archived rows from public queries, but the runner's optional calls silently skipped on postgres hubs); `rowToLead` exposes `archivedAt`. Fixes the red CI postgres suite and enables hot/warm/cold archiving on production.
+
+## 0.79.0 — 2026-11-19
+
+- **English social preview card for X/Twitter**: the `Twitterbot` crawler gets `lang=en` (token-bounded UA match, so `TelegramBot (like TwitterBot)` keeps the Russian card), a new `/og-en.png` banner in the same design and English og/twitter meta; English visitors get the English banner too. Lead-page titles stay the language of the post.
+- **llms.txt agent quickstart (RU+EN)**: operational loop for agents (search → card → market → delta-sync), guest 12h delay and contact rules, 404 semantics, Cache-Control instead of polling.
+- **Global & cross-market PPP econometrics**: `/research` and `/en/research` now analyze both the Russian market (RUB/month) and the global English-language market (USD/year across Greenhouse, Lever, Ashby, RemoteOK, Remotive, WorkingNomads, HN, JustJoin and more), including IMF/World Bank ICP Purchasing Power Parity (κ_PPP = 2.55) comparisons by grade and role.
+- **Blinder–Oaxaca twofold decomposition, Theil entropy GE(1) & IPW disclosure correction**: `src/research/report.ts` computes pooled-reference Blinder–Oaxaca decompositions (Endowments E vs pure location/remote rent C), Theil upper-tail entropy, and Horvitz–Thompson inverse-probability-weighted medians correcting for non-random salary hiding.
+- **W3C MathML / LaTeX equations & ready-to-compile `/research/paper.tex`**: `/research/methodology` and `/en/research/methodology` render publication-grade MathML equations with one-click LaTeX copy, and `GET /research/paper.tex` + `GET /en/research/paper.tex` export complete LaTeX manuscripts with live econometric tables.
+- **Native OpenRadar UI polish & mobile responsiveness**: `src/research/enhance.ts` preserves OpenRadar's native Zinc + Emerald palette, 8px cards and pill controls while adding a Light/Dark/Auto theme toggle, 2px emerald reading progress bar, SVG chart tooltips, J/K section navigation, and responsive horizontal scroll wrappers for wide research tables on mobile viewports.
+
+## 0.77.0 — 2026-11-18
+
+- **25 new Telegram discovery channels**: job-channel presets from the `rabota_jobs_chnls` list join the source catalog — Frontend, Python, Java, Golang, PHP, 1C, .NET, C++, Node.js, Unity, DevOps, QA, iOS/Swift, Android, Flutter/Dart, Data Engineering, Data Science/ML, data/system/business/product analytics, Project/Product Management and HR/IT recruiting.
+
+## 0.76.0 — 2026-11-18
+
+- **Extract provider rotation (`RADAR_EXTRACT_PROVIDERS`)**: model extraction now takes an ordered JSON pool of OpenAI-compatible endpoints (`baseUrl`, `apiKey`, `model`, optional `fallbackModel`, `pauseMs`, `concurrency`). An endpoint answering 401/402/403 is parked and the next one extracts the same post in the same batch; the pool is shared across rounds and parked endpoints retry after `RADAR_EXTRACT_PROVIDER_COOLDOWN_MIN` (default 60). The legacy `OPENAI_*` provider joins the pool last unless already listed, so single-provider setups work unchanged; GigaChat keeps its own flow. Per-endpoint `pauseMs`/`concurrency` pace the batch for rate-limited free tiers. Stored model facts now record the model that actually answered, including cascade and rotation fallbacks. When every endpoint is parked the batch stops with the parking status and makes no network calls; a 429 still pauses without parking.
+
+## 0.75.0 — 2026-11-17
+
+- **Decision key rotation (`SUBQ_API_KEYS`)**: the decide classifier now takes a comma-separated pool of SubQ keys (order: `RADAR_DECIDE_KEY`, then `SUBQ_API_KEYS`, then `SUBQ_API_KEY`, deduplicated). A key that answers 401/402/403 is parked and the next key answers the same post in the same round; the pool is shared across rounds, so an exhausted key is not retried every batch. Parked keys come back after `RADAR_DECIDE_KEY_COOLDOWN_MIN` (default 60) — SubQ credits are a prepaid balance with no timed reset, but a top-up revives the same key. When every key is parked the round stops with the parking status and makes no network calls; a 429 still stops the batch without parking the key. The 402 admin alert now points at `SUBQ_API_KEYS`.
+
+## 0.74.0 — 2026-11-16
+
+- **ATS phase 1: light poll**: one shared request clock per vendor (shards of one board system cannot burst it), a board failing three rotations in a row parks for a day, Greenhouse reads a light listing (`content=false`, ~16× smaller) and fetches full content only for jobs whose timestamp changed; the ghost diff gets the exact board id set, and any listing hiccup falls back to the full read.
+- **`OPENAI_EXTRA_BODY`**: verbatim JSON merged into classifier/extract requests, so provider switches like Qwen's `enable_thinking:false` need no code change.
+
+## 0.73.3 — 2026-11-16
+
+- **Deploy**: pre-deploy database dumps are skipped by default (regular cron backups cover it; force with `PREDEPLOY_BACKUP=1`).
+- **Network**: all active contributors are ranked, and the network page copy is clarified.
+
+## 0.73.2 — 2026-11-16
+
+- **Extension connect compatibility**: `/extension/connect` auto-assigns a server state nonce when legacy installed browser extensions connect without a `state` parameter, resolving the `Bad state` 400 error on sign-in.
+- **Network statistics accuracy**: `/network` now uses real 7-day source volume from `getAdminStats` rather than an arbitrary 3,000-lead guest feed slice, and accurately displays total weekly platform publications (~78,000) rather than the sum of the visible top 7 rows.
+- **Admin UI subnavigation**: added persistent tab navigation across `/admin`, `/admin/users`, `/admin/decisions`, `/admin/labels`, and `/sources/quality` for seamless operator navigation.
+
 ## 0.73.1 — 2026-11-16
 
 - **Public API docs page (/docs)**: human-readable endpoint reference generated from the OpenAPI 3.1 schema — methods, parameters, responses and the Lead field table. Linked from the footer, sitemap, `/llms.txt` and Trust page so API catalogs can verify a self-serve docs URL.

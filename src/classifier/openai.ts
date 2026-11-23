@@ -9,17 +9,38 @@ function asString(value: unknown): string | undefined {
 }
 
 export class OpenAiClassifier implements Classifier {
+  private extraBody?: Record<string, unknown>;
+  private extraBodyRead = false;
+
   constructor(
     private readonly env: Env,
     private readonly logger: Logger,
   ) {}
+
+  /** OPENAI_EXTRA_BODY (JSON) merges verbatim into every request: provider-specific
+   * switches like Qwen's `enable_thinking: false` ride along without a code change. */
+  private readExtraBody(): Record<string, unknown> | undefined {
+    if (this.extraBodyRead) return this.extraBody;
+    this.extraBodyRead = true;
+    const raw = this.env.OPENAI_EXTRA_BODY;
+    if (!raw?.trim()) return this.extraBody;
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      this.extraBody = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : undefined;
+      if (!this.extraBody) this.logger.warn('OPENAI_EXTRA_BODY must be a JSON object, ignoring');
+    } catch {
+      this.logger.warn('OPENAI_EXTRA_BODY is not valid JSON, ignoring');
+    }
+    return this.extraBody;
+  }
 
   async classify(lead: ClassifierInput) {
     const apiKey = this.env.OPENAI_API_KEY;
     if (!apiKey) return null;
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 25_000);
+    const timeoutMs = this.env.RADAR_LLM_TIMEOUT_MS ?? 8_000;
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(`${this.env.OPENAI_BASE_URL.replace(/\/+$/, '')}/chat/completions`, {
         method: 'POST',
@@ -32,6 +53,7 @@ export class OpenAiClassifier implements Classifier {
           model: this.env.OPENAI_MODEL,
           temperature: 0,
           response_format: { type: 'json_object' },
+          ...this.readExtraBody(),
           messages: [
             {
               role: 'system',

@@ -1,6 +1,6 @@
 # Архитектура Radar
 
-Статус: v0.8 (radar/2). Документ описывает конвейер одного узла. Сеть «узлы → хаб» описана в [PROTOCOL.md](PROTOCOL.md).
+Статус: v0.80 (radar/2). Документ описывает конвейер одного узла. Сеть «узлы → хаб» описана в [PROTOCOL.md](PROTOCOL.md).
 
 ## 1. Задача
 
@@ -141,7 +141,9 @@ sessions(id, user_id, created_at, expires_at)
 - `PRIMARY KEY (user_id, lead_id, signal)` в `lead_votes` — один голос на участника;
 - `(status, created_at)`, `(source_id, created_at)`, `(title_key, created_at)` — основные выборки;
 - `idx_leads_search_vector` (GIN по взвешенному `tsvector`: заголовок A, навыки/направление B, текст C) — быстрый полнотекстовый поиск PostgreSQL;
-- `idx_leads_paradedb` (`USING paradedb`) — Tantivy BM25 инвертированный индекс по всем полям лида при наличии ParadeDB.
+- `idx_leads_paradedb` (`USING bm25 (id, title, skills_json, direction, text)`, миграция 038) — Tantivy BM25 инвертированный индекс по полям лида при наличии ParadeDB.
+
+Старые лиды уходят в мягкий архив (hot/warm/cold, миграция 041): колонка `archived_at` прячет их из ленты и API, но строка остаётся в `leads`, поэтому каскадные ссылки, рейтинговый гроссбух и история доставок не теряются. Пороги архива задаются переменными окружения, см. `.env.example`.
 
 `config_json` и `reasons_json` — JSON. Секреты в БД не хранятся: только имена переменных окружения и токены вебхуков. Таблицы `app_users`, `lead_votes` и колонка `leads.embedding` (halfvec) — задел под Этапы 3–4 роадмапа; эмбеддинги пока не заполняются.
 
@@ -268,7 +270,7 @@ const ok = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(req.headers
 - `GET|POST /extension/connect`, `/api/ext/me`, `/api/ext/submit`, `DELETE /api/ext/token` — вход расширения через GitHub: токен `ext_…` только на добавление заказов, хранится SHA-256, возвращается лишь на `https://<id>.chromiumapp.org/`.
 - `GET /me` — профиль вошедшего: уровень, задержка, рейтинг привязанного ключа, как подняться.
 - `GET /yandex_<код>.html` — подтверждение Яндекс Вебмастера, если задан `RADAR_YANDEX_VERIFICATION`. Счётчики Метрики и Google Analytics и мета-тег Search Console выводятся только при `RADAR_YANDEX_METRIKA_ID`, `RADAR_GA_ID`, `RADAR_GOOGLE_SITE_VERIFICATION`; CSP расширяется на их домены только тогда же.
-- `GET /og.png` — карточка для соцсетей; `og:image` и абсолютный `og:url` выводятся, когда задан `RADAR_PUBLIC_URL`.
+- `GET /og.png`, `GET /og-en.png` — карточки для соцсетей (RU/EN); `og:image` и абсолютный `og:url` выводятся, когда задан `RADAR_PUBLIC_URL`. Английскую карточку получают посетители с `lang=en` и кроулер X/Twitter (`Twitterbot`): `resolveLang` для него всегда возвращает `en`, поэтому сниппет ссылки в X английский.
 - `GET /assets/app.<hash>.css`, `GET /assets/logo.<hash>.svg` — стили и логотип с годовым кэшем; хэш меняется вместе с содержимым.
 - `GET /api/delta` — поток изменений для синхронизации узлов (JSON/NDJSON).
 - `GET /sources`, `/sources/new`, `/sources/:id`, `/sources/:id/edit` — дашборд источников.

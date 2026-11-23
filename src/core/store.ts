@@ -1,6 +1,7 @@
 import type { LeadReview, ReviewBucket } from './reviews.ts';
 import type { LabelledDecision, ModelDecision } from './decisions.ts';
 import type { SourceQualityInput } from './source-quality.ts';
+import type { SourceFlowStats } from './source-health.ts';
 import type { PageFacts } from '../research/facts.ts';
 import type { WorkplaceType } from './text.ts';
 import type { SubscriptionRecord } from './subscriptions.ts';
@@ -44,6 +45,22 @@ export type LeadSort = 'new' | 'score' | 'budget' | 'relevance';
  */
 export const SCORE_DECAY_PER_HOUR = 1 / 6;
 
+/**
+ * How much of a lead's text the research report reads (listLeadsForResearch): company
+ * career pages (ATS) are many and long and only their head matters. Cold compaction cuts
+ * text to exactly this head, so research gives the same answer for a compacted lead —
+ * both use this one constant and must never drift apart.
+ */
+export const RESEARCH_TEXT_HEAD = { ats: 600, other: 3000 } as const;
+
+/** The research head of a lead's text for a source of this kind (see RESEARCH_TEXT_HEAD). */
+export function researchTextHead(text: string, sourceKind: string | undefined): string {
+  return text.slice(0, sourceKind === 'ats' ? RESEARCH_TEXT_HEAD.ats : RESEARCH_TEXT_HEAD.other);
+}
+
+/** Metadata keys cold compaction drops: free-form prose no research or scoring path reads. */
+export const COMPACT_DROP_METADATA_KEYS = ['summary', 'retitle_from'] as const;
+
 export interface ListLeadsOptions {
   limit?: number;
   /** Only leads first seen at or before this instant (tier delay, walking a long window). */
@@ -77,6 +94,11 @@ export interface ListLeadsOptions {
   language?: 'ru' | 'en';
   /** Leads to skip, for paging the HTML feed (the v2 API pages with a cursor). */
   offset?: number;
+  /**
+   * Only leads whose ISCO-08 occupation (classifyIsco08) starts with one of these 2–4 digit
+   * codes. Applied before LIMIT/OFFSET/cursor, so pages stay full when matches are sparse.
+   */
+  occupationCodes?: string[];
 }
 
 export interface LeadDeliveryRecord {
@@ -126,6 +148,37 @@ export interface AdminUsersData {
     labels: number;
   }>;
   subscriptions: Array<{ id: string; name: string; channel: string; paused: boolean; lastSentAt?: string }>;
+}
+
+/** One aggregated counter cell for agent analytics: day × surface × route/tool × tier × client × source. */
+export interface ApiUsageDim {
+  /** UTC date, YYYY-MM-DD. */
+  day: string;
+  surface: 'api' | 'mcp' | 'research';
+  /** Path template (`/api/leads/{id}`), MCP tool or method name, or the research file name. */
+  detail: string;
+  tier: 'guest' | 'member' | 'admin' | 'token';
+  /** User-Agent class: claude, codex, cursor, browser, bot, other. Never the raw string. */
+  client: string;
+  /** Attribution label from the whitelist ('' = direct/unknown). */
+  via: string;
+}
+
+/** The /admin/analytics view: counters and token actives, oldest day first, no gaps. */
+export interface AgentUsageStats {
+  days: Array<{ day: string; api: number; mcp: number; research: number }>;
+  details: Array<{ surface: string; detail: string; calls: number }>;
+  tokens: Array<{ day: string; active: number }>;
+  via: Array<{ via: string; calls: number }>;
+  clients: Array<{ client: string; calls: number }>;
+}
+
+/** The data-goods metric (план D3): per day, how many leads carry model facts and model pay. */
+export interface ModelPayDay {
+  day: string;
+  leads: number;
+  withFacts: number;
+  withPay: number;
 }
 
 /** The last `count` UTC dates ending today, oldest first. */
@@ -462,6 +515,10 @@ export interface Store extends HubStore {
   listFxRates?(): Promise<Record<string, Record<string, number>>>;
   saveFxRates?(month: string, rates: Record<string, number>): Promise<void>;
   updateLeadStatus(id: string, status: LeadStatus, deliveredAt?: string, scoreDelta?: number): Promise<void>;
+  /** Retroactive spam rejection: status and the door reasons together (the refilter pass). */
+  updateLeadStatusAndReasons?(id: string, status: LeadStatus, reasons: string[]): Promise<void>;
+  /** Per-source poll flow over the last `days` and the `days` before them (silent-drop alert). */
+  getFlowStats?(days: number): Promise<SourceFlowStats[]>;
   /** Sets a recomputed base score; the stored score is the base plus the community vote adjustment. */
   updateLeadScore?(id: string, baseScore: number): Promise<number | undefined>;
   /** Leads whose stored title still opens with channel hashtags — the retitle pass's input. */
@@ -614,6 +671,14 @@ export interface Store extends HubStore {
   getAdminStats?(days?: number): Promise<AdminStats>;
   /** Operator view of the people on the service: who signed up, who acts, who consumes. */
   adminUsersOverview?(): Promise<AdminUsersData>;
+  /** Agent analytics: one aggregated counter upsert — never a per-call row, never an IP. */
+  bumpApiUsage?(dim: ApiUsageDim, calls?: number): Promise<void>;
+  /** Marks that this agent-token holder was active on the day (one row per token-day). */
+  touchTokenDay?(userId: number, day?: string): Promise<void>;
+  /** The /admin/analytics view over the counters for the last `days` days. */
+  agentUsageStats?(days?: number): Promise<AgentUsageStats>;
+  /** The extract-goods view (план D3): leads with model facts and model pay per day. */
+  modelPayStats?(days?: number): Promise<ModelPayDay[]>;
   /** Browser extension tokens, stored as SHA-256 hashes. */
   saveExtensionToken?(tokenHash: string, userId: number): Promise<void>;
   getUserByExtensionToken?(tokenHash: string): Promise<UserRecord | null>;
@@ -677,8 +742,28 @@ export interface Store extends HubStore {
   countLeads?(options: FeedOptions & { feedOnly?: boolean }): Promise<number>;
 
   deleteLead?(id: string): Promise<boolean>;
-  cleanupOldLeads?(retentionDays: number): Promise<number>;
+  /**
+   * Legacy retention (RADAR_RETENTION_MODE=delete): hard-deletes leads older than
+   * retentionDays, cascading their ledger, deliveries and sightings. With archiveDir only
+   * leads whose month file already exists there (see exportArchivedLeads) are deleted.
+   */
+  cleanupOldLeads?(retentionDays: number, archiveDir?: string): Promise<number>;
   cleanupRuns?(retentionDays: number): Promise<number>;
+  /** Prunes delivered outbox queue rows older than retentionDays (safe retention window for in-flight retries). */
+  cleanupLeadDeliveries?(retentionDays: number): Promise<number>;
+  /** Lead lifecycle, step 1 (warm): leads older than hotDays hide from feed/API (archived_at);
+   * the full row stays. Batched. Nothing is deleted. */
+  archiveOldLeads?(hotDays: number): Promise<number>;
+  /** Step 2: monthly gz JSONL export (`leads-YYYY-MM.jsonl.gz`, UTC months) of fully-archived
+   * months not exported yet; returns the files written. */
+  exportArchivedLeads?(dir: string, hotDays: number): Promise<string[]>;
+  /**
+   * Step 3 (cold, RADAR_RETENTION_MODE=compact): leads older than retentionDays whose month
+   * file already exists in archiveDir shrink in place — text cut to the research head
+   * (researchTextHead), contacts and the embedding cleared, bulky metadata dropped,
+   * compacted_at set. Ids, votes, rating, sightings and deliveries stay. Idempotent.
+   */
+  compactOldLeads?(retentionDays: number, archiveDir: string): Promise<number>;
 
   close(): Promise<void>;
 }

@@ -1,4 +1,4 @@
-import { pollBackoffFactor, shouldQuarantineSource } from '../core/source-health.ts';
+import { DEFAULT_ERROR_BASE_INTERVAL_SEC, MAX_BACKOFF_INTERVAL_SEC, pollBackoffFactor, shouldQuarantineSource } from '../core/source-health.ts';
 import { randomUUID } from 'node:crypto';
 import type { PollContext, SourceRecord } from '../core/types.ts';
 import { sourceProxyUrl } from '../net/proxy.ts';
@@ -175,9 +175,6 @@ export interface PollAllOptions {
  * to be polled less often than every tick. With a deadline, a slow run stops starting new
  * sources instead of growing longer than the tick.
  */
-const MAX_BACKOFF_INTERVAL_SEC = 6 * 3600;
-const DEFAULT_ERROR_BASE_INTERVAL_SEC = 300;
-
 export async function pollAll(deps: PollDeps, options: PollAllOptions = {}): Promise<PollSummary[]> {
   const [allSources, healthList] = await Promise.all([
     deps.store.listSources(),
@@ -193,8 +190,12 @@ export async function pollAll(deps: PollDeps, options: PollAllOptions = {}): Pro
     if (!adapter?.poll) continue;
 
     const health = healthById.get(source.id);
+    const isHhCompanyRss = source.kind === 'rss' && typeof source.config.url === 'string' &&
+      /hh\.ru\/search\/vacancy\/rss\?(?:.*(?:employer_id|search_field=company_name))/i.test(source.config.url);
+    const baseIntervalSec = Number(source.config.intervalSec) || (isHhCompanyRss ? 7200 : adapter.defaultPollIntervalSec) || 0;
     if (health) {
-      const q = shouldQuarantineSource(health);
+      // The base interval scales the quarantine minimum to the polls the backoff leaves it.
+      const q = shouldQuarantineSource(health, { baseIntervalSec, now: new Date(now) });
       if (q.quarantine && q.reason) {
         await deps.store.updateSource(source.id, {
           enabled: false,
@@ -213,7 +214,6 @@ export async function pollAll(deps: PollDeps, options: PollAllOptions = {}): Pro
       }
     }
 
-    const baseIntervalSec = Number(source.config.intervalSec) || adapter.defaultPollIntervalSec || 0;
     const factor = pollBackoffFactor(health);
     const effectiveIntervalSec = factor > 1
       ? Math.min((baseIntervalSec || DEFAULT_ERROR_BASE_INTERVAL_SEC) * factor, MAX_BACKOFF_INTERVAL_SEC)

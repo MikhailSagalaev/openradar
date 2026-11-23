@@ -28,7 +28,9 @@ export function goldSample(leads: Lead[], size: number): Lead[] {
   for (const lead of [...leads].sort((a, b) => rank(a.id).localeCompare(rank(b.id)))) {
     const record = deriveRecord(lead, { useModel: false });
     const key = `${record.platform}|${record.type}|${record.scope}`;
-    groups.set(key, [...(groups.get(key) ?? []), lead]);
+    const list = groups.get(key);
+    if (list) list.push(lead);
+    else groups.set(key, [lead]);
   }
   const queues = [...groups.values()].sort((a, b) => b.length - a.length);
   const picked: Lead[] = [];

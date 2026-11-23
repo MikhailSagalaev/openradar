@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+# The ParadeDB image of the paradedb job; docker-compose.yml pins the same tag.
+env:
+  PARADEDB_IMAGE: paradedb/paradedb:0.26.5-pg18
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -46,11 +50,72 @@ jobs:
       - run: pnpm typecheck
       - name: Run tests against the in-memory store
         run: pnpm test
-      - name: Run tests against PostgreSQL
+      - name: Run tests against PostgreSQL (pgvector, tsvector search fallback)
         env:
           RADAR_TEST_STORE: postgres
           DATABASE_URL: postgres://radar:test_password@127.0.0.1:5432/radar_test
         run: pnpm test
       - name: Python SDK
-        run: python3 -m unittest discover -s sdk/python/tests
+        run: pnpm test:python
       - run: pnpm build
+      - name: Pack the browser extension
+        run: pnpm pack:extension
+
+  # The advertised minimum (engines: node >=22.19, .nvmrc 22): typecheck and in-memory tests.
+  node22:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Europe/Moscow
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12.16.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - name: Run tests against the in-memory store
+        run: pnpm test
+
+  # The search path production runs: ParadeDB pg_search (BM25, `@@@`, paradedb.score).
+  # Started by hand rather than as a service: the server needs
+  # shared_preload_libraries=pg_search,pg_cron, as in docker-compose.yml (the image init script creates pg_cron).
+  paradedb:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Europe/Moscow
+    steps:
+      - uses: actions/checkout@v7
+      - name: Start ParadeDB
+        run: |
+          docker run -d --name paradedb -p 5432:5432 --shm-size=512m \
+            -e POSTGRES_DB=radar_test -e POSTGRES_USER=radar -e POSTGRES_PASSWORD=test_password \
+            "$PARADEDB_IMAGE" postgres -c shared_preload_libraries=pg_search,pg_cron
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12.16.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Wait for ParadeDB
+        run: |
+          for i in $(seq 1 60); do
+            docker exec paradedb pg_isready -U radar -d radar_test -h 127.0.0.1 && exit 0
+            sleep 2
+          done
+          docker logs paradedb
+          exit 1
+      - name: Run tests against PostgreSQL with pg_search
+        env:
+          RADAR_TEST_STORE: postgres
+          DATABASE_URL: postgres://radar:test_password@127.0.0.1:5432/radar_test
+        run: pnpm test
+      - name: The BM25 index was built (the pg_search branch really ran)
+        run: |
+          docker exec paradedb psql -U radar -d radar_test -tAc \
+            "SELECT count(*) FROM pg_indexes WHERE indexname = 'idx_leads_paradedb'" | grep -qx 1

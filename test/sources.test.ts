@@ -26,6 +26,7 @@ describe('source adapters', () => {
 
   it('parses a public Telegram channel preview', async () => {
     const adapter = registry.get('telegram');
+    expect(adapter?.defaultPollIntervalSec).toBe(1800);
     const leads = await adapter!.poll!(
       makeSource({ kind: 'telegram', config: { channel: '@test' } }),
       pollContext(fixture('telegram.html')),

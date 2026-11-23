@@ -21,8 +21,75 @@ function decideKey(env: Env): string | undefined {
   return env.RADAR_DECIDE_KEY ?? env.SUBQ_API_KEY;
 }
 
+/** Ordered, deduplicated pool: explicit override first, then the comma list, then the single key. */
+export function decideKeys(env: Env): string[] {
+  const raw = [env.RADAR_DECIDE_KEY, ...(env.SUBQ_API_KEYS?.split(',') ?? []), env.SUBQ_API_KEY];
+  const seen = new Set<string>();
+  const keys: string[] = [];
+  for (const entry of raw) {
+    const key = entry?.trim();
+    if (key && !seen.has(key)) {
+      seen.add(key);
+      keys.push(key);
+    }
+  }
+  return keys;
+}
+
+/** A key that answers one of these is dead until the cooldown passes: bad key, no credits, no access. */
+const KEY_DEAD = new Set([401, 402, 403]);
+
+export interface DecisionKeyPool {
+  /** First key not parked, or undefined when every key is parked. */
+  current(): string | undefined;
+  /** Park a dead key; the next current() skips it until the cooldown passes. */
+  park(key: string, status: number): void;
+  /** Status that parked the most recent key — the batch's stop reason when all keys are parked. */
+  parkedStatus(): number | undefined;
+  readonly size: number;
+}
+
+/**
+ * Shared across rounds so an exhausted key stays parked instead of being retried every batch.
+ * SubQ credits are a prepaid balance with no timed reset, but a top-up (or a fresh grant on the
+ * account) brings the same key back, so parked keys are retried once the cooldown passes.
+ */
+export function newDecisionKeys(env: Env, now: () => number = Date.now): DecisionKeyPool {
+  const keys = decideKeys(env);
+  const cooldownMs = (env.RADAR_DECIDE_KEY_COOLDOWN_MIN ?? 60) * 60_000;
+  const parkedUntil = new Map<string, number>();
+  let lastStatus: number | undefined;
+  return {
+    size: keys.length,
+    current() {
+      const at = now();
+      for (const key of keys) {
+        const until = parkedUntil.get(key);
+        if (until === undefined) return key;
+        if (until <= at) {
+          parkedUntil.delete(key);
+          return key;
+        }
+      }
+      return undefined;
+    },
+    park(key, status) {
+      parkedUntil.set(key, now() + cooldownMs);
+      lastStatus = status;
+    },
+    parkedStatus() {
+      return lastStatus;
+    },
+  };
+}
+
+/** Never log a full key: the prefix is enough to tell the pool's keys apart. */
+function maskKey(key: string): string {
+  return `${key.slice(0, 10)}…`;
+}
+
 export function decisionsEnabled(env: Env): boolean {
-  return Boolean(env.RADAR_DECIDE_ENABLED && decideKey(env));
+  return Boolean(env.RADAR_DECIDE_ENABLED && decideKeys(env).length > 0);
 }
 
 export interface DecideDeps {
@@ -33,6 +100,8 @@ export interface DecideDeps {
   now?: () => Date;
   /** Idempotency cache for the paid call (plan 021E); the runner shares one across rounds. */
   replay?: ReplayCache<ModelDecision | number | undefined>;
+  /** Key pool shared across rounds; without it the single configured key is used as before. */
+  keys?: DecisionKeyPool;
 }
 
 export interface DecideSummary {
@@ -53,23 +122,44 @@ const STOP = new Set([401, 402, 403, 429]);
  * a retry or an overlapping round replays the cached answer instead of double-charging. The
  * durable answer lives in the store; this guards the in-flight window before it is saved.
  * The runner shares one cache across rounds; a caller without one gets a fresh cache.
+ * Only answers are remembered: an HTTP status (a 429 above all) or an unparsable reply must
+ * not stop every round for the whole window — the next round asks again.
  */
 export function newDecisionReplay(): ReplayCache<ModelDecision | number | undefined> {
-  return new ReplayCache<ModelDecision | number | undefined>({ windowMs: 10 * 60_000, maxEntries: 5000 });
+  return new ReplayCache<ModelDecision | number | undefined>({
+    windowMs: 10 * 60_000,
+    maxEntries: 5000,
+    shouldCache: (value) => typeof value === 'object' && value !== null,
+  });
 }
 
 async function askOne(lead: { id: string; title: string; text: string }, deps: DecideDeps): Promise<ModelDecision | number | undefined> {
   const { env } = deps;
   const state = scrubContacts(`${lead.title}\n\n${lead.text.slice(0, MAX_TEXT)}`);
-  const response = await deps.fetchImpl(env.RADAR_DECIDE_URL!, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${decideKey(env)}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ model: env.RADAR_DECIDE_MODEL, state, questions: DECISION_QUESTIONS }),
-    signal: AbortSignal.timeout(REQUEST_MS),
-  });
-  if (!response.ok) return response.status;
-  const decidedAt = (deps.now?.() ?? new Date()).toISOString();
-  return parseDecision(await response.json(), lead.id, env.RADAR_DECIDE_MODEL!, decidedAt);
+  for (;;) {
+    const key = deps.keys ? deps.keys.current() : decideKey(env);
+    // Every key is parked: report the status that killed the last one without a network call.
+    if (!key) return deps.keys?.parkedStatus() ?? 402;
+    const response = await deps.fetchImpl(env.RADAR_DECIDE_URL!, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ model: env.RADAR_DECIDE_MODEL, state, questions: DECISION_QUESTIONS }),
+      signal: AbortSignal.timeout(REQUEST_MS),
+    });
+    if (!response.ok) {
+      if (deps.keys && KEY_DEAD.has(response.status)) {
+        deps.keys.park(key, response.status);
+        deps.logger.warn('decision key parked, rotating', { key: maskKey(key), status: response.status, left: deps.keys.size });
+        continue;
+      }
+      if (response.status >= 500) {
+        throw new Error(`Transient decision HTTP ${response.status}`);
+      }
+      return response.status;
+    }
+    const decidedAt = (deps.now?.() ?? new Date()).toISOString();
+    return parseDecision(await response.json(), lead.id, env.RADAR_DECIDE_MODEL!, decidedAt);
+  }
 }
 
 async function withRetry<T>(ask: () => Promise<T>): Promise<T> {
@@ -78,6 +168,8 @@ async function withRetry<T>(ask: () => Promise<T>): Promise<T> {
       return await ask();
     } catch (error) {
       if (attempt >= ATTEMPTS) throw error;
+      const delay = Math.min(2000, 250 * Math.pow(2, attempt - 1));
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 }
@@ -154,7 +246,12 @@ export async function runDecisions(deps: DecideDeps, limit: number): Promise<Dec
           if (STOP.has(answer)) summary.stopped = answer;
           else deps.logger.warn('decision refused', { status: answer });
         } else if (answer) {
-          await deps.store.saveModelDecision!(answer);
+          // The cached answer is about the text, not the post: another post with the same
+          // text gets it under its own id, so neither post stays undecided.
+          const decision = answer.leadId === lead.id
+            ? answer
+            : { ...answer, leadId: lead.id, decidedAt: (deps.now?.() ?? new Date()).toISOString() };
+          await deps.store.saveModelDecision!(decision);
           summary.saved++;
           summary.tokens += answer.tokens;
         } else {

@@ -12,11 +12,10 @@ The most useful contribution is a new board: one adapter, one fixture, one test.
 git clone https://github.com/MikhailSagalaev/openradar.git
 cd openradar
 pnpm install
-pnpm typecheck
-pnpm test
+pnpm verify   # lint, version lock, typecheck, build, tests, Python SDK — the same gates as CI
 ```
 
-Node.js 22.19+ (CI runs 24 LTS) and pnpm 12+. Tests use an in-memory store and never call the network; adapters are tested against saved fixtures. `RADAR_TEST_STORE=postgres DATABASE_URL=... pnpm test` runs the same suite on PostgreSQL.
+Node.js 22.19+ (CI tests 22 and 24 LTS), pnpm 12+ and Python 3 (for the SDK tests). `pnpm verify` runs `pnpm lint`, `node scripts/check-version.js`, `pnpm typecheck`, `pnpm build`, `pnpm test` and `pnpm test:python`; tests run in `Europe/Moscow` time locally as in CI. Tests use an in-memory store and never call the network; adapters are tested against saved fixtures. `RADAR_TEST_STORE=postgres DATABASE_URL=... pnpm test` runs the same suite on PostgreSQL.
 
 ### Adding a source
 
@@ -36,7 +35,7 @@ Rules for adapters and sinks: [docs/PLUGINS.md](docs/PLUGINS.md).
 
 ### Pull requests
 
-- `pnpm typecheck` and `pnpm test` pass.
+- `pnpm verify` passes (lint, version lock, typecheck, build, tests, Python SDK).
 - One change per pull request, with a short description of what and why.
 - Add or update a test for any behaviour change.
 - Update the docs and `CHANGELOG.md` when users or operators will notice the change.
@@ -49,10 +48,9 @@ Rules for adapters and sinks: [docs/PLUGINS.md](docs/PLUGINS.md).
 git clone https://github.com/MikhailSagalaev/openradar.git
 cd openradar
 pnpm install
-pnpm typecheck
-pnpm test
+pnpm verify   # lint, проверка версий, типы, сборка, тесты, Python SDK — те же проверки, что в CI
 ```
 
 Новый источник: `pnpm new:connector <имя>` создаст адаптер в `src/sources/`, фикстуру и тест. Адаптер берёт только адрес из настроек источника, отдаёт текст как есть вместе с контактами (сервер сам скрывает их от гостей) и не обходит вход, капчу и платный доступ. Подробные правила — в [docs/PLUGINS.md](docs/PLUGINS.md).
 
-Перед пул-реквестом: `pnpm typecheck` и `pnpm test` проходят, на изменение поведения есть тест, документация и `CHANGELOG.md` обновлены.
+Нужны Node.js 22.19+ (CI проверяет 22 и 24 LTS), pnpm 12+ и Python 3. Перед пул-реквестом: `pnpm verify` проходит (lint, версии, типы, сборка, тесты, Python SDK), на изменение поведения есть тест, документация и `CHANGELOG.md` обновлены.

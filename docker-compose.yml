@@ -2,7 +2,11 @@ services:
   postgres:
     # A new major version takes a new volume: scripts/pg-upgrade.sh moves the data over.
     # ParadeDB bundles Tantivy BM25 (pg_search), pg_analytics and pgvector in PostgreSQL.
-    image: ${RADAR_PG_IMAGE:-paradedb/paradedb:latest-pg18}
+    # Pinned, not latest-pg18: a pg_search upgrade can need `ALTER EXTENSION pg_search UPDATE`
+    # or a BM25 reindex, so it should land deliberately, not with whatever image was pulled. CI tests this same tag
+    # (PARADEDB_IMAGE in .github/workflows/ci.yml); bump both together. 0.26.5-pg18 is the exact
+    # image (same digest) the production node ran as latest-pg18 when the pin was introduced.
+    image: ${RADAR_PG_IMAGE:-paradedb/paradedb:0.26.5-pg18}
     container_name: radar_postgres
     restart: unless-stopped
     mem_limit: ${RADAR_PG_MEM_LIMIT:-1g}
@@ -11,7 +15,8 @@ services:
     # such query fails with "could not resize shared memory segment ... No space
     # left on device" (review writes and the decisions worker included).
     shm_size: ${RADAR_PG_SHM_SIZE:-512m}
-    command: postgres -c shared_preload_libraries=pg_search
+    # pg_cron too: the image init script creates it, and a fresh volume fails to initialize without it.
+    command: postgres -c shared_preload_libraries=pg_search,pg_cron
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-radar}
       POSTGRES_USER: ${POSTGRES_USER:-radar}

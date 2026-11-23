@@ -31,10 +31,15 @@ export async function researchRecords(store: Store, from: string, to: string, op
 }
 
 let cached: { at: number; report: Report; records: ResearchRecord[] } | undefined;
+let cachedRecordsMap: Map<string, ResearchRecord> | undefined;
+let cachedRecordsPeriod: { from: string; to: string } | undefined;
 
 export function resetResearchCache(): void {
   cached = undefined;
   building = undefined;
+  csvCache = undefined;
+  cachedRecordsMap = undefined;
+  cachedRecordsPeriod = undefined;
 }
 
 function withRates(report: Report, fx: Record<string, Record<string, number>> | undefined, at: string): Report {
@@ -62,7 +67,43 @@ export async function liveReport(store: Store, now: Date = new Date(), options: 
 
 async function buildLive(store: Store, now: Date, options: DeriveOptions): Promise<{ report: Report; records: ResearchRecord[] }> {
   const period = livePeriod(now, LIVE_DAYS);
-  const records = await researchRecords(store, period.from, period.to, options);
+  let records: ResearchRecord[];
+
+  const existingMap = cachedRecordsMap;
+  const existingPeriod = cachedRecordsPeriod;
+  const canUseIncremental = existingMap !== undefined
+    && existingPeriod !== undefined
+    && period.to >= existingPeriod.to;
+
+  if (canUseIncremental && existingMap && existingPeriod) {
+    // 1. Evict records that fell out of the rolling 30-day window
+    const minDate = period.from.slice(0, 10);
+    for (const [id, r] of existingMap.entries()) {
+      if (r.date < minDate) {
+        existingMap.delete(id);
+      }
+    }
+
+    // 2. Query only the delta since the previous fetch (with 10-minute safety buffer)
+    const deltaFrom = new Date(Date.parse(existingPeriod.to) - 10 * 60_000).toISOString();
+    const newRecords = await researchRecords(store, deltaFrom, period.to, options);
+    for (const r of newRecords) {
+      existingMap.set(r.id, r);
+    }
+
+    // 3. Collect and sort (newest first, identical to researchRecords)
+    records = Array.from(existingMap.values()).sort(
+      (a, b) => b.date.localeCompare(a.date) || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0),
+    );
+  } else {
+    records = await researchRecords(store, period.from, period.to, options);
+    cachedRecordsMap = new Map();
+    for (const r of records) {
+      cachedRecordsMap.set(r.id, r);
+    }
+  }
+  cachedRecordsPeriod = { from: period.from, to: period.to };
+
   // The base is younger than the window: say from when the data really starts.
   const first = records.reduce<string | undefined>((min, r) => (!min || r.date < min ? r.date : min), undefined);
   if (first && first > period.from.slice(0, 10)) {
@@ -73,6 +114,22 @@ async function buildLive(store: Store, now: Date, options: DeriveOptions): Promi
   const report = withRates(buildReport(records, period, 'live', now), await store.listFxRates?.(), period.to);
   cached = { at: now.getTime(), report, records };
   return cached;
+}
+
+/** The dataset CSV of one live build: built once per report build, not per request. */
+let csvCache: { build: object; csv: string } | undefined;
+
+/**
+ * The live dataset as CSV, cached next to the live report and rebuilt only when the report
+ * is. The held-back day is measured from the build time, the moment the records were read.
+ */
+export async function liveDatasetCsv(store: Store, now: Date = new Date(), options: DeriveOptions = {}): Promise<string> {
+  const build = await liveReport(store, now, options);
+  if (csvCache?.build === build) return csvCache.csv;
+  const at = 'at' in build && typeof build.at === 'number' ? new Date(build.at) : now;
+  const csv = datasetCsv(build.records, at);
+  csvCache = { build, csv };
+  return csv;
 }
 
 export function previousMonth(now: Date): string {

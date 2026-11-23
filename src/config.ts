@@ -35,14 +35,39 @@ const envSchema = z.object({
   RADAR_POLL_INTERVAL_SEC: z.coerce.number().int().positive().default(300),
   RADAR_POLL_CONCURRENCY: z.coerce.number().int().positive().default(16),
   RADAR_LLM_ENABLED: booleanFromEnv(false),
+  RADAR_LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(8_000).optional(),
   OPENAI_API_KEY: optionalString,
   OPENAI_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
   OPENAI_MODEL: z.string().default('gpt-4o-mini'),
+  // Verbatim JSON merged into every classifier/extract request (e.g. Qwen's enable_thinking).
+  OPENAI_EXTRA_BODY: optionalString,
   // Model extraction of pay, role and grade for the research reports (same API as above).
   RADAR_EXTRACT_ENABLED: booleanFromEnv(false),
   RADAR_EXTRACT_MODEL: optionalString,
   RADAR_EXTRACT_FALLBACK_MODEL: optionalString,
   RADAR_EXTRACT_PER_HOUR: z.coerce.number().int().nonnegative().default(300),
+  // Group N posts into one extraction request (plan 021E/D2); 0 or 1 keeps one lead per call.
+  RADAR_EXTRACT_BATCH: z.coerce.number().int().nonnegative().max(16).default(0),
+  // Ordered pool of OpenAI-compatible endpoints: [{"baseUrl","apiKey","model","fallbackModel"?,"pauseMs"?,"concurrency"?}].
+  // The legacy OPENAI_* provider joins last unless the same baseUrl+key is already listed.
+  RADAR_EXTRACT_PROVIDERS: z.string().optional().transform((value, ctx) => {
+    const trimmed = value?.trim();
+    if (!trimmed) return undefined;
+    try {
+      return z.array(z.object({
+        baseUrl: z.string().url(),
+        apiKey: z.string().min(1),
+        model: z.string().min(1),
+        fallbackModel: z.string().min(1).optional(),
+        pauseMs: z.coerce.number().int().nonnegative().optional(),
+        concurrency: z.coerce.number().int().positive().optional(),
+      })).min(1).parse(JSON.parse(trimmed));
+    } catch {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'RADAR_EXTRACT_PROVIDERS must be a non-empty JSON array of {baseUrl, apiKey, model, fallbackModel?, pauseMs?, concurrency?}' });
+      return z.NEVER;
+    }
+  }),
+  RADAR_EXTRACT_PROVIDER_COOLDOWN_MIN: z.coerce.number().int().nonnegative().default(60),
   // Answers are saved either way; figures use them only once their quality is checked.
   RADAR_EXTRACT_APPLY: booleanFromEnv(false),
   RADAR_USER_TELEGRAM: booleanFromEnv(false),
@@ -60,6 +85,8 @@ const envSchema = z.object({
   // ATS board-diff: a job removed from its board is soft-closed, a returned one reopened.
   RADAR_ATS_GHOST_CHECK: booleanFromEnv(true),
   SUBQ_API_KEY: optionalString,
+  SUBQ_API_KEYS: optionalString,
+  RADAR_DECIDE_KEY_COOLDOWN_MIN: z.coerce.number().int().nonnegative().default(60),
   RADAR_EXTRACT_PROVIDER: z.enum(['openai', 'gigachat']).default('openai'),
   GIGACHAT_AUTH_KEY: optionalString,
   GIGACHAT_SCOPE: z.string().default('GIGACHAT_API_PERS'),
@@ -91,7 +118,13 @@ const envSchema = z.object({
   RADAR_PROXY_URL: optionalString,
   RADAR_DIGEST_CHAT_ID: optionalString,
   RADAR_DIGEST_INTERVAL_HOURS: z.coerce.number().int().positive().default(6),
+  // Lead lifecycle: hot (0..HOT_DAYS) в фиде; warm (archived_at) — скрыт, строка целиком;
+  // cold (> RETENTION_DAYS) — после выгрузки месяца в RADAR_ARCHIVE_DIR строка сжимается
+  // (compact) или, по явному выбору, удаляется (delete). off — ни того, ни другого.
   RADAR_RETENTION_DAYS: z.coerce.number().int().positive().default(180),
+  RADAR_RETENTION_MODE: z.enum(['compact', 'delete', 'off']).default('compact'),
+  RADAR_LEADS_HOT_DAYS: z.coerce.number().int().positive().default(60),
+  RADAR_ARCHIVE_DIR: z.string().default('data/archives'),
   // Closed-post checks against the boards, and feed age limits (0 turns a limit off).
   RADAR_CHECK_CLOSED: booleanFromEnv(true),
   RADAR_SUBSCRIPTION_BOT: booleanFromEnv(false),
@@ -107,6 +140,8 @@ const envSchema = z.object({
   // is the only way to hand that memory back (docs/OPS_BOT_AND_MEMORY.md). 0 disables a limit.
   RADAR_PG_CONN_MAX_AGE_SEC: z.coerce.number().int().nonnegative().default(1800),
   RADAR_PG_CONN_MAX_USES: z.coerce.number().int().nonnegative().default(500),
+  // Maximum connections in the Postgres pool. Default 25 fits safely within the 40-connection ceiling.
+  RADAR_PG_POOL_MAX: z.coerce.number().int().positive().default(25),
   // Per-request statement timeout for web reads (SET LOCAL inside the request's transaction):
   // a runaway BM25 query dies alone instead of growing until the OOM-killer picks a victim.
   // Background jobs keep the role-level timeout. 0 disables.

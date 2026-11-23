@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { gunzipSync } from 'node:zlib';
 import { createApp } from '../src/server/app.ts';
 import { webPubkey } from '../src/hub/web-key.ts';
@@ -1108,6 +1110,11 @@ describe('http server', () => {
     expect(consent).toContain('@octocat');
     expect(consent).toContain(`name="redirect_uri" value="${redirect}"`);
     expect(consent).toContain(`name="state" value="${state}"`);
+
+    // Legacy installed extensions that omit the state param are auto-assigned a nonce.
+    const legacyTabFlow = `/extension/connect?redirect_uri=${encodeURIComponent('chrome-extension://abcdefghijklmnopabcdefghijklmnop/connected.html')}`;
+    const legacyConsent = await (await app.request(legacyTabFlow, { headers: cookie })).text();
+    expect(legacyConsent).toContain('name="state"');
 
     const evil = await app.request('/extension/connect', {
       method: 'POST',
@@ -2244,7 +2251,11 @@ describe('http server', () => {
     const indexHtml = await indexRes.text();
     expect(indexHtml).toContain('href="/extension"');
 
-    // 4. Download endpoint returns application/zip
+    // 4. Download endpoint returns application/zip. The zip is a build artifact (gitignored,
+    // packed by the Docker build); pack it here when a fresh checkout has none.
+    if (!fs.existsSync(path.join(process.cwd(), 'extension.zip'))) {
+      execFileSync(process.execPath, ['scripts/pack-extension.js'], { cwd: process.cwd(), stdio: 'ignore' });
+    }
     const downloadRes = await app.request('/extension/download');
     expect(downloadRes.status).toBe(200);
     expect(downloadRes.headers.get('content-type')).toContain('application/zip');

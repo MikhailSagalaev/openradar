@@ -6,17 +6,21 @@
  */
 import { escapeHtml, jsonForScript } from '../core/text.ts';
 import { layout, type AuthDisplay } from '../server/ui.ts';
+import { RESEARCH_ENHANCE_HEAD, renderResearchEnhancements } from './enhance.ts';
 import { translateSkill, translateSourceTitle } from '../server/i18n.ts';
 import type { IndexSeries, OpenradarIndex } from './index.ts';
 import { lineChart, renderIntlIndexSection, renderPlatformIndexTable, renderWeekdayProfileSection } from './index-page.ts';
 import { renderEconometricsSection,
   renderScientificSection,
+  renderCrossMarketSection,
+  renderIntlResearchSection,
+  renderFormulaGallerySection,
   renderAcademicCitations,
-  scholarMetaTags, renderGigBracketsSection, renderGradeMatrixSection, renderLanguageMatrixSection, renderRegionalComparisonSection } from './pages.ts';
+  scholarMetaTags, renderGigBracketsSection, renderGradeMatrixSection, renderLanguageMatrixSection, renderRegionalComparisonSection,
+  renderEditorialInsight, renderCartaSection, renderTaskTransformationSection, renderBumpChartSection, renderEmbedDialog, researchLabel,
+  rangeChart as rangeChartOf, countBars as countBarsOf, kpi, quoteButton as quoteButtonOf, formatNum, ORIGIN_LABELS, LICENSE, REPO_URL, QUOTE_SCRIPT,
+} from './pages.ts';
 import { MIN_MEDIAN, MIN_QUARTILES, RELIABLE, REPORT_VERSION, rubMonthToUsdYear, type Dist, type Report, type Slice } from './report.ts';
-
-const LICENSE = 'CC BY 4.0';
-const REPO_URL = 'https://github.com/MikhailSagalaev/openradar';
 
 export const ROLE_EN: Record<string, string> = {
   ai: 'AI engineering and vibe coding',
@@ -62,9 +66,8 @@ const REGION_EN: Record<string, string> = {
   'Другие города': 'Other cities',
   'Не указан': 'Not stated',
 };
-const ORIGIN_EN: Record<string, string> = { page: 'vacancy page markup', text: 'post text', budget: "the board's budget", model: 'language model' };
 
-const num = (value: number): string => new Intl.NumberFormat('en-US').format(value);
+const num = (value: number): string => formatNum(value, 'en');
 const rub = (value: number): string => `₽${num(value)}`;
 const pct = (value: number): string => `${value}%`;
 const dateEn = (iso: string): string => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -87,38 +90,37 @@ function translate(slices: Slice[], names: Record<string, string>, hrefOf?: (key
   return slices.map((s) => ({ ...s, label: names[s.key] ?? s.label, href: hrefOf ? hrefOf(s.key) : undefined }));
 }
 
-function rangeChart(rows: Array<{ label: string; href?: string; pay: Dist }>, unit: (v: number) => string = rub): string {
-  const shown = rows.filter((row) => row.pay.median !== undefined);
-  if (!shown.length) return `<p class="muted small">Not enough data yet: a group needs at least ${MIN_MEDIAN} posts with pay.</p>`;
-  const top = Math.max(...shown.map((row) => Math.max(row.pay.p75 ?? 0, row.pay.ciHigh ?? 0, row.pay.median!))) * 1.08;
-  const at = (v: number): string => `${Math.min(100, (v / top) * 100).toFixed(2)}%`;
-  return `<div class="rs-chart" role="table">${shown.map((row) => `<div class="rs-row"${row.pay.ciLow !== undefined ? ` title="${escapeHtml(`95% interval: ${unit(row.pay.ciLow)} to ${unit(row.pay.ciHigh!)}`)}"` : ''}>
-  <div class="rs-label">${row.href ? `<a href="${escapeHtml(row.href)}">${escapeHtml(row.label)}</a>` : escapeHtml(row.label)}</div>
-  <div class="rs-track">${row.pay.p25 !== undefined && row.pay.p75 !== undefined ? `<span class="rs-band" style="left:${at(row.pay.p25)};width:calc(${at(row.pay.p75)} - ${at(row.pay.p25)})"></span>` : ''}${row.pay.ciLow !== undefined && row.pay.ciHigh !== undefined ? `<span class="rs-ci" style="left:${at(row.pay.ciLow)};width:calc(${at(row.pay.ciHigh)} - ${at(row.pay.ciLow)})"></span>` : ''}<span class="rs-dot" style="left:${at(row.pay.median!)}"></span></div>
-  <div class="rs-val"><b>${escapeHtml(unit(row.pay.median!))}</b><span class="rs-n">n = ${row.pay.n}${row.pay.n < RELIABLE ? ' · few' : ''}</span></div>
-</div>`).join('')}</div>
-<p class="rs-legend"><span class="rs-dot-key"></span> median <span class="rs-ci-key"></span> 95% interval of the median <span class="rs-band-key"></span> middle half of posts (25th to 75th percentile)</p>`;
-}
+const rangeChart = (rows: Array<{ label: string; href?: string; pay: Dist }>): string => rangeChartOf(rows, { lang: 'en', unit: rub });
+const countBars = (rows: Array<{ label: string; n: number }>): string => countBarsOf(rows, 'en');
+const quoteButton = (quote: string): string => quoteButtonOf(quote, 'en');
 
-function countBars(rows: Array<{ label: string; n: number }>): string {
-  if (!rows.length) return '';
-  const max = Math.max(...rows.map((row) => row.n));
-  return `<div class="rs-chart">${rows.map((row) => `<div class="rs-row">
-  <div class="rs-label">${escapeHtml(row.label)}</div>
-  <div class="rs-track"><span class="rs-fill" style="width:${((row.n / max) * 100).toFixed(2)}%"></span></div>
-  <div class="rs-val"><b>${num(row.n)}</b></div>
-</div>`).join('')}</div>`;
+/** The editorial takeaway of the order block, written in English from the same figures (see report.computeEditorialInsight). */
+export function editorialInsightEn(report: Report): Report['editorialInsight'] {
+  const carta = report.cartaCapital ?? [];
+  if (!report.editorialInsight) return undefined;
+  const named = carta.filter((row) => row.label !== 'Другое' && row.label !== 'Другие направления');
+  const total = carta.reduce((sum, row) => sum + row.n, 0);
+  if (named.length < 2) return undefined;
+  const byCount = [...named].sort((a, b) => b.n - a.n)[0]!;
+  const byMoney = [...named].sort((a, b) => b.capitalShare - a.capitalShare)[0]!;
+  const name = (label: string): string => researchLabel(label, 'en');
+  const { phrase } = periodEn(report);
+  const fact = `Most orders with a budget are in “${name(byCount.label)}” (${pct(byCount.nShare)}).`;
+  if (byCount.label === byMoney.label) {
+    return {
+      fact,
+      contrast: `The same role also takes the largest sum of budgets (${pct(byMoney.capitalShare)}).`,
+      conclusion: 'Here the number of orders and the money coincide.',
+      quote: `According to openradar, “${name(byCount.label)}” accounts for ${pct(byCount.nShare)} of orders with a stated budget and ${pct(byCount.capitalShare)} of the sum of those budgets (${phrase}, sample: ${num(total)} orders).`,
+    };
+  }
+  return {
+    fact,
+    contrast: `The largest sum of budgets goes to “${name(byMoney.label)}”: ${pct(byMoney.capitalShare)} with ${pct(byMoney.nShare)} of orders.`,
+    conclusion: 'Frequent orders and large budgets are different parts of the market. The sum is sensitive to single large orders.',
+    quote: `According to openradar, “${name(byMoney.label)}” accounts for ${pct(byMoney.nShare)} of orders with a stated budget and ${pct(byMoney.capitalShare)} of the sum of those budgets; most orders are in “${name(byCount.label)}” (${phrase}, sample: ${num(total)} orders).`,
+  };
 }
-
-const kpi = (value: string, label: string): string => `<div class="rs-kpi"><b>${escapeHtml(value)}</b><span>${escapeHtml(label)}</span></div>`;
-const quoteButton = (quote: string): string => `<button type="button" class="rs-quote" data-quote="${escapeHtml(quote)}">Copy quote</button>`;
-const QUOTE_SCRIPT = `<script>
-document.addEventListener('click', (event) => {
-  const button = event.target.closest('[data-quote]');
-  if (!button) return;
-  navigator.clipboard.writeText(button.dataset.quote).then(() => { button.textContent = 'Copied'; });
-});
-</script>`;
 
 /** The findings of the Russian report, written in English from the same figures. */
 export function findingsEn(report: Report): Array<{ text: string; quote: string }> {
@@ -223,7 +225,15 @@ export function renderReportPageEn(options: { report: Report; baseUrl: string; v
   ${kpi(num(totals.companies), 'employers')}
 </div>
 <p class="small muted">Pay is in Russian roubles a month${report.fx?.USD ? ` (₽${num(Math.round(report.fx.USD))} ≈ $1, the Bank of Russia rate)` : ''}.</p>
-${report.version < REPORT_VERSION ? `<p class="notice">This report is frozen under an earlier version of the methodology (${report.version}): its order figures include English-language orders. The figures are kept so that links to them stay true. See the <a href="/en/research/methodology#versions">changes</a>.</p>` : ''}
+${report.version === 2 && REPORT_VERSION > 2 ? `<p class="notice">This report is frozen under methodology version 2: p-values in the hypothesis-testing block are approximate, with no multiple-comparison adjustment and no effect-size threshold. All other figures are computed the same way. See the <a href="/en/research/methodology#versions">changes</a>.</p>` : report.version < REPORT_VERSION ? `<p class="notice">This report is frozen under an earlier version of the methodology (${report.version}): its order figures include English-language orders. The figures are kept so that links to them stay true. See the <a href="/en/research/methodology#versions">changes</a>.</p>` : ''}
+
+${renderEditorialInsight(editorialInsightEn(report), 'en')}
+
+${renderCartaSection(report.cartaCapital, baseUrl, 'en')}
+
+${renderTaskTransformationSection(report.taskTransformation, baseUrl, 'en')}
+
+${renderBumpChartSection(report.bumpChart, baseUrl, 'en')}
 
 ${findings.length ? `<section class="rs-section">
   <h2>Key findings</h2>
@@ -251,18 +261,11 @@ ${(jobs.itCompanies?.length || jobs.companies.length) ? `<section class="rs-sect
   <p class="small">Russian-language orders. <b>${pct(gigs.budgetShare)}</b> of them state a budget, for the whole project.${totals.intlGigs ? ` English-language orders (${num(totals.intlGigs)}) stay out.` : ''}</p>
   ${rangeChart(translate(gigs.byCategory.filter((s) => s.key !== 'other'), ROLE_EN))}
   ${renderGigBracketsSection(gigs.brackets, 'en')}</section>
-${intlMedian ? `<section class="rs-section" id="international"><h2>International remote vacancies &amp; global market</h2>
-  <p class="small">English-language vacancies from international remote boards and company ATS career pages in Greenhouse, Lever, and Ashby (${num(totals.intlJobs ?? 0)} vacancies): a median of <b>${num(rubMonthToUsdYear(intlMedian, report.fx?.USD))} a year</b>${jobs.intl.p25 && jobs.intl.p75 ? ` (middle half: ${num(rubMonthToUsdYear(jobs.intl.p25, report.fx?.USD))}–${num(rubMonthToUsdYear(jobs.intl.p75, report.fx?.USD))}/yr)` : ''} (n = ${num(jobs.intl.n)}). They stay out of the Russian rouble figures above; daily volume dynamics are tracked in the <a href="/en/research/index#global-index">openradar international index</a>.</p>
-  ${jobs.intlByRole?.length ? `<h3 style="margin-top:16px">Global annual pay by role ($/year)</h3>
-  ${rangeChart(translate(jobs.intlByRole, ROLE_EN), (v) => `${num(rubMonthToUsdYear(v, report.fx?.USD))}/yr`)}` : ''}
-  ${jobs.intlByGrade?.length ? `<h3 style="margin-top:16px">Global annual pay by seniority ($/year)</h3>
-  ${rangeChart(translate(jobs.intlByGrade, GRADE_EN), (v) => `${num(rubMonthToUsdYear(v, report.fx?.USD))}/yr`)}` : ''}
-  ${jobs.intlCompanies?.length ? `<h3 style="margin-top:16px">Top hiring international employers</h3>
-  ${countBars(jobs.intlCompanies.slice(0, 10).map((c) => ({ label: c.name, n: c.n })))}` : ''}
-  ${gigs.intlBudget?.median ? `<p class="small" style="margin-top:14px"><b>Global freelance orders (Freelancer.com, ${num(totals.intlGigs ?? 0)} orders):</b> median project budget is <b>${num(Math.round(gigs.intlBudget.median / (report.fx?.USD ?? 80)))}</b>${gigs.intlBudget.p25 && gigs.intlBudget.p75 ? ` (middle half: ${num(Math.round(gigs.intlBudget.p25 / (report.fx?.USD ?? 80)))}–${num(Math.round(gigs.intlBudget.p75 / (report.fx?.USD ?? 80)))})` : ''}, sample n = ${num(gigs.intlBudget.n)} orders with stated budget.</p>` : ''}</section>` : ''}
+${renderCrossMarketSection(jobs.crossMarket, (slug) => (jobs.roles.some((r) => r.slug === slug) ? `/en/research/roles/${slug}` : undefined), 'en')}
+${renderIntlResearchSection(report, (slug) => (jobs.roles.some((r) => r.slug === slug) ? `/en/research/roles/${slug}` : undefined), 'en')}
 <section class="rs-section"><h2>Where the data comes from</h2>
   ${countBars(totals.platforms.slice(0, 12).map((p) => ({ label: p.key, n: p.n })))}
-  ${totals.payOrigins && Object.keys(totals.payOrigins).length ? `<p class="small">Where the pay was read: ${Object.entries(totals.payOrigins).map(([o, n]) => `${escapeHtml(ORIGIN_EN[o] ?? o)} — ${num(n)}`).join(', ')}.</p>` : ''}</section>
+  ${totals.payOrigins && Object.keys(totals.payOrigins).length ? `<p class="small">Where the pay was read: ${Object.entries(totals.payOrigins).map(([o, n]) => `${escapeHtml(ORIGIN_LABELS.en[o] ?? o)} — ${num(n)}`).join(', ')}.</p>` : ''}</section>
 
 <section class="rs-section prose"><h2>How to cite</h2>
   <p>openradar data is open under ${LICENSE}: use it in articles and research with a link to the source.</p>
@@ -275,7 +278,9 @@ ${intlMedian ? `<section class="rs-section" id="international"><h2>International
     <li>Need a cut for your topic? <a href="${REPO_URL}/issues" target="_blank" rel="noopener">Ask on GitHub</a>.</li>
   </ul>
   ${snapshots.length ? `<h2>Monthly reports</h2><div class="chip-links">${snapshots.map((s) => `<a href="/en/research/${escapeHtml(s.period)}">${escapeHtml(new Date(`${s.period}-01T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }))}</a>`).join('')}</div>` : ''}
-</section>`;
+</section>
+
+${renderEmbedDialog('en')}`;
   const dataset = {
     '@context': 'https://schema.org',
     '@type': 'Dataset',
@@ -295,11 +300,11 @@ ${intlMedian ? `<section class="rs-section" id="international"><h2>International
     title,
     version,
     active: 'research',
-    body,
+    body: body + renderResearchEnhancements('en'),
     lang: 'en',
     auth: options.auth,
     script: QUOTE_SCRIPT,
-    head: `${scholarMetaTags({ title, baseUrl, path, dateIso: report.generatedAt, lang: 'en' })}
+    head: `${RESEARCH_ENHANCE_HEAD}${scholarMetaTags({ title, baseUrl, path, dateIso: report.generatedAt, lang: 'en' })}
 ${enHead(description, `${baseUrl}${path}`, ruPath, baseUrl)}
 <script type="application/ld+json">${jsonForScript(dataset)}</script>`,
   });
@@ -343,10 +348,10 @@ ${renderIntlIndexSection(index.intl, 'en', (slug, fallback) => ROLE_EN[slug] ?? 
     title: 'The openradar index: vacancies and freelance orders in Russia',
     version,
     active: 'research',
-    body,
+    body: body + renderResearchEnhancements('en'),
     lang: 'en',
     auth: options.auth,
-    head: enHead('The daily openradar index: new vacancies and freelance orders in Russian-language IT against a base of 100. Open data, CC BY 4.0.', `${baseUrl}/en/research/index`, '/research/index', baseUrl),
+    head: RESEARCH_ENHANCE_HEAD + enHead('The daily openradar index: new vacancies and freelance orders in Russian-language IT against a base of 100. Open data, CC BY 4.0.', `${baseUrl}/en/research/index`, '/research/index', baseUrl),
   });
 }
 
@@ -406,12 +411,16 @@ export function renderMethodologyPageEn(options: { baseUrl: string; version: str
     <li><b>Laspeyres fixed-basket weekly salary index (<code>weeklyIndexed</code>):</b> holds role weights <code>w_r = N_r / ∑ N_j</code> fixed across weeks so short-term shifts in source mix cannot masquerade as wage inflation.</li>
     <li><b>Gini coefficient (G), quartile dispersion (QCD), and Bowley–Kelley skewness:</b> pay inequality and dispersion are quantified via the <code>P90/P10</code> decile ratio, the non-parametric quartile coefficient of dispersion <code>QCD = (P75 − P25) / (P75 + P25)</code>, the Gini index <code>G = ∑_{i=1..n} (2i − n − 1)·x_(i) / (n · ∑ x_(i))</code>, and quantile skewness indices <code>S_B</code> and <code>S_K</code>. Employer demand concentration is measured via the Herfindahl–Hirschman Index (<code>HHI = ∑ s_i² × 10,000</code>).</li>
     <li><b>Mincerian log-wage regression (OLS with White HC1 robust standard errors) &amp; ANOVA (η²):</b> to isolate the pure ceteris paribus returns to seniority (Middle, Senior, Lead vs Junior/Intern), geography (Moscow, St. Petersburg vs regional offices), all-Russia remote work, and AI skills, openradar estimates a multi-factor OLS regression on <code>ln(W_i)</code> with White heteroskedasticity-consistent standard errors (<code>HC1</code>) and Halvorsen–Palmquist exact percentage effects <code>Δ% = (exp(β_j) − 1) × 100%</code>, alongside one-way ANOVA variance decomposition (<code>η² = SS_between / SS_total</code>) and non-parametric hypothesis tests (Mann–Whitney <code>U</code> with Cliff’s <code>δ</code>, Kruskal–Wallis <code>H</code> with <code>ε²</code>, and Spearman’s <code>ρ_s</code>).</li>
+    <li><b>Statistical inference (report version 3):</b> all p-values are exact rather than read off a table of critical values. Kruskal–Wallis <code>H</code> is divided by the tie correction <code>1 − Σ(t³ − t) / (N³ − N)</code> and referred to χ² with the actual degrees of freedom <code>df = k − 1</code> (groups under five observations are dropped, so df varies); its effect size is <code>ε² = H / (N − 1)</code> (0.01 small, 0.08 medium, 0.26 large; Tomczak &amp; Tomczak, 2014). Mann–Whitney <code>U</code> uses the tie-corrected normal approximation, with Cliff’s δ as effect size (0.147 / 0.33 / 0.474; Romano et al., 2006). Spearman’s ρ is tested with <code>t = ρ·√((k − 2)/(1 − ρ²))</code> against Student t with k − 2 df, with |ρ| thresholds 0.1 / 0.3 / 0.5 (Cohen, 1988). Mincer coefficients use <code>t = β / SE(HC1)</code> and Student t with <code>df = n − k</code>; stars are derived from p (*** &lt; 0.001, ** &lt; 0.01, * &lt; 0.05). ANOVA and regression F tests use the F distribution. Hypotheses H1–H4 are tested on the same data, so the Holm–Bonferroni adjustment is applied across them and both raw and adjusted p are published. A hypothesis is confirmed only when the adjusted p &lt; 0.05, the effect is at least small, and it points the predicted way: with tens of thousands of observations almost any difference is significant, so significance alone is not evidence of a meaningful difference. p-values follow APA style (“&lt; 0.001” or three decimals). Dunn’s pairwise post-hoc comparisons are not published.</li>
   </ul>
+
+  ${renderFormulaGallerySection('en')}
 
   <h2 id="index">7. The openradar index (Russian-language &amp; Global panels)</h2>
   <p>The index (<a href="/en/research/index">/en/research/index</a>) tracks daily new vacancies and freelance orders against a base of 100 (9 November – 6 December 2026) across two independent fixed panels: the 8-feed Russian-language panel (hh.ru, Habr Career, getmatch, Rabota Rossii, Kwork, FL.ru, Freelancehunt) and the 11-board International Global &amp; Remote panel (Himalayas, Arbeitnow, JustJoin, Jobicy, WeWorkRemotely, RemoteWorker UK, CryptoJobsList, Ashby, Greenhouse, Lever, and Freelancer.com). Sequential vacancy IDs on hh.ru (<code>Δid ≤ 230,000</code>) and Habr Career (<code>Δid ≤ 100</code>) filter out bumped older vacancies. Values are 7-day rolling averages (<code>MA_7</code>) with pre-base onboarding spike Winsorization (<code>2.5 × median</code>), accompanied by IT-vacancies sub-indices, per-board indices, role indices, and Monday–Sunday seasonality profiles.</p>
 
     <h2 id="versions">8. Versions, Open Data Codebook &amp; Academic Citation</h2>
+  <p><b>Report version 3 (November 2026).</b> Exact p-values instead of critical-value tables: χ² with the actual df for Kruskal–Wallis (previously the df = 3 thresholds were always used), Student t for Mincer coefficients and Spearman’s ρ (previously normal thresholds, and the intercept was always shown as p &lt; 0.001), the F distribution for F tests. Holm–Bonferroni adjustment across H1–H4, and a hypothesis is confirmed only when the adjusted p &lt; 0.05 and the effect is at least small. All other report figures are unchanged.</p>
   <p><b>Report version 2 and index version 2 (November 2026).</b> Russian-language order isolation, Bank of Russia monthly FX rates, order-statistic 95% CIs, stratified role-and-seniority gap adjustments, role × seniority salary heatmaps, Mincerian log-wage OLS regression (White HC1), ANOVA variance decomposition (η²), non-parametric hypothesis tests, and panel index freshness gating. Open data under ${LICENSE} (<a href="/research/dataset.csv">/research/dataset.csv</a> and <a href="/research/report.json">/research/report.json</a>).</p>
   <p><b>CSV Data Dictionary (<code>/research/dataset.csv</code>):</b> each row represents one deduplicated post with 19 standardized columns: <code>id</code>, <code>date</code> (UTC YYYY-MM-DD), <code>type</code> (<code>job</code> | <code>gig</code>), <code>platform</code>, <code>role</code> (25 specializations), <code>grade</code> (<code>intern</code>..<code>lead</code>), <code>language</code>, <code>region</code>, <code>remote</code> (<code>0</code> | <code>1</code>), <code>company</code>, <code>pay_min_rub</code>, <code>pay_max_rub</code>, <code>pay_rub</code> (midpoint in RUB), <code>pay_period</code> (<code>month</code> | <code>project</code> | <code>hour</code> | <code>day</code>), <code>currency</code>, <code>pay_origin</code> (<code>page</code> | <code>board</code> | <code>text</code> | <code>model</code>), <code>ai_mention</code> (<code>0</code> | <code>1</code>), <code>skills</code> (<code>;</code>-separated), and <code>scope</code> (<code>ru</code> | <code>intl</code>).</p>
   <p><b>Standard Academic Citation (APA 7th):</b> <code>openradar Research. (2026). Methodology of the Russian IT &amp; Freelance Labour Market Study and Panel Index (Version 2). openradar. ${escapeHtml(baseUrl)}/en/research/methodology</code></p>
@@ -420,9 +429,9 @@ export function renderMethodologyPageEn(options: { baseUrl: string; version: str
     title: 'Methodology of openradar research & index',
     version,
     active: 'research',
-    body,
+    body: body + renderResearchEnhancements('en'),
     lang: 'en',
     auth: options.auth,
-    head: enHead('How openradar counts pay and budgets: sources, pay parsing, roles and seniority, 95% CIs, Simpson paradox adjustment, and the panel index.', `${baseUrl}/en/research/methodology`, '/research/methodology', baseUrl),
+    head: RESEARCH_ENHANCE_HEAD + enHead('How openradar counts pay and budgets: sources, pay parsing, roles and seniority, 95% CIs, Simpson paradox adjustment, and the panel index.', `${baseUrl}/en/research/methodology`, '/research/methodology', baseUrl),
   });
 }

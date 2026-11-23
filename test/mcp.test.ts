@@ -82,7 +82,7 @@ describe('MCP server', () => {
 
   it('lists the tools', async () => {
     const resp = (await handleMcpRequest({ jsonrpc: '2.0', id: 2, method: 'tools/list' }, backend)) as Content;
-    expect((resp.result?.tools as unknown[]).length).toBe(MCP_TOOLS.length);
+    expect((resp.result!.tools as unknown[]).length).toBe(MCP_TOOLS.length);
     expect(MCP_TOOLS.map((t) => t.name)).toEqual([
       'search_leads',
       'get_lead_details',

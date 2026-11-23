@@ -1,4 +1,4 @@
-import { applyDecisions, decisionsEnabled, newDecisionReplay, runDecisions } from './decide.ts';
+import { applyDecisions, decisionsEnabled, newDecisionKeys, newDecisionReplay, runDecisions, type DecisionKeyPool } from './decide.ts';
 import { runEnrichment } from './enrich.ts';
 import { runVisaSponsors } from '../research/visa-sponsors.ts';
 import { webPubkey } from '../hub/web-key.ts';
@@ -9,6 +9,7 @@ import { runDigestIfDue } from './digest.ts';
 import type { SubscriptionRound } from './subscriptions.ts';
 import { notifyPoints } from './points-notify.ts';
 import { auditSourceRobotsIfDue } from './robots-audit.ts';
+import { reportSilentDrops } from '../core/source-health.ts';
 import { checkLeadsLiveness } from './liveness.ts';
 import { recomputeRatings } from '../hub/rating.ts';
 import { parseModerators } from '../hub/service.ts';
@@ -16,9 +17,12 @@ import { ensureMonthlySnapshot, liveReport } from '../research/service.ts';
 import { ensureDailyCounts, openradarIndex } from '../research/index.ts';
 import { ensureFxRates } from '../research/fx.ts';
 import { extractionEnabled, runModelExtraction } from '../research/model.ts';
+import { newExtractProviders, type ExtractProviderPool } from '../research/providers.ts';
 import type { UserTelegramRound } from './user-telegram.ts';
 
 const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000;
+/** The silent-drop check scans two weeks of runs; every six hours is plenty. */
+const FLOW_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const BACKGROUND_INTERVAL_MS = 60 * 1000;
 const LIVENESS_INTERVAL_MS = 5 * 60 * 1000;
 const EXTRACTION_INTERVAL_MS = 2 * 60 * 1000;
@@ -42,12 +46,17 @@ export class PollRunner {
   private lastLivenessAt = 0;
   private livenessRunning = false;
   private lastMaintenanceAt = 0;
+  private lastFlowCheckAt = 0;
   private lastExtractionAt = 0;
   private extractionRunning = false;
   private decisionsRunning = false;
   private nextDecisionsAt = 0;
   /** Shared idempotency cache for the paid model call across rounds (plan 021E). */
   private decisionReplay = newDecisionReplay();
+  /** Shared key pool: an exhausted key stays parked across rounds until its cooldown passes. */
+  private decisionKeys: DecisionKeyPool | undefined;
+  /** Shared extract provider pool: an exhausted endpoint stays parked across rounds. */
+  private extractProviderPool: ExtractProviderPool | undefined;
   private enrichmentRunning = false;
   private nextEnrichmentAt = 0;
   private visaSponsorsRunning = false;
@@ -131,7 +140,7 @@ export class PollRunner {
       const fxCheckDue = Date.now() - this.lastFxCheckAt >= FX_RATES_CHECK_MS;
       if (fxCheckDue) {
         this.lastFxCheckAt = Date.now();
-        void ensureFxRates(this.deps.store).catch((error: unknown) => {
+        void ensureFxRates(this.deps.store, new Date(), this.deps.fetchImpl ?? fetch).catch((error: unknown) => {
           // The reference rates stand in until the Bank of Russia answers.
           this.logger.warn('Bank of Russia rates not saved', { error: error instanceof Error ? error.message : String(error) });
         });
@@ -217,7 +226,7 @@ export class PollRunner {
     if (perHour <= 0 || this.enrichmentRunning || Date.now() < this.nextEnrichmentAt) return;
     this.nextEnrichmentAt = Date.now() + EXTRACTION_INTERVAL_MS;
     this.enrichmentRunning = true;
-    void runEnrichment({ store: this.deps.store, env, logger: this.deps.logger.child('enrich'), fetchImpl: fetch }, Math.max(1, Math.round(perHour / BATCHES_PER_HOUR)))
+    void runEnrichment({ store: this.deps.store, env, logger: this.deps.logger.child('enrich'), fetchImpl: this.deps.fetchImpl ?? fetch }, Math.max(1, Math.round(perHour / BATCHES_PER_HOUR)))
       .then((summary) => {
         if (summary.checked) this.logger.info('pages read', { ...summary });
       })
@@ -260,7 +269,8 @@ export class PollRunner {
     if (Date.now() < this.nextDecisionsAt) return;
     this.nextDecisionsAt = Date.now() + EXTRACTION_INTERVAL_MS;
     this.decisionsRunning = true;
-    void runDecisions({ store: this.deps.store, env, logger: this.deps.logger.child('decide'), fetchImpl: fetch, replay: this.decisionReplay }, Math.max(1, Math.round(perHour / BATCHES_PER_HOUR)))
+    this.decisionKeys ??= newDecisionKeys(env);
+    void runDecisions({ store: this.deps.store, env, logger: this.deps.logger.child('decide'), fetchImpl: this.deps.fetchImpl ?? fetch, replay: this.decisionReplay, keys: this.decisionKeys }, Math.max(1, Math.round(perHour / BATCHES_PER_HOUR)))
       .then((summary) => {
         if (summary.asked) this.logger.info('decisions finished', { ...summary });
         if (this.deps.services) {
@@ -286,7 +296,7 @@ export class PollRunner {
             this.deps.services.record('subq', 'SubQ AI (классификация)', 'ok');
           }
         }
-        return applyDecisions({ store: this.deps.store, env, logger: this.deps.logger.child('decide'), fetchImpl: fetch }, 500).then((done) => {
+        return applyDecisions({ store: this.deps.store, env, logger: this.deps.logger.child('decide'), fetchImpl: this.deps.fetchImpl ?? fetch }, 500).then((done) => {
           if (done.hidden || done.closed || done.moved || done.directed) this.logger.info('decisions applied', { ...done });
           return summary;
         });
@@ -310,8 +320,10 @@ export class PollRunner {
     if (Date.now() - this.lastExtractionAt < EXTRACTION_INTERVAL_MS) return;
     this.lastExtractionAt = Date.now();
     this.extractionRunning = true;
+    this.extractProviderPool ??= newExtractProviders(env);
+    const providers = this.extractProviderPool.size > 0 ? this.extractProviderPool : undefined;
     const limit = Math.max(1, Math.min(25, Math.round(env.RADAR_EXTRACT_PER_HOUR / BATCHES_PER_HOUR)));
-    void runModelExtraction({ store: this.deps.store, env, logger: this.deps.logger.child('extract'), fetchImpl: this.deps.fetchImpl }, { limit })
+    void runModelExtraction({ store: this.deps.store, env, logger: this.deps.logger.child('extract'), fetchImpl: this.deps.fetchImpl, providers }, { limit })
       .then((summary) => {
         if (summary.asked) this.logger.info('model extraction finished', { asked: summary.asked, saved: summary.saved, failed: summary.failed, stopped: summary.stopped });
         if (summary.pausedMs) this.lastExtractionAt = Date.now() + summary.pausedMs - EXTRACTION_INTERVAL_MS;
@@ -350,11 +362,56 @@ export class PollRunner {
 
     const store = this.deps.store;
     try {
-      const leads = await store.cleanupOldLeads?.(this.deps.env.RADAR_RETENTION_DAYS);
+      // Lead lifecycle: hot (0..HOT_DAYS) — в фиде; warm — archived_at, скрыт из фида/API,
+      // строка целиком; месяц, целиком ушедший в warm, выгружается в RADAR_ARCHIVE_DIR
+      // (leads-YYYY-MM.jsonl.gz). Cold (> RETENTION_DAYS) — только для уже выгруженных
+      // месяцев: compact (по умолчанию) сжимает строку на месте — id, голоса, рейтинг,
+      // показы и доставки остаются для статистики; delete (явный выбор) удаляет строки
+      // каскадом вместе с гроссбухом и доставками; off — ничего не делает.
+      // Its own try/catch: an unwritable archive dir (EACCES on a root-owned ./data bind mount)
+      // used to abort the whole pass — rating recompute, research daily counts and robots audit
+      // below were skipped every hour. Archiving, export and retention fail alone now.
+      const env = this.deps.env;
+      let leads: number | undefined;
+      try {
+        const hotDays = env.RADAR_LEADS_HOT_DAYS ?? 60;
+        const archiveDir = env.RADAR_ARCHIVE_DIR ?? 'data/archives';
+        const retentionMode = env.RADAR_RETENTION_MODE ?? 'compact';
+        if (retentionMode !== 'off' && hotDays >= env.RADAR_RETENTION_DAYS) {
+          this.logger.warn('RADAR_LEADS_HOT_DAYS >= RADAR_RETENTION_DAYS: leads reach retention only once archived and exported', {
+            hotDays,
+            retentionDays: env.RADAR_RETENTION_DAYS,
+          });
+        }
+        const archived = await store.archiveOldLeads?.(hotDays);
+        if (archived) this.logger.info('leads archived', { archived });
+        const exported = await store.exportArchivedLeads?.(archiveDir, hotDays);
+        if (exported?.length) this.logger.info('archive exported', { files: exported });
+        if (retentionMode === 'compact') {
+          const compacted = await store.compactOldLeads?.(env.RADAR_RETENTION_DAYS, archiveDir);
+          if (compacted) this.logger.info('leads compacted', { compacted });
+        } else if (retentionMode === 'delete') {
+          // Only months already exported: the archive file keeps the full copy.
+          leads = await store.cleanupOldLeads?.(env.RADAR_RETENTION_DAYS, archiveDir);
+        }
+      } catch (error) {
+        this.logger.warn('lead lifecycle failed', { error: error instanceof Error ? error.message : String(error) });
+      }
       // Голоса-события и история запусков нужны для health (24ч) и аудита;
       // храним их 30 дней, чтобы таблицы не росли бесконечно.
       const runs = await store.cleanupRuns?.(30);
+      const deliveries = await store.cleanupLeadDeliveries?.(14);
+      if (runs) this.logger.info('old runs cleaned up', { runs });
+      if (deliveries) this.logger.info('old lead deliveries cleaned up', { deliveries });
       const sessions = await store.purgeExpiredSessions?.();
+      // A source that still answers but stopped bringing posts (a drifted feed URL) is invisible
+      // to the error-based hygiene: surface it separately, at most once every six hours.
+      if (Date.now() - this.lastFlowCheckAt >= FLOW_CHECK_INTERVAL_MS) {
+        this.lastFlowCheckAt = Date.now();
+        await reportSilentDrops(store, this.deps.services, this.logger).catch((error) => {
+          this.logger.warn('silent-drop check failed', { error: error instanceof Error ? error.message : String(error) });
+        });
+      }
       if (this.deps.env.RADAR_MODE === 'hub') {
         const secret = this.deps.env.RADAR_WEB_KEY_SECRET || this.deps.env.RADAR_ADMIN_TOKEN;
         const rating = await recomputeRatings(store, parseModerators(this.deps.env.RADAR_MODERATORS), new Date(), secret ? (id) => webPubkey(secret, id) : undefined);

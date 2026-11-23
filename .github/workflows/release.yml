@@ -55,6 +55,7 @@ jobs:
           TZ: Europe/Moscow
         run: |
           node scripts/check-version.js
+          pnpm lint
           pnpm typecheck
           pnpm test
 
@@ -70,7 +71,7 @@ jobs:
             manifest.version = '$VER';
             fs.writeFileSync('extension/manifest.json', JSON.stringify(manifest, null, 2));
           "
-          cd extension && zip -r ../radar-extension-${{ steps.version.outputs.tag }}.zip ./* && cd ..
+          node scripts/pack-extension.js "radar-extension-${{ steps.version.outputs.tag }}.zip"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4

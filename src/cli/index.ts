@@ -12,6 +12,8 @@ import { rekeyTitles } from '../pipeline/rekey.ts';
 import { scoreSource } from '../core/source-quality.ts';
 import { fillEmployers } from '../pipeline/reemployers.ts';
 import { rescoreLeads } from '../pipeline/rescore.ts';
+import { refilterLeads } from '../pipeline/refilter.ts';
+import { detectSilentDrops } from '../core/source-health.ts';
 import { auditSourceRobots, robotsMarkdown } from '../pipeline/robots-audit.ts';
 import { PollRunner } from '../pipeline/runner.ts';
 import { filterJobspyLeads, jobspyCsv, parseExportSince, siteSlugFor } from '../core/jobspy.ts';
@@ -21,6 +23,7 @@ import { pollUserTelegramSources } from '../pipeline/user-telegram.ts';
 import { deliverDueSubscriptions, deliverLeadClosedToSubscriptions } from '../pipeline/subscriptions.ts';
 import { leadEvents } from '../core/events.ts';
 import { startServer } from '../server/index.ts';
+import { flushUsage, stopUsageFlush } from '../server/usage.ts';
 import { SOURCE_PRESETS } from '../sources/presets.ts';
 import { loadEnv } from '../config.ts';
 import { runMigrations } from '../store/migrator.ts';
@@ -521,6 +524,27 @@ function buildProgram(): Command {
     });
 
   source
+    .command('drops')
+    .description('Sources that still answer but stopped bringing posts (silent flow drop)')
+    .option('--days <n>', 'Window in days', '7')
+    .option('--ratio <r>', 'Flag below this share of the previous window', '0.2')
+    .option('--min-prev <n>', 'Ignore sources with fewer previous inserts', '100')
+    .action(async (options: { days: string; ratio: string; minPrev: string }) => {
+      await withRuntime(async (runtime) => {
+        const stats = (await runtime.store.getFlowStats?.(Number(options.days) || 7)) ?? [];
+        const drops = detectSilentDrops(stats, { ratio: Number(options.ratio) || 0.2, minPrevious: Number(options.minPrev) || 100 });
+        if (drops.length === 0) {
+          console.log('Тихих просадок нет.');
+          return;
+        }
+        console.log(table(
+          ['Источник', 'Было', 'Стало', 'Доля'],
+          drops.map((d) => [d.title, String(d.previousInserted), String(d.inserted), d.ratio.toFixed(2)]),
+        ));
+      });
+    });
+
+  source
     .command('presets')
     .description('List or add pre-configured freelance and order sources')
     .option('--add', 'Add all preset sources into the database')
@@ -654,6 +678,29 @@ function buildProgram(): Command {
           money: options.money,
         });
         console.log(`Проверено: ${summary.checked}, тип или флаги изменились: ${summary.requalified}, оплата или навыки: ${summary.repriced}, рейтинг изменился: ${summary.changed}`);
+      });
+    });
+
+  program
+    .command('refilter')
+    .description('Re-run the tightened spam patterns over visible leads; dry run unless --apply')
+    .option('--days <n>', 'Leads created in the last N days', '30')
+    .option('--limit <n>', 'At most this many newest leads', '50000')
+    .option('--apply', 'Actually reject the matches (default: dry run)')
+    .option('--all', 'Re-run every spam category, not only the 2026-11 audit additions')
+    .action(async (options: { days: string; limit: string; apply?: boolean; all?: boolean }) => {
+      await withRuntime(async (runtime) => {
+        const summary = await refilterLeads(runtime.store, {
+          days: Number(options.days) || 30,
+          limit: Number(options.limit) || 50000,
+          apply: options.apply === true,
+          all: options.all === true,
+        });
+        console.log(`Область: ${options.all ? 'все spam-категории' : 'новые паттерны аудита 2026-11 (масс-отправка личных + recovery аккаунтов)'}`);
+        console.log(`Проверено: ${summary.checked}, совпало: ${summary.matched}, отклонено: ${summary.rejected}${options.apply ? '' : ' (dry run)'}`);
+        if (summary.samples.length) {
+          console.log(table(['Причина', 'Заголовок'], summary.samples.map((s) => [s.reasons.join(','), s.title.slice(0, 90)])));
+        }
       });
     });
 
@@ -796,6 +843,9 @@ function buildProgram(): Command {
         runner?.stop();
         server.close(async () => {
           try {
+            // Buffered agent-usage counters go to the store before it closes.
+            stopUsageFlush(runtime);
+            await flushUsage(runtime);
             await runtime.store.close();
           } finally {
             process.exit(0);

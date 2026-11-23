@@ -324,7 +324,7 @@ const STYLE = `
   --focus-ring: 0 0 0 3px rgba(113, 113, 122, 0.22);
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #09090b;
     --surface: #121215;
     --surface-hover: #1c1c22;
@@ -337,6 +337,23 @@ const STYLE = `
     --rose: #f87171;
     --amber: #fbbf24;
   }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #09090b;
+  --surface: #121215;
+  --surface-hover: #1c1c22;
+  --ink: #f4f4f5;
+  --muted: #a1a1aa;
+  --line: #27272a;
+  --line-strong: #3f3f46;
+  --soft: #18181b;
+  --emerald: #34d399;
+  --rose: #f87171;
+  --amber: #fbbf24;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; color-scheme: light dark; }
@@ -461,6 +478,31 @@ main {
 }
 .nav a:hover { color: var(--ink); text-decoration: none; }
 .nav a.active { color: var(--ink); border-color: var(--ink); }
+/* One-button color theme toggle in the header: shows the icon of the theme a click leads to. */
+.theme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 9999px;
+  background: var(--bg);
+  color: var(--muted);
+  cursor: pointer;
+  flex: none;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.theme-btn:hover { border-color: var(--line-strong); color: var(--ink); background: var(--surface-hover); }
+.theme-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.theme-icon-moon { display: none; }
+:root[data-theme="dark"] .theme-icon-moon { display: block; }
+:root[data-theme="dark"] .theme-icon-sun { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-icon-moon { display: block; }
+  :root:not([data-theme="light"]) .theme-icon-sun { display: none; }
+}
 .actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 .btn-submit {
   height: 34px;
@@ -1195,6 +1237,7 @@ dialog::backdrop {
 .admin-tile-value { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-top: 2px; }
 .admin-tile-hint { font-size: 12px; color: var(--muted); }
 .admin-section { margin-top: 32px; }
+.admin-nav { margin: 12px 0 20px; }
 .admin-section h2 { font-size: 15px; margin: 0 0 10px; }
 .admin-chart { display: flex; align-items: flex-end; gap: 6px; height: 180px; padding-top: 8px; border-bottom: 1px solid var(--line); }
 .admin-bar { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; }
@@ -2394,6 +2437,30 @@ export function setAnalytics(config: AnalyticsConfig): void {
   analyticsBodyHtml = analyticsBody(config);
 }
 
+/**
+ * Color theme: an early bootstrap that applies the saved choice before first paint
+ * (no flash), and a one-button toggle in the header — light ↔ dark, persisted under
+ * the same 'openradar-theme' key the research pages' bootstrap reads.
+ */
+const THEME_HEAD = `<script>
+(function(){
+  try {
+    var t = localStorage.getItem('openradar-theme');
+    if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+function toggleTheme() {
+  var doc = document.documentElement;
+  var mode = doc.getAttribute('data-theme');
+  var darkNow = mode === 'dark' || (mode !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  var next = darkNow ? 'light' : 'dark';
+  doc.setAttribute('data-theme', next);
+  try { localStorage.setItem('openradar-theme', next); } catch (e) {}
+  var b = document.getElementById('theme-toggle');
+  if (b) b.setAttribute('aria-label', next === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
+}
+</script>`;
+
 /** Absolute public URL (RADAR_PUBLIC_URL) for og:image and og:url; unset on a private node. */
 let publicBaseUrl: string | undefined;
 export function setPublicBaseUrl(url: string | undefined): void {
@@ -2431,6 +2498,7 @@ export function layout(input: {
 }): string {
   const lang = input.lang ?? 'ru';
   const t = getTranslations(lang);
+  const ogImagePath = lang === 'en' ? '/og-en.png' : '/og.png';
   const nav = (key: 'leads' | 'sources' | 'extension' | 'research' | 'network' | 'employers', label: string, href: string): string =>
     `<a href="${href}"${input.active === key ? ' class="active"' : ''}>${label}</a>`;
 
@@ -2478,11 +2546,12 @@ export function layout(input: {
 <meta property="og:site_name" content="openradar">
 <meta property="og:title" content="${escapeHtml(input.title)} · openradar">
 <meta property="og:type" content="website">
-${publicBaseUrl ? `<meta property="og:image" content="${escapeHtml(publicBaseUrl)}/og.png">
+${THEME_HEAD}
+${publicBaseUrl ? `<meta property="og:image" content="${escapeHtml(publicBaseUrl)}${ogImagePath}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="${escapeHtml(publicBaseUrl)}/og.png">` : '<meta name="twitter:card" content="summary">'}
+<meta name="twitter:image" content="${escapeHtml(publicBaseUrl)}${ogImagePath}">` : '<meta name="twitter:card" content="summary">'}
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="alternate" type="application/rss+xml" title="${lang === 'en' ? 'openradar — fresh gigs and jobs' : 'openradar — свежие заказы и вакансии'}" href="/feed.rss">
 ${input.head ?? ''}
@@ -2502,7 +2571,13 @@ ${analyticsBodyHtml}
     ${nav('sources', t.navSources, '/sources')}
     ${nav('network', lang === 'ru' ? 'Участники' : 'Participants', '/network')}
   </nav>
-  <div class="actions">${input.actions ?? ''}${authWidget}</div>
+  <div class="actions">
+    <button type="button" id="theme-toggle" class="theme-btn" onclick="toggleTheme()" aria-label="${lang === 'ru' ? 'Переключить светлую и тёмную тему' : 'Switch between light and dark theme'}" title="${lang === 'ru' ? 'Тема' : 'Theme'}">
+      <svg class="theme-icon theme-icon-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      <svg class="theme-icon theme-icon-moon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>
+    ${input.actions ?? ''}${authWidget}
+  </div>
 </header>
 <main class="main-content" id="main" tabindex="-1">
 ${input.body}
@@ -2848,26 +2923,34 @@ export function leadTitle(lead: Lead): string {
 /** The day counter counts up to this many leads; above it the page says «5 000+». */
 export const FOUND_TODAY_CAP = 5000;
 
-function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru', admin = true): string {
+/**
+ * The grey line under a lead title: type, source, category, place, pay, age. Shared by the feed
+ * and the SEO pages so both show the same thing; an absurd salary (salaryLooksWrong) is left out.
+ */
+export function leadMetaLine(lead: Lead, lang: SupportedLang = 'ru', source?: SourceRecord): string {
   const t = getTranslations(lang);
-  // An absurd salary stays off the feed: the row says «проверить» instead of the number.
-  const salarySuspect = salaryLooksWrong(lead);
   const money = typeof lead.budget === 'number' ? formatBudget(lead.budget, lead.currency) : lead.rawSalary;
   const displayCity = translateCity(lead.city, lang);
   const locationLabel = lead.workplaceType === 'hybrid'
     ? (displayCity ? `${displayCity} (${t.hybridFormat})` : t.hybridFormat)
     : (lead.isRemote ? (displayCity ?? t.remote) : displayCity);
-
-  const meta = [
+  return [
     lead.type === 'job' ? t.jobType : t.gigType,
     source?.title ? translateSourceTitle(source.title, lang) : undefined,
     lead.category ? translateSkill(lead.category, lang) : undefined,
     locationLabel,
-    salarySuspect ? undefined : money,
+    salaryLooksWrong(lead) ? undefined : money,
     formatRelative(lead.createdAt, lang),
   ]
     .filter(Boolean)
     .join(' · ');
+}
+
+function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru', admin = true): string {
+  const t = getTranslations(lang);
+  // An absurd salary stays off the feed: the row says «проверить» instead of the number.
+  const salarySuspect = salaryLooksWrong(lead);
+  const meta = leadMetaLine(lead, lang, source);
 
   const signals: string[] = [];
   if (salarySuspect) {

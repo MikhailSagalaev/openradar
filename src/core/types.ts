@@ -21,6 +21,18 @@ export interface Logger {
   child(scope: string): Logger;
 }
 
+/** One OpenAI-compatible extraction endpoint in the RADAR_EXTRACT_PROVIDERS pool. */
+export interface ExtractProvider {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  /** Second model tried on the same endpoint when the primary returns nothing usable. */
+  fallbackModel?: string;
+  /** Minimum pause between requests: rate-limited free tiers need a slower pace. */
+  pauseMs?: number;
+  concurrency?: number;
+}
+
 export interface Env {
   NODE_ENV: 'development' | 'production' | 'test';
   DATABASE_URL?: string;
@@ -31,12 +43,19 @@ export interface Env {
   RADAR_POLL_INTERVAL_SEC: number;
   RADAR_POLL_CONCURRENCY: number;
   RADAR_LLM_ENABLED: boolean;
+  RADAR_LLM_TIMEOUT_MS?: number;
   RADAR_EXTRACT_ENABLED: boolean;
   RADAR_EXTRACT_MODEL?: string;
   /** Second OpenAI-compatible model tried when the primary returns nothing usable. */
   RADAR_EXTRACT_FALLBACK_MODEL?: string;
   RADAR_EXTRACT_PER_HOUR: number;
   RADAR_EXTRACT_APPLY: boolean;
+  /** Ordered pool of OpenAI-compatible extraction endpoints; a parked one is skipped for the cooldown. */
+  RADAR_EXTRACT_PROVIDERS?: ExtractProvider[];
+  /** Minutes a parked extract provider waits before it is tried again. 0 tries every round. */
+  RADAR_EXTRACT_PROVIDER_COOLDOWN_MIN: number;
+  /** Leads per extraction request: ≥2 groups posts into one batched call (0/1 = one lead per call). */
+  RADAR_EXTRACT_BATCH: number;
   RADAR_DECIDE_ENABLED?: boolean;
   RADAR_DECIDE_URL?: string;
   RADAR_DECIDE_MODEL?: string;
@@ -49,6 +68,10 @@ export interface Env {
   /** ATS board-diff: soft-close jobs removed from their board, reopen returned ones (plan 021B). */
   RADAR_ATS_GHOST_CHECK?: boolean;
   SUBQ_API_KEY?: string;
+  /** Comma-separated pool of SubQ keys; a key that answers 401/402/403 is parked and the next one takes over. */
+  SUBQ_API_KEYS?: string;
+  /** Minutes a parked decision key waits before it is tried again (credits may be topped up). 0 tries every round. */
+  RADAR_DECIDE_KEY_COOLDOWN_MIN: number;
   /** Site visitors may link their own Telegram account by QR (sessions stored encrypted). */
   RADAR_USER_TELEGRAM: boolean;
   RADAR_EXTRACT_PROVIDER: 'openai' | 'gigachat';
@@ -59,6 +82,7 @@ export interface Env {
   OPENAI_API_KEY?: string;
   OPENAI_BASE_URL: string;
   OPENAI_MODEL: string;
+  OPENAI_EXTRA_BODY?: string;
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_CHAT_ID?: string;
   RADAR_ADMIN_CHAT_ID?: string;
@@ -94,6 +118,12 @@ export interface Env {
   RADAR_DIGEST_CHAT_ID?: string;
   RADAR_DIGEST_INTERVAL_HOURS: number;
   RADAR_RETENTION_DAYS: number;
+  /** Leads older than this hide from the feed/API (warm: archived_at, full row kept). */
+  RADAR_LEADS_HOT_DAYS: number;
+  /** What happens past RADAR_RETENTION_DAYS: compact (default), delete (legacy) or off. */
+  RADAR_RETENTION_MODE?: 'compact' | 'delete' | 'off';
+  /** Where the monthly gz JSONL exports of archived leads land. */
+  RADAR_ARCHIVE_DIR: string;
   RADAR_CHECK_CLOSED: boolean;
   /** Hub: the TELEGRAM_BOT_TOKEN bot takes /start codes and sends saved-search digests (sets its webhook). */
   RADAR_SUBSCRIPTION_BOT: boolean;
@@ -107,6 +137,8 @@ export interface Env {
   RADAR_PG_CONN_MAX_AGE_SEC: number;
   /** Recycle pooled PG connections after this many queries (0 = never). */
   RADAR_PG_CONN_MAX_USES: number;
+  /** Maximum pooled PG connections (default 25). */
+  RADAR_PG_POOL_MAX: number;
   /** SET LOCAL statement_timeout for web reads, ms (0 = off). */
   RADAR_WEB_STATEMENT_TIMEOUT_MS: number;
   /** Anonymous lead-card HTML cache TTL, seconds (0 = off). */
@@ -178,6 +210,7 @@ export interface RawLead {
   skills?: string[];
   isRemote?: boolean;
   workplaceType?: 'remote' | 'hybrid' | 'onsite';
+  lang?: 'ru' | 'en';
   grade?: string;
   publishedAt?: string;
   metadata?: Record<string, unknown>;
@@ -225,6 +258,10 @@ export interface Lead extends RawLead {
   reasons: string[];
   createdAt: string;
   deliveredAt?: string;
+  /** Soft archive: set once the lead leaves the hot window (feed/API hide it, data stays). */
+  archivedAt?: string;
+  /** Cold compaction: text cut to the research head, contacts/embedding cleared (full copy in the month file). */
+  compactedAt?: string;
   votes_up?: number;
   votes_down?: number;
   votes_scam?: number;

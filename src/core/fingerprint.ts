@@ -103,35 +103,49 @@ export function computeMinHashSketch(normalizedText: string): string {
 }
 
 /**
+ * Decodes a base64url MinHash sketch into a typed Uint16Array.
+ * Returns null if the sketch is empty, invalid or corrupt.
+ */
+export function decodeMinHashSketch(sketch: string): Uint16Array | null {
+  if (!sketch) return null;
+  try {
+    const buf = Buffer.from(sketch, 'base64url');
+    if (buf.length !== MINHASH_K * 2) return null;
+    if (buf.byteOffset % 2 === 0) {
+      return new Uint16Array(buf.buffer, buf.byteOffset, MINHASH_K);
+    }
+    // If byteOffset in Node's shared buffer pool is odd, allocate an aligned buffer
+    const copy = new Uint8Array(buf).slice();
+    return new Uint16Array(copy.buffer, 0, MINHASH_K);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fast zero-copy Jaccard estimation between two already decoded Uint16Array MinHash sketches.
+ */
+export function estimateJaccardFromUint16(uintA: Uint16Array, uintB: Uint16Array): number {
+  let matches = 0;
+  for (let i = 0; i < MINHASH_K; i++) {
+    if (uintA[i] === uintB[i]) {
+      matches++;
+    }
+  }
+  return matches / MINHASH_K;
+}
+
+/**
  * Estimates the Jaccard similarity coefficient between two MinHash sketches.
  * Returns a value in [0.0, 1.0].
  * By convention, sketches with similarity >= 0.75 are considered fuzzy duplicates.
  */
 export function estimateJaccardFromSketches(mhA: string, mhB: string): number {
   if (!mhA || !mhB) return 0;
-
-  try {
-    const bufA = Buffer.from(mhA, 'base64url');
-    const bufB = Buffer.from(mhB, 'base64url');
-
-    if (bufA.length !== MINHASH_K * 2 || bufB.length !== MINHASH_K * 2) {
-      return 0;
-    }
-
-    const uintA = new Uint16Array(bufA.buffer, bufA.byteOffset, MINHASH_K);
-    const uintB = new Uint16Array(bufB.buffer, bufB.byteOffset, MINHASH_K);
-
-    let matches = 0;
-    for (let i = 0; i < MINHASH_K; i++) {
-      if (uintA[i] === uintB[i]) {
-        matches++;
-      }
-    }
-
-    return matches / MINHASH_K;
-  } catch {
-    return 0;
-  }
+  const a = decodeMinHashSketch(mhA);
+  const b = decodeMinHashSketch(mhB);
+  if (!a || !b) return 0;
+  return estimateJaccardFromUint16(a, b);
 }
 
 export const MINHASH_BANDS = 16;
@@ -143,28 +157,22 @@ export const MINHASH_ROWS_PER_BAND = 4; // 16 bands * 4 hashes = 64
  */
 export function computeMinHashBands(sketch: string): string[] {
   if (!sketch) return [];
-  try {
-    const buf = Buffer.from(sketch, 'base64url');
-    if (buf.length !== MINHASH_K * 2) return [];
+  const uint16 = decodeMinHashSketch(sketch);
+  if (!uint16) return [];
 
-    const uint16 = new Uint16Array(buf.buffer, buf.byteOffset, MINHASH_K);
-    const bands: string[] = new Array(MINHASH_BANDS);
-
-    for (let b = 0; b < MINHASH_BANDS; b++) {
-      const offset = b * MINHASH_ROWS_PER_BAND;
-      const v0 = uint16[offset] ?? 0;
-      const v1 = uint16[offset + 1] ?? 0;
-      const v2 = uint16[offset + 2] ?? 0;
-      const v3 = uint16[offset + 3] ?? 0;
-      let h = 0x811c9dc5;
-      h = Math.imul(h ^ v0, 0x01000193) >>> 0;
-      h = Math.imul(h ^ v1, 0x01000193) >>> 0;
-      h = Math.imul(h ^ v2, 0x01000193) >>> 0;
-      h = Math.imul(h ^ v3, 0x01000193) >>> 0;
-      bands[b] = `b${b}:${h.toString(16)}`;
-    }
-    return bands;
-  } catch {
-    return [];
+  const bands: string[] = new Array(MINHASH_BANDS);
+  for (let b = 0; b < MINHASH_BANDS; b++) {
+    const offset = b * MINHASH_ROWS_PER_BAND;
+    const v0 = uint16[offset] ?? 0;
+    const v1 = uint16[offset + 1] ?? 0;
+    const v2 = uint16[offset + 2] ?? 0;
+    const v3 = uint16[offset + 3] ?? 0;
+    let h = 0x811c9dc5;
+    h = Math.imul(h ^ v0, 0x01000193) >>> 0;
+    h = Math.imul(h ^ v1, 0x01000193) >>> 0;
+    h = Math.imul(h ^ v2, 0x01000193) >>> 0;
+    h = Math.imul(h ^ v3, 0x01000193) >>> 0;
+    bands[b] = `b${b}:${h.toString(16)}`;
   }
+  return bands;
 }

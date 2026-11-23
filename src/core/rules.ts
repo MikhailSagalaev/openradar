@@ -28,7 +28,7 @@ const SPAM_RULES: SpamRule[] = [
   {
     reason: 'MASS_MESSAGING',
     pattern:
-      /(массов[а-я]*\s+рассылк|рассылк[а-я]*\s+(сообщени|писем|в\s+(лс|личк|ватсап|whatsapp|тг|телеграм|viber))|инвайт[а-я]*|спам[а-я]*\s*рассылк|парсинг\s+(контактов|номеров|телефонов)|база\s+номеров)/iu,
+      /(масс(?:ов|ой)[а-я]*\s+(?:рассылк|отправк[а-я]*\s+(?:личных|сообщени[а-я]*\s+в\s+(?:соц|личн|директ)))|рассылк[а-я]*\s+(сообщени|писем|в\s+(лс|личк|ватсап|whatsapp|тг|телеграм|viber))|инвайт[а-я]*|спам[а-я]*\s*рассылк|парсинг\s+(контактов|номеров|телефонов)|база\s+номеров)/iu,
   },
   {
     reason: 'BOTTING',
@@ -38,7 +38,10 @@ const SPAM_RULES: SpamRule[] = [
   {
     reason: 'GREY_FINANCE',
     pattern:
-      /(дроп[а-я]*|обнал[а-я]*|оформлени[а-я]*\s+карт[а-я]*\s+на\s+себя|аренда\s+(аккаунт|лс|ватсап)|верификац[а-я]*\s+(кошельк|бирж|авито)|оплата\s+за\s+верификац)/iu,
+      // «дроповод» is the unambiguous money-mule term; a bare «дроп» stem also matched
+      // «гидропроект», «недропользователь», «дропшиппинг» and SEO dropped domains, hiding
+      // legitimate engineering and e-commerce posts, so it is deliberately not used.
+      /(дроповод[а-я]*|обнал[а-я]*|оформлени[а-я]*\s+карт[а-я]*\s+на\s+себя|аренда\s+(аккаунт|лс|ватсап)|верификац[а-я]*\s+(кошельк|бирж|авито)|оплата\s+за\s+верификац|(?:восстановлени[ея]|восстановить|разблокировк[аи]|разблокировать|разбан[а-я]*|recuperaci[oó]n|recuperar|recover(?:y)?|unban)[\s\S]{0,60}?(?:instagram|инстаграм|facebook|фейсбук|whatsapp|ватсап|tiktok|тикток|вконтакте|одноклассник))/iu,
   },
   {
     reason: 'ACADEMIC_FRAUD',
@@ -95,6 +98,55 @@ export interface RuleResult {
   score: number;
 }
 
+/**
+ * The exact patterns added by the 2026-11 quality audit: the mass-messaging «отправка личных
+ * сообщений» branch (the typo that slipped past the old «рассылка»-only pattern) and social-account
+ * recovery/unban. The retroactive refilter pass tests only these by default, not whole spam
+ * categories: older, broader stems (COLD_CALLING on sales jobs, the former bare «дроп» on
+ * «гидропроект»/«дропшиппинг») would retroactively hide legitimate posts, which is an operator
+ * product decision, not a cleanup.
+ */
+export const AUDIT_2026_11_PATTERNS: Array<{ reason: string; pattern: RegExp }> = [
+  {
+    reason: 'spam:MASS_MESSAGING',
+    pattern: /масс(?:ов|ой)[а-я]*\s+отправк[а-я]*\s+(?:личных|сообщени[а-я]*\s+в\s+(?:соц|личн|директ))/iu,
+  },
+  {
+    reason: 'spam:GREY_FINANCE',
+    pattern: /(?:восстановлени[ея]|восстановить|разблокировк[аи]|разблокировать|разбан[а-я]*|recuperaci[oó]n|recuperar|recover(?:y)?|unban)[\s\S]{0,60}?(?:instagram|инстаграм|facebook|фейсбук|whatsapp|ватсап|tiktok|тикток|вконтакте|одноклассник)/iu,
+  },
+];
+
+/** The audit-added spam reasons for a stored post, without the older broader rules. */
+export function auditSpamReasons(title: string, text: string): string[] {
+  const haystack = `${title}\n${text}`;
+  const reasons: string[] = [];
+  for (const { reason, pattern } of AUDIT_2026_11_PATTERNS) {
+    if (pattern.test(haystack)) reasons.push(reason);
+  }
+  return reasons;
+}
+
+/**
+ * The door spam categories alone, without a source's keyword/budget/age gates. Shared by
+ * applyRules at ingest and by the retroactive refilter pass, so a stored lead is judged by
+ * the same spam patterns a fresh one is. The data-entry foreign-currency special case reads
+ * the title and the extracted currency, exactly as ingest does.
+ */
+export function spamReasons(title: string, text: string, currency?: string): string[] {
+  const haystack = `${title}\n${text}`;
+  for (const rule of SPAM_RULES) {
+    const isDataEntryForeignCurrency =
+      rule.reason === 'DATA_ENTRY_SCAM' &&
+      (currency === 'EUR' || currency === 'USD') &&
+      /(?:ввод[а-я]*\s+данных|data\s+entry|набор[а-я]*\s+текст)/iu.test(title);
+    if (rule.pattern.test(haystack) || isDataEntryForeignCurrency) {
+      return [`spam:${rule.reason}`];
+    }
+  }
+  return [];
+}
+
 function includesKeyword(haystack: string, keyword: string): boolean {
   const needle = normalizeForMatch(keyword);
   return needle.length > 0 && haystack.includes(needle);
@@ -112,20 +164,10 @@ export function applyRules(
     reasons.push('too_short');
   }
 
-  for (const rule of SPAM_RULES) {
-    // cleanTitle() strips «- 2000EUR» from the title, so the pattern no longer sees the pay: the
-    // extracted currency stands in for it. Only a post titled as data entry counts; company
-    // vacancies (an executive assistant, a benefits analyst) list data entry among the duties.
-    const isDataEntryForeignCurrency =
-      rule.reason === 'DATA_ENTRY_SCAM' &&
-      (lead.currency === 'EUR' || lead.currency === 'USD') &&
-      /(?:ввод[а-я]*\s+данных|data\s+entry|набор[а-я]*\s+текст)/iu.test(lead.title);
-
-    if (rule.pattern.test(`${lead.title}\n${lead.text}`) || isDataEntryForeignCurrency) {
-      reasons.push(`spam:${rule.reason}`);
-      break;
-    }
-  }
+  // cleanTitle() strips «- 2000EUR» from the title, so the pattern no longer sees the pay: the
+  // extracted currency stands in for it. Only a post titled as data entry counts; company
+  // vacancies (an executive assistant, a benefits analyst) list data entry among the duties.
+  reasons.push(...spamReasons(lead.title, lead.text, lead.currency));
 
   const exclude = source.config.excludeKeywords ?? [];
   for (const keyword of exclude) {

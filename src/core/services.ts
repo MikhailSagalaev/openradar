@@ -73,35 +73,43 @@ export class ServiceMonitor {
 
   private async triggerAlert(service: ServiceCheck): Promise<void> {
     this.lastAlertAt.set(service.name, Date.now());
-    const env = this.deps.env;
-    if (!env) return;
-
-    const botToken = env.TELEGRAM_BOT_TOKEN;
-    const chatId = env.RADAR_ADMIN_CHAT_ID ?? env.TELEGRAM_CHAT_ID;
-    if (!botToken || !chatId) return;
-
-    const fetchImpl = this.deps.fetchImpl ?? globalThis.fetch;
     const msg = [
       `[openradar alert] Сервис ${service.label} (${service.name}) перешел в статус ERROR!`,
       service.httpStatus ? `HTTP Status: ${service.httpStatus}` : undefined,
       service.error ? `Причина: ${service.error}` : undefined,
-      service.httpStatus === 402 ? 'Требуется пополнить баланс или обновить SUBQ_API_KEY.' : undefined,
+      service.httpStatus === 402 ? 'Все ключи SubQ исчерпаны: пополните баланс или добавьте новый ключ в SUBQ_API_KEYS.' : undefined,
       service.httpStatus === 401 ? 'Ключ API недействителен (Unauthorized).' : undefined,
       `Время: ${service.lastChecked}`,
     ]
       .filter(Boolean)
       .join('\n');
 
+    await this.sendTelegram(msg);
+  }
+
+  /** Operator alert unrelated to a service error (a silent flow drop), with its own cooldown. */
+  async notify(key: string, message: string, cooldownMs = 24 * 3600 * 1000): Promise<boolean> {
+    const mapKey = `notify:${key}`;
+    const last = this.lastAlertAt.get(mapKey) ?? 0;
+    if (Date.now() - last < cooldownMs) return false;
+    this.lastAlertAt.set(mapKey, Date.now());
+    await this.sendTelegram(message);
+    return true;
+  }
+
+  private async sendTelegram(msg: string): Promise<void> {
+    const env = this.deps.env;
+    if (!env) return;
+    const botToken = env.TELEGRAM_BOT_TOKEN;
+    const chatId = env.RADAR_ADMIN_CHAT_ID ?? env.TELEGRAM_CHAT_ID;
+    if (!botToken || !chatId) return;
+    const fetchImpl = this.deps.fetchImpl ?? globalThis.fetch;
     try {
       const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
       await fetchImpl(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: msg,
-          disable_web_page_preview: true,
-        }),
+        body: JSON.stringify({ chat_id: chatId, text: msg, disable_web_page_preview: true }),
         signal: AbortSignal.timeout(10_000),
       });
     } catch {

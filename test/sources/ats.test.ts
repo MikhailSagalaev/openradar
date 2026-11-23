@@ -33,7 +33,7 @@ describe('ATS source adapter', () => {
   });
 
   it('reads Greenhouse boards with the company name and remote location', async () => {
-    const source = makeSource({ kind: 'ats', config: { provider: 'greenhouse', companies: ['gitlab'], maxAgeDays: 365 } });
+    const source = makeSource({ kind: 'ats', config: { provider: 'greenhouse', companies: ['gitlab'], maxAgeDays: 365, lightPoll: false, vendorPaceMs: 0 } });
     const urls: string[] = [];
     const leads = await adapter.poll!(source, served({ 'boards-api.greenhouse.io/v1/boards/gitlab/jobs': fixture('ats-greenhouse.json') }, urls));
     expect(urls[0]).toBe('https://boards-api.greenhouse.io/v1/boards/gitlab/jobs?content=true');
@@ -73,8 +73,23 @@ describe('ATS source adapter', () => {
     expect(leads).toHaveLength(2);
   });
 
+  it('reads Workday boards through the POST listing, with relative dates and a cleaned city', async () => {
+    const source = makeSource({ kind: 'ats', config: { provider: 'workday', companies: ['crowdstrike@wd5=CrowdStrike|crowdstrikecareers'], perCompany: 5, maxAgeDays: 365, vendorPaceMs: 0 } });
+    const leads = await adapter.poll!(source, served({ '/wday/cxs/crowdstrike/crowdstrikecareers/jobs': fixture('ats-workday.json') }));
+    expect(leads.length).toBeGreaterThan(3);
+    const lead = leads[0]!;
+    expect(lead).toMatchObject({ type: 'job', author: 'CrowdStrike', isRemote: false });
+    expect(lead.city).toBeUndefined();
+    expect(lead.externalId).toBe('workday:crowdstrike:R30431');
+    expect(lead.url).toBe('https://crowdstrike.wd5.myworkdayjobs.com/en-US/crowdstrikecareers/job/USA---Sunnyvale-CA/Engineer-III--Cloud---Authentication---Authorization--Hybrid-_R30431');
+    // "Posted 2 Days Ago" counts from the fixed now of the test context.
+    expect(lead.publishedAt).toBe('2026-10-27T00:00:00.000Z');
+    // "USA - Sunnyvale, CA" names the city; "2 Locations" stays unnamed.
+    expect(leads[1]!.city).toBe('Sunnyvale');
+  });
+
   it('goes round the company list a few at a time and survives a missing board', async () => {
-    const source = makeSource({ id: 'ats-round-robin', kind: 'ats', config: { provider: 'greenhouse', companies: 'gitlab, gone, bad/slug, other', perPoll: 2, maxAgeDays: 365 } });
+    const source = makeSource({ id: 'ats-round-robin', kind: 'ats', config: { provider: 'greenhouse', companies: 'gitlab, gone, bad/slug, other', perPoll: 2, maxAgeDays: 365, lightPoll: false, vendorPaceMs: 0 } });
     expect(companiesOf(source).map((c) => c.slug)).toEqual(['gitlab', 'gone', 'other']);
     const urls: string[] = [];
     const leads = await adapter.poll!(source, served({ '/boards/gitlab/': fixture('ats-greenhouse.json') }, urls));
@@ -85,7 +100,7 @@ describe('ATS source adapter', () => {
   });
 
   it('reads a board again when its answer stalls, and leaves an HTTP error alone', async () => {
-    const source = makeSource({ id: 'ats-stall', kind: 'ats', config: { provider: 'greenhouse', companies: ['gitlab', 'gone'], perPoll: 2, maxAgeDays: 365 } });
+    const source = makeSource({ id: 'ats-stall', kind: 'ats', config: { provider: 'greenhouse', companies: ['gitlab', 'gone'], perPoll: 2, maxAgeDays: 365, lightPoll: false, vendorPaceMs: 0 } });
     const urls: string[] = [];
     let stalls = 2;
     const ctx = {
@@ -106,7 +121,7 @@ describe('ATS source adapter', () => {
   it('gives a source its own longer timeout, within a ceiling', async () => {
     const seen: number[] = [];
     const ctx = { ...served({}), timeoutMs: 15_000 };
-    const spy = (timeoutMs: unknown) => makeSource({ id: `ats-t${String(timeoutMs)}`, kind: 'ats', config: { provider: 'greenhouse', companies: ['gitlab'], timeoutMs } });
+    const spy = (timeoutMs: unknown) => makeSource({ id: `ats-t${String(timeoutMs)}`, kind: 'ats', config: { provider: 'greenhouse', companies: ['gitlab'], timeoutMs, lightPoll: false, vendorPaceMs: 0 } });
     const realSetTimeout = globalThis.setTimeout;
     globalThis.setTimeout = ((fn: () => void, ms?: number) => { seen.push(ms ?? 0); return realSetTimeout(fn, 0); }) as typeof setTimeout;
     try {
@@ -119,7 +134,7 @@ describe('ATS source adapter', () => {
   });
 
   it('gives a board up after three stalled answers and goes on', async () => {
-    const source = makeSource({ id: 'ats-stuck', kind: 'ats', config: { provider: 'greenhouse', companies: ['gitlab'], maxAgeDays: 365 } });
+    const source = makeSource({ id: 'ats-stuck', kind: 'ats', config: { provider: 'greenhouse', companies: ['gitlab'], maxAgeDays: 365, lightPoll: false, vendorPaceMs: 0 } });
     let calls = 0;
     const ctx = { ...served({}), fetchImpl: async () => { calls++; throw new DOMException('This operation was aborted', 'AbortError'); } };
     expect(await adapter.poll!(source, ctx)).toEqual([]);
@@ -127,7 +142,7 @@ describe('ATS source adapter', () => {
   });
 
   it('keeps only postings of the last maxAgeDays', async () => {
-    const source = makeSource({ id: 'ats-age', kind: 'ats', config: { provider: 'greenhouse', companies: ['gitlab'], maxAgeDays: 1 } });
+    const source = makeSource({ id: 'ats-age', kind: 'ats', config: { provider: 'greenhouse', companies: ['gitlab'], maxAgeDays: 1, lightPoll: false, vendorPaceMs: 0 } });
     const ctx = { ...served({ 'boards-api.greenhouse.io': fixture('ats-greenhouse.json') }), now: () => new Date('2026-08-20T12:00:00Z') };
     const leads = await adapter.poll!(source, ctx);
     expect(leads.map((l) => l.publishedAt)).toEqual(['2026-08-19T16:52:27-04:00']);

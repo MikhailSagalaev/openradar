@@ -7,11 +7,11 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { escapeHtml, extractSkills, stripInvisible } from '../core/text.ts';
+import { escapeHtml, stripInvisible } from '../core/text.ts';
 import { emitLeadDeleted } from '../core/events.ts';
 import { renderRssFeed } from './feed.ts';
 import type { ParticipantRecord, UserRecord } from '../core/store.ts';
-import type { Lead, LeadStatus, LeadType, RawLead, SourceConfig, SourceKind, SourceRecord, Stats, Viewer, VoteSignal } from '../core/types.ts';
+import type { Lead, LeadStatus, LeadType, RawLead, SourceConfig, SourceHealth, SourceKind, SourceRecord, Stats, Viewer, VoteSignal } from '../core/types.ts';
 import type { EmployerSummary, ListLeadsOptions } from '../core/store.ts';
 import { pollAll, pollSource } from '../pipeline/poll.ts';
 import { ingestRawLead, type IngestDeps } from '../pipeline/ingest.ts';
@@ -29,12 +29,14 @@ import { remoteFromText } from '../core/extract.ts';
 import { DEFAULT_SESSION_ENV, TELEGRAM_SESSION_ENV_RE } from '../sources/telegram-account.ts';
 import { VERSION } from '../version.ts';
 import { githubOAuthConfigured, startGitHubOAuth, handleGitHubCallback, secureCookie } from './auth.ts';
-import { renderAdminPage, renderAdminUsersPage } from './admin.ts';
+import { renderAdminAnalyticsPage, renderAdminPage, renderAdminUsersPage } from './admin.ts';
 import { analyticsFromEnv, contentSecurityPolicy } from './analytics.ts';
-import { filterOptions, IT_SKILLS, matchesSavedFilters, parseFeedFilters, type FeedFilters } from './filters.ts';
+import { filterOptions, IT_SKILLS, parseFeedFilters, type FeedFilters } from './filters.ts';
 import { computeInsights, estimateMarket } from '../core/market.ts';
 import { COLLECTOR_MAX_ORDERS, COLLECTOR_PLATFORMS, collectedOrderToRaw, type CollectorPlatform, COLLECTOR_SITES, collectedVacancyToRaw, type CollectorSite } from './collector.ts';
 import { configureRateLimit, rateLimit } from './ratelimit.ts';
+import { countResearch, countTokenDay, countUsage, pathTemplate, tierOf, usageDim, viaFrom } from './usage.ts';
+import { createPopularCounters } from './popular.ts';
 import { indexCsv, openradarIndex } from '../research/index.ts';
 import { qualityFlagsOf } from '../core/quality.ts';
 import { explainLead } from '../core/explain.ts';
@@ -104,13 +106,15 @@ import {
   renderSourceQualityPage,
   renderFaqPage,
   renderLlmsTxt,
+  renderSkillMd,
+  renderSkillsIndex,
   renderRobotsTxt,
   assembleSitemaps,
   type SitemapBundle,
 } from './seo.ts';
 import { renderApiCatalog, renderOpenApi } from './openapi.ts';
-import { datasetCsv, liveReport, monthSnapshot } from '../research/service.ts';
-import { renderEmbedPage, renderMethodologyPage, renderReportPage, renderRolePage } from '../research/pages.ts';
+import { liveDatasetCsv, liveReport, monthSnapshot } from '../research/service.ts';
+import { renderAcademicPaperLatex, renderEmbedPage, renderMethodologyPage, renderReportPage, renderRolePage } from '../research/pages.ts';
 import { extractPreviewFromHtml, validateSubmissionUrl } from './preview.ts';
 import { renderLogo, LOGO_SVG, LOGO_ASSET_PATH, FAVICON_SVG } from './logo.ts';
 
@@ -148,7 +152,28 @@ function isGitHubAdmin(user: UserRecord | undefined, runtime: Runtime): boolean 
     .some((entry) => (/^\d+$/.test(entry) ? Number(entry) === user.githubId : entry === user.handle.toLowerCase()));
 }
 
-async function isAdmin(c: Context, runtime: Runtime): Promise<boolean> {
+/**
+ * Per-request memo of the auth lookups: the viewer, the session user and the admin check are
+ * each resolved at most once per request, however many handlers and middlewares ask.
+ */
+declare module 'hono' {
+  interface ContextVariableMap {
+    radarCurrentUser: Promise<UserRecord | undefined>;
+    radarIsAdmin: Promise<boolean>;
+    radarViewer: Promise<Viewer>;
+  }
+}
+
+function isAdmin(c: Context, runtime: Runtime): Promise<boolean> {
+  let memo = c.get('radarIsAdmin');
+  if (!memo) {
+    memo = resolveIsAdmin(c, runtime);
+    c.set('radarIsAdmin', memo);
+  }
+  return memo;
+}
+
+async function resolveIsAdmin(c: Context, runtime: Runtime): Promise<boolean> {
   const env = runtime.env;
   if (env.RADAR_ADMIN_GITHUB && isGitHubAdmin(await currentUser(c, runtime), runtime)) return true;
   if (!env.RADAR_ADMIN_TOKEN) return false;
@@ -175,11 +200,18 @@ async function canRead(c: Context, runtime: Runtime): Promise<boolean> {
 }
 
 /** GitHub-authenticated user of this session, if any. */
-async function currentUser(c: Context, runtime: Runtime): Promise<UserRecord | undefined> {
-  const sessionId = getCookie(c, 'radar_session');
-  if (!sessionId || !runtime.store.getUserBySession) return undefined;
-  const user = await runtime.store.getUserBySession(sessionId);
-  return user ?? undefined;
+function currentUser(c: Context, runtime: Runtime): Promise<UserRecord | undefined> {
+  let memo = c.get('radarCurrentUser');
+  if (!memo) {
+    memo = (async () => {
+      const sessionId = getCookie(c, 'radar_session');
+      if (!sessionId || !runtime.store.getUserBySession) return undefined;
+      const user = await runtime.store.getUserBySession(sessionId);
+      return user ?? undefined;
+    })();
+    c.set('radarCurrentUser', memo);
+  }
+  return memo;
 }
 
 /** A lead card that does not exist (or is not visible): the cached renderer signals 404 with it. */
@@ -305,7 +337,16 @@ function invalidProxyUrl(config: Record<string, unknown>): string | null {
  * Admin sees everything; a logged-in GitHub user is a member; everyone else
  * is a guest. In hub mode the tier sets the feed delay; guests never see contacts.
  */
-async function viewerFromRequest(c: Context, runtime: Runtime): Promise<Viewer> {
+function viewerFromRequest(c: Context, runtime: Runtime): Promise<Viewer> {
+  let memo = c.get('radarViewer');
+  if (!memo) {
+    memo = resolveViewer(c, runtime);
+    c.set('radarViewer', memo);
+  }
+  return memo;
+}
+
+async function resolveViewer(c: Context, runtime: Runtime): Promise<Viewer> {
   // A GitHub administrator is still a user: the profile keeps their subscriptions and Telegram.
   if (await isAdmin(c, runtime)) return { tier: 'admin', userId: (await currentUser(c, runtime))?.id };
   const moderators = parseModerators(runtime.env.RADAR_MODERATORS);
@@ -1028,6 +1069,29 @@ export function createApp(runtime: Runtime): Hono {
   // bodies and clients without Accept-Encoding, so nothing else changes.
   app.use('*', compress());
 
+  // Agent analytics (план A): one aggregated counter per API/v2 call that answered below 400.
+  // Counted after the response, fire-and-forget — an analytics failure never breaks the reply.
+  // Known blind spot: nginx microcache serves some guest GETs without reaching the origin.
+  const apiUsageCounter = async (c: Context, next: Next): Promise<void> => {
+    await next();
+    if (c.res.status >= 400 || !runtime.store.bumpApiUsage) return;
+    // The response is already decided: nothing here (a failing viewer lookup included) may change it.
+    try {
+      const viewer = await viewerFromRequest(c, runtime);
+      countUsage(runtime, usageDim({
+        surface: 'api',
+        detail: pathTemplate(c.req.path),
+        tier: tierOf(viewer),
+        ua: c.req.header('user-agent'),
+        via: viaFrom(c),
+      }));
+    } catch (error) {
+      runtime.logger.warn(`usage count failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+  app.use('/api/*', apiUsageCounter);
+  app.use('/v2/*', apiUsageCounter);
+
   app.use('*', async (c, next) => {
     // frame-ancestors governs framing; X-Frame-Options only when nothing may frame us.
     if (!analytics.yandexMetrikaId) c.header('X-Frame-Options', 'DENY');
@@ -1123,9 +1187,20 @@ export function createApp(runtime: Runtime): Hono {
       return undefined;
     }
   })();
+  const ogImageEn = (() => {
+    try {
+      return fs.readFileSync(path.resolve(process.cwd(), 'assets/og-en.png'));
+    } catch {
+      return undefined;
+    }
+  })();
   app.get('/og.png', (c) => {
     if (!ogImage) return c.notFound();
     return new Response(ogImage, { headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=86400' } });
+  });
+  app.get('/og-en.png', (c) => {
+    if (!ogImageEn) return c.notFound();
+    return new Response(ogImageEn, { headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=86400' } });
   });
 
   app.get(LOGO_ASSET_PATH, () => {
@@ -1260,54 +1335,20 @@ export function createApp(runtime: Runtime): Hono {
   });
 
   // Search suggestions and dynamic filter skills: dictionary skills of recent leads (up to 30),
-  // filtered for significance (count >= 2), refreshed every 10 minutes.
-  const popularCaches = new Map<string, { at: number; items: Array<{ name: string; count: number }> }>();
-  const popularSkills = async (filters: SavedFilters): Promise<Array<{ name: string; count: number }>> => {
-    const key = [filters.type ?? '', filters.it ? '1' : '0', filters.remote ? '1' : '0', filters.language ?? '', filters.budgetRub ?? ''].join('|');
-    const cached = popularCaches.get(key);
-    if (cached && Date.now() - cached.at < 10 * 60_000) return cached.items;
-    const recent = await runtime.store.getLeadsForFeed({
+  // filtered for significance (count >= 2), refreshed every 10 minutes. One recent-window fetch
+  // per 10 minutes serves every filter combination and the directions count (src/server/popular.ts).
+  const popular = createPopularCounters({
+    loadRecent: () => runtime.store.getLeadsForFeed({
       limit: 2000,
       createdAfter: new Date(Date.now() - 14 * 24 * 3600_000).toISOString(),
-    });
-    const scope: SavedFilters = { type: filters.type, it: filters.it, remote: filters.remote, language: filters.language, budgetRub: filters.budgetRub };
-    const counts = new Map<string, number>();
-    for (const lead of recent.filter((lead) => matchesSavedFilters(lead, scope))) {
-      const skills = lead.skills?.length ? lead.skills : extractSkills(lead.title, lead.text);
-      for (const skill of skills) {
-        counts.set(skill, (counts.get(skill) ?? 0) + 1);
-      }
-    }
-    const items = [...counts.entries()]
-      .filter(([, count]) => count >= 2)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 30)
-      .map(([name, count]) => ({ name, count }));
-    popularCaches.set(key, { at: Date.now(), items });
-    return items;
-  };
-
-  let directionsCache: { at: number; items: Array<{ slug: string; count: number }> } | undefined;
+    }),
+  });
+  const popularSkills = popular.popularSkills;
   const popularDirections = async (lang: SupportedLang): Promise<Array<{ slug: string; label: string; count?: number }>> => {
-    if (directionsCache && Date.now() - directionsCache.at < 10 * 60_000) {
-      return directionsCache.items.map((i) => ({ slug: i.slug, label: roleLabel(i.slug, lang), count: i.count || undefined }));
-    }
-    const recent = await runtime.store.getLeadsForFeed({
-      limit: 2000,
-      createdAfter: new Date(Date.now() - 14 * 24 * 3600_000).toISOString(),
-    });
-    const counts = new Map<string, number>();
-    for (const lead of recent) {
-      if (lead.direction) {
-        counts.set(lead.direction, (counts.get(lead.direction) ?? 0) + 1);
-      }
-    }
-    const items = ROLES.map((r) => ({
-      slug: r.slug,
-      count: counts.get(r.slug) ?? 0,
-    })).sort((a, b) => b.count - a.count);
-    directionsCache = { at: Date.now(), items };
-    return items.map((i) => ({ slug: i.slug, label: roleLabel(i.slug, lang), count: i.count || undefined }));
+    const counts = await popular.directionCounts();
+    return ROLES.map((r) => ({ slug: r.slug, count: counts.get(r.slug) ?? 0 }))
+      .sort((a, b) => b.count - a.count)
+      .map((i) => ({ slug: i.slug, label: roleLabel(i.slug, lang), count: i.count || undefined }));
   };
 
   // Public feeds: generous per-IP limits, so a scraper loop cannot pin the database.
@@ -1328,6 +1369,20 @@ export function createApp(runtime: Runtime): Hono {
       throw error;
     });
     statsCache = { at: Date.now(), value };
+    return value;
+  };
+
+  // Source health aggregates two weeks of runs; scanning it on every feed request or
+  // sources page view burns hundreds of milliseconds of Postgres CPU. A 60-second cache
+  // keeps the dashboard responsive while keeping database load near zero.
+  let sourceHealthCache: { at: number; value: Promise<SourceHealth[]> } | undefined;
+  const cachedSourceHealth = (): Promise<SourceHealth[]> => {
+    if (sourceHealthCache && Date.now() - sourceHealthCache.at < 60_000) return sourceHealthCache.value;
+    const value = runtime.store.getSourceHealth().catch((error) => {
+      sourceHealthCache = undefined;
+      throw error;
+    });
+    sourceHealthCache = { at: Date.now(), value };
     return value;
   };
 
@@ -1380,9 +1435,10 @@ export function createApp(runtime: Runtime): Hono {
   };
   // Median vacancy pay by role over 30 days: a salary far below it is shown as «проверить».
   let salaryMediansAt = 0;
+  let refreshingMedians = false;
   const refreshSalaryMedians = async (): Promise<void> => {
-    if (Date.now() - salaryMediansAt < 30 * 60_000) return;
-    salaryMediansAt = Date.now();
+    if (Date.now() - salaryMediansAt < 30 * 60_000 || refreshingMedians) return;
+    refreshingMedians = true;
     try {
       const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
       // The database takes every vacancy of the window; a listing stops at 5000, about one day of the hub.
@@ -1391,13 +1447,17 @@ export function createApp(runtime: Runtime): Hono {
       } else {
         setSalaryMedians(computeSalaryMedians(await runtime.store.listLeads({ type: 'job', limit: 5000, createdAfter: since })));
       }
+      salaryMediansAt = Date.now();
     } catch (error) {
       runtime.logger.warn('salary medians failed', { error: String(error) });
+    } finally {
+      refreshingMedians = false;
     }
   };
+  void refreshSalaryMedians();
   app.get('/', feedLimit, async (c) => {
     if (!await canRead(c, runtime)) return c.redirect('/login');
-    await refreshSalaryMedians();
+    void refreshSalaryMedians();
     const lang = resolveLang(c);
     const rawStatus = c.req.query('status') ?? '';
     const status = [
@@ -1430,7 +1490,7 @@ export function createApp(runtime: Runtime): Hono {
     }
     const [stats, health, fetched] = await Promise.all([
       cachedStats(),
-      runtime.store.getSourceHealth(),
+      cachedSourceHealth(),
       // One extra lead tells whether a next page exists.
       leadsFor(runtime, viewer, {
         limit: pageSize + 1,
@@ -1613,7 +1673,7 @@ export function createApp(runtime: Runtime): Hono {
     if (!await isAdmin(c, runtime)) return c.redirect('/login?returnTo=/admin');
     const [stats, health, admin] = await Promise.all([
       cachedStats(),
-      runtime.store.getSourceHealth(),
+      cachedSourceHealth(),
       runtime.store.getAdminStats ? runtime.store.getAdminStats(14) : undefined,
     ]);
     if (!admin) return c.text('This store has no admin statistics', 501);
@@ -1645,6 +1705,15 @@ export function createApp(runtime: Runtime): Hono {
         subscriptions: data.subscriptions,
       }),
     );
+  });
+
+  /** The agent-usage counters of plan A: aggregated day cells, no per-call rows. */
+  app.get('/admin/analytics', async (c) => {
+    if (!await isAdmin(c, runtime)) return c.redirect('/login?returnTo=/admin/analytics');
+    const data = runtime.store.agentUsageStats ? await runtime.store.agentUsageStats(14) : undefined;
+    if (!data) return c.text('This store has no agent usage stats', 501);
+    const modelPay = await runtime.store.modelPayStats?.(14).catch(() => undefined);
+    return c.html(renderAdminAnalyticsPage({ version: VERSION, auth: await getAuthDisplay(c, runtime), lang: resolveLang(c), ...data, modelPay }));
   });
 
   /** Each account's web key, to put a name on a line of the rating. */
@@ -2049,7 +2118,7 @@ export function createApp(runtime: Runtime): Hono {
     const admin = await isAdmin(c, runtime);
     return c.html(
       renderSourcesPage({
-        health: await runtime.store.getSourceHealth(),
+        health: await cachedSourceHealth(),
         version: VERSION,
         auth: await getAuthDisplay(c, runtime),
         lang,
@@ -2236,7 +2305,7 @@ export function createApp(runtime: Runtime): Hono {
     const source = await runtime.store.getSource(c.req.param('id'));
     if (!source) return c.html(renderNotFound(VERSION, lang), 404);
     const viewer = await viewerFromRequest(c, runtime);
-    const allHealth = await runtime.store.getSourceHealth();
+    const allHealth = await cachedSourceHealth();
     const health = allHealth.find((item) => item.source.id === source.id) ?? {
       source,
       last24h: {
@@ -2278,7 +2347,7 @@ export function createApp(runtime: Runtime): Hono {
 
   app.get('/leads/:id', async (c) => {
     if (!await canRead(c, runtime)) return c.redirect('/login');
-    await refreshSalaryMedians();
+    void refreshSalaryMedians();
     const lang = resolveLang(c);
     const viewer = await viewerFromRequest(c, runtime);
     const id = c.req.param('id');
@@ -2491,7 +2560,7 @@ export function createApp(runtime: Runtime): Hono {
 
   app.get('/api/sources/health', async (c) => {
     if (!await canRead(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
-    const health = await runtime.store.getSourceHealth();
+    const health = await cachedSourceHealth();
     return c.json(
       health.map((item) => ({
         ...item,
@@ -2713,8 +2782,18 @@ export function createApp(runtime: Runtime): Hono {
     if (!body || typeof body !== 'object') {
       return c.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, 400);
     }
-    const { handleMcpRequest } = await import('../mcp/server.ts');
+    const { handleMcpRequest, mcpUsageDetail } = await import('../mcp/server.ts');
     const viewer = agent ? await viewerForUser(runtime, agent.id) : await viewerFromRequest(c, runtime);
+    // Agent analytics: every authorized JSON-RPC call counts; tools/call also names the tool.
+    // Labels come from an allowlist of methods and tool names, never raw from the body.
+    countUsage(runtime, usageDim({
+      surface: 'mcp',
+      detail: mcpUsageDetail(body),
+      tier: agent ? 'token' : tierOf(viewer),
+      ua: c.req.header('user-agent'),
+      via: viaFrom(c),
+    }));
+    if (agent) countTokenDay(runtime, agent.id);
     const manageUrl = `${publicBaseUrl(c, runtime)}/me#subscriptions`;
     const resp = await handleMcpRequest(body, {
       subscriptions: agent
@@ -2763,6 +2842,9 @@ export function createApp(runtime: Runtime): Hono {
         if (result) await recordWebSignal(runtime, id, agent.id, result.myVote ?? null);
         return { ok: Boolean(result), myVote: result?.myVote ?? undefined };
       },
+    }, {
+      // Write confirmations are bound to the caller: another caller cannot confirm this token.
+      identity: agent ? `agent:${agent.id}` : viewer.userId !== undefined ? `user:${viewer.userId}` : viewer.pubkey ? `key:${viewer.pubkey}` : 'guest',
     });
     if (resp === null) return c.body(null, 202);
     return c.json(resp);
@@ -3034,7 +3116,10 @@ export function createApp(runtime: Runtime): Hono {
   app.get('/extension/connect', async (c) => {
     const redirectUri = c.req.query('redirect_uri') ?? '';
     if (!EXTENSION_REDIRECT_RE.test(redirectUri)) return c.text('Bad redirect_uri', 400);
-    const state = c.req.query('state') ?? '';
+    let state = c.req.query('state') ?? '';
+    if (!state && redirectUri.startsWith('chrome-extension://')) {
+      state = randomUUID();
+    }
     if (!EXTENSION_STATE_RE.test(state)) return c.text('Bad state', 400);
     if (!githubOAuthConfigured(runtime) || !runtime.store.saveExtensionToken) return c.text('GitHub sign-in is not configured on this server', 501);
     const user = await currentUser(c, runtime);
@@ -3481,11 +3566,13 @@ export function createApp(runtime: Runtime): Hono {
   });
   app.get('/research/index.json', async (c) => {
     const index = await openradarIndex(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+    countResearch(c, runtime, 'index.json');
     // The index is cached for an hour server-side; clients may hold it for 10 minutes.
     return c.json(index, 200, { 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=600' });
   });
   app.get('/research/index.csv', async (c) => {
     const index = await openradarIndex(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+    countResearch(c, runtime, 'index.csv');
     return c.body(indexCsv(index), 200, {
       'content-type': 'text/csv; charset=utf-8',
       'content-disposition': 'attachment; filename="openradar-index.csv"',
@@ -3517,14 +3604,34 @@ export function createApp(runtime: Runtime): Hono {
   app.get('/research/methodology', async (c) => toEnglish(c, '/research/methodology') ?? c.html(renderMethodologyPage({ baseUrl: seoBaseUrl(c), version: VERSION, auth: await getAuthDisplay(c, runtime) })));
   app.get('/research/report.json', async (c) => {
     const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+    countResearch(c, runtime, 'report.json');
     // The report itself is rebuilt at most every 15 minutes; let clients hold it for 5.
     return c.json(report, 200, { 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=300' });
   });
   app.get('/research/dataset.csv', async (c) => {
-    const { records } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
-    return c.body(datasetCsv(records), 200, {
+    const csv = await liveDatasetCsv(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+    countResearch(c, runtime, 'dataset.csv');
+    return c.body(csv, 200, {
       'content-type': 'text/csv; charset=utf-8',
       'content-disposition': 'attachment; filename="openradar-dataset.csv"',
+      'access-control-allow-origin': '*',
+      'cache-control': 'public, max-age=300',
+    });
+  });
+  app.get('/research/paper.tex', async (c) => {
+    const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+    return c.body(renderAcademicPaperLatex(report, seoBaseUrl(c), 'ru'), 200, {
+      'content-type': 'application/x-tex; charset=utf-8',
+      'content-disposition': 'attachment; filename="openradar-research-ru.tex"',
+      'access-control-allow-origin': '*',
+      'cache-control': 'public, max-age=300',
+    });
+  });
+  app.get('/en/research/paper.tex', async (c) => {
+    const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+    return c.body(renderAcademicPaperLatex(report, seoBaseUrl(c), 'en'), 200, {
+      'content-type': 'application/x-tex; charset=utf-8',
+      'content-disposition': 'attachment; filename="openradar-research-en.tex"',
       'access-control-allow-origin': '*',
       'cache-control': 'public, max-age=300',
     });
@@ -3554,6 +3661,17 @@ export function createApp(runtime: Runtime): Hono {
   );
   app.get('/en/llms.txt', (c) =>
     c.text(renderLlmsTxt(seoBaseUrl(c), 'en'), 200, { 'content-type': 'text/plain; charset=utf-8' }),
+  );
+  // The ready-made skill pack for visiting agents (план B): a stable URL with the
+  // skills' essence and install commands, plus the machine-readable manifest.
+  app.get('/skill.md', (c) =>
+    c.text(renderSkillMd(seoBaseUrl(c)), 200, {
+      'content-type': 'text/markdown; charset=utf-8',
+      'cache-control': 'public, max-age=3600',
+    }),
+  );
+  app.get('/.well-known/skills/index.json', (c) =>
+    c.json(renderSkillsIndex(seoBaseUrl(c)), 200, { 'cache-control': 'public, max-age=3600' }),
   );
   // Machine-readable API description: OpenAPI 3.1 plus the RFC 9727 catalog pointing at it.
   app.get('/openapi.json', (c) =>
@@ -3592,55 +3710,88 @@ export function createApp(runtime: Runtime): Hono {
     at: number;
     participants: Array<{ shortPubkey: string; name?: string; about?: string; handle?: string; posts: number; points: number; tier: string }>;
     topSources: Array<{ title: string; leads: number; href?: string }>;
+    totalWeekLeads: number;
   } | undefined;
   app.get('/network', rateLimit({ windowMs: 60_000, max: 60 }), async (c) => {
     const lang = resolveLang(c);
     if (!networkCache || Date.now() - networkCache.at >= 10 * 60_000) {
       const since = new Date(Date.now() - RATING_WINDOW_MS).toISOString();
-      const sums = [...(await runtime.store.sumLedger(since)).entries()]
-        .filter(([pubkey, points]) => /^[0-9a-f]{64}$/.test(pubkey) && points > 0)
-        .sort((a, b) => b[1] - a[1])
+      const ledgerSums = await runtime.store.sumLedger(since);
+      const recentObs = await runtime.store.listObservationsSince(since);
+      const obsCounts = new Map<string, number>();
+      for (const o of recentObs) {
+        if (/^[0-9a-f]{64}$/.test(o.pubkey)) {
+          obsCounts.set(o.pubkey, (obsCounts.get(o.pubkey) ?? 0) + 1);
+        }
+      }
+      const allPubkeys = new Set([...ledgerSums.keys(), ...obsCounts.keys()]);
+      const ranked = [...allPubkeys]
+        .filter((pubkey) => /^[0-9a-f]{64}$/.test(pubkey))
+        .map((pubkey) => ({
+          pubkey,
+          points: ledgerSums.get(pubkey) ?? 0,
+          posts: obsCounts.get(pubkey) ?? 0,
+        }))
+        .filter((p) => p.points > 0 || p.posts > 0)
+        .sort((a, b) => b.points - a.points || b.posts - a.posts)
         .slice(0, 30);
       const moderators = parseModerators(runtime.env.RADAR_MODERATORS);
       const participants = [];
       const accounts = await accountsByKey();
-      for (const [pubkey, points] of sums) {
+      for (const item of ranked) {
+        const pubkey = item.pubkey;
         const participant = await runtime.store.getParticipant(pubkey);
         const account = accounts.get(pubkey) ?? (participant?.githubUserId ? await runtime.store.getUserById(participant.githubUserId) ?? undefined : undefined);
         const shown = account && account.publicProfile !== false ? account : undefined;
-        const posts = await runtime.store.countObservationsByPubkey(pubkey);
+        const posts = item.posts || (await runtime.store.countObservationsByPubkey(pubkey));
         const profileName = participant?.profile?.name;
         const profileAbout = participant?.profile?.about;
         participants.push({
           shortPubkey: `${pubkey.slice(0, 8)}…${pubkey.slice(-4)}`,
           name: typeof profileName === 'string' && profileName.trim() ? profileName.trim() : undefined,
           about: typeof profileAbout === 'string' && profileAbout.trim() ? profileAbout.trim() : undefined,
-          points,
+          points: item.points,
           posts,
           handle: shown?.handle,
-          tier: tierFor({ rating: points, moderator: moderators.has(pubkey), githubLinked: Boolean(participant?.githubUserId) }),
+          tier: tierFor({ rating: item.points, moderator: moderators.has(pubkey), githubLinked: Boolean(participant?.githubUserId) }),
         });
       }
-      const weekLeads = await feedFor(runtime, { tier: 'guest' }, { limit: 3000, createdAfter: new Date(Date.now() - 7 * 24 * 3600_000).toISOString() });
-      const bySource = new Map<string, number>();
-      for (const lead of weekLeads) {
-        const id = lead.sourceRef ? `${lead.sourceRef.platform}:${lead.sourceRef.channel}` : lead.sourceId;
-        bySource.set(id, (bySource.get(id) ?? 0) + 1);
+      let topSources: Array<{ title: string; leads: number; href?: string }> = [];
+      let totalWeekLeads = 0;
+      if (runtime.store.getAdminStats) {
+        const adminStats = await runtime.store.getAdminStats(7);
+        totalWeekLeads = adminStats.days.reduce((sum, d) => sum + d.gigs + d.jobs, 0);
+        topSources = adminStats.sources
+          .filter((s) => s.inserted7d > 0)
+          .slice(0, 7)
+          .map((s) => ({
+            title: s.title,
+            leads: s.inserted7d,
+            href: `/sources/${s.sourceId}`,
+          }));
+      } else {
+        const weekLeads = await feedFor(runtime, { tier: 'guest' }, { limit: 10_000, createdAfter: new Date(Date.now() - 7 * 24 * 3600_000).toISOString() });
+        totalWeekLeads = weekLeads.length;
+        const bySource = new Map<string, number>();
+        for (const lead of weekLeads) {
+          const id = lead.sourceRef ? `${lead.sourceRef.platform}:${lead.sourceRef.channel}` : lead.sourceId;
+          bySource.set(id, (bySource.get(id) ?? 0) + 1);
+        }
+        const sources = await runtime.store.listSources();
+        const titleById = new Map(sources.map((s) => [s.id, s]));
+        topSources = [...bySource.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 7)
+          .map(([key, leads]) => {
+            const source = titleById.get(key) ?? sources.find((s) => `${s.kind}:${s.id}` === key);
+            return {
+              title: source?.title ?? sources.find((s) => s.id === key)?.title ?? key,
+              leads,
+              href: source ? `/sources/${source.id}` : undefined,
+            };
+          });
       }
-      const sources = await runtime.store.listSources();
-      const titleById = new Map(sources.map((s) => [s.id, s]));
-      const topSources = [...bySource.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 7)
-        .map(([key, leads]) => {
-          const source = titleById.get(key) ?? sources.find((s) => `${s.kind}:${s.id}` === key);
-          return {
-            title: source?.title ?? sources.find((s) => s.id === key)?.title ?? key,
-            leads,
-            href: source ? `/sources/${source.id}` : undefined,
-          };
-        });
-      networkCache = { at: Date.now(), participants, topSources };
+      networkCache = { at: Date.now(), participants, topSources, totalWeekLeads };
     }
     const body = renderNetworkPage({
       baseUrl: seoBaseUrl(c),
@@ -3649,6 +3800,7 @@ export function createApp(runtime: Runtime): Hono {
       lang,
       participants: networkCache.participants,
       sources: networkCache.topSources,
+      totalWeekLeads: networkCache.totalWeekLeads,
       windowDays: RATING_WINDOW_MS / 86_400_000,
     });
     c.header('Cache-Control', 'private, no-cache');

@@ -1,6 +1,6 @@
 import type { SourceConfig, SourceKind } from '../core/types.ts';
 import { ATS_COMPANIES } from './ats-companies.ts';
-import { CAREER_SITE_PRESETS, HH_EMPLOYER_PRESETS } from './career-sites.ts';
+import { CAREER_SITE_PRESETS, HH_EMPLOYER_PRESETS, HH_NAME_EMPLOYER_PRESETS } from './career-sites.ts';
 import { JSON_BOARD_PRESETS } from './json-boards.ts';
 
 export interface SourcePreset {
@@ -515,6 +515,26 @@ const BASE_PRESETS: SourcePreset[] = [
     },
   },
   {
+    id: 'ats-workday',
+    kind: 'ats',
+    title: 'Карьерные страницы компаний — Workday',
+    description: 'Публичное API системы найма Workday: вакансии крупнейших работодателей прямо с их карьерных страниц, без ключа',
+    config: {
+      provider: 'workday',
+      perPoll: 2,
+      maxAgeDays: 30,
+      companies: [
+        'nvidia@wd5=NVIDIA|NVIDIAExternalCareerSite',
+        'boeing@wd1=Boeing|EXTERNAL_CAREERS',
+        'astrazeneca@wd3=AstraZeneca|Careers',
+        'pfizer@wd1=Pfizer|PfizerCareers',
+        'unilever@wd3=Unilever|Unilever_Experienced_Professionals',
+        'geaerospace@wd5=GE Aerospace|GE_ExternalSite',
+        'ttmtech@wd5=TTM Technologies|jobs',
+      ],
+    },
+  },
+  {
     id: 'rt-solar',
     kind: 'sitemap',
     title: 'RT-Solar — Вакансии',
@@ -938,6 +958,69 @@ const BASE_PRESETS: SourcePreset[] = [
     },
   },
   {
+    id: 'tg-ya-jobs',
+    kind: 'telegram',
+    title: 'Telegram — @ya_jobs: Яндекс нанимает',
+    description: 'Корпоративный канал Яндекса с вакансиями для разработчиков',
+    config: {
+      channel: 'ya_jobs',
+    },
+  },
+  {
+    id: 'tg-yandexcareers',
+    kind: 'telegram',
+    title: 'Telegram — @yandexcareers: YandexCareers',
+    description: 'Канал Яндекс Карьеры с вакансиями Яндекса',
+    config: {
+      channel: 'yandexcareers',
+    },
+  },
+  {
+    id: 'tg-mts-digital',
+    kind: 'telegram',
+    title: 'Telegram — @mts_digital: MTS Digital',
+    description: 'Официальный канал МТС Digital: вакансии и новости технологических команд',
+    config: {
+      channel: 'mts_digital',
+    },
+  },
+  {
+    id: 'tg-sibur-career',
+    kind: 'telegram',
+    title: 'Telegram — @sibur_career: СИБУР',
+    description: 'Карьерный канал СИБУРа: вакансии и стажировки',
+    config: {
+      channel: 'sibur_career',
+    },
+  },
+  {
+    id: 'tg-lamoda-tech',
+    kind: 'telegram',
+    title: 'Telegram — @lamoda_tech: Lamoda Tech',
+    description: 'Корпоративный канал Lamoda Tech с IT-вакансиями',
+    config: {
+      channel: 'lamoda_tech',
+    },
+  },
+  {
+    id: 'tg-distantsiya',
+    kind: 'telegram',
+    title: 'Telegram — @distantsiya: Дистанция',
+    description: 'Публичный TG-канал с удалёнными вакансиями',
+    config: {
+      channel: 'distantsiya',
+    },
+  },
+  {
+    id: 'tg-remote-job-ru',
+    kind: 'telegram',
+    title: 'Telegram — @remote_job_ru: удалённая работа',
+    description: 'Публичный TG-канал с удалённой работой для IT-специалистов',
+    config: {
+      channel: 'remote_job_ru',
+    },
+  },
+  {
     id: 'tg-stagirovky',
     kind: 'telegram',
     title: 'Telegram — @stagirovky: стажировки',
@@ -1057,6 +1140,53 @@ const BASE_PRESETS: SourcePreset[] = [
   ...CAREER_SITE_PRESETS,
   ...JSON_BOARD_PRESETS,
   ...HH_EMPLOYER_PRESETS,
+  ...HH_NAME_EMPLOYER_PRESETS,
+  { id: 'tg-freeit-job', kind: 'telegram', title: 'Telegram — @freeIT_job: IT-вакансии', description: 'Публичный TG-канал с IT-вакансиями', config: { channel: 'freeIT_job' } },
+  { id: 'tg-frontend-jobs-vakansii', kind: 'telegram', title: 'Telegram — @frontend_jobs_vakansii: Frontend-вакансии', description: 'Публичный TG-канал с вакансиями для Frontend-разработчиков', config: { channel: 'frontend_jobs_vakansii' } },
+  { id: 'tg-python-vakansii-jobs', kind: 'telegram', title: 'Telegram — @python_vakansii_jobs: Python-вакансии', description: 'Публичный TG-канал с вакансиями для Python-разработчиков', config: { channel: 'python_vakansii_jobs' } },
+  { id: 'tg-java-jobs-vakansii', kind: 'telegram', title: 'Telegram — @java_jobs_vakansii: Java-вакансии', description: 'Публичный TG-канал с вакансиями для Java-разработчиков', config: { channel: 'java_jobs_vakansii' } },
+  { id: 'tg-golang-go-jobs-vakansii', kind: 'telegram', title: 'Telegram — @golang_go_jobs_vakansii: Golang-вакансии', description: 'Публичный TG-канал с вакансиями для Golang-разработчиков', config: { channel: 'golang_go_jobs_vakansii' } },
+  { id: 'tg-php-jobs-vakansii', kind: 'telegram', title: 'Telegram — @php_jobs_vakansii: PHP-вакансии', description: 'Публичный TG-канал с вакансиями для PHP-разработчиков', config: { channel: 'php_jobs_vakansii' } },
+  { id: 'tg-vakansii-1s-programmist', kind: 'telegram', title: 'Telegram — @vakansii_1s_programmist: 1C-вакансии', description: 'Публичный TG-канал с вакансиями для 1С-разработчиков', config: { channel: 'vakansii_1s_programmist' } },
+  { id: 'tg-c-dotnet-jobs-vakansii', kind: 'telegram', title: 'Telegram — @c_dotnet_jobs_vakansii: .NET-вакансии', description: 'Публичный TG-канал с вакансиями для .NET-разработчиков', config: { channel: 'c_dotnet_jobs_vakansii' } },
+  { id: 'tg-cpp-jobs-vakansii', kind: 'telegram', title: 'Telegram — @cpp_jobs_vakansii: C++ вакансии', description: 'Публичный TG-канал с вакансиями для C++ разработчиков', config: { channel: 'cpp_jobs_vakansii' } },
+  { id: 'tg-node-js-jobs-vakansii', kind: 'telegram', title: 'Telegram — @node_js_jobs_vakansii: Node.js вакансии', description: 'Публичный TG-канал с вакансиями для Node.js разработчиков', config: { channel: 'node_js_jobs_vakansii' } },
+  { id: 'tg-unity-jobs-vakansii', kind: 'telegram', title: 'Telegram — @unity_jobs_vakansii: Unity вакансии', description: 'Публичный TG-канал с вакансиями для Unity разработчиков', config: { channel: 'unity_jobs_vakansii' } },
+  { id: 'tg-devops-jobs-vakansii', kind: 'telegram', title: 'Telegram — @devops_jobs_vakansii: DevOps вакансии', description: 'Публичный TG-канал с вакансиями для DevOps инженеров', config: { channel: 'devops_jobs_vakansii' } },
+  { id: 'tg-qa-testirovshchik-jobs-vakansii', kind: 'telegram', title: 'Telegram — @qa_testirovshchik_jobs_vakansii: QA вакансии', description: 'Публичный TG-канал с вакансиями для QA инженеров', config: { channel: 'qa_testirovshchik_jobs_vakansii' } },
+  { id: 'tg-ios-swift-jobs-vakansii', kind: 'telegram', title: 'Telegram — @ios_swift_jobs_vakansii: iOS вакансии', description: 'Публичный TG-канал с вакансиями для iOS разработчиков', config: { channel: 'ios_swift_jobs_vakansii' } },
+  { id: 'tg-vakansii-android-jobs', kind: 'telegram', title: 'Telegram — @vakansii_android_jobs: Android вакансии', description: 'Публичный TG-канал с вакансиями для Android разработчиков', config: { channel: 'vakansii_android_jobs' } },
+  { id: 'tg-flutter-dart-jobs-vakansii', kind: 'telegram', title: 'Telegram — @flutter_dart_jobs_vakansii: Flutter вакансии', description: 'Публичный TG-канал с вакансиями для Flutter разработчиков', config: { channel: 'flutter_dart_jobs_vakansii' } },
+  { id: 'tg-data-engineer-vakansii', kind: 'telegram', title: 'Telegram — @data_engineer_vakansii: Data Engineer вакансии', description: 'Публичный TG-канал с вакансиями для Data Engineer-ов', config: { channel: 'data_engineer_vakansii' } },
+  { id: 'tg-data-science-ml-vakansii', kind: 'telegram', title: 'Telegram — @data_science_ml_vakansii: Data Science вакансии', description: 'Публичный TG-канал с вакансиями в Data Science и ML', config: { channel: 'data_science_ml_vakansii' } },
+  { id: 'tg-analitik-dannyh-vakansii', kind: 'telegram', title: 'Telegram — @analitik_dannyh_vakansii: Аналитик данных', description: 'Публичный TG-канал с вакансиями для аналитиков данных', config: { channel: 'analitik_dannyh_vakansii' } },
+  { id: 'tg-sistemny-analitik-vakansii', kind: 'telegram', title: 'Telegram — @sistemny_analitik_vakansii: Системный аналитик', description: 'Публичный TG-канал с вакансиями для системных аналитиков', config: { channel: 'sistemny_analitik_vakansii' } },
+  { id: 'tg-biznes-analitik-vakansii', kind: 'telegram', title: 'Telegram — @biznes_analitik_vakansii: Бизнес-аналитик', description: 'Публичный TG-канал с вакансиями для бизнес-аналитиков', config: { channel: 'biznes_analitik_vakansii' } },
+  { id: 'tg-product-analyst-vakansii', kind: 'telegram', title: 'Telegram — @product_analyst_vakansii: Продуктовый аналитик', description: 'Публичный TG-канал с вакансиями для продуктовых аналитиков', config: { channel: 'product_analyst_vakansii' } },
+  { id: 'tg-project-manager-pm-vakansii', kind: 'telegram', title: 'Telegram — @project_manager_pm_vakansii: Project Manager', description: 'Публичный TG-канал с вакансиями для Project Manager-ов', config: { channel: 'project_manager_pm_vakansii' } },
+  { id: 'tg-product-manager-vakansii', kind: 'telegram', title: 'Telegram — @product_manager_vakansii: Product Manager', description: 'Публичный TG-канал с вакансиями для Product Manager-ов', config: { channel: 'product_manager_vakansii' } },
+  { id: 'tg-hr-it-rekruter-jobs-vakansii', kind: 'telegram', title: 'Telegram — @hr_it_rekruter_jobs_vakansii: HR/Recruiter', description: 'Публичный TG-канал с вакансиями для HR и IT-рекрутеров', config: { channel: 'hr_it_rekruter_jobs_vakansii' } },
+  // Tilda, No-code, Web design & Freelance gigs cluster
+  { id: 'tg-tilda-experts', kind: 'telegram', title: 'Telegram — @tilda_experts: Tilda Experts — вакансии и проекты', description: 'Официальный публичный канал сообщества экспертов Tilda', config: { channel: 'tilda_experts' } },
+  { id: 'tg-tildoshnaya', kind: 'telegram', title: 'Telegram — @tildoshnaya: Тильдошная — дизайн и разработка', description: 'Публичный канал и заказы сообщества Тильдошная', config: { channel: 'tildoshnaya' } },
+  { id: 'tg-mari-vakansii', kind: 'telegram', title: 'Telegram — @mari_vakansii: Мари про вакансии — инфобизнес и сайты', description: 'Заказы и вакансии на сайты, лендинги и инфобизнес', config: { channel: 'mari_vakansii' } },
+  { id: 'tg-job-webdev', kind: 'telegram', title: 'Telegram — @job_webdev: Работа — вёрстка и фронтенд', description: 'Заказы и вакансии по веб-разработке, сайтам и вёрстке', config: { channel: 'job_webdev' } },
+  { id: 'tg-design-jobs-uxui', kind: 'telegram', title: 'Telegram — @design_jobs_uxui: UX/UI & Web Design', description: 'Вакансии и проекты по веб-дизайну и интерфейсам', config: { channel: 'design_jobs_uxui' } },
+  { id: 'tg-figma-jobs', kind: 'telegram', title: 'Telegram — @figma_jobs: Figma & UI/UX вакансии', description: 'Канал вакансий и заказов для дизайнеров в Figma', config: { channel: 'figma_jobs' } },
+  { id: 'tg-dribbble-jobs', kind: 'telegram', title: 'Telegram — @dribbble_jobs: Дизайн и креатив', description: 'Вакансии для веб- и графических дизайнеров', config: { channel: 'dribbble_jobs' } },
+  { id: 'tg-freelance-rabota', kind: 'telegram', title: 'Telegram — @freelance_rabota: Фриланс: проекты и заказы', description: 'Проектная работа, фриланс-заказы и разработка под ключ', config: { channel: 'freelance_rabota' } },
+  { id: 'tg-zakazy-freelance', kind: 'telegram', title: 'Telegram — @zakazy_freelance: Заказы фриланс', description: 'Биржа фриланс-заказов и задач на разработку', config: { channel: 'zakazy_freelance' } },
+  { id: 'tg-nocode-jobs', kind: 'telegram', title: 'Telegram — @nocode_jobs: No-Code вакансии и проекты', description: 'Вакансии и заказы по разработке без кода (Tilda, Webflow, Bubble)', config: { channel: 'nocode_jobs' } },
+  { id: 'tg-webflow-ru', kind: 'telegram', title: 'Telegram — @webflow_ru: Webflow Russia', description: 'Заказы и вакансии сообщества Webflow и no-code веб-разработки', config: { channel: 'webflow_ru' } },
+  { id: 'tg-digital-rabota', kind: 'telegram', title: 'Telegram — @digital_rabota: Digital & IT вакансии', description: 'Вакансии и проекты в диджитал-агентствах и IT-компаниях', config: { channel: 'digital_rabota' } },
+  { id: 'tg-distantsiya', kind: 'telegram', title: 'Telegram — @distantsiya: Дистанция — удаленная работа', description: 'Удаленная работа, фриланс и проектные задачи', config: { channel: 'distantsiya' } },
+  { id: 'tg-normrabota', kind: 'telegram', title: 'Telegram — @normrabota: Норм работа', description: 'Качественные удаленные вакансии и проектные контракты', config: { channel: 'normrabota' } },
+  { id: 'tg-finder-vc', kind: 'telegram', title: 'Telegram — @finder_vc: Finder.vc — вакансии и проекты', description: 'Удаленная работа для разработчиков, дизайнеров и маркетологов', config: { channel: 'finder_vc' } },
+  { id: 'tg-theyseeku', kind: 'telegram', title: 'Telegram — @theyseeku: They Seek You — креативные вакансии', description: 'Вакансии для креаторов, дизайнеров и продуктовых команд', config: { channel: 'theyseeku' } },
+  { id: 'tg-workinhead', kind: 'telegram', title: 'Telegram — @workinhead: Work in Head', description: 'Вакансии и фриланс в IT и digital', config: { channel: 'workinhead' } },
+  { id: 'tg-seojobs', kind: 'telegram', title: 'Telegram — @seojobs: SEO & Маркетинг', description: 'Вакансии и заказы по SEO-оптимизации, сайтам и аналитике', config: { channel: 'seojobs' } },
+  { id: 'tg-marketer-jobs', kind: 'telegram', title: 'Telegram — @marketer_jobs: Вакансии для маркетологов', description: 'Проекты и вакансии в интернет-маркетинге и лидогенерации', config: { channel: 'marketer_jobs' } },
+  { id: 'tg-it-jobs-freelance', kind: 'telegram', title: 'Telegram — @it_jobs_freelance: IT & Freelance вакансии', description: 'Фриланс-заказы и проектная разработка', config: { channel: 'it_jobs_freelance' } },
 ];
 
 /** An ATS preset with the boards found since: a slug listed twice is read once. */

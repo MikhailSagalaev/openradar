@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
 import { recalculateVoteScoreAndStatus } from '../core/rules.ts';
+import { matchesOccupationCodes } from '../core/isco.ts';
 import { isRemoteLead, normalizeTechTokens, titleForLanguage } from '../core/text.ts';
 import { contactKey, mergeContacts } from '../core/contacts.ts';
 import type {
@@ -22,6 +24,9 @@ import type {
   UserVoteResult,
   AdminStats,
   AdminUsersData,
+  AgentUsageStats,
+  ModelPayDay,
+  ApiUsageDim,
   UserTelegramAccountInput,
   UserTelegramAccountRecord,
   UserSourceInput,
@@ -31,11 +36,13 @@ import type { LeadReview, ReviewBucket } from '../core/reviews.ts';
 import { disagreement, type LabelledDecision, type ModelDecision } from '../core/decisions.ts';
 import type { EmployerRow, EmployerSummary, SourceQualityInput, LeadFactsFill, LeadMoney, LeadSighting, ResearchDailyRow, SourceActivity } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
-import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
+import { COMPACT_DROP_METADATA_KEYS, lastDays, researchTextHead, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
+import { archiveFileOf, archivedMonthWrittenAt, EXPORT_CLOCK_SLACK_MS, utcMonthEndsBy, utcMonthOf, writeJsonlGzAtomic } from './archive-file.ts';
 import { computeSalaryMedians } from '../core/salary-sanity.ts';
 import { normalizeSalary } from '../core/salary.ts';
 import { MIN_CONFIDENCE, type ModelFacts } from '../research/model.ts';
 import { countFailedInRow } from '../core/source-health.ts';
+import type { SourceFlowStats } from '../core/source-health.ts';
 import type { SubscriptionRecord } from '../core/subscriptions.ts';
 import type { VisaSponsorNote } from '../research/visa-sponsors.ts';
 import type {
@@ -280,7 +287,11 @@ export class MemoryStore implements Store {
 
   async listEmployers(options: { limit: number; minPosts: number; query?: string }): Promise<EmployerSummary[]> {
     const groups = new Map<string, Lead[]>();
-    for (const lead of this.openVacancies()) groups.set(lead.companyKey!, [...(groups.get(lead.companyKey!) ?? []), lead]);
+    for (const lead of this.openVacancies()) {
+      const list = groups.get(lead.companyKey!);
+      if (list) list.push(lead);
+      else groups.set(lead.companyKey!, [lead]);
+    }
     const wanted = options.query?.toLowerCase();
     return [...groups.entries()]
       .filter(([, leads]) => leads.length >= options.minPosts && (!wanted || leads.some((l) => l.company?.toLowerCase().includes(wanted))))
@@ -331,7 +342,15 @@ export class MemoryStore implements Store {
 
   async listLeadsToDecide(limit: number): Promise<Array<{ id: string; title: string; text: string }>> {
     return [...this.leads.values()]
-      .filter((l) => !this.modelDecisions.has(l.id) && l.sourceRef?.visibility !== 'private' && this.sources.get(l.sourceId)?.config.userTelegram !== true)
+      .filter(
+        (l) =>
+          !this.modelDecisions.has(l.id) &&
+          l.status !== 'rejected' &&
+          (l.state ?? 'active') === 'active' &&
+          !l.archivedAt &&
+          l.sourceRef?.visibility !== 'private' &&
+          this.sources.get(l.sourceId)?.config.userTelegram !== true,
+      )
       .slice(0, limit)
       .map((l) => ({ id: l.id, title: l.title, text: l.text }));
   }
@@ -596,6 +615,36 @@ export class MemoryStore implements Store {
     if (lead && !lead.confirmedAt) lead.confirmedAt = at;
   }
 
+  async updateLeadStatusAndReasons(id: string, status: LeadStatus, reasons: string[]): Promise<void> {
+    const lead = this.leads.get(id);
+    if (lead) {
+      lead.status = status;
+      lead.reasons = reasons;
+    }
+  }
+
+  async getFlowStats(days: number): Promise<SourceFlowStats[]> {
+    const now = Date.now();
+    const recentSince = new Date(now - days * 86_400_000).toISOString();
+    const prevSince = new Date(now - 2 * days * 86_400_000).toISOString();
+    const agg = (arr: RunRecord[]) => ({
+      runs: arr.length,
+      errors: arr.filter((r) => Boolean(r.error)).length,
+      inserted: arr.reduce((acc, r) => acc + r.inserted, 0),
+    });
+    const sources = await this.listSources();
+    return sources.map((source) => {
+      const window = this.runs.filter((r) => r.sourceId === source.id && r.startedAt >= prevSince);
+      return {
+        sourceId: source.id,
+        title: source.title,
+        enabled: source.enabled,
+        recent: agg(window.filter((r) => r.startedAt >= recentSince)),
+        previous: agg(window.filter((r) => r.startedAt < recentSince)),
+      };
+    });
+  }
+
   private checkedAt = new Map<string, number>();
 
   async listLeadsToCheck(options: { hosts: string[]; limit: number; createdAfter: string; now?: Date }): Promise<Array<Pick<Lead, 'id' | 'url' | 'createdAt' | 'type'>>> {
@@ -678,14 +727,17 @@ export class MemoryStore implements Store {
   }
 
   async listBoardLeads(options: { sourceId: string; externalIdPrefix: string; createdAfter: string; limit: number }): Promise<Array<Pick<Lead, 'id' | 'externalId' | 'state'>>> {
-    const out: Array<Pick<Lead, 'id' | 'externalId' | 'state'>> = [];
+    // Newest first, like PostgreSQL's ORDER BY created_at DESC LIMIT n.
+    const matched: Lead[] = [];
     for (const lead of this.leads.values()) {
       if (lead.sourceId !== options.sourceId || !lead.externalId?.startsWith(options.externalIdPrefix)) continue;
       if (lead.createdAt < options.createdAfter) continue;
-      out.push({ id: lead.id, externalId: lead.externalId, state: lead.state ?? 'active' });
-      if (out.length >= options.limit) break;
+      matched.push(lead);
     }
-    return out;
+    return matched
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, options.limit)
+      .map((lead) => ({ id: lead.id, externalId: lead.externalId, state: lead.state ?? 'active' }));
   }
 
   async saveLeadFacts(id: string, facts: PageFacts, fill: LeadFactsFill): Promise<void> {
@@ -719,7 +771,7 @@ export class MemoryStore implements Store {
       })
       .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
       .slice(0, options.limit)
-      .map((l) => ({ ...l, text: l.text.slice(0, 3000), seenBy: (this.sightings.get(l.id) ?? []).map((s) => s.sourceId) }));
+      .map((l) => ({ ...l, text: researchTextHead(l.text, this.sources.get(l.sourceId)?.kind), seenBy: (this.sightings.get(l.id) ?? []).map((s) => s.sourceId) }));
   }
 
   private researchDaily = new Map<string, ResearchDailyRow[]>();
@@ -916,6 +968,8 @@ export class MemoryStore implements Store {
 
   private queryLeads(options: FeedOptions, feedOnly = false, countOnly = false): Lead[] {
     let result = Array.from(this.leads.values());
+    // Soft archive: hidden leads stay for statistics, the public surface does not see them.
+    result = result.filter((l) => !l.archivedAt);
     if (options.createdBefore) {
       const cutoff = options.createdBefore;
       result = result.filter((l) => l.createdAt <= cutoff);
@@ -962,7 +1016,7 @@ export class MemoryStore implements Store {
     }
     if (options.language) {
       const russian = options.language === 'ru';
-      result = result.filter((l) => /[А-Яа-яЁё]/.test(titleForLanguage(l.title)) === russian);
+      result = result.filter((l) => (l.lang ? l.lang === options.language : /[А-Яа-яЁё]/.test(titleForLanguage(l.title)) === russian));
     }
     if (options.createdAfter) {
       const since = options.createdAfter;
@@ -975,6 +1029,10 @@ export class MemoryStore implements Store {
     if (options.directionsAny?.length) {
       const wanted = new Set(options.directionsAny.map((d) => d.toLowerCase()));
       result = result.filter((l) => l.direction && wanted.has(l.direction.toLowerCase()));
+    }
+    if (options.occupationCodes?.length) {
+      const codes = options.occupationCodes;
+      result = result.filter((l) => matchesOccupationCodes(l, codes));
     }
     if (options.query?.trim()) {
       const q = options.query.trim().toLowerCase();
@@ -1075,6 +1133,66 @@ export class MemoryStore implements Store {
       },
       users,
       subscriptions: [],
+    };
+  }
+
+  private apiUsage = new Map<string, { dim: ApiUsageDim; calls: number }>();
+  private tokenDays = new Set<string>();
+
+  async modelPayStats(days = 14): Promise<ModelPayDay[]> {
+    const window = lastDays(days);
+    const byDay = new Map<string, ModelPayDay>(window.map((day) => [day, { day, leads: 0, withFacts: 0, withPay: 0 }]));
+    for (const lead of this.leads.values()) {
+      const cell = byDay.get(lead.createdAt.slice(0, 10));
+      if (!cell || lead.status === 'rejected') continue;
+      cell.leads++;
+      const model = (lead.metadata as Record<string, unknown> | undefined)?.model as { facts?: Record<string, unknown> } | undefined;
+      if (model?.facts) {
+        cell.withFacts++;
+        if (model.facts.payMin != null || model.facts.payMax != null) cell.withPay++;
+      }
+    }
+    return window.map((day) => byDay.get(day)!);
+  }
+
+  async bumpApiUsage(dim: ApiUsageDim, calls = 1): Promise<void> {
+    const key = [dim.day, dim.surface, dim.detail, dim.tier, dim.client, dim.via].join('\u0000');
+    const cell = this.apiUsage.get(key);
+    if (cell) cell.calls += calls;
+    else this.apiUsage.set(key, { dim, calls });
+  }
+
+  async touchTokenDay(userId: number, day = new Date().toISOString().slice(0, 10)): Promise<void> {
+    this.tokenDays.add(`${day}\u0000${userId}`);
+  }
+
+  async agentUsageStats(days = 14): Promise<AgentUsageStats> {
+    const window = lastDays(days);
+    const inWindow = Array.from(this.apiUsage.values()).filter((c) => window.includes(c.dim.day));
+    const perDay = (day: string, surface: string) =>
+      inWindow.filter((c) => c.dim.day === day && c.dim.surface === surface).reduce((a, c) => a + c.calls, 0);
+    const top = (pick: (c: { dim: ApiUsageDim; calls: number }) => string) => {
+      const by = new Map<string, number>();
+      for (const c of inWindow) by.set(pick(c), (by.get(pick(c)) ?? 0) + c.calls);
+      return [...by.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12);
+    };
+    return {
+      days: window.map((day) => ({
+        day,
+        api: perDay(day, 'api'),
+        mcp: perDay(day, 'mcp'),
+        research: perDay(day, 'research'),
+      })),
+      details: top((c) => `${c.dim.surface}:${c.dim.detail}`).map(([k, calls]) => {
+        const sep = k.indexOf(':');
+        return { surface: k.slice(0, sep), detail: k.slice(sep + 1), calls };
+      }),
+      tokens: window.map((day) => ({
+        day,
+        active: Array.from(this.tokenDays).filter((t) => t.startsWith(`${day}\u0000`)).length,
+      })),
+      via: top((c) => c.dim.via).map(([via, calls]) => ({ via: via || 'direct', calls })),
+      clients: top((c) => c.dim.client).map(([client, calls]) => ({ client, calls })),
     };
   }
 
@@ -1503,11 +1621,11 @@ export class MemoryStore implements Store {
     return this.leads.delete(id);
   }
 
-  async cleanupOldLeads(retentionDays: number): Promise<number> {
+  async cleanupOldLeads(retentionDays: number, archiveDir?: string): Promise<number> {
     const cutoff = new Date(Date.now() - retentionDays * 24 * 3600 * 1000).toISOString();
     let removed = 0;
     for (const [id, lead] of this.leads.entries()) {
-      if (lead.createdAt < cutoff) {
+      if (lead.createdAt < cutoff && (archiveDir === undefined || this.isExported(lead, archiveDir))) {
         this.leadsByFingerprint.delete(lead.fingerprint);
         if (lead.externalId) {
           this.leadsByExternal.delete(`${lead.sourceId}:${lead.externalId}`);
@@ -1524,6 +1642,81 @@ export class MemoryStore implements Store {
     const before = this.runs.length;
     this.runs = this.runs.filter((run) => run.startedAt >= cutoff);
     return before - this.runs.length;
+  }
+
+  async cleanupLeadDeliveries(retentionDays: number): Promise<number> {
+    const cutoff = Date.now() - retentionDays * 24 * 3600 * 1000;
+    let count = 0;
+    for (const [key, record] of this.leadDeliveries.entries()) {
+      if (record.status === 'sent' && new Date(record.updatedAt).getTime() < cutoff) {
+        this.leadDeliveries.delete(key);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /** Warm step: hide leads older than hotDays from the feed/API; the full row stays. */
+  async archiveOldLeads(hotDays: number): Promise<number> {
+    const cutoff = Date.now() - hotDays * 24 * 3600 * 1000;
+    let archived = 0;
+    for (const lead of this.leads.values()) {
+      if (!lead.archivedAt && Date.parse(lead.createdAt) < cutoff) {
+        lead.archivedAt = new Date().toISOString();
+        archived++;
+      }
+    }
+    return archived;
+  }
+
+  /** Cold export: fully-archived UTC months as gzipped JSONL, one file per month. */
+  async exportArchivedLeads(dir: string, hotDays: number): Promise<string[]> {
+    mkdirSync(dir, { recursive: true });
+    const byMonth = new Map<string, Lead[]>();
+    const hotEnd = Date.now() - (hotDays + 1) * 24 * 3600 * 1000;
+    for (const lead of this.leads.values()) {
+      if (!lead.archivedAt) continue;
+      const month = utcMonthOf(lead.createdAt);
+      if (!utcMonthEndsBy(month, hotEnd)) continue;
+      const rows = byMonth.get(month);
+      if (rows) rows.push(lead);
+      else byMonth.set(month, [lead]);
+    }
+    const written: string[] = [];
+    for (const [month, rows] of [...byMonth].sort(([a], [b]) => a.localeCompare(b))) {
+      if (archivedMonthWrittenAt(dir, month)) continue;
+      const file = archiveFileOf(dir, month);
+      rows.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      await writeJsonlGzAtomic(file, (async function* () { yield* rows; })());
+      written.push(file);
+    }
+    return written;
+  }
+
+  /** Cold step: shrink exported leads older than retentionDays in place (see Store.compactOldLeads). */
+  async compactOldLeads(retentionDays: number, archiveDir: string): Promise<number> {
+    const cutoff = new Date(Date.now() - retentionDays * 24 * 3600 * 1000).toISOString();
+    let compacted = 0;
+    for (const lead of this.leads.values()) {
+      if (lead.compactedAt || lead.createdAt >= cutoff || !this.isExported(lead, archiveDir)) continue;
+      lead.text = researchTextHead(lead.text, this.sources.get(lead.sourceId)?.kind);
+      lead.contacts = [];
+      if (lead.metadata) {
+        const metadata = { ...lead.metadata };
+        for (const key of COMPACT_DROP_METADATA_KEYS) delete metadata[key];
+        lead.metadata = metadata;
+      }
+      lead.compactedAt = new Date().toISOString();
+      compacted++;
+    }
+    return compacted;
+  }
+
+  /** The lead's full copy is on disk: archived, and archived before its month file was written. */
+  private isExported(lead: Lead, archiveDir: string): boolean {
+    if (!lead.archivedAt) return false;
+    const writtenAt = archivedMonthWrittenAt(archiveDir, utcMonthOf(lead.createdAt));
+    return writtenAt !== undefined && Date.parse(lead.archivedAt) <= writtenAt.getTime() + EXPORT_CLOCK_SLACK_MS;
   }
 
   async getLeadsForFeed(options: FeedOptions = {}): Promise<Lead[]> {

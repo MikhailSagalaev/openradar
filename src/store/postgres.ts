@@ -1,7 +1,9 @@
 import pg from 'pg';
 import { randomUUID } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
 import { recalculateVoteScoreAndStatus } from '../core/rules.ts';
-import { normalizeTechTokens, type WorkplaceType } from '../core/text.ts';
+import { matchesOccupationCodes } from '../core/isco.ts';
+import { isRemoteLead, normalizeTechTokens, titleForLanguage, type WorkplaceType } from '../core/text.ts';
 import { mergeContacts } from '../core/contacts.ts';
 import type {
   Contact,
@@ -38,6 +40,9 @@ import type {
   UserVoteResult,
   AdminStats,
   AdminUsersData,
+  AgentUsageStats,
+  ModelPayDay,
+  ApiUsageDim,
   UserTelegramAccountInput,
   UserTelegramAccountRecord,
   UserSourceInput,
@@ -47,8 +52,10 @@ import { TRUST_MIN_AGREEMENT, TRUST_MIN_CONTROLS, type LeadReview, type ReviewBu
 import { DECISION_VERSION, disagreement, type LabelledDecision, type ModelDecision } from '../core/decisions.ts';
 import type { EmployerRow, EmployerSummary, SourceQualityInput, LeadFactsFill, LeadMoney, LeadSighting, ResearchDailyRow, SourceActivity } from '../core/store.ts';
 import type { PageFacts } from '../research/facts.ts';
-import { lastDays, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
+import { COMPACT_DROP_METADATA_KEYS, lastDays, RESEARCH_TEXT_HEAD, SCORE_DECAY_PER_HOUR } from '../core/store.ts';
+import { ARCHIVE_PAGE_SIZE, archiveFileOf, archivedMonthWrittenAt, EXPORT_CLOCK_SLACK_MS, LIFECYCLE_BATCH_SIZE, utcMonthBounds, utcMonthEndsBy, utcMonthOf, writeJsonlGzAtomic } from './archive-file.ts';
 import { BROKEN_AFTER, countFailedInRow } from '../core/source-health.ts';
+import type { SourceFlowStats } from '../core/source-health.ts';
 import type { SubscriptionRecord } from '../core/subscriptions.ts';
 import type { VisaSponsorNote } from '../research/visa-sponsors.ts';
 
@@ -75,13 +82,13 @@ export class PostgresStore implements Store {
   private maxConnUses: number;
   private webStatementTimeoutMs: number;
 
-  constructor(connectionString: string, options: { maxConnAgeSec?: number; maxConnUses?: number; webStatementTimeoutMs?: number } = {}) {
+  constructor(connectionString: string, options: { maxConnAgeSec?: number; maxConnUses?: number; webStatementTimeoutMs?: number; maxPoolSize?: number } = {}) {
     this.maxConnAgeMs = Math.max(0, options.maxConnAgeSec ?? 1800) * 1000;
     this.maxConnUses = Math.max(0, options.maxConnUses ?? 500);
     this.webStatementTimeoutMs = Math.max(0, options.webStatementTimeoutMs ?? 0);
     this.pool = new Pool({
       connectionString,
-      max: 20,
+      max: options.maxPoolSize ?? 25,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
       // pg-pool's own budgets (pg 8.23+): a connection is retired after maxUses
@@ -492,7 +499,7 @@ export class PostgresStore implements Store {
           raw_salary, payment_period, normalized_usd_min, normalized_usd_max,
           minhash_sketch, state, contacts_json,
           source_platform, source_channel, source_channel_title, source_visibility, source_message_id,
-          company, company_key, direction, workplace_type
+          company, company_key, direction, workplace_type, lang
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7,
           $8, $9, $10, $11, $12, $13::jsonb, $14,
@@ -502,7 +509,7 @@ export class PostgresStore implements Store {
           $30, $31, $32, $33,
           $34, $35, $36::jsonb,
           $37, $38, $39, $40, $41,
-          $42, $43, $44, $45
+          $42, $43, $44, $45, $46
         ) ON CONFLICT DO NOTHING`,
         [
           lead.id,
@@ -518,7 +525,7 @@ export class PostgresStore implements Store {
           lead.currency ?? 'RUB',
           lead.category ?? null,
           JSON.stringify(lead.skills ?? []),
-          lead.isRemote ?? (lead.workplaceType === 'remote'),
+          isRemoteLead(lead),
           JSON.stringify(lead.metadata ?? {}),
           lead.publishedAt ? new Date(lead.publishedAt) : null,
           lead.fingerprint,
@@ -550,6 +557,7 @@ export class PostgresStore implements Store {
           lead.companyKey ?? null,
           lead.direction ?? null,
           lead.workplaceType ?? (lead.isRemote === true ? 'remote' : lead.isRemote === false ? 'onsite' : null),
+          lead.lang ?? (/[А-Яа-яЁё]/.test(titleForLanguage(lead.title)) ? 'ru' : 'en'),
         ]
       );
 
@@ -660,7 +668,10 @@ export class PostgresStore implements Store {
          JOIN sources s ON s.id = l.source_id
          LEFT JOIN model_decisions d ON d.lead_id = l.id AND d.version = $2
         WHERE d.lead_id IS NULL
-          AND l.created_at >= now() - interval '30 days'
+          AND l.status <> 'rejected'
+          AND COALESCE(l.state, 'active') = 'active'
+          AND l.archived_at IS NULL
+          AND l.created_at >= now() - interval '14 days'
           AND COALESCE(l.source_visibility, 'public') <> 'private'
           AND COALESCE((s.config_json->>'userTelegram')::boolean, false) = false
         ORDER BY l.created_at DESC LIMIT $1`,
@@ -1101,6 +1112,36 @@ export class PostgresStore implements Store {
     }
   }
 
+  async updateLeadStatusAndReasons(id: string, status: LeadStatus, reasons: string[]): Promise<void> {
+    await this.pool.query(
+      `UPDATE leads SET status = $1, reasons_json = $2::jsonb WHERE id = $3`,
+      [status, JSON.stringify(reasons), id],
+    );
+  }
+
+  async getFlowStats(days: number): Promise<SourceFlowStats[]> {
+    const res = await this.pool.query(
+      `SELECT s.id, s.title, s.enabled,
+         count(*) FILTER (WHERE r.started_at >= now() - ($1 || ' days')::interval) AS recent_runs,
+         count(*) FILTER (WHERE r.started_at >= now() - ($1 || ' days')::interval AND r.error IS NOT NULL) AS recent_errors,
+         COALESCE(sum(r.inserted) FILTER (WHERE r.started_at >= now() - ($1 || ' days')::interval), 0) AS recent_inserted,
+         count(*) FILTER (WHERE r.started_at < now() - ($1 || ' days')::interval) AS prev_runs,
+         count(*) FILTER (WHERE r.started_at < now() - ($1 || ' days')::interval AND r.error IS NOT NULL) AS prev_errors,
+         COALESCE(sum(r.inserted) FILTER (WHERE r.started_at < now() - ($1 || ' days')::interval), 0) AS prev_inserted
+       FROM sources s JOIN runs r ON r.source_id = s.id
+       WHERE r.started_at >= now() - ($2 || ' days')::interval
+       GROUP BY s.id, s.title, s.enabled`,
+      [days, days * 2],
+    );
+    return res.rows.map((r: any) => ({
+      sourceId: r.id,
+      title: r.title,
+      enabled: r.enabled,
+      recent: { runs: Number(r.recent_runs), errors: Number(r.recent_errors), inserted: Number(r.recent_inserted) },
+      previous: { runs: Number(r.prev_runs), errors: Number(r.prev_errors), inserted: Number(r.prev_inserted) },
+    }));
+  }
+
   async recordVote(
     leadId: string,
     signal: 'useful' | 'junk' | 'scam' | 'closed',
@@ -1236,6 +1277,7 @@ export class PostgresStore implements Store {
   }
 
   async getLeadsForFeed(options: FeedOptions = {}): Promise<Lead[]> {
+    if (options.occupationCodes?.length) return this.feedByOccupation(options);
     return this.queryLeads(options, true);
   }
 
@@ -1282,6 +1324,9 @@ export class PostgresStore implements Store {
     const conditions: string[] = [];
     const params: unknown[] = [];
     let idx = 1;
+    // Soft archive: hidden leads still live in this table for statistics; the public
+    // surface (feed, listing, search, counts) does not see them.
+    conditions.push('archived_at IS NULL');
 
     if (feedOnly) {
       // Leads rejected by the pipeline rules stay with the operator, not in the public feed.
@@ -1324,9 +1369,9 @@ export class PostgresStore implements Store {
     }
     if (options.remote) {
       // Remote classification: requires is_remote = true or workplace_type = 'remote',
-      // or explicit online city / text markers, avoiding blind city IS NULL assumptions.
+      // or explicit online city markers, avoiding heavy text regex scanning.
       conditions.push(
-        `(is_remote = true OR workplace_type = 'remote' OR city ~* '^(онлайн|удал)' OR (title || ' ' || text) ~* 'удал[её]нн(?:ая|ое|ый|ую)\\s+(?:работ|формат|график)|100%\\s+remote|\\btelecommute\\b|работа\\s+из\\s+дома' OR (COALESCE(type, 'gig') <> 'job' AND workplace_type IS NULL AND (city IS NULL OR btrim(city) = '')))`,
+        `(is_remote = true OR workplace_type = 'remote' OR city ~* '^(онлайн|удал)' OR (COALESCE(type, 'gig') <> 'job' AND workplace_type IS NULL AND (city IS NULL OR btrim(city) = '')))`,
       );
     }
     if (options.workplaceType) {
@@ -1346,8 +1391,8 @@ export class PostgresStore implements Store {
       params.push(options.skillsAny.map((skill) => skill.toLowerCase()));
     }
     if (options.language) {
-      const body = `regexp_replace(title, '(Компания|Город|Company|City)\\s*:[^.|\\n]*', '', 'g')`;
-      conditions.push(options.language === 'ru' ? `${body} ~ '[А-Яа-яЁё]'` : `${body} !~ '[А-Яа-яЁё]'`);
+      conditions.push(`lang = $${idx++}`);
+      params.push(options.language);
     }
     if (options.createdAfter) {
       conditions.push(`created_at >= $${idx++}::timestamptz`);
@@ -1495,6 +1540,84 @@ export class PostgresStore implements Store {
     };
   }
 
+  async modelPayStats(days = 14): Promise<ModelPayDay[]> {
+    const window = lastDays(days);
+    const res = await this.pool.query(
+      `SELECT created_at::date::text AS day,
+              COUNT(*) AS leads,
+              COUNT(*) FILTER (WHERE metadata_json->'model'->'facts' IS NOT NULL) AS with_facts,
+              COUNT(*) FILTER (WHERE metadata_json->'model'->'facts'->>'payMin' IS NOT NULL
+                                OR metadata_json->'model'->'facts'->>'payMax' IS NOT NULL) AS with_pay
+         FROM leads
+        WHERE created_at >= $1::timestamptz AND status <> 'rejected'
+        GROUP BY 1`,
+      [`${window[0]}T00:00:00Z`],
+    );
+    const num = (v: unknown): number => parseInt(String(v ?? '0'), 10) || 0;
+    const byDay = new Map(res.rows.map((r) => [String(r.day), { leads: num(r.leads), withFacts: num(r.with_facts), withPay: num(r.with_pay) }]));
+    return window.map((day) => ({ day, ...(byDay.get(day) ?? { leads: 0, withFacts: 0, withPay: 0 }) }));
+  }
+
+  async bumpApiUsage(dim: ApiUsageDim, calls = 1): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO api_usage_daily (day, surface, detail, tier, client, via, calls)
+       VALUES ($1::date, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (day, surface, detail, tier, client, via)
+       DO UPDATE SET calls = api_usage_daily.calls + EXCLUDED.calls`,
+      [dim.day, dim.surface, dim.detail, dim.tier, dim.client, dim.via, calls],
+    );
+  }
+
+  async touchTokenDay(userId: number, day = new Date().toISOString().slice(0, 10)): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO api_token_days (day, user_id) VALUES ($1::date, $2) ON CONFLICT DO NOTHING`,
+      [day, userId],
+    );
+  }
+
+  async agentUsageStats(days = 14): Promise<AgentUsageStats> {
+    const window = lastDays(days);
+    const since = window[0]!;
+    const num = (v: unknown): number => parseInt(String(v ?? '0'), 10) || 0;
+    const [byDay, details, tokens, via, clients] = await Promise.all([
+      this.pool.query(
+        `SELECT day::text, surface, SUM(calls) AS calls FROM api_usage_daily WHERE day >= $1::date GROUP BY 1, 2`,
+        [since],
+      ),
+      this.pool.query(
+        `SELECT surface, detail, SUM(calls) AS calls FROM api_usage_daily WHERE day >= $1::date
+         GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 12`,
+        [since],
+      ),
+      this.pool.query(
+        `SELECT day::text, COUNT(*) AS active FROM api_token_days WHERE day >= $1::date GROUP BY 1`,
+        [since],
+      ),
+      this.pool.query(
+        `SELECT via, SUM(calls) AS calls FROM api_usage_daily WHERE day >= $1::date GROUP BY 1 ORDER BY 2 DESC LIMIT 12`,
+        [since],
+      ),
+      this.pool.query(
+        `SELECT client, SUM(calls) AS calls FROM api_usage_daily WHERE day >= $1::date GROUP BY 1 ORDER BY 2 DESC LIMIT 12`,
+        [since],
+      ),
+    ]);
+    const dayCell = new Map(byDay.rows.map((r) => [`${r.day}:${r.surface}`, num(r.calls)]));
+    const tokenCell = new Map(tokens.rows.map((r) => [String(r.day), num(r.active)]));
+    return {
+      days: window.map((day) => ({
+        day,
+        api: dayCell.get(`${day}:api`) ?? 0,
+        mcp: dayCell.get(`${day}:mcp`) ?? 0,
+        research: dayCell.get(`${day}:research`) ?? 0,
+      })),
+      details: details.rows.map((r) => ({ surface: String(r.surface), detail: String(r.detail), calls: num(r.calls) })),
+      tokens: window.map((day) => ({ day, active: tokenCell.get(day) ?? 0 })),
+      via: via.rows.map((r) => ({ via: String(r.via) || 'direct', calls: num(r.calls) })),
+      clients: clients.rows.map((r) => ({ client: String(r.client), calls: num(r.calls) })),
+    };
+  }
+
   async getStats(): Promise<Stats> {
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
 
@@ -1532,46 +1655,51 @@ export class PostgresStore implements Store {
   }
 
   async getSourceHealth(): Promise<SourceHealth[]> {
-    const sources = await this.listSources();
-    const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const since24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const since7d = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
 
-    const aggregateRes = await this.pool.query(
-      `SELECT source_id,
-              COALESCE(SUM(found), 0) AS found,
-              COALESCE(SUM(inserted), 0) AS inserted,
-              COALESCE(SUM(duplicates), 0) AS duplicates,
-              COALESCE(SUM(rejected), 0) AS rejected,
-              COALESCE(SUM(delivered), 0) AS delivered,
-              COALESCE(SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END), 0) AS errors,
-              COUNT(*) AS runs
-       FROM runs
-       WHERE started_at >= $1::timestamptz
-       GROUP BY source_id`,
-      [since]
-    );
+    const [sources, aggregateRes, lastRunsRes, recentRes] = await Promise.all([
+      this.listSources(),
+      this.pool.query(
+        `SELECT source_id,
+                COALESCE(SUM(found), 0) AS found,
+                COALESCE(SUM(inserted), 0) AS inserted,
+                COALESCE(SUM(duplicates), 0) AS duplicates,
+                COALESCE(SUM(rejected), 0) AS rejected,
+                COALESCE(SUM(delivered), 0) AS delivered,
+                COALESCE(SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END), 0) AS errors,
+                COUNT(*) AS runs
+         FROM runs
+         WHERE started_at >= $1::timestamptz
+         GROUP BY source_id`,
+        [since24h]
+      ),
+      this.pool.query(
+        `SELECT r.* FROM sources s
+         CROSS JOIN LATERAL (
+           SELECT * FROM runs
+           WHERE source_id = s.id
+           ORDER BY started_at DESC
+           LIMIT 1
+         ) r`
+      ),
+      // The newest BROKEN_AFTER runs of each source, to tell one failed poll from a broken source.
+      // Using LATERAL with index idx_runs_source_started avoids heavy window function and temp-file disk writes.
+      this.pool.query(
+        `SELECT r.source_id, r.error FROM sources s
+         CROSS JOIN LATERAL (
+           SELECT source_id, error, started_at FROM runs
+           WHERE source_id = s.id AND started_at >= $1::timestamptz
+           ORDER BY started_at DESC
+           LIMIT $2
+         ) r ORDER BY r.source_id, r.started_at DESC`,
+        [since7d, BROKEN_AFTER]
+      ),
+    ]);
 
     const aggregate = new Map(aggregateRes.rows.map(r => [r.source_id, r]));
-
-    const lastRunsRes = await this.pool.query(
-      `SELECT r.* FROM runs r
-       JOIN (
-         SELECT source_id, MAX(started_at) AS max_started
-         FROM runs GROUP BY source_id
-       ) latest
-         ON latest.source_id = r.source_id AND latest.max_started = r.started_at`
-    );
-
     const lastBySource = new Map(lastRunsRes.rows.map(r => [r.source_id, this.rowToRun(r)]));
 
-    // The newest BROKEN_AFTER runs of each source, to tell one failed poll from a broken source.
-    const recentRes = await this.pool.query(
-      `SELECT source_id, error FROM (
-         SELECT source_id, error, started_at,
-                ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY started_at DESC) AS n
-         FROM runs WHERE started_at >= $1::timestamptz
-       ) recent WHERE n <= $2 ORDER BY source_id, started_at DESC`,
-      [new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString(), BROKEN_AFTER],
-    );
     const recentBySource = new Map<string, Array<{ error?: string }>>();
     for (const r of recentRes.rows) {
       const list = recentBySource.get(r.source_id) ?? [];
@@ -1694,6 +1822,7 @@ export class PostgresStore implements Store {
       skills: Array.isArray(r.skills_json) ? r.skills_json : (typeof r.skills_json === 'string' ? JSON.parse(r.skills_json) : []),
       isRemote: r.is_remote !== null ? Boolean(r.is_remote) : (r.workplace_type === 'remote'),
       workplaceType: (r.workplace_type as WorkplaceType) || (r.is_remote ? 'remote' : 'onsite'),
+      lang: (r.lang?.trim() as 'ru' | 'en') || (/[А-Яа-яЁё]/.test(titleForLanguage(r.title)) ? 'ru' : 'en'),
       metadata: typeof r.metadata_json === 'object' && r.metadata_json !== null ? r.metadata_json : JSON.parse(r.metadata_json || '{}'),
       publishedAt: r.published_at ? new Date(r.published_at).toISOString() : undefined,
       fingerprint: r.fingerprint,
@@ -1702,6 +1831,8 @@ export class PostgresStore implements Store {
       score: r.score,
       reasons: Array.isArray(r.reasons_json) ? r.reasons_json : JSON.parse(r.reasons_json || '[]'),
       createdAt: new Date(r.created_at).toISOString(),
+      archivedAt: r.archived_at ? new Date(r.archived_at).toISOString() : undefined,
+      compactedAt: r.compacted_at ? new Date(r.compacted_at).toISOString() : undefined,
       deliveredAt: r.delivered_at ? new Date(r.delivered_at).toISOString() : undefined,
       type: r.type === 'job' ? 'job' : 'gig',
       rawSalary: r.raw_salary || undefined,
@@ -2380,12 +2511,16 @@ export class PostgresStore implements Store {
     return (res.rowCount ?? 0) > 0;
   }
 
-  async cleanupOldLeads(retentionDays: number): Promise<number> {
-    const res = await this.pool.query(
-      `DELETE FROM leads WHERE created_at < NOW() - ($1 || ' days')::interval`,
-      [retentionDays]
-    );
-    return res.rowCount ?? 0;
+  async cleanupOldLeads(retentionDays: number, archiveDir?: string): Promise<number> {
+    if (archiveDir === undefined) {
+      const res = await this.pool.query(
+        `DELETE FROM leads WHERE created_at < NOW() - ($1 || ' days')::interval`,
+        [retentionDays]
+      );
+      return res.rowCount ?? 0;
+    }
+    // RADAR_RETENTION_MODE=delete: only exported months, in batches (each DELETE cascades).
+    return this.forEachExportedBatch(retentionDays, archiveDir, (ids) => `DELETE FROM leads WHERE id IN (${ids})`);
   }
 
   async cleanupRuns(retentionDays: number): Promise<number> {
@@ -2394,6 +2529,192 @@ export class PostgresStore implements Store {
       [retentionDays]
     );
     return res.rowCount ?? 0;
+  }
+
+  async cleanupLeadDeliveries(retentionDays: number): Promise<number> {
+    let total = 0;
+    const batchSize = 5000;
+    for (;;) {
+      const res = await this.pool.query(
+        `DELETE FROM lead_deliveries
+         WHERE (lead_id, sink) IN (
+           SELECT lead_id, sink FROM lead_deliveries
+           WHERE status = 'sent' AND updated_at < NOW() - make_interval(days => $1::int)
+           LIMIT $2
+         )`,
+        [retentionDays, batchSize]
+      );
+      const count = res.rowCount ?? 0;
+      total += count;
+      if (count < batchSize) break;
+    }
+    return total;
+  }
+
+  /**
+   * Warm step: hide leads older than hotDays from the feed/API; the full row stays.
+   * Batched so a first run over a large table does not hold one huge transaction. The UPDATE
+   * does not touch `text`, so its TOAST value is kept as is (no lz4 recompression here —
+   * only compaction, which rewrites `text`, recompresses it).
+   */
+  async archiveOldLeads(hotDays: number): Promise<number> {
+    let archived = 0;
+    for (;;) {
+      const res = await this.pool.query(
+        `UPDATE leads SET archived_at = NOW()
+          WHERE id IN (
+            SELECT id FROM leads
+             WHERE archived_at IS NULL AND created_at < NOW() - make_interval(days => $1::int)
+             LIMIT $2)`,
+        [hotDays, LIFECYCLE_BATCH_SIZE],
+      );
+      const count = res.rowCount ?? 0;
+      archived += count;
+      if (count < LIFECYCLE_BATCH_SIZE) return archived;
+    }
+  }
+
+  /** The oldest archived month, cached per process: the lower bound of export and compaction. */
+  private archiveFloorMonth?: string;
+  /** Months whose cold rows are all compacted already: skipped until the process restarts. */
+  private compactedMonths = new Set<string>();
+  private embeddingColumn?: Promise<boolean>;
+
+  private async oldestArchivedMonth(): Promise<string | undefined> {
+    if (this.archiveFloorMonth) return this.archiveFloorMonth;
+    const res = await this.pool.query(`SELECT min(created_at) AS oldest FROM leads WHERE archived_at IS NOT NULL`);
+    const oldest = res.rows[0]?.oldest;
+    if (!oldest) return undefined;
+    this.archiveFloorMonth = utcMonthOf(new Date(oldest).toISOString());
+    return this.archiveFloorMonth;
+  }
+
+  /** UTC months from the oldest archived one up to (not including) the month of `before`. */
+  private async archiveMonthsBefore(before: number): Promise<string[]> {
+    const floor = await this.oldestArchivedMonth();
+    if (!floor) return [];
+    const months: string[] = [];
+    for (let month = floor; utcMonthEndsBy(month, before); month = utcMonthOf(utcMonthBounds(month).end)) {
+      months.push(month);
+    }
+    return months;
+  }
+
+  /**
+   * Cold export: fully-archived UTC months as gzipped JSONL, one file per month. Months
+   * already on disk cost no query; a missing month streams in keyset pages to a temp file
+   * that is renamed into place only once complete.
+   */
+  async exportArchivedLeads(dir: string, hotDays: number): Promise<string[]> {
+    mkdirSync(dir, { recursive: true });
+    const hotEnd = Date.now() - (hotDays + 1) * 24 * 3600 * 1000;
+    const written: string[] = [];
+    for (const month of await this.archiveMonthsBefore(hotEnd)) {
+      if (archivedMonthWrittenAt(dir, month)) continue;
+      const { start, end } = utcMonthBounds(month);
+      const any = await this.pool.query(
+        `SELECT 1 FROM leads WHERE archived_at IS NOT NULL AND created_at >= $1::timestamptz AND created_at < $2::timestamptz LIMIT 1`,
+        [start, end],
+      );
+      if (!any.rowCount) continue;
+      const file = archiveFileOf(dir, month);
+      await writeJsonlGzAtomic(file, this.archivedMonthRows(start, end));
+      written.push(file);
+    }
+    return written;
+  }
+
+  private async *archivedMonthRows(start: string, end: string): AsyncGenerator<Lead> {
+    let afterId: string | null = null;
+    for (;;) {
+      const res: pg.QueryResult = await this.pool.query(
+        `SELECT * FROM leads
+          WHERE archived_at IS NOT NULL AND created_at >= $1::timestamptz AND created_at < $2::timestamptz
+            AND ($3::text IS NULL OR id > $3::text)
+          ORDER BY id
+          LIMIT $4`,
+        [start, end, afterId, ARCHIVE_PAGE_SIZE],
+      );
+      for (const row of res.rows) yield this.rowToLead(row);
+      if (res.rows.length < ARCHIVE_PAGE_SIZE) return;
+      afterId = res.rows[res.rows.length - 1].id as string;
+    }
+  }
+
+  /**
+   * Runs `statement` (given the id subquery) in batches over leads older than retentionDays
+   * whose full copy is on disk: the month file exists and the lead was archived before it
+   * was written. Unexported months are never touched.
+   */
+  private async forEachExportedBatch(
+    retentionDays: number,
+    archiveDir: string,
+    statement: (idsSubquery: string) => string,
+    extraWhere = '',
+    extraParams: unknown[] = [],
+  ): Promise<number> {
+    const cutoff = Date.now() - retentionDays * 24 * 3600 * 1000;
+    let total = 0;
+    // Months that started before the cutoff: a month straddling it is handled up to the cutoff.
+    const months = await this.archiveMonthsBefore(Date.parse(utcMonthBounds(utcMonthOf(new Date(cutoff).toISOString())).end));
+    for (const month of months) {
+      if (this.compactedMonths.has(month)) continue;
+      const writtenAt = archivedMonthWrittenAt(archiveDir, month);
+      if (!writtenAt) continue;
+      const { start, end } = utcMonthBounds(month);
+      const until = Math.min(cutoff, Date.parse(end));
+      const ids = `SELECT id FROM leads
+             WHERE created_at >= $1::timestamptz AND created_at < $2::timestamptz
+               AND archived_at IS NOT NULL AND archived_at <= $3::timestamptz${extraWhere}
+             LIMIT $4`;
+      for (;;) {
+        const res = await this.pool.query(statement(ids), [
+          start,
+          new Date(until).toISOString(),
+          new Date(writtenAt.getTime() + EXPORT_CLOCK_SLACK_MS).toISOString(),
+          LIFECYCLE_BATCH_SIZE,
+          ...extraParams,
+        ]);
+        const count = res.rowCount ?? 0;
+        total += count;
+        if (count < LIFECYCLE_BATCH_SIZE) break;
+      }
+      // A month wholly past the cutoff is done for this process (compaction is idempotent).
+      if (until === Date.parse(end) && extraWhere) this.compactedMonths.add(month);
+    }
+    return total;
+  }
+
+  private hasEmbeddingColumn(): Promise<boolean> {
+    // pgvector is optional (migration 003 skips the column without it).
+    this.embeddingColumn ??= this.pool
+      .query(`SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'leads' AND column_name = 'embedding'`)
+      .then((res) => (res.rowCount ?? 0) > 0)
+      .catch(() => false);
+    return this.embeddingColumn;
+  }
+
+  /**
+   * Cold step (RADAR_RETENTION_MODE=compact): exported leads older than retentionDays shrink
+   * in place — text cut to the research head (the same RESEARCH_TEXT_HEAD and left() as
+   * listLeadsForResearch, so the report reads them identically), contacts and the embedding
+   * cleared, bulky metadata keys dropped. Rewriting `text` also recompresses it with lz4.
+   */
+  async compactOldLeads(retentionDays: number, archiveDir: string): Promise<number> {
+    const embedding = (await this.hasEmbeddingColumn()) ? 'embedding = NULL,' : '';
+    return this.forEachExportedBatch(
+      retentionDays,
+      archiveDir,
+      (ids) => `UPDATE leads SET
+           text = left(text, CASE WHEN source_id IN (SELECT id FROM sources WHERE kind = 'ats') THEN $5::int ELSE $6::int END),
+           contacts_json = '[]'::jsonb,
+           metadata_json = COALESCE(metadata_json, '{}'::jsonb) - $7::text[],
+           ${embedding}
+           compacted_at = NOW()
+         WHERE id IN (${ids})`,
+      ' AND compacted_at IS NULL',
+      [RESEARCH_TEXT_HEAD.ats, RESEARCH_TEXT_HEAD.other, [...COMPACT_DROP_METADATA_KEYS]],
+    );
   }
 
   // --- radar/2 hub ---
@@ -2770,9 +3091,10 @@ export class PostgresStore implements Store {
   async listBoardLeads(options: { sourceId: string; externalIdPrefix: string; createdAfter: string; limit: number }): Promise<Array<Pick<Lead, 'id' | 'externalId' | 'state'>>> {
     const result = await this.pool.query(
       `SELECT id, external_id, state FROM leads
-        WHERE source_id = $1 AND external_id LIKE $2 || '%' AND created_at >= $3::timestamptz
+        WHERE source_id = $1 AND external_id LIKE $2 ESCAPE '\\' AND created_at >= $3::timestamptz
         ORDER BY created_at DESC LIMIT $4`,
-      [options.sourceId, options.externalIdPrefix, options.createdAfter, options.limit],
+      // A literal prefix: `_` and `%` in it are characters, not LIKE wildcards.
+      [options.sourceId, `${options.externalIdPrefix.replace(/[\\%_]/g, '\\$&')}%`, options.createdAfter, options.limit],
     );
     return result.rows.map((r) => ({ id: r.id, externalId: r.external_id || undefined, state: (r.state as LeadState) || 'active' }));
   }
@@ -2811,7 +3133,7 @@ export class PostgresStore implements Store {
     const result = await this.pool.query(
       // Company career pages are many and long, and only their head matters to the report.
       `SELECT id, source_id, external_id, url, canonical_url, title,
-              left(text, CASE WHEN source_id IN (SELECT id FROM sources WHERE kind = 'ats') THEN 600 ELSE 3000 END) AS text, author, city,
+              left(text, CASE WHEN source_id IN (SELECT id FROM sources WHERE kind = 'ats') THEN $5::int ELSE $6::int END) AS text, author, city,
               budget, currency, category, skills_json, is_remote, workplace_type, metadata_json, published_at, fingerprint,
               title_key, status, score, reasons_json, created_at, delivered_at, type, raw_salary, payment_period,
               normalized_usd_min, normalized_usd_max, state, contacts_json, source_platform, source_channel,
@@ -2821,16 +3143,14 @@ export class PostgresStore implements Store {
          FROM leads
         WHERE COALESCE(published_at, created_at) >= $1::timestamptz AND COALESCE(published_at, created_at) < $2::timestamptz
           AND state NOT IN ('hidden_junk', 'hidden_scam') AND status NOT IN ('rejected', 'failed')
-          AND NOT EXISTS (
-            SELECT 1 FROM jsonb_array_elements_text(COALESCE(metadata_json->'qualityFlags', '[]'::jsonb)) AS flag
-            WHERE flag IN ('channel_ad', 'digest', 'mlm')
-          )
+          AND NOT (COALESCE(metadata_json->'qualityFlags', '[]'::jsonb) ?| ARRAY['channel_ad', 'digest', 'mlm'])
           -- Pages follow the primary key: all pages together walk the table once, where an
           -- order by date would sort the whole period again for every page.
           AND ($4::text IS NULL OR id > $4::text)
         ORDER BY id
         LIMIT $3`,
-      [options.from, options.to, options.limit, options.afterId ?? null],
+      // The same head cold compaction keeps (RESEARCH_TEXT_HEAD): compacted leads read identically.
+      [options.from, options.to, options.limit, options.afterId ?? null, RESEARCH_TEXT_HEAD.ats, RESEARCH_TEXT_HEAD.other],
     );
     return result.rows.map((r) => ({ ...this.rowToLead(r), seenBy: (r.seen_by as string[] | null) ?? [] }));
   }
@@ -3040,6 +3360,43 @@ export class PostgresStore implements Store {
     return result.rows.map((r) => ({ period: r.period, createdAt: new Date(r.created_at).toISOString() }));
   }
 
+
+  /**
+   * The feed filtered by ISCO-08 occupation. The occupation is a heuristic over title, skills
+   * and direction (classifyIsco08) with no column behind it, so the predicate runs here, inside
+   * the store, over the same SQL filters and order, scanning batch by batch until the page is
+   * full: LIMIT, OFFSET and the cursor apply to the matching rows, not to a raw prefix. The
+   * cursor mode walks a keyset (created_at, id); other orders page by OFFSET (capped at 10k).
+   */
+  private async feedByOccupation(options: FeedOptions): Promise<Lead[]> {
+    const codes = options.occupationCodes ?? [];
+    const limit = Math.max(1, Math.min(options.limit ?? 50, 5000));
+    let skip = Math.max(0, Math.min(Math.floor(options.offset ?? 0), 10_000));
+    const batch = 1000;
+    const maxScanned = 20_000;
+    const out: Lead[] = [];
+    let after = options.after;
+    let offset = 0;
+    for (let scanned = 0; scanned < maxScanned && out.length < limit;) {
+      const rows = await this.queryLeads({ ...options, occupationCodes: undefined, limit: batch, offset: after ? 0 : offset, after }, true);
+      scanned += rows.length;
+      for (const lead of rows) {
+        if (!matchesOccupationCodes(lead, codes)) continue;
+        if (skip > 0) { skip--; continue; }
+        out.push(lead);
+        if (out.length >= limit) break;
+      }
+      if (rows.length < batch) break;
+      if (after) {
+        const last = rows.at(-1)!;
+        after = { createdAt: last.createdAt, id: last.id };
+      } else {
+        offset += rows.length;
+        if (offset > 10_000) break;
+      }
+    }
+    return out;
+  }
 }
 
 function parseJsonArray(value: unknown): any[] {

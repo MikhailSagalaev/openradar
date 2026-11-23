@@ -17,7 +17,8 @@ import { resetGigachatToken } from '../src/research/gigachat.ts';
 import { parseModelAnswer, runModelExtraction } from '../src/research/model.ts';
 import { modelQuality } from '../src/research/quality.ts';
 import { MIN_MEDIAN, buildReport, dist, monthPeriod } from '../src/research/report.ts';
-import { renderEmbedPage, renderMethodologyPage, renderReportPage } from '../src/research/pages.ts';
+import { renderAcademicPaperLatex, renderEmbedPage, renderMethodologyPage, renderReportPage } from '../src/research/pages.ts';
+import { renderReportPageEn } from '../src/research/pages-en.ts';
 import { buildMonthReport, datasetCsv, ensureMonthlySnapshot, resetResearchCache } from '../src/research/service.ts';
 import { createApp } from '../src/server/app.ts';
 import { makeTestRuntime } from './helpers.ts';
@@ -779,7 +780,155 @@ describe('research data consistency & honest visual metrics', () => {
 
     const methRu = renderMethodologyPage({ baseUrl: 'https://openradar.fun', version: '0.73.0' });
     expect(methRu).toContain('Codebook / Data Dictionary');
+    expect(methRu).toContain('id="mathematical-apparatus"');
+    expect(methRu).toContain('<math xmlns="http://www.w3.org/1998/Math/MathML"');
     expect(methRu).toContain('pay_min_rub');
     expect(methRu).not.toMatch(/\$[a-zA-Z\\]/);
+  });
+
+  it('computes full international market econometrics, macro-regions, hubs, and cross-market PPP comparison', () => {
+    expect(detectCompany({ company: 'Unknown', text: '', type: 'job' })).toBeUndefined();
+    expect(detectCompany({ company: 'Confidential', text: '', type: 'job' })).toBeUndefined();
+
+    const records: ResearchRecord[] = [];
+    for (let i = 0; i < 15; i++) {
+      // Russian IT records
+      records.push(
+        record(5000 + i, {
+          role: 'backend',
+          grade: 'junior',
+          language: 'Python',
+          region: 'Москва',
+          city: 'Москва',
+          remote: false,
+          company: 'Яндекс',
+          pay: 120_000 + i * 2_000,
+          payMin: 110_000 + i * 2_000,
+          payMax: 130_000 + i * 2_000,
+        }),
+        record(6000 + i, {
+          role: 'backend',
+          grade: 'senior',
+          language: 'Python',
+          region: 'Не указан',
+          remote: true,
+          company: 'Т-Банк',
+          pay: 380_000 + i * 4_000,
+          payMin: 350_000 + i * 4_000,
+          payMax: 410_000 + i * 4_000,
+        }),
+      );
+      // International IT records across CEE (PLN), Western Europe (EUR), and North America / Remote (USD)
+      records.push(
+        record(7000 + i, {
+          scope: 'intl',
+          market: 'intl',
+          platform: 'justjoin.it',
+          role: 'backend',
+          grade: 'junior',
+          language: 'Python',
+          region: 'Другие города',
+          city: 'Варшава',
+          remote: false,
+          company: 'Allegro',
+          currency: 'PLN',
+          pay: 260_000 + i * 3_000,
+          payMin: 240_000 + i * 3_000,
+          payMax: 280_000 + i * 3_000,
+        }),
+        record(8000 + i, {
+          scope: 'intl',
+          market: 'intl',
+          platform: 'greenhouse',
+          role: 'backend',
+          grade: 'middle',
+          language: 'Python',
+          region: 'Другие города',
+          city: 'Берлин',
+          remote: false,
+          company: 'N26',
+          currency: 'EUR',
+          pay: 520_000 + i * 5_000,
+          payMin: 490_000 + i * 5_000,
+          payMax: 550_000 + i * 5_000,
+        }),
+        record(9000 + i, {
+          scope: 'intl',
+          market: 'intl',
+          platform: 'ashby',
+          role: 'backend',
+          grade: 'senior',
+          language: 'Python',
+          region: 'Другие города',
+          city: 'Сан-Франциско',
+          remote: true,
+          ai: true,
+          company: 'Linear',
+          currency: 'USD',
+          pay: 1_100_000 + i * 10_000,
+          payMin: 1_000_000 + i * 10_000,
+          payMax: 1_200_000 + i * 10_000,
+        }),
+        record(9500 + i, {
+          scope: 'intl',
+          market: 'intl',
+          payPeriod: 'project',
+          type: 'gig',
+          platform: 'freelancer.com',
+          role: 'backend',
+          currency: 'USD',
+          pay: 45_000 + i * 5_000,
+        }),
+      );
+    }
+
+    const report = buildReport(records, monthPeriod('2026-11'), 'month');
+    expect(report.jobs.intlResearch).toBeDefined();
+    expect(report.jobs.intlResearch!.totalVacancies).toBe(45);
+    expect(report.jobs.intlResearch!.paidVacancies).toBe(45);
+    expect(report.jobs.intlResearch!.gradeMatrix.length).toBeGreaterThanOrEqual(1);
+    expect(report.jobs.intlResearch!.languageMatrix.length).toBeGreaterThanOrEqual(1);
+    expect(report.jobs.intlResearch!.macroRegions.length).toBeGreaterThanOrEqual(2);
+    expect(report.jobs.intlResearch!.byHub.map((h) => h.key)).toEqual(
+      expect.arrayContaining(['Варшава', 'Берлин', 'Сан-Франциско']),
+    );
+    expect(report.jobs.intlResearch!.econometrics.all.gini).toBeGreaterThan(0.1);
+    expect(report.jobs.intlResearch!.econometrics.all.theil).toBeGreaterThan(0.01);
+    expect(report.jobs.intlResearch!.scientific.mincer).toBeDefined();
+
+    expect(report.jobs.crossMarket).toBeDefined();
+    expect(report.jobs.crossMarket!.byGrade.length).toBeGreaterThanOrEqual(2);
+    expect(report.jobs.crossMarket!.byRole.length).toBeGreaterThanOrEqual(1);
+    expect(report.jobs.crossMarket!.structuralMetrics.length).toBeGreaterThanOrEqual(3);
+
+    expect(report.gigs.intlByCategory?.length).toBeGreaterThanOrEqual(1);
+    expect(report.gigs.intlBrackets?.length).toBeGreaterThanOrEqual(1);
+
+    const ruHtml = renderReportPage({ report, baseUrl: 'https://openradar.fun', version: '0.75.0', snapshots: [] });
+    const enHtml = renderReportPageEn({ report, baseUrl: 'https://openradar.fun', version: '0.75.0', snapshots: [] });
+    expect(ruHtml).toContain('id="cross-market-comparison"');
+    expect(ruHtml).toContain('id="intl-heatmap-role-grade"');
+    expect(ruHtml).toContain('id="intl-macro-regions"');
+    expect(ruHtml).toContain('id="intl-econometrics"');
+    expect(ruHtml).toContain('id="intl-mincer"');
+    expect(enHtml).toContain('id="cross-market-comparison"');
+    expect(enHtml).toContain('id="intl-heatmap-role-grade"');
+    expect(enHtml).toContain('id="intl-macro-regions"');
+  });
+});
+
+describe('research v0.79.0 native UI & paper.tex', () => {
+  it('keeps native OpenRadar styling without rs-editorial override and exports LaTeX paper', () => {
+    const report = buildReport([], monthPeriod('2026-11'), 'month');
+    const ruHtml = renderReportPage({ report, baseUrl: 'https://openradar.fun', version: '0.79.0', snapshots: [] });
+    expect(ruHtml).toContain('rs-enhance-style');
+    expect(ruHtml).not.toContain('rs-editorial');
+    expect(ruHtml).not.toContain('капитал');
+
+    const texRu = renderAcademicPaperLatex(report, 'https://openradar.fun', 'ru');
+    expect(texRu).toContain('\\documentclass');
+    expect(texRu).toContain('\\begin{document}');
+    const texEn = renderAcademicPaperLatex(report, 'https://openradar.fun', 'en');
+    expect(texEn).toContain('Blinder--Oaxaca');
   });
 });

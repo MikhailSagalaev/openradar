@@ -78,6 +78,27 @@ describe('personal Telegram sources', () => {
     expect(t.calls.at(-1)).toEqual({ chat: 'jobs_public', minId: 6 });
   });
 
+  it('does not award credit for duplicate posts (Sybil farming prevention)', async () => {
+    const msg = message(10, {}, 'Уникальный проект для проверки антифарминга очков, бюджет 50 000 ₽');
+    const t = await setup(['@jobs_public'], { jobs_public: [msg] });
+    
+    // First round inserts the lead and awards credit
+    const round1 = await pollUserTelegramSources(t.deps);
+    expect(round1.inserted).toBe(1);
+    expect(t.credit).toHaveBeenCalledTimes(1);
+
+    // Reset cursor manually to simulate seeing the same message or duplicate
+    await t.store.updateUserSource!(t.source.id, t.user.id, { cursors: {} });
+    t.credit.mockClear();
+
+    const later = { ...t.deps, now: () => new Date(NOW.getTime() + 16 * 60_000) };
+    const round2 = await pollUserTelegramSources(later);
+    expect(round2.found).toBe(1);
+    expect(round2.inserted).toBe(0);
+    // Credit must NOT be called for duplicate
+    expect(t.credit).not.toHaveBeenCalled();
+  });
+
   it('never reads dialogs with people or chats without a public link', async () => {
     const t = await setup(['@friend', '-1001234', '@jobs_public'], {
       friend: [message(1, { type: 'user', username: 'friend' }, 'Привет! Нужен разработчик для моего проекта, обсудим цену завтра?')],
