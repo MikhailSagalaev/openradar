@@ -666,7 +666,10 @@ export class PostgresStore implements Store {
          JOIN sources s ON s.id = l.source_id
          LEFT JOIN model_decisions d ON d.lead_id = l.id AND d.version = $2
         WHERE d.lead_id IS NULL
-          AND l.created_at >= now() - interval '30 days'
+          AND l.status <> 'rejected'
+          AND COALESCE(l.state, 'active') = 'active'
+          AND l.archived_at IS NULL
+          AND l.created_at >= now() - interval '14 days'
           AND COALESCE(l.source_visibility, 'public') <> 'private'
           AND COALESCE((s.config_json->>'userTelegram')::boolean, false) = false
         ORDER BY l.created_at DESC LIMIT $1`,

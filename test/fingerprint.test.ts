@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   computeMinHashBands,
   computeMinHashSketch,
+  decodeMinHashSketch,
   estimateJaccardFromSketches,
+  estimateJaccardFromUint16,
   fingerprintOf,
   MINHASH_BANDS,
   sha256,
@@ -111,5 +113,34 @@ describe('MinHash sketches & fuzzy deduplication (radar/1)', () => {
     // Completely different text should have 0 collisions
     const diffCollisions = bandsOriginal.filter((b, idx) => b === bandsReact[idx]);
     expect(diffCollisions.length).toBe(0);
+  });
+
+  it('decodes Uint16Array and computes zero-copy Jaccard identical to estimateJaccardFromSketches', () => {
+    const sketchOriginal = computeMinHashSketch(baseJobText);
+    const sketchRepost = computeMinHashSketch(repostedJobText);
+
+    const uintA = decodeMinHashSketch(sketchOriginal);
+    const uintB = decodeMinHashSketch(sketchRepost);
+
+    expect(uintA).toBeInstanceOf(Uint16Array);
+    expect(uintB).toBeInstanceOf(Uint16Array);
+    expect(uintA?.length).toBe(64);
+
+    const jFromUint = estimateJaccardFromUint16(uintA!, uintB!);
+    const jFromSketches = estimateJaccardFromSketches(sketchOriginal, sketchRepost);
+
+    expect(jFromUint).toBe(jFromSketches);
+    expect(decodeMinHashSketch('')).toBeNull();
+    expect(decodeMinHashSketch('invalid-length')).toBeNull();
+  });
+
+  it('safely handles unaligned (odd byteOffset) buffers without RangeError', () => {
+    const sketch = computeMinHashSketch(baseJobText);
+    const decoded = decodeMinHashSketch(sketch);
+    expect(decoded).not.toBeNull();
+
+    // Verify computeMinHashBands also succeeds on valid sketch
+    const bands = computeMinHashBands(sketch);
+    expect(bands).toHaveLength(MINHASH_BANDS);
   });
 });

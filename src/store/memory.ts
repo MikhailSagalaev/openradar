@@ -337,7 +337,15 @@ export class MemoryStore implements Store {
 
   async listLeadsToDecide(limit: number): Promise<Array<{ id: string; title: string; text: string }>> {
     return [...this.leads.values()]
-      .filter((l) => !this.modelDecisions.has(l.id) && l.sourceRef?.visibility !== 'private' && this.sources.get(l.sourceId)?.config.userTelegram !== true)
+      .filter(
+        (l) =>
+          !this.modelDecisions.has(l.id) &&
+          l.status !== 'rejected' &&
+          (l.state ?? 'active') === 'active' &&
+          !l.archivedAt &&
+          l.sourceRef?.visibility !== 'private' &&
+          this.sources.get(l.sourceId)?.config.userTelegram !== true,
+      )
       .slice(0, limit)
       .map((l) => ({ id: l.id, title: l.title, text: l.text }));
   }
