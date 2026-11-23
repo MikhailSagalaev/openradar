@@ -999,7 +999,7 @@ export class MemoryStore implements Store {
     }
     if (options.language) {
       const russian = options.language === 'ru';
-      result = result.filter((l) => /[А-Яа-яЁё]/.test(titleForLanguage(l.title)) === russian);
+      result = result.filter((l) => (l.lang ? l.lang === options.language : /[А-Яа-яЁё]/.test(titleForLanguage(l.title)) === russian));
     }
     if (options.createdAfter) {
       const since = options.createdAfter;

@@ -35,6 +35,7 @@ const envSchema = z.object({
   RADAR_POLL_INTERVAL_SEC: z.coerce.number().int().positive().default(300),
   RADAR_POLL_CONCURRENCY: z.coerce.number().int().positive().default(16),
   RADAR_LLM_ENABLED: booleanFromEnv(false),
+  RADAR_LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(8_000).optional(),
   OPENAI_API_KEY: optionalString,
   OPENAI_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
   OPENAI_MODEL: z.string().default('gpt-4o-mini'),
