@@ -70,7 +70,7 @@ export function createPopularCounters(options: {
   const popularSkills = (filters: SavedFilters): Promise<Array<{ name: string; count: number }>> => {
     const type = filters.type === 'job' || filters.type === 'gig' ? filters.type : undefined;
     const scope: SavedFilters = { type, it: filters.it, remote: filters.remote, language: filters.language, budgetRub: budgetBucket(filters.budgetRub, type) };
-    const hasNarrowFilters = Boolean(scope.it || scope.remote || scope.language || scope.budgetRub);
+    const hasNarrowFilters = Boolean(scope.it || scope.remote || scope.budgetRub);
 
     if (!hasNarrowFilters && options.loadTopSkills) {
       return getTopSkills();
