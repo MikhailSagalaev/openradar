@@ -155,7 +155,7 @@ export const ROLES: RoleDef[] = [
   { slug: 'fullstack', label: 'Fullstack-разработчик', plural: 'fullstack-разработчики', types: ['job'],
     pattern: rx(`full[- ]?stack|фулстек|фуллстек`) },
   { slug: 'frontend', label: 'Frontend-разработчик', plural: 'frontend-разработчики', types: ['job'],
-    pattern: rx(`front[- ]?end|фронтенд|фронт-енд|верстальщик|${W}react${E}|(?<!pearson\\s)${W}vue(?:\\.js|js)?${E}|angular|javascript-разработчик|js-разработчик`) },
+    pattern: rx(`front[- ]?end|фронтенд|фронт-енд|верстальщик|${W}react(?:\\.js|js)?${E}|(?<!pearson\\s)${W}vue(?:\\.js|js)?${E}|angular|next\\.?js|nuxt|svelte|javascript-разработчик|js-разработчик|разработчик\\s+(?:интерфейсов|ui)|разработка\\s+интерфейсов|ui[- ]?(?:developer|engineer|разработчик)`) },
   { slug: 'embedded', label: 'Embedded-разработчик', plural: 'embedded-разработчики', types: ['job'],
     pattern: rx(`embedded|встраиваем|микроконтрол|${W}плис${E}|fpga|${W}stm32`) },
   { slug: 'backend', label: 'Backend-разработчик', plural: 'backend-разработчики', types: ['job'],
@@ -248,7 +248,7 @@ export function roleLabel(slug: string, lang: 'ru' | 'en' = 'ru'): string {
 
 const NON_IT_1C_USER_TITLE = /(?:менеджер\s+по\s+продаж|продавец|торгов\p{L}*\s+представител|бухгалтер|кассир|кладовщик|товаровед|оператор\s+(?:1\s*[-–—]?\s*[сc]|пк|склад|баз)|секретарь|делопроизводител)/iu;
 
-export function classifyRole(type: LeadType, title: string, extra = ''): string {
+export function classifyRole(type: LeadType, title: string, extra = '', skills?: string[]): string {
   if (isPhysicalNonItWork(title, extra)) return OTHER_ROLE.slug;
   if (type === 'gig') {
     // The title decides; the text helps when the title is «Нужна помощь».
@@ -266,8 +266,36 @@ export function classifyRole(type: LeadType, title: string, extra = ''): string 
         (role.slug === 'ai' ? AI_ENGINEER : role.pattern).test(source),
     )?.slug;
   const ai = roleDef('ai')!.pattern;
+  const titleRole = jobRole(title, false) ?? (ai.test(title) ? 'ai' : undefined);
+  if (titleRole && titleRole !== 'backend') return titleRole;
+
+  // When title specifically names backend (e.g. "Python Backend Developer"), keep backend
+  const isExplicitBackend = rx(`\\b(?:back[- ]?end|бэкенд|бекенд)\\b`).test(title);
+  if (isExplicitBackend) return 'backend';
+
+  // If title was a generic developer title or matched default backend, check skills and extra text for specific specialization
+  const isGenericSoftware = titleRole === 'backend' || (ANY_ENGINEER.test(title) && !NOT_SOFTWARE.test(title));
+  if (isGenericSoftware) {
+    if (skills && skills.length > 0) {
+      const hasFrontendSkill = skills.some((s) => rx(`\\b(?:react|vue|angular|next\\.?js|nuxt|svelte|tailwind|css|html|frontend|фронтенд)\\b`).test(s));
+      const hasBackendSkill = skills.some((s) => rx(`\\b(?:python|golang|java(?!script)|c#|\\.net|php|c\\+\\+|rust|scala|ruby|kotlin|1[сc]|backend|бэкенд)\\b`).test(s));
+      if (hasFrontendSkill && !hasBackendSkill) return 'frontend';
+      if (hasFrontendSkill && hasBackendSkill) return 'fullstack';
+      if (skills.some((s) => rx(`\\b(?:ios|android|flutter|swift|react native)\\b`).test(s))) return 'mobile';
+      if (skills.some((s) => rx(`\\b(?:qa|тестиров|sdet)\\b`).test(s))) return 'qa';
+      if (skills.some((s) => rx(`\\b(?:devops|sre|kubernetes)\\b`).test(s))) return 'devops';
+    }
+    if (extra) {
+      const extraRole = jobRole(extra, true);
+      if (extraRole && ['frontend', 'fullstack', 'mobile', 'qa', 'devops', 'security', 'data-engineer', 'ml', 'ai', 'architect', 'sysadmin', 'gamedev', 'embedded'].includes(extraRole)) {
+        return extraRole;
+      }
+    }
+    return 'backend';
+  }
+
   const engineer = ANY_ENGINEER.test(title) && !NOT_SOFTWARE.test(title) ? 'backend' : undefined;
-  return jobRole(title, false) ?? (ai.test(title) ? 'ai' : undefined) ?? engineer ?? (extra ? jobRole(extra, true) : undefined) ?? OTHER_ROLE.slug;
+  return titleRole ?? engineer ?? (extra ? jobRole(extra, true) : undefined) ?? OTHER_ROLE.slug;
 }
 
 // ---------- Languages ----------
@@ -633,7 +661,7 @@ export function deriveRecord(lead: Lead, options: DeriveOptions = {}): ResearchR
   const opening = head.replace(/^Вакансия компании:[^\n]*\n?|^Создана:[^\n]*\n?|^Регион:[^\n]*\n?/gmu, '').slice(0, 250);
   // English company blurbs open with what the company does, so only Russian posts get this help.
   const hint = scopeOf(lead.title, head) === 'ru' ? opening : '';
-  const ruled = classifyRole(type, lead.title, type === 'gig' ? head.slice(0, 600) : `${facts?.specialization ?? ''}\n${hint}`);
+  const ruled = classifyRole(type, lead.title, type === 'gig' ? head.slice(0, 600) : `${facts?.specialization ?? ''}\n${hint}`, skills);
   const role = ruled === OTHER_ROLE.slug && model?.role ? model.role : ruled;
 
   const fromModel: Pay | undefined = model?.currency && model.period

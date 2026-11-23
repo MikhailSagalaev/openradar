@@ -238,7 +238,7 @@ export async function ingestRawLead(
     author: prepared.author,
     company: employer?.name,
     companyKey: employer?.key,
-    direction: classifyRole(prepared.type ?? 'gig', prepared.title, (prepared.type ?? 'gig') === 'gig' || scopeOf(prepared.title, prepared.text) === 'ru' ? prepared.text.slice(0, 600) : ''),
+    direction: classifyRole(prepared.type ?? 'gig', prepared.title, (prepared.type ?? 'gig') === 'gig' || scopeOf(prepared.title, prepared.text) === 'ru' ? prepared.text.slice(0, 600) : '', skills),
     city,
     budget: prepared.budget,
     currency: prepared.currency ?? 'RUB',

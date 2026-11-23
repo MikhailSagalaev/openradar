@@ -605,7 +605,7 @@ export function localizeCatalogEntry(entry: CatalogEntry, lang?: SupportedLang):
 export function isCatalogLeadRelevant(lead: Lead, entry: CatalogEntry): boolean {
   if (isPhysicalNonItWork(lead.title, lead.text)) return false;
   if (entry.directions?.length && lead.direction === 'dev-other') {
-    const liveRole = classifyRole(lead.type ?? entry.type ?? 'gig', lead.title, lead.text);
+    const liveRole = classifyRole(lead.type ?? entry.type ?? 'gig', lead.title, lead.text, lead.skills);
     if (liveRole === 'other') return false;
   }
   return true;

@@ -214,6 +214,43 @@ describe('popular skills and directions cache', () => {
     await counters.popularSkills({});
     expect(loads).toBe(3);
   });
+
+  it('delegates to loadDirections and loadTopSkills when provided', async () => {
+    let dirLoads = 0;
+    let topSkillLoads = 0;
+    const counters = createPopularCounters({
+      loadRecent: async () => [lead(1)],
+      loadDirections: async () => {
+        dirLoads++;
+        return new Map([['backend', 16000], ['frontend', 4000], ['other', 80000]]);
+      },
+      loadTopSkills: async () => {
+        topSkillLoads++;
+        return [{ name: 'Python', count: 13000 }, { name: 'SQL', count: 9000 }];
+      },
+    });
+
+    const dirs = await counters.directionCounts();
+    expect(dirs.get('backend')).toBe(16000);
+    expect(dirs.get('other')).toBe(80000);
+    expect(dirLoads).toBe(1);
+
+    // Cached call within TTL
+    await counters.directionCounts();
+    expect(dirLoads).toBe(1);
+
+    // Unfiltered popular skills uses loadTopSkills
+    const skills = await counters.popularSkills({ type: 'job' });
+    expect(skills).toEqual([
+      { name: 'Python', count: 13000 },
+      { name: 'SQL', count: 9000 },
+    ]);
+    expect(topSkillLoads).toBe(1);
+
+    // Narrow-filtered popular skills falls back to recent window
+    const narrow = await counters.popularSkills({ type: 'job', remote: true });
+    expect(narrow.length).toBeLessThanOrEqual(2);
+  });
 });
 
 describe('research dataset CSV cache', () => {

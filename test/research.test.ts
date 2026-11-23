@@ -88,6 +88,12 @@ describe('role, grade, language and employer', () => {
     expect(classifyRole('job', 'Менеджер по продажам B2B (кассы, маркировка, 1С)')).toBe('sales');
     expect(classifyRole('job', 'Продавец-консультант в Салон оптики', 'Работа в 1С')).toBe('sales');
     expect(classifyRole('job', 'Оператор 1С на склад')).toBe('other');
+    expect(classifyRole('job', 'Разработчик интерфейсов')).toBe('frontend');
+    expect(classifyRole('job', 'Next.js разработчик')).toBe('frontend');
+    expect(classifyRole('job', 'Senior Software Engineer', '', ['React', 'TypeScript', 'Tailwind'])).toBe('frontend');
+    expect(classifyRole('job', 'Software Engineer', '', ['React', 'Python', 'PostgreSQL'])).toBe('fullstack');
+    expect(classifyRole('job', 'Senior Software Engineer', '', ['Python', 'PostgreSQL'])).toBe('backend');
+    expect(classifyRole('job', 'Разработчик', 'Ищем frontend разработчика на React')).toBe('frontend');
   });
 
   it('classifies orders by title, then by text', () => {
