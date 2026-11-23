@@ -1388,7 +1388,7 @@ export class PostgresStore implements Store {
       if (trimmed.length >= 2) {
         queryTsIdx = idx;
         if (this.hasPgSearch) {
-          conditions.push(`leads @@@ $${idx}`);
+          conditions.push(`leads @@@ paradedb.parse($${idx}, lenient => true)`);
           params.push(trimmed);
         } else {
           conditions.push(`search_vector @@ (websearch_to_tsquery('russian', $${idx}) || websearch_to_tsquery('english', $${idx}))`);
