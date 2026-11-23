@@ -32,6 +32,7 @@ interface RecentWindow {
 export function createPopularCounters(options: {
   loadRecent: () => Promise<Lead[]>;
   loadDirections?: () => Promise<Map<string, number>>;
+  loadGrades?: () => Promise<Map<string, number>>;
   loadTopSkills?: () => Promise<Array<{ name: string; count: number }>>;
   now?: () => number;
   ttlMs?: number;
@@ -43,6 +44,7 @@ export function createPopularCounters(options: {
   let window: { at: number; promise: Promise<RecentWindow> } | undefined;
   const skillCache = new Map<string, { at: number; promise: Promise<Array<{ name: string; count: number }>> }>();
   let directionCache: { at: number; promise: Promise<Map<string, number>> } | undefined;
+  let gradeCache: { at: number; promise: Promise<Map<string, number>> } | undefined;
   let topSkillsCache: { at: number; promise: Promise<Array<{ name: string; count: number }>> } | undefined;
 
   const getTopSkills = (): Promise<Array<{ name: string; count: number }>> => {
@@ -123,5 +125,22 @@ export function createPopularCounters(options: {
     return promise;
   };
 
-  return { popularSkills, directionCounts, get cachedSkillKeys(): number { return skillCache.size; } };
+  /** Lead counts per `grade`: uses `loadGrades` when supplied, else counts over recent window. */
+  const gradeCounts = (): Promise<Map<string, number>> => {
+    if (gradeCache && now() - gradeCache.at < ttlMs) return gradeCache.promise;
+    const at = now();
+    const promise = options.loadGrades
+      ? options.loadGrades()
+      : recent().then(({ leads }) => {
+          const counts = new Map<string, number>();
+          for (const { lead } of leads) if (lead.grade) counts.set(lead.grade, (counts.get(lead.grade) ?? 0) + 1);
+          return counts;
+        });
+    const entry = { at, promise };
+    gradeCache = entry;
+    promise.catch(() => { if (gradeCache === entry) gradeCache = undefined; });
+    return promise;
+  };
+
+  return { popularSkills, directionCounts, gradeCounts, get cachedSkillKeys(): number { return skillCache.size; } };
 }

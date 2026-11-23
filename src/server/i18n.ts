@@ -128,6 +128,7 @@ export interface Translations {
   budgetSelectLabel: string;
   skillSelectLabel: string;
   directionSelectLabel: string;
+  gradeSelectLabel: string;
   langSelectLabel: string;
   closeDialog: string;
   sortNew: string;
@@ -138,6 +139,12 @@ export interface Translations {
   budgetFrom: string;
   skillAny: string;
   directionAny: string;
+  gradeAny: string;
+  gradeIntern: string;
+  gradeJunior: string;
+  gradeMiddle: string;
+  gradeSenior: string;
+  gradeLead: string;
   remoteOnly: string;
   itOnly: string;
   resetFilters: string;
@@ -323,6 +330,7 @@ export const RU: Translations = {
   budgetSelectLabel: 'Минимальный бюджет',
   skillSelectLabel: 'Фильтр по навыку',
   directionSelectLabel: 'Фильтр по направлению',
+  gradeSelectLabel: 'Уровень (грейд)',
   langSelectLabel: 'Язык публикаций',
   closeDialog: 'Закрыть окно',
   sortNew: 'Сначала новые',
@@ -333,6 +341,12 @@ export const RU: Translations = {
   budgetFrom: 'от {n} ₽',
   skillAny: 'Все навыки',
   directionAny: 'Все направления',
+  gradeAny: 'Любой грейд',
+  gradeIntern: 'Стажёр (Intern)',
+  gradeJunior: 'Джуниор (Junior)',
+  gradeMiddle: 'Мидл (Middle)',
+  gradeSenior: 'Сеньор (Senior)',
+  gradeLead: 'Тимлид / Lead',
   remoteOnly: 'Только удалённо',
   itOnly: 'Только IT',
   resetFilters: 'Сбросить фильтры',
@@ -513,6 +527,7 @@ export const EN: Translations = {
   budgetSelectLabel: 'Minimum budget',
   skillSelectLabel: 'Filter by skill',
   directionSelectLabel: 'Filter by direction',
+  gradeSelectLabel: 'Seniority level',
   langSelectLabel: 'Publication language',
   closeDialog: 'Close dialog',
   sortNew: 'Newest first',
@@ -523,6 +538,12 @@ export const EN: Translations = {
   budgetFrom: 'from {n} ₽',
   skillAny: 'All skills',
   directionAny: 'All directions',
+  gradeAny: 'Any grade',
+  gradeIntern: 'Intern',
+  gradeJunior: 'Junior',
+  gradeMiddle: 'Middle',
+  gradeSenior: 'Senior',
+  gradeLead: 'Lead / Principal',
   remoteOnly: 'Remote only',
   itOnly: 'IT only',
   resetFilters: 'Reset filters',

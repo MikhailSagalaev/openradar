@@ -19,6 +19,7 @@ import { salaryLooksWrong } from '../core/salary-sanity.ts';
 import type { SourcePreset } from '../sources/presets.ts';
 import { ATS_LABELS, ATS_PROVIDERS } from '../sources/ats.ts';
 import { ROLES, roleLabel } from '../research/derive.ts';
+import { DECISION_GRADES } from '../core/decisions.ts';
 import type { LeadSort } from '../core/store.ts';
 
 export interface AuthDisplay {
@@ -48,6 +49,8 @@ export interface LeadsPageData {
   popularSkills?: Array<{ name: string; count: number }>;
   /** Directions/roles with counts for faceted filter. */
   directions?: Array<{ slug: string; label: string; count?: number }>;
+  /** Grades with counts for faceted filter. */
+  popularGrades?: Array<{ slug: string; total: number }>;
   /** No lead matched the whole query; these match some of its words. */
   partialMatch?: boolean;
   /** 1-based page of the feed and whether another page follows. */
@@ -2077,6 +2080,19 @@ legend {
   color: var(--muted);
   font-size: 12.5px;
 }
+.tag-grade {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  line-height: 1.3;
+}
 pre.token {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -2969,6 +2985,9 @@ function leadRow(lead: Lead, source?: SourceRecord, lang: SupportedLang = 'ru', 
   }
 
   const details: string[] = [];
+  if (lead.grade) {
+    details.push(`<span class="tag-grade">${escapeHtml(lead.grade.toUpperCase())}</span>`);
+  }
   if (signals.length) {
     details.push(signals.join(', '));
   }
@@ -3082,6 +3101,7 @@ export function renderLeadsPage(data: LeadsPageData): string {
       budget: filters.budgetRub ? String(filters.budgetRub) : undefined,
       skill: filters.skill,
       direction: filters.direction,
+      grade: filters.grade,
       language: filters.language === filters.defaultLanguage ? undefined : (filters.language ?? 'all'),
       remote: filters.remote ? '1' : undefined,
       it: filters.it ? '1' : undefined,
@@ -3153,6 +3173,25 @@ export function renderLeadsPage(data: LeadsPageData): string {
   ];
   const directionSelect = renderDropdown('direction', t.directionSelectLabel, directionItems, Boolean(filters.direction), true);
 
+  const gradeLabelMap: Record<string, string> = {
+    intern: t.gradeIntern,
+    junior: t.gradeJunior,
+    middle: t.gradeMiddle,
+    senior: t.gradeSenior,
+    lead: t.gradeLead,
+  };
+  const gradeCountsMap = new Map(data.popularGrades?.map((g) => [g.slug, g.total]) ?? []);
+  const gradeItems: DropdownItem[] = [
+    { value: '', label: t.gradeAny, selected: !filters.grade },
+    ...DECISION_GRADES.map((g) => ({
+      value: g,
+      label: gradeLabelMap[g] ?? g,
+      count: gradeCountsMap.get(g),
+      selected: filters.grade === g,
+    })),
+  ];
+  const gradeSelect = renderDropdown('grade', t.gradeSelectLabel, gradeItems, Boolean(filters.grade));
+
   const budgetSteps = budgetStepsFor(type === 'gig' || type === 'job' ? type : undefined);
   const budgetItems: DropdownItem[] = [
     { value: '', label: t.budgetAny, selected: !filters.budgetRub },
@@ -3214,10 +3253,10 @@ export function renderLeadsPage(data: LeadsPageData): string {
   // On phones the filters fold under one button unless some are set (see the script below).
   const activeCount = activeFilterCount(filters);
   const filterBar = `<details class="filters" id="feed-filters"${hasActiveFilters(filters) ? ' open' : ''}><summary class="filters-toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>${escapeHtml(t.filtersTitle)}${activeCount ? `<span class="filters-count">${activeCount}</span>` : ''}<svg class="filters-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div class="filter-bar">
-    ${sortSelect}${directionSelect}${budgetSelect}${skillSelect}${languageSelect}
+    ${sortSelect}${directionSelect}${gradeSelect}${budgetSelect}${skillSelect}${languageSelect}
     <label class="filter-check${filters.it ? ' active' : ''}"><input type="checkbox" name="it" value="1"${filters.it ? ' checked' : ''} onchange="this.form.submit()">${escapeHtml(t.itOnly)}</label>
     <label class="filter-check${filters.remote ? ' active' : ''}"><input type="checkbox" name="remote" value="1"${filters.remote ? ' checked' : ''} onchange="this.form.submit()">${escapeHtml(t.remoteOnly)}</label>
-    ${hasActiveFilters(filters) ? `<a class="filter-reset" href="${escapeHtml(hrefWith({ sort: undefined, direction: undefined, budget: undefined, skill: undefined, language: undefined, remote: undefined, it: undefined }))}">${escapeHtml(t.resetFilters)}</a>` : ''}
+    ${hasActiveFilters(filters) ? `<a class="filter-reset" href="${escapeHtml(hrefWith({ sort: undefined, direction: undefined, grade: undefined, budget: undefined, skill: undefined, language: undefined, remote: undefined, it: undefined }))}">${escapeHtml(t.resetFilters)}</a>` : ''}
     ${followControl}
     <a class="filter-rss" href="${escapeHtml(rssHref)}" target="_blank" rel="noopener">RSS</a>
   </div></details>
@@ -3745,6 +3784,7 @@ ${cautionBanner}
       ${lead.category ? `<div><dt>${escapeHtml(t.category)}</dt><dd><b>${escapeHtml(translateSkill(lead.category, lang))}</b></dd></div>` : ''}
       <div><dt>${escapeHtml(t.location)}</dt><dd>${escapeHtml(translateCity(lead.city, lang) ?? (lead.isRemote ? t.remote : '—'))}</dd></div>
       <div><dt>${escapeHtml(t.format)}</dt><dd>${lead.workplaceType === 'hybrid' ? escapeHtml(t.hybridFormat) : (lead.isRemote ? escapeHtml(t.remoteFormat) : escapeHtml(t.onsiteFormat))}</dd></div>
+      ${lead.grade ? `<div><dt>${escapeHtml(lang === 'en' ? 'Seniority' : 'Грейд')}</dt><dd><span class="tag-grade">${escapeHtml(lead.grade.toUpperCase())}</span></dd></div>` : ''}
       <div><dt>${escapeHtml(t.budget)}</dt><dd>${salaryDisplay}${usdEstimate}</dd></div>
       <div><dt>${escapeHtml(t.score)}</dt><dd>${scoreCell(lead.score, lang)}</dd></div>
       <div><dt>${escapeHtml(t.published)}</dt><dd>${formatDate(lead.publishedAt, lang)}</dd></div>

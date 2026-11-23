@@ -89,6 +89,8 @@ export interface ListLeadsOptions {
   publishedAfter?: string;
   /** Only leads whose research direction (role) is one of these: catalog pages and role filters. */
   directionsAny?: string[];
+  /** Only leads with this seniority grade (intern, junior, middle, senior, lead). */
+  grade?: string;
   sort?: LeadSort;
   /** Only leads whose title is in Russian (Cyrillic) or in English (no Cyrillic). */
   language?: 'ru' | 'en';
@@ -543,6 +545,8 @@ export interface Store extends HubStore {
   markDecisionApplied?(leadId: string, applied: string): Promise<void>;
   /** Fills empty/other research direction from a sure model answer: data, not a feed action. */
   applyLeadDirection?(leadId: string, direction: string): Promise<void>;
+  /** Fills seniority grade when column is empty or from model decision. */
+  applyLeadGrade?(leadId: string, grade: string): Promise<void>;
   /** Fills workplace only when the column is still empty (rules win when they already wrote one). */
   applyLeadWorkplace?(leadId: string, workplaceType: 'remote' | 'hybrid' | 'onsite', isRemote: boolean): Promise<void>;
   /** Backfill: copy sure SubQ directions onto leads still stuck on empty/other. */
@@ -560,6 +564,8 @@ export interface Store extends HubStore {
   deleteLeadReview?(leadId: string, userId: number): Promise<void>;
   /** Directions with open posts, the fullest first. */
   listDirections?(): Promise<Array<{ slug: string; total: number }>>;
+  /** Seniority grades across active posts with counts, fullest first. */
+  listGrades?(): Promise<Array<{ slug: string; total: number }>>;
   /** Top skills across active posts, most popular first. */
   listTopSkills?(limit?: number): Promise<Array<{ name: string; total: number }>>;
   listLeadsForDirections?(afterId: string | null, limit: number): Promise<Lead[]>;

@@ -1,4 +1,4 @@
-import { classifyRole, scopeOf } from '../research/derive.ts';
+import { classifyRole, detectGrade, scopeOf } from '../research/derive.ts';
 import { employerOf } from '../core/company.ts';
 import { randomUUID } from 'node:crypto';
 import { prepareRawLead } from '../core/prepare.ts';
@@ -239,6 +239,7 @@ export async function ingestRawLead(
     company: employer?.name,
     companyKey: employer?.key,
     direction: classifyRole(prepared.type ?? 'gig', prepared.title, (prepared.type ?? 'gig') === 'gig' || scopeOf(prepared.title, prepared.text) === 'ru' ? prepared.text.slice(0, 600) : '', skills),
+    grade: prepared.grade ?? detectGrade(prepared.title, prepared.text, undefined, classifyRole(prepared.type ?? 'gig', prepared.title, (prepared.type ?? 'gig') === 'gig' || scopeOf(prepared.title, prepared.text) === 'ru' ? prepared.text.slice(0, 600) : '', skills)),
     city,
     budget: prepared.budget,
     currency: prepared.currency ?? 'RUB',

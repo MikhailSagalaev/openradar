@@ -202,6 +202,14 @@ export async function applyDecisions(deps: DecideDeps, limit: number): Promise<{
       await store.applyLeadDirection(decision.leadId, decision.direction);
       summary.directed++;
     }
+    // Seniority grade from the model
+    if (
+      decision.grade
+      && ['intern', 'junior', 'middle', 'senior', 'lead'].includes(decision.grade)
+      && store.applyLeadGrade
+    ) {
+      await store.applyLeadGrade(decision.leadId, decision.grade);
+    }
     // Only fill workplace when rules left it empty: SubQ remote is noul, not hybrid-aware.
     if (decision.remote !== undefined && store.applyLeadWorkplace) {
       let wp: 'remote' | 'hybrid' | 'onsite' | undefined;

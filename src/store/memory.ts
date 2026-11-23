@@ -395,6 +395,11 @@ export class MemoryStore implements Store {
     if (lead && (!lead.direction || lead.direction === '' || lead.direction === 'other')) lead.direction = direction;
   }
 
+  async applyLeadGrade(leadId: string, grade: string): Promise<void> {
+    const lead = this.leads.get(leadId);
+    if (lead && (!lead.grade || lead.grade === '')) lead.grade = grade;
+  }
+
   async applyLeadWorkplace(leadId: string, workplaceType: 'remote' | 'hybrid' | 'onsite', isRemote: boolean): Promise<void> {
     const lead = this.leads.get(leadId);
     if (lead && lead.workplaceType == null) {
@@ -527,6 +532,16 @@ export class MemoryStore implements Store {
   async listDirections(): Promise<Array<{ slug: string; total: number }>> {
     const counts = new Map<string, number>();
     for (const lead of this.leads.values()) if (lead.direction && (lead.state ?? 'active') === 'active') counts.set(lead.direction, (counts.get(lead.direction) ?? 0) + 1);
+    return [...counts.entries()].map(([slug, total]) => ({ slug, total })).sort((a, b) => b.total - a.total);
+  }
+
+  async listGrades(): Promise<Array<{ slug: string; total: number }>> {
+    const counts = new Map<string, number>();
+    for (const lead of this.leads.values()) {
+      if (lead.grade && (lead.state ?? 'active') === 'active' && lead.status !== 'rejected') {
+        counts.set(lead.grade, (counts.get(lead.grade) ?? 0) + 1);
+      }
+    }
     return [...counts.entries()].map(([slug, total]) => ({ slug, total })).sort((a, b) => b.total - a.total);
   }
 
@@ -1042,6 +1057,9 @@ export class MemoryStore implements Store {
     if (options.directionsAny?.length) {
       const wanted = new Set(options.directionsAny.map((d) => d.toLowerCase()));
       result = result.filter((l) => l.direction && wanted.has(l.direction.toLowerCase()));
+    }
+    if (options.grade) {
+      result = result.filter((l) => l.grade === options.grade);
     }
     if (options.occupationCodes?.length) {
       const codes = options.occupationCodes;

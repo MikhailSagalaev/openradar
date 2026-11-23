@@ -499,7 +499,7 @@ export class PostgresStore implements Store {
           raw_salary, payment_period, normalized_usd_min, normalized_usd_max,
           minhash_sketch, state, contacts_json,
           source_platform, source_channel, source_channel_title, source_visibility, source_message_id,
-          company, company_key, direction, workplace_type, lang
+          company, company_key, direction, workplace_type, lang, grade
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7,
           $8, $9, $10, $11, $12, $13::jsonb, $14,
@@ -509,7 +509,7 @@ export class PostgresStore implements Store {
           $30, $31, $32, $33,
           $34, $35, $36::jsonb,
           $37, $38, $39, $40, $41,
-          $42, $43, $44, $45, $46
+          $42, $43, $44, $45, $46, $47
         ) ON CONFLICT DO NOTHING`,
         [
           lead.id,
@@ -558,6 +558,7 @@ export class PostgresStore implements Store {
           lead.direction ?? null,
           lead.workplaceType ?? (lead.isRemote === true ? 'remote' : lead.isRemote === false ? 'onsite' : null),
           lead.lang ?? (/[А-Яа-яЁё]/.test(titleForLanguage(lead.title)) ? 'ru' : 'en'),
+          lead.grade ?? null,
         ]
       );
 
@@ -776,6 +777,14 @@ export class PostgresStore implements Store {
     );
   }
 
+  async applyLeadGrade(leadId: string, grade: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE leads SET grade = $2
+        WHERE id = $1 AND (grade IS NULL OR grade = '')`,
+      [leadId, grade],
+    );
+  }
+
   async applyLeadWorkplace(leadId: string, workplaceType: 'remote' | 'hybrid' | 'onsite', isRemote: boolean): Promise<void> {
     await this.pool.query(
       `UPDATE leads SET workplace_type = $2, is_remote = $3
@@ -903,6 +912,14 @@ export class PostgresStore implements Store {
         WHERE direction IS NOT NULL AND state = 'active' AND status <> 'rejected' GROUP BY direction ORDER BY total DESC`,
     );
     return res.rows.map((r) => ({ slug: String(r.direction), total: Number(r.total) }));
+  }
+
+  async listGrades(): Promise<Array<{ slug: string; total: number }>> {
+    const res = await this.pool.query(
+      `SELECT grade, count(*)::int AS total FROM leads
+        WHERE grade IS NOT NULL AND state = 'active' AND status <> 'rejected' GROUP BY grade ORDER BY total DESC`,
+    );
+    return res.rows.map((r) => ({ slug: String(r.grade), total: Number(r.total) }));
   }
 
   async listTopSkills(limit = 40): Promise<Array<{ name: string; total: number }>> {
@@ -1420,6 +1437,10 @@ export class PostgresStore implements Store {
       conditions.push(`direction = ANY($${idx++}::text[])`);
       params.push(options.directionsAny);
     }
+    if (options.grade) {
+      conditions.push(`grade = $${idx++}`);
+      params.push(options.grade);
+    }
     let queryTsIdx: number | undefined;
     if (options.query && options.query.trim().length > 0) {
       const trimmed = options.query.trim();
@@ -1866,6 +1887,7 @@ export class PostgresStore implements Store {
       company: r.company ?? undefined,
       companyKey: r.company_key ?? undefined,
       direction: r.direction ?? undefined,
+      grade: r.grade ?? undefined,
       contacts: parseJsonArray(r.contacts_json),
       sourceRef: r.source_platform && r.source_channel
         ? {
@@ -3307,6 +3329,14 @@ export class PostgresStore implements Store {
           `UPDATE leads SET direction = $2, role = COALESCE(role, $2)
            WHERE id = $1 AND (direction IS NULL OR direction = '' OR direction = 'other')`,
           [id, facts.role],
+        );
+      }
+
+      // 7. Seniority grade
+      if (facts.grade && ['intern', 'junior', 'middle', 'senior', 'lead'].includes(facts.grade)) {
+        await client.query(
+          `UPDATE leads SET grade = $2 WHERE id = $1 AND (grade IS NULL OR grade = '')`,
+          [id, facts.grade],
         );
       }
 

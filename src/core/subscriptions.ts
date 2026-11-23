@@ -17,6 +17,7 @@ export interface SavedFilters {
   remote?: boolean;
   budgetRub?: number;
   skill?: string;
+  grade?: string;
   language?: 'ru' | 'en';
 }
 
@@ -72,6 +73,7 @@ export function savedFiltersFrom(input: Record<string, unknown>): SavedFilters {
     remote: flag('remote'),
     budgetRub: Number.isFinite(budget) && budget > 0 ? Math.min(Math.round(budget), 100_000_000) : undefined,
     skill: text('skill', 40),
+    grade: text('grade', 20),
     language,
   };
   return Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== undefined)) as SavedFilters;
@@ -79,7 +81,7 @@ export function savedFiltersFrom(input: Record<string, unknown>): SavedFilters {
 
 /** True when the filter narrows nothing: such a subscription would be the whole feed. */
 export function isEmptyFilter(filters: SavedFilters): boolean {
-  return !filters.q && !filters.it && !filters.skill && !filters.budgetRub && !filters.type && !filters.remote;
+  return !filters.q && !filters.it && !filters.skill && !filters.budgetRub && !filters.type && !filters.remote && !filters.grade;
 }
 
 /** The feed URL of a saved filter, so a digest links to the rest of its leads. */
@@ -90,6 +92,7 @@ export function feedQuery(filters: SavedFilters): string {
   params.set('sort', 'new');
   if (filters.budgetRub) params.set('budget', String(filters.budgetRub));
   if (filters.skill) params.set('skill', filters.skill);
+  if (filters.grade) params.set('grade', filters.grade);
   params.set('language', filters.language ?? 'all');
   if (filters.remote) params.set('remote', '1');
   if (filters.it) params.set('it', '1');
@@ -103,6 +106,7 @@ export function subscriptionName(filters: SavedFilters): string {
     filters.type === 'job' ? 'вакансии' : filters.type === 'gig' ? 'заказы' : undefined,
     filters.it ? 'IT' : undefined,
     filters.skill,
+    filters.grade,
     filters.remote ? 'удалённо' : undefined,
     filters.budgetRub ? `от ${new Intl.NumberFormat('ru-RU').format(filters.budgetRub)} ₽` : undefined,
     filters.language === 'ru' ? 'на русском' : filters.language === 'en' ? 'на английском' : undefined,

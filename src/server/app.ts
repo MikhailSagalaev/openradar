@@ -1348,6 +1348,12 @@ export function createApp(runtime: Runtime): Hono {
       for (const item of items) map.set(item.slug, item.total);
       return map;
     },
+    loadGrades: async () => {
+      const items = (await runtime.store.listGrades?.()) ?? [];
+      const map = new Map<string, number>();
+      for (const item of items) map.set(item.slug, item.total);
+      return map;
+    },
     loadTopSkills: async () => {
       const items = (await runtime.store.listTopSkills?.(40)) ?? [];
       return items.map((i) => ({ name: i.name, count: i.total }));
@@ -1361,6 +1367,10 @@ export function createApp(runtime: Runtime): Hono {
     const otherCount = counts.get(OTHER_ROLE.slug) ?? 0;
     const all = otherCount > 0 ? [...definedRoles, { slug: OTHER_ROLE.slug, count: otherCount }] : definedRoles;
     return all.map((i) => ({ slug: i.slug, label: roleLabel(i.slug, lang), count: i.count || undefined }));
+  };
+  const popularGrades = async (): Promise<Array<{ slug: string; total: number }>> => {
+    const counts = await popular.gradeCounts();
+    return Array.from(counts.entries()).map(([slug, total]) => ({ slug, total }));
   };
 
   // Public feeds: generous per-IP limits, so a scraper loop cannot pin the database.
@@ -1546,6 +1556,7 @@ export function createApp(runtime: Runtime): Hono {
           budgetRub: filters.budgetRub,
         }),
         directions: await popularDirections(lang),
+        popularGrades: await popularGrades(),
         query,
         status,
         type: type ?? '',

@@ -1,4 +1,5 @@
 import type { Context } from 'hono';
+import { DECISION_GRADES } from '../core/decisions.ts';
 import { rubToUsd } from '../core/salary.ts';
 import { titleForLanguage } from '../core/text.ts';
 import type { SavedFilters } from '../core/subscriptions.ts';
@@ -43,6 +44,7 @@ export interface FeedFilters {
   budgetRub?: number;
   skill?: string;
   direction?: string;
+  grade?: string;
   language?: 'ru' | 'en';
   /** The order this page shows without ?sort: the home feed ranks, feeds and APIs stay newest first. */
   defaultSort?: LeadSort;
@@ -57,6 +59,8 @@ export function parseFeedFilters(c: Context, defaultSort: LeadSort = 'new', defa
   const budget = Number(c.req.query('budget'));
   const skill = (c.req.query('skill') ?? '').trim().slice(0, 40);
   const direction = (c.req.query('direction') ?? '').trim().slice(0, 40);
+  const rawGrade = (c.req.query('grade') ?? '').trim().toLowerCase();
+  const grade = (DECISION_GRADES as readonly string[]).includes(rawGrade) ? rawGrade : undefined;
   const language = c.req.query('language');
   return {
     language: language === 'ru' || language === 'en' ? language : language === 'all' ? undefined : defaultLanguage,
@@ -66,6 +70,7 @@ export function parseFeedFilters(c: Context, defaultSort: LeadSort = 'new', defa
     budgetRub: Number.isFinite(budget) && budget > 0 ? Math.min(Math.round(budget), 100_000_000) : undefined,
     skill: skill || undefined,
     direction: direction || undefined,
+    grade,
     defaultSort,
     defaultLanguage,
   };
@@ -88,6 +93,7 @@ export function filterOptions(filters: FeedFilters, now: Date = new Date()): Lis
     skill: filters.skill,
     skillsAny: filters.it ? [...IT_SKILLS] : undefined,
     directionsAny: filters.direction ? [filters.direction] : undefined,
+    grade: filters.grade,
     language: filters.language,
     createdAfter: rankedWindowApplies(filters) ? new Date(now.getTime() - RANKED_WINDOW_MS).toISOString() : undefined,
   };
@@ -102,6 +108,7 @@ export function activeFilterCount(filters: FeedFilters): number {
     Boolean(filters.budgetRub),
     Boolean(filters.skill),
     Boolean(filters.direction),
+    Boolean(filters.grade),
     Boolean(filters.language && filters.language !== filters.defaultLanguage),
   ].filter(Boolean).length;
 }
@@ -119,6 +126,7 @@ export function hasActiveFilters(filters: FeedFilters): boolean {
  */
 export function matchesSavedFilters(lead: Lead, filters: SavedFilters): boolean {
   if (filters.type && lead.type !== filters.type) return false;
+  if (filters.grade && lead.grade !== filters.grade) return false;
   if (filters.skill && !(lead.skills ?? []).some((s) => s.toLowerCase() === filters.skill!.toLowerCase())) return false;
   if (filters.it && !(lead.skills ?? []).some((s) => (IT_SKILLS as readonly string[]).some((it) => it.toLowerCase() === s.toLowerCase()))) return false;
   if (filters.remote) {
