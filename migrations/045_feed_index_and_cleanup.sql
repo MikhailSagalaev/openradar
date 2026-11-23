@@ -1,5 +1,6 @@
 -- 045_feed_index_and_cleanup.sql
 -- Optimizations for feed queries, language filtering, remote jobs, and removal of dead indexes:
+SET statement_timeout = 0;
 SET lock_timeout = '4s';
 
 -- 1. Drop dead halfvec HNSW index (0 embeddings exist in table, BM25 + MinHash used instead).
