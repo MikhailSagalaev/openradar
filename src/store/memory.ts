@@ -530,6 +530,19 @@ export class MemoryStore implements Store {
     return [...counts.entries()].map(([slug, total]) => ({ slug, total })).sort((a, b) => b.total - a.total);
   }
 
+  async listTopSkills(limit = 40): Promise<Array<{ name: string; total: number }>> {
+    const counts = new Map<string, number>();
+    for (const lead of this.leads.values()) {
+      if ((lead.state ?? 'active') === 'active' && lead.status !== 'rejected' && lead.skills) {
+        for (const skill of lead.skills) counts.set(skill, (counts.get(skill) ?? 0) + 1);
+      }
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([name, total]) => ({ name, total }));
+  }
+
   async listLeadsForDirections(afterId: string | null, limit: number): Promise<Lead[]> {
     return [...this.leads.values()].filter((l) => afterId === null || l.id > afterId).sort((a, b) => (a.id < b.id ? -1 : 1)).slice(0, limit).map((l) => ({ ...l }));
   }

@@ -45,7 +45,7 @@ import { TelegramAuthService } from './tg-auth.ts';
 import { runSourceHygiene, sourceState } from '../core/source-health.ts';
 import { LABEL_VERDICTS, scoreSource } from '../core/source-quality.ts';
 import { REVIEW_ISSUES, isReviewVerdict, pickBucket, reviewConsensus, type ReviewIssue } from '../core/reviews.ts';
-import { roleDef, roleLabel, ROLES } from '../research/derive.ts';
+import { OTHER_ROLE, roleDef, roleLabel, ROLES } from '../research/derive.ts';
 import { scoreDecisions } from '../core/decisions.ts';
 import { assertSafeUrl } from '../core/ssrf.ts';
 import { robotsFor } from '../pipeline/robots-audit.ts';
@@ -1342,13 +1342,25 @@ export function createApp(runtime: Runtime): Hono {
       limit: 2000,
       createdAfter: new Date(Date.now() - 14 * 24 * 3600_000).toISOString(),
     }),
+    loadDirections: async () => {
+      const items = (await runtime.store.listDirections?.()) ?? [];
+      const map = new Map<string, number>();
+      for (const item of items) map.set(item.slug, item.total);
+      return map;
+    },
+    loadTopSkills: async () => {
+      const items = (await runtime.store.listTopSkills?.(40)) ?? [];
+      return items.map((i) => ({ name: i.name, count: i.total }));
+    },
   });
   const popularSkills = popular.popularSkills;
   const popularDirections = async (lang: SupportedLang): Promise<Array<{ slug: string; label: string; count?: number }>> => {
     const counts = await popular.directionCounts();
-    return ROLES.map((r) => ({ slug: r.slug, count: counts.get(r.slug) ?? 0 }))
-      .sort((a, b) => b.count - a.count)
-      .map((i) => ({ slug: i.slug, label: roleLabel(i.slug, lang), count: i.count || undefined }));
+    const definedRoles = ROLES.map((r) => ({ slug: r.slug, count: counts.get(r.slug) ?? 0 }))
+      .sort((a, b) => b.count - a.count);
+    const otherCount = counts.get(OTHER_ROLE.slug) ?? 0;
+    const all = otherCount > 0 ? [...definedRoles, { slug: OTHER_ROLE.slug, count: otherCount }] : definedRoles;
+    return all.map((i) => ({ slug: i.slug, label: roleLabel(i.slug, lang), count: i.count || undefined }));
   };
 
   // Public feeds: generous per-IP limits, so a scraper loop cannot pin the database.

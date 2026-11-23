@@ -247,7 +247,7 @@ export function computeInsights(leads: Lead[], windowDays: number = 30): MarketI
     const physicalNoise = isPhysicalNonItWork(lead.title, lead.text);
     const rawDir = physicalNoise
       ? 'other'
-      : (lead.direction && lead.direction !== 'other' ? lead.direction : classifyRole(lead.type ?? 'job', lead.title));
+      : (lead.direction && lead.direction !== 'other' ? lead.direction : classifyRole(lead.type ?? 'job', lead.title, lead.text, lead.skills));
     if (rawDir && rawDir !== 'other') {
       dirCounts.set(rawDir, (dirCounts.get(rawDir) ?? 0) + 1);
       if (IT_DIRECTIONS.has(rawDir)) itCount++;

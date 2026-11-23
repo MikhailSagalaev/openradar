@@ -31,6 +31,8 @@ interface RecentWindow {
  */
 export function createPopularCounters(options: {
   loadRecent: () => Promise<Lead[]>;
+  loadDirections?: () => Promise<Map<string, number>>;
+  loadTopSkills?: () => Promise<Array<{ name: string; count: number }>>;
   now?: () => number;
   ttlMs?: number;
   maxKeys?: number;
@@ -41,6 +43,16 @@ export function createPopularCounters(options: {
   let window: { at: number; promise: Promise<RecentWindow> } | undefined;
   const skillCache = new Map<string, { at: number; promise: Promise<Array<{ name: string; count: number }>> }>();
   let directionCache: { at: number; promise: Promise<Map<string, number>> } | undefined;
+  let topSkillsCache: { at: number; promise: Promise<Array<{ name: string; count: number }>> } | undefined;
+
+  const getTopSkills = (): Promise<Array<{ name: string; count: number }>> => {
+    if (topSkillsCache && now() - topSkillsCache.at < ttlMs) return topSkillsCache.promise;
+    const at = now();
+    const promise = options.loadTopSkills!();
+    topSkillsCache = { at, promise };
+    promise.catch(() => { if (topSkillsCache?.promise === promise) topSkillsCache = undefined; });
+    return promise;
+  };
 
   const recent = (): Promise<RecentWindow> => {
     if (window && now() - window.at < ttlMs) return window.promise;
@@ -58,6 +70,12 @@ export function createPopularCounters(options: {
   const popularSkills = (filters: SavedFilters): Promise<Array<{ name: string; count: number }>> => {
     const type = filters.type === 'job' || filters.type === 'gig' ? filters.type : undefined;
     const scope: SavedFilters = { type, it: filters.it, remote: filters.remote, language: filters.language, budgetRub: budgetBucket(filters.budgetRub, type) };
+    const hasNarrowFilters = Boolean(scope.it || scope.remote || scope.language || scope.budgetRub);
+
+    if (!hasNarrowFilters && options.loadTopSkills) {
+      return getTopSkills();
+    }
+
     const key = [scope.type ?? '', scope.it ? '1' : '0', scope.remote ? '1' : '0', scope.language ?? '', scope.budgetRub ?? ''].join('|');
     const cached = skillCache.get(key);
     if (cached && now() - cached.at < ttlMs) {
@@ -88,15 +106,18 @@ export function createPopularCounters(options: {
     return promise;
   };
 
-  /** Lead counts per `direction` over the same recent window. */
+  /** Lead counts per `direction`: uses `loadDirections` when supplied, else counts over recent window. */
   const directionCounts = (): Promise<Map<string, number>> => {
     if (directionCache && now() - directionCache.at < ttlMs) return directionCache.promise;
-    const promise = recent().then(({ leads }) => {
-      const counts = new Map<string, number>();
-      for (const { lead } of leads) if (lead.direction) counts.set(lead.direction, (counts.get(lead.direction) ?? 0) + 1);
-      return counts;
-    });
-    const entry = { at: now(), promise };
+    const at = now();
+    const promise = options.loadDirections
+      ? options.loadDirections()
+      : recent().then(({ leads }) => {
+          const counts = new Map<string, number>();
+          for (const { lead } of leads) if (lead.direction) counts.set(lead.direction, (counts.get(lead.direction) ?? 0) + 1);
+          return counts;
+        });
+    const entry = { at, promise };
     directionCache = entry;
     promise.catch(() => { if (directionCache === entry) directionCache = undefined; });
     return promise;

@@ -560,6 +560,8 @@ export interface Store extends HubStore {
   deleteLeadReview?(leadId: string, userId: number): Promise<void>;
   /** Directions with open posts, the fullest first. */
   listDirections?(): Promise<Array<{ slug: string; total: number }>>;
+  /** Top skills across active posts, most popular first. */
+  listTopSkills?(limit?: number): Promise<Array<{ name: string; total: number }>>;
   listLeadsForDirections?(afterId: string | null, limit: number): Promise<Lead[]>;
   setLeadDirection?(id: string, direction: string): Promise<void>;
   /** Posts readers finished, with the answers of those who still count. */

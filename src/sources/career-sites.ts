@@ -327,6 +327,28 @@ const HH_NAME_EMPLOYERS: Array<[id: string, name: string]> = [
   ['hh-name-donstroy', 'Донстрой'],
   ['hh-name-mosgov', 'Правительство Москвы'],
   ['hh-name-sitidrive', 'Ситидрайв'],
+  // Российские разработчики ПО (TAdviser 2026)
+  ['hh-name-basealt', 'Базальт СПО'],
+  ['hh-name-redsoft', 'РЕД СОФТ'],
+  ['hh-name-arenadata', 'Arenadata'],
+  ['hh-name-orionsoft', 'Orion soft'],
+  ['hh-name-cyberprotect', 'Киберпротект'],
+  ['hh-name-elma', 'ELMA'],
+  ['hh-name-directum', 'Directum'],
+  ['hh-name-bitrix', '1С-Битрикс'],
+  ['hh-name-moysklad', 'МойСклад'],
+  ['hh-name-myoffice', 'МойОфис'],
+  ['hh-name-kaiten', 'Kaiten'],
+  ['hh-name-evateam', 'EvaTeam'],
+  ['hh-name-simpleone', 'SimpleOne'],
+  ['hh-name-iva', 'IVA Technologies'],
+  ['hh-name-trueconf', 'TrueConf'],
+  ['hh-name-usergate', 'UserGate'],
+  ['hh-name-solar', 'Ростелеком-Солар'],
+  ['hh-name-infowatch', 'InfoWatch'],
+  ['hh-name-searchinform', 'СёрчИнформ'],
+  ['hh-name-galaktika', 'Корпорация Галактика'],
+  ['hh-name-parus', 'Корпорация Парус'],
 ];
 
 export const HH_NAME_EMPLOYER_PRESETS: SourcePreset[] = HH_NAME_EMPLOYERS.map(([id, name]) => ({

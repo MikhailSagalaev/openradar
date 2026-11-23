@@ -905,6 +905,19 @@ export class PostgresStore implements Store {
     return res.rows.map((r) => ({ slug: String(r.direction), total: Number(r.total) }));
   }
 
+  async listTopSkills(limit = 40): Promise<Array<{ name: string; total: number }>> {
+    const res = await this.pool.query(
+      `SELECT s.skill AS name, count(*)::int AS total
+       FROM leads, jsonb_array_elements_text(COALESCE(skills_json, '[]'::jsonb)) AS s(skill)
+       WHERE state = 'active' AND status <> 'rejected'
+       GROUP BY s.skill
+       ORDER BY total DESC
+       LIMIT $1`,
+      [limit],
+    );
+    return res.rows.map((r) => ({ name: String(r.name), total: Number(r.total) }));
+  }
+
   async listLeadsForDirections(afterId: string | null, limit: number): Promise<Lead[]> {
     const res = await this.pool.query(`SELECT * FROM leads WHERE ($1::text IS NULL OR id > $1::text) ORDER BY id LIMIT $2`, [afterId, limit]);
     return res.rows.map((r) => this.rowToLead(r));
