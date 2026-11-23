@@ -551,6 +551,8 @@ export interface Store extends HubStore {
   applyLeadWorkplace?(leadId: string, workplaceType: 'remote' | 'hybrid' | 'onsite', isRemote: boolean): Promise<void>;
   /** Backfill: copy sure SubQ directions onto leads still stuck on empty/other. */
   applyDirectionsFromDecisions?(minConfidence?: number): Promise<number>;
+  /** Backfill: copy detected model grades onto leads where grade is still null. */
+  applyGradesFromDecisions?(): Promise<number>;
   /** Posts the model took off the feed, the newest first. */
   listAppliedDecisions?(limit: number): Promise<Array<{ lead: Lead; decision: ModelDecision }>>;
   /** A person says the model was wrong: the post comes back and counts as a good one. */

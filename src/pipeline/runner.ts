@@ -455,8 +455,12 @@ export class PollRunner {
           const directed = await store.applyDirectionsFromDecisions(0.8);
           if (directed) this.logger.info('directions backfilled from decisions', { directed });
         }
+        if (this.deps.env.RADAR_DECIDE_APPLY && store.applyGradesFromDecisions) {
+          const graded = await store.applyGradesFromDecisions();
+          if (graded) this.logger.info('grades backfilled from decisions', { graded });
+        }
       } catch (error) {
-        this.logger.warn('directions backfill failed', { error: error instanceof Error ? error.message : String(error) });
+        this.logger.warn('directions/grades backfill failed', { error: error instanceof Error ? error.message : String(error) });
       }
       // Last month's market report is frozen once, early in the next month.
       try {

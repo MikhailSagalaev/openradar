@@ -421,6 +421,18 @@ export class MemoryStore implements Store {
     return n;
   }
 
+  async applyGradesFromDecisions(): Promise<number> {
+    let n = 0;
+    for (const decision of this.modelDecisions.values()) {
+      if (decision.overruled || !decision.grade || !['intern', 'junior', 'middle', 'senior', 'lead'].includes(decision.grade)) continue;
+      const lead = this.leads.get(decision.leadId);
+      if (!lead || (lead.grade && lead.grade !== '')) continue;
+      lead.grade = decision.grade;
+      n++;
+    }
+    return n;
+  }
+
   async listAppliedDecisions(limit: number): Promise<Array<{ lead: Lead; decision: ModelDecision }>> {
     return [...this.modelDecisions.values()].flatMap((decision) => {
       const lead = this.leads.get(decision.leadId);

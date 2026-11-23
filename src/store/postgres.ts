@@ -823,6 +823,32 @@ export class PostgresStore implements Store {
     return total;
   }
 
+  /** Writes detected model grades onto active leads still lacking one (catalog backfill in 2k batches). */
+  async applyGradesFromDecisions(): Promise<number> {
+    let total = 0;
+    for (;;) {
+      const res = await this.pool.query(
+        `WITH batch AS (
+           SELECT l.id, d.grade
+             FROM leads l
+             JOIN model_decisions d ON d.lead_id = l.id
+            WHERE NOT COALESCE(d.overruled, false)
+              AND d.grade IS NOT NULL
+              AND d.grade IN ('intern', 'junior', 'middle', 'senior', 'lead')
+              AND (l.grade IS NULL OR l.grade = '')
+              AND l.state = 'active' AND l.status <> 'rejected'
+            LIMIT 2000
+         )
+         UPDATE leads l SET grade = batch.grade
+           FROM batch WHERE l.id = batch.id`,
+      );
+      const n = res.rowCount ?? 0;
+      total += n;
+      if (n < 2000) break;
+    }
+    return total;
+  }
+
   async listAppliedDecisions(limit: number): Promise<Array<{ lead: Lead; decision: ModelDecision }>> {
     const res = await this.pool.query(
       `SELECT l.*, d.lead_id, d.version AS d_version, d.model AS d_model, d.kind AS d_kind, d.kind_confidence,
