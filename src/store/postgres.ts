@@ -3090,10 +3090,7 @@ export class PostgresStore implements Store {
          FROM leads
         WHERE COALESCE(published_at, created_at) >= $1::timestamptz AND COALESCE(published_at, created_at) < $2::timestamptz
           AND state NOT IN ('hidden_junk', 'hidden_scam') AND status NOT IN ('rejected', 'failed')
-          AND NOT EXISTS (
-            SELECT 1 FROM jsonb_array_elements_text(COALESCE(metadata_json->'qualityFlags', '[]'::jsonb)) AS flag
-            WHERE flag IN ('channel_ad', 'digest', 'mlm')
-          )
+          AND NOT (COALESCE(metadata_json->'qualityFlags', '[]'::jsonb) ?| ARRAY['channel_ad', 'digest', 'mlm'])
           -- Pages follow the primary key: all pages together walk the table once, where an
           -- order by date would sort the whole period again for every page.
           AND ($4::text IS NULL OR id > $4::text)
