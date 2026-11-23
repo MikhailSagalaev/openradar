@@ -400,6 +400,9 @@ export class PollRunner {
       // Голоса-события и история запусков нужны для health (24ч) и аудита;
       // храним их 30 дней, чтобы таблицы не росли бесконечно.
       const runs = await store.cleanupRuns?.(30);
+      const deliveries = await store.cleanupLeadDeliveries?.(14);
+      if (runs) this.logger.info('old runs cleaned up', { runs });
+      if (deliveries) this.logger.info('old lead deliveries cleaned up', { deliveries });
       const sessions = await store.purgeExpiredSessions?.();
       // A source that still answers but stopped bringing posts (a drifted feed URL) is invisible
       // to the error-based hygiene: surface it separately, at most once every six hours.

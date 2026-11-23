@@ -1627,6 +1627,18 @@ export class MemoryStore implements Store {
     return before - this.runs.length;
   }
 
+  async cleanupLeadDeliveries(retentionDays: number): Promise<number> {
+    const cutoff = Date.now() - retentionDays * 24 * 3600 * 1000;
+    let count = 0;
+    for (const [key, record] of this.leadDeliveries.entries()) {
+      if (record.status === 'sent' && new Date(record.updatedAt).getTime() < cutoff) {
+        this.leadDeliveries.delete(key);
+        count++;
+      }
+    }
+    return count;
+  }
+
   /** Warm step: hide leads older than hotDays from the feed/API; the full row stays. */
   async archiveOldLeads(hotDays: number): Promise<number> {
     const cutoff = Date.now() - hotDays * 24 * 3600 * 1000;

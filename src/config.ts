@@ -140,6 +140,8 @@ const envSchema = z.object({
   // is the only way to hand that memory back (docs/OPS_BOT_AND_MEMORY.md). 0 disables a limit.
   RADAR_PG_CONN_MAX_AGE_SEC: z.coerce.number().int().nonnegative().default(1800),
   RADAR_PG_CONN_MAX_USES: z.coerce.number().int().nonnegative().default(500),
+  // Maximum connections in the Postgres pool. Default 25 fits safely within the 40-connection ceiling.
+  RADAR_PG_POOL_MAX: z.coerce.number().int().positive().default(25),
   // Per-request statement timeout for web reads (SET LOCAL inside the request's transaction):
   // a runaway BM25 query dies alone instead of growing until the OOM-killer picks a victim.
   // Background jobs keep the role-level timeout. 0 disables.

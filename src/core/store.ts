@@ -733,6 +733,8 @@ export interface Store extends HubStore {
    */
   cleanupOldLeads?(retentionDays: number, archiveDir?: string): Promise<number>;
   cleanupRuns?(retentionDays: number): Promise<number>;
+  /** Prunes delivered outbox queue rows older than retentionDays (safe retention window for in-flight retries). */
+  cleanupLeadDeliveries?(retentionDays: number): Promise<number>;
   /** Lead lifecycle, step 1 (warm): leads older than hotDays hide from feed/API (archived_at);
    * the full row stays. Batched. Nothing is deleted. */
   archiveOldLeads?(hotDays: number): Promise<number>;

@@ -230,6 +230,30 @@ describe('store', () => {
     await store.close();
   });
 
+  it('cleans up old delivered outbox queue entries past retention window', async () => {
+    const store = new MemoryStore();
+    const lead = makeLead({ id: 'lead-delivery-prune' });
+    await store.insertLead(lead);
+
+    await store.initLeadDeliveries?.(lead.id, ['telegram', 'hub']);
+    await store.updateLeadDelivery?.(lead.id, 'telegram', 'sent');
+
+    // Simulate old date on telegram delivery
+    const oldDate = new Date(Date.now() - 20 * 24 * 3600 * 1000).toISOString();
+    const deliveries = await store.getLeadDeliveries?.(lead.id);
+    const tg = deliveries?.find((d) => d.sink === 'telegram');
+    if (tg) tg.updatedAt = oldDate;
+
+    // Pruning with 14 days retention removes only old sent delivery, keeps pending
+    const removed = await store.cleanupLeadDeliveries?.(14);
+    expect(removed).toBe(1);
+
+    const remaining = await store.getLeadDeliveries?.(lead.id);
+    expect(remaining?.map((d) => d.sink)).toEqual(['hub']);
+
+    await store.close();
+  });
+
   it('records votes, recalculates score based on community sentiment, and returns voting fields', async () => {
     const store = new MemoryStore();
     const source = await store.createSource({ kind: 'rss', title: 'Feed' });

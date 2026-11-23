@@ -46,6 +46,7 @@ export async function createRuntime(env: Env = loadEnv(), overrides: RuntimeOver
       maxConnAgeSec: env.RADAR_PG_CONN_MAX_AGE_SEC,
       maxConnUses: env.RADAR_PG_CONN_MAX_USES,
       webStatementTimeoutMs: env.RADAR_WEB_STATEMENT_TIMEOUT_MS,
+      maxPoolSize: env.RADAR_PG_POOL_MAX,
     });
     await pgStore.init();
     store = pgStore;

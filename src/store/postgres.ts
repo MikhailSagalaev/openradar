@@ -81,13 +81,13 @@ export class PostgresStore implements Store {
   private maxConnUses: number;
   private webStatementTimeoutMs: number;
 
-  constructor(connectionString: string, options: { maxConnAgeSec?: number; maxConnUses?: number; webStatementTimeoutMs?: number } = {}) {
+  constructor(connectionString: string, options: { maxConnAgeSec?: number; maxConnUses?: number; webStatementTimeoutMs?: number; maxPoolSize?: number } = {}) {
     this.maxConnAgeMs = Math.max(0, options.maxConnAgeSec ?? 1800) * 1000;
     this.maxConnUses = Math.max(0, options.maxConnUses ?? 500);
     this.webStatementTimeoutMs = Math.max(0, options.webStatementTimeoutMs ?? 0);
     this.pool = new Pool({
       connectionString,
-      max: 20,
+      max: options.maxPoolSize ?? 25,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
       // pg-pool's own budgets (pg 8.23+): a connection is retired after maxUses
@@ -1627,46 +1627,51 @@ export class PostgresStore implements Store {
   }
 
   async getSourceHealth(): Promise<SourceHealth[]> {
-    const sources = await this.listSources();
-    const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const since24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const since7d = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
 
-    const aggregateRes = await this.pool.query(
-      `SELECT source_id,
-              COALESCE(SUM(found), 0) AS found,
-              COALESCE(SUM(inserted), 0) AS inserted,
-              COALESCE(SUM(duplicates), 0) AS duplicates,
-              COALESCE(SUM(rejected), 0) AS rejected,
-              COALESCE(SUM(delivered), 0) AS delivered,
-              COALESCE(SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END), 0) AS errors,
-              COUNT(*) AS runs
-       FROM runs
-       WHERE started_at >= $1::timestamptz
-       GROUP BY source_id`,
-      [since]
-    );
+    const [sources, aggregateRes, lastRunsRes, recentRes] = await Promise.all([
+      this.listSources(),
+      this.pool.query(
+        `SELECT source_id,
+                COALESCE(SUM(found), 0) AS found,
+                COALESCE(SUM(inserted), 0) AS inserted,
+                COALESCE(SUM(duplicates), 0) AS duplicates,
+                COALESCE(SUM(rejected), 0) AS rejected,
+                COALESCE(SUM(delivered), 0) AS delivered,
+                COALESCE(SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END), 0) AS errors,
+                COUNT(*) AS runs
+         FROM runs
+         WHERE started_at >= $1::timestamptz
+         GROUP BY source_id`,
+        [since24h]
+      ),
+      this.pool.query(
+        `SELECT r.* FROM sources s
+         CROSS JOIN LATERAL (
+           SELECT * FROM runs
+           WHERE source_id = s.id
+           ORDER BY started_at DESC
+           LIMIT 1
+         ) r`
+      ),
+      // The newest BROKEN_AFTER runs of each source, to tell one failed poll from a broken source.
+      // Using LATERAL with index idx_runs_source_started avoids heavy window function and temp-file disk writes.
+      this.pool.query(
+        `SELECT r.source_id, r.error FROM sources s
+         CROSS JOIN LATERAL (
+           SELECT source_id, error, started_at FROM runs
+           WHERE source_id = s.id AND started_at >= $1::timestamptz
+           ORDER BY started_at DESC
+           LIMIT $2
+         ) r ORDER BY r.source_id, r.started_at DESC`,
+        [since7d, BROKEN_AFTER]
+      ),
+    ]);
 
     const aggregate = new Map(aggregateRes.rows.map(r => [r.source_id, r]));
-
-    const lastRunsRes = await this.pool.query(
-      `SELECT r.* FROM runs r
-       JOIN (
-         SELECT source_id, MAX(started_at) AS max_started
-         FROM runs GROUP BY source_id
-       ) latest
-         ON latest.source_id = r.source_id AND latest.max_started = r.started_at`
-    );
-
     const lastBySource = new Map(lastRunsRes.rows.map(r => [r.source_id, this.rowToRun(r)]));
 
-    // The newest BROKEN_AFTER runs of each source, to tell one failed poll from a broken source.
-    const recentRes = await this.pool.query(
-      `SELECT source_id, error FROM (
-         SELECT source_id, error, started_at,
-                ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY started_at DESC) AS n
-         FROM runs WHERE started_at >= $1::timestamptz
-       ) recent WHERE n <= $2 ORDER BY source_id, started_at DESC`,
-      [new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString(), BROKEN_AFTER],
-    );
     const recentBySource = new Map<string, Array<{ error?: string }>>();
     for (const r of recentRes.rows) {
       const list = recentBySource.get(r.source_id) ?? [];
@@ -2496,6 +2501,26 @@ export class PostgresStore implements Store {
       [retentionDays]
     );
     return res.rowCount ?? 0;
+  }
+
+  async cleanupLeadDeliveries(retentionDays: number): Promise<number> {
+    let total = 0;
+    const batchSize = 5000;
+    for (;;) {
+      const res = await this.pool.query(
+        `DELETE FROM lead_deliveries
+         WHERE (lead_id, sink) IN (
+           SELECT lead_id, sink FROM lead_deliveries
+           WHERE status = 'sent' AND updated_at < NOW() - make_interval(days => $1::int)
+           LIMIT $2
+         )`,
+        [retentionDays, batchSize]
+      );
+      const count = res.rowCount ?? 0;
+      total += count;
+      if (count < batchSize) break;
+    }
+    return total;
   }
 
   /**
