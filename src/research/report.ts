@@ -893,7 +893,9 @@ function sliceBy(records: ResearchRecord[], key: (r: ResearchRecord) => string |
   for (const record of records) {
     const k = key(record);
     if (!k) continue;
-    groups.set(k, [...(groups.get(k) ?? []), record]);
+    const list = groups.get(k);
+    if (list) list.push(record);
+    else groups.set(k, [record]);
   }
   const slices = Array.from(groups, ([k, group]) => {
     const withPay = group.filter(paid);
@@ -918,19 +920,24 @@ function skillStats(
   for (const record of records) {
     for (const skill of record.skills) {
       if (UMBRELLA_SKILLS.has(skill.trim().toLowerCase())) continue;
-      by.set(skill, [...(by.get(skill) ?? []), record.pay!]);
+      const list = by.get(skill);
+      if (list) list.push(record.pay!);
+      else by.set(skill, [record.pay!]);
     }
   }
   const base = baselineMedian ?? dist(records.map((r) => r.pay!)).median;
-  return Array.from(by, ([skill, values]) => {
-    const pay = dist(values);
-    const matched = records.length >= MIN_ADJUSTED ? adjustedGap(records, (r) => r.skills.includes(skill))?.pct : undefined;
-    const rawPct = pay.median !== undefined && base ? Math.round(((pay.median - base) / base) * 100) : undefined;
-    return { skill, n: values.length, pay, premiumPct: matched ?? rawPct };
-  })
+  const candidates = Array.from(by.entries())
+    .map(([skill, values]) => ({ skill, values, pay: dist(values) }))
     .filter((s) => s.pay.median !== undefined)
-    .sort((a, b) => b.n - a.n)
-    .slice(0, limit)
+    .sort((a, b) => b.values.length - a.values.length)
+    .slice(0, limit);
+
+  return candidates
+    .map(({ skill, values, pay }) => {
+      const matched = records.length >= MIN_ADJUSTED ? adjustedGap(records, (r) => r.skills.includes(skill))?.pct : undefined;
+      const rawPct = pay.median !== undefined && base ? Math.round(((pay.median - base) / base) * 100) : undefined;
+      return { skill, n: values.length, pay, premiumPct: matched ?? rawPct };
+    })
     .sort((a, b) => b.pay.median! - a.pay.median!);
 }
 
@@ -2202,7 +2209,12 @@ export function buildReport(
   const weeks = new Map<string, number[]>();
   const weekCounts = new Map<string, number>();
   for (const r of jobs) weekCounts.set(mondayOf(r.date), (weekCounts.get(mondayOf(r.date)) ?? 0) + 1);
-  for (const r of ruJobs) weeks.set(mondayOf(r.date), [...(weeks.get(mondayOf(r.date)) ?? []), r.pay!]);
+  for (const r of ruJobs) {
+    const m = mondayOf(r.date);
+    const list = weeks.get(m);
+    if (list) list.push(r.pay!);
+    else weeks.set(m, [r.pay!]);
+  }
 
   const roles = [...groupBy(jobs, (r) => r.role)]
     .filter(([slug]) => slug !== OTHER_ROLE.slug)

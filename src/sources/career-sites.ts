@@ -113,7 +113,11 @@ export const HH_EMPLOYER_PRESETS: SourcePreset[] = HH_EMPLOYERS.map(([id, name, 
   kind: 'rss',
   title: `${name} — вакансии на hh.ru`,
   description: `Лента вакансий компании ${name} на hh.ru`,
-  config: { url: `https://hh.ru/search/vacancy/rss?employer_id=${employer}&order_by=publication_time`, company: name },
+  config: {
+    url: `https://hh.ru/search/vacancy/rss?employer_id=${employer}&order_by=publication_time`,
+    company: name,
+    intervalSec: 7200,
+  },
 }));
 
 /**
@@ -333,5 +337,6 @@ export const HH_NAME_EMPLOYER_PRESETS: SourcePreset[] = HH_NAME_EMPLOYERS.map(([
   config: {
     url: `https://hh.ru/search/vacancy/rss?text=${encodeURIComponent(name)}&search_field=company_name&order_by=publication_time`,
     company: name,
+    intervalSec: 7200,
   },
 }));

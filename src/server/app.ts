@@ -11,7 +11,7 @@ import { escapeHtml, stripInvisible } from '../core/text.ts';
 import { emitLeadDeleted } from '../core/events.ts';
 import { renderRssFeed } from './feed.ts';
 import type { ParticipantRecord, UserRecord } from '../core/store.ts';
-import type { Lead, LeadStatus, LeadType, RawLead, SourceConfig, SourceKind, SourceRecord, Stats, Viewer, VoteSignal } from '../core/types.ts';
+import type { Lead, LeadStatus, LeadType, RawLead, SourceConfig, SourceHealth, SourceKind, SourceRecord, Stats, Viewer, VoteSignal } from '../core/types.ts';
 import type { EmployerSummary, ListLeadsOptions } from '../core/store.ts';
 import { pollAll, pollSource } from '../pipeline/poll.ts';
 import { ingestRawLead, type IngestDeps } from '../pipeline/ingest.ts';
@@ -1377,6 +1377,20 @@ export function createApp(runtime: Runtime): Hono {
     return value;
   };
 
+  // Source health aggregates two weeks of runs; scanning it on every feed request or
+  // sources page view burns hundreds of milliseconds of Postgres CPU. A 60-second cache
+  // keeps the dashboard responsive while keeping database load near zero.
+  let sourceHealthCache: { at: number; value: Promise<SourceHealth[]> } | undefined;
+  const cachedSourceHealth = (): Promise<SourceHealth[]> => {
+    if (sourceHealthCache && Date.now() - sourceHealthCache.at < 60_000) return sourceHealthCache.value;
+    const value = runtime.store.getSourceHealth().catch((error) => {
+      sourceHealthCache = undefined;
+      throw error;
+    });
+    sourceHealthCache = { at: Date.now(), value };
+    return value;
+  };
+
   // Anonymous lead cards are the crawlers' favourite URL: every vendor fetches the same
   // cards, and each render costs a BM25 "similar" query. Guests (no session cookie) get a
   // short in-process HTML cache; one render per card per TTL, single in-flight render per
@@ -1476,7 +1490,7 @@ export function createApp(runtime: Runtime): Hono {
     }
     const [stats, health, fetched] = await Promise.all([
       cachedStats(),
-      runtime.store.getSourceHealth(),
+      cachedSourceHealth(),
       // One extra lead tells whether a next page exists.
       leadsFor(runtime, viewer, {
         limit: pageSize + 1,
@@ -1659,7 +1673,7 @@ export function createApp(runtime: Runtime): Hono {
     if (!await isAdmin(c, runtime)) return c.redirect('/login?returnTo=/admin');
     const [stats, health, admin] = await Promise.all([
       cachedStats(),
-      runtime.store.getSourceHealth(),
+      cachedSourceHealth(),
       runtime.store.getAdminStats ? runtime.store.getAdminStats(14) : undefined,
     ]);
     if (!admin) return c.text('This store has no admin statistics', 501);
@@ -2104,7 +2118,7 @@ export function createApp(runtime: Runtime): Hono {
     const admin = await isAdmin(c, runtime);
     return c.html(
       renderSourcesPage({
-        health: await runtime.store.getSourceHealth(),
+        health: await cachedSourceHealth(),
         version: VERSION,
         auth: await getAuthDisplay(c, runtime),
         lang,
@@ -2291,7 +2305,7 @@ export function createApp(runtime: Runtime): Hono {
     const source = await runtime.store.getSource(c.req.param('id'));
     if (!source) return c.html(renderNotFound(VERSION, lang), 404);
     const viewer = await viewerFromRequest(c, runtime);
-    const allHealth = await runtime.store.getSourceHealth();
+    const allHealth = await cachedSourceHealth();
     const health = allHealth.find((item) => item.source.id === source.id) ?? {
       source,
       last24h: {
@@ -2544,7 +2558,7 @@ export function createApp(runtime: Runtime): Hono {
 
   app.get('/api/sources/health', async (c) => {
     if (!await canRead(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
-    const health = await runtime.store.getSourceHealth();
+    const health = await cachedSourceHealth();
     return c.json(
       health.map((item) => ({
         ...item,
