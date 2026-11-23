@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { recalculateVoteScoreAndStatus } from '../core/rules.ts';
 import { matchesOccupationCodes } from '../core/isco.ts';
-import { normalizeTechTokens, titleForLanguage, type WorkplaceType } from '../core/text.ts';
+import { isRemoteLead, normalizeTechTokens, titleForLanguage, type WorkplaceType } from '../core/text.ts';
 import { mergeContacts } from '../core/contacts.ts';
 import type {
   Contact,
@@ -524,7 +524,7 @@ export class PostgresStore implements Store {
           lead.currency ?? 'RUB',
           lead.category ?? null,
           JSON.stringify(lead.skills ?? []),
-          lead.isRemote ?? (lead.workplaceType === 'remote'),
+          isRemoteLead(lead),
           JSON.stringify(lead.metadata ?? {}),
           lead.publishedAt ? new Date(lead.publishedAt) : null,
           lead.fingerprint,
@@ -1340,8 +1340,11 @@ export class PostgresStore implements Store {
       params.push(options.minBudgetUsd);
     }
     if (options.remote) {
-      // Remote classification: backed by indexed is_remote / workplace_type columns.
-      conditions.push(`(is_remote = true OR workplace_type = 'remote')`);
+      // Remote classification: requires is_remote = true or workplace_type = 'remote',
+      // or explicit online city markers, avoiding heavy text regex scanning.
+      conditions.push(
+        `(is_remote = true OR workplace_type = 'remote' OR city ~* '^(онлайн|удал)' OR (COALESCE(type, 'gig') <> 'job' AND workplace_type IS NULL AND (city IS NULL OR btrim(city) = '')))`,
+      );
     }
     if (options.workplaceType) {
       conditions.push(`workplace_type = $${idx++}`);
