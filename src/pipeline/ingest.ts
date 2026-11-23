@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { prepareRawLead } from '../core/prepare.ts';
 import { applyRules } from '../core/rules.ts';
 import { assessQuality, offersNoPay } from '../core/quality.ts';
-import { classifyWorkplace, extractSkills } from '../core/text.ts';
+import { classifyWorkplace, extractSkills, titleForLanguage } from '../core/text.ts';
 import { emitLeadCreated } from '../core/events.ts';
 import { estimateJaccardFromSketches } from '../core/fingerprint.ts';
 import { companyKeyOf } from '../core/company.ts';
@@ -250,6 +250,7 @@ export async function ingestRawLead(
     skills,
     isRemote: wp.isRemote,
     workplaceType: wp.workplaceType,
+    lang: prepared.lang ?? (/[А-Яа-яЁё]/.test(titleForLanguage(prepared.title)) ? 'ru' : 'en'),
     metadata,
     publishedAt: prepared.publishedAt,
     contacts: prepared.contacts,

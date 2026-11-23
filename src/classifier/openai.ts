@@ -39,7 +39,8 @@ export class OpenAiClassifier implements Classifier {
     if (!apiKey) return null;
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 25_000);
+    const timeoutMs = this.env.RADAR_LLM_TIMEOUT_MS ?? 8_000;
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(`${this.env.OPENAI_BASE_URL.replace(/\/+$/, '')}/chat/completions`, {
         method: 'POST',

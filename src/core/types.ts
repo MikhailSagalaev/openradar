@@ -43,6 +43,7 @@ export interface Env {
   RADAR_POLL_INTERVAL_SEC: number;
   RADAR_POLL_CONCURRENCY: number;
   RADAR_LLM_ENABLED: boolean;
+  RADAR_LLM_TIMEOUT_MS?: number;
   RADAR_EXTRACT_ENABLED: boolean;
   RADAR_EXTRACT_MODEL?: string;
   /** Second OpenAI-compatible model tried when the primary returns nothing usable. */
@@ -207,6 +208,7 @@ export interface RawLead {
   skills?: string[];
   isRemote?: boolean;
   workplaceType?: 'remote' | 'hybrid' | 'onsite';
+  lang?: 'ru' | 'en';
   grade?: string;
   publishedAt?: string;
   metadata?: Record<string, unknown>;

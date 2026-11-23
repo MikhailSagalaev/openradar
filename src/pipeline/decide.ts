@@ -152,6 +152,9 @@ async function askOne(lead: { id: string; title: string; text: string }, deps: D
         deps.logger.warn('decision key parked, rotating', { key: maskKey(key), status: response.status, left: deps.keys.size });
         continue;
       }
+      if (response.status >= 500) {
+        throw new Error(`Transient decision HTTP ${response.status}`);
+      }
       return response.status;
     }
     const decidedAt = (deps.now?.() ?? new Date()).toISOString();
@@ -165,6 +168,8 @@ async function withRetry<T>(ask: () => Promise<T>): Promise<T> {
       return await ask();
     } catch (error) {
       if (attempt >= ATTEMPTS) throw error;
+      const delay = Math.min(2000, 250 * Math.pow(2, attempt - 1));
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 }

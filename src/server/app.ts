@@ -1440,9 +1440,10 @@ export function createApp(runtime: Runtime): Hono {
   };
   // Median vacancy pay by role over 30 days: a salary far below it is shown as «проверить».
   let salaryMediansAt = 0;
+  let refreshingMedians = false;
   const refreshSalaryMedians = async (): Promise<void> => {
-    if (Date.now() - salaryMediansAt < 30 * 60_000) return;
-    salaryMediansAt = Date.now();
+    if (Date.now() - salaryMediansAt < 30 * 60_000 || refreshingMedians) return;
+    refreshingMedians = true;
     try {
       const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
       // The database takes every vacancy of the window; a listing stops at 5000, about one day of the hub.
@@ -1451,13 +1452,17 @@ export function createApp(runtime: Runtime): Hono {
       } else {
         setSalaryMedians(computeSalaryMedians(await runtime.store.listLeads({ type: 'job', limit: 5000, createdAfter: since })));
       }
+      salaryMediansAt = Date.now();
     } catch (error) {
       runtime.logger.warn('salary medians failed', { error: String(error) });
+    } finally {
+      refreshingMedians = false;
     }
   };
+  void refreshSalaryMedians();
   app.get('/', feedLimit, async (c) => {
     if (!await canRead(c, runtime)) return c.redirect('/login');
-    await refreshSalaryMedians();
+    void refreshSalaryMedians();
     const lang = resolveLang(c);
     const rawStatus = c.req.query('status') ?? '';
     const status = [
@@ -2347,7 +2352,7 @@ export function createApp(runtime: Runtime): Hono {
 
   app.get('/leads/:id', async (c) => {
     if (!await canRead(c, runtime)) return c.redirect('/login');
-    await refreshSalaryMedians();
+    void refreshSalaryMedians();
     const lang = resolveLang(c);
     const viewer = await viewerFromRequest(c, runtime);
     const id = c.req.param('id');

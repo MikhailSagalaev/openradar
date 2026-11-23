@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { recalculateVoteScoreAndStatus } from '../core/rules.ts';
 import { matchesOccupationCodes } from '../core/isco.ts';
-import { normalizeTechTokens, type WorkplaceType } from '../core/text.ts';
+import { isRemoteLead, normalizeTechTokens, titleForLanguage, type WorkplaceType } from '../core/text.ts';
 import { mergeContacts } from '../core/contacts.ts';
 import type {
   Contact,
@@ -498,7 +498,7 @@ export class PostgresStore implements Store {
           raw_salary, payment_period, normalized_usd_min, normalized_usd_max,
           minhash_sketch, state, contacts_json,
           source_platform, source_channel, source_channel_title, source_visibility, source_message_id,
-          company, company_key, direction, workplace_type
+          company, company_key, direction, workplace_type, lang
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7,
           $8, $9, $10, $11, $12, $13::jsonb, $14,
@@ -508,7 +508,7 @@ export class PostgresStore implements Store {
           $30, $31, $32, $33,
           $34, $35, $36::jsonb,
           $37, $38, $39, $40, $41,
-          $42, $43, $44, $45
+          $42, $43, $44, $45, $46
         ) ON CONFLICT DO NOTHING`,
         [
           lead.id,
@@ -524,7 +524,7 @@ export class PostgresStore implements Store {
           lead.currency ?? 'RUB',
           lead.category ?? null,
           JSON.stringify(lead.skills ?? []),
-          lead.isRemote ?? (lead.workplaceType === 'remote'),
+          isRemoteLead(lead),
           JSON.stringify(lead.metadata ?? {}),
           lead.publishedAt ? new Date(lead.publishedAt) : null,
           lead.fingerprint,
@@ -556,6 +556,7 @@ export class PostgresStore implements Store {
           lead.companyKey ?? null,
           lead.direction ?? null,
           lead.workplaceType ?? (lead.isRemote === true ? 'remote' : lead.isRemote === false ? 'onsite' : null),
+          lead.lang ?? (/[А-Яа-яЁё]/.test(titleForLanguage(lead.title)) ? 'ru' : 'en'),
         ]
       );
 
@@ -1340,9 +1341,9 @@ export class PostgresStore implements Store {
     }
     if (options.remote) {
       // Remote classification: requires is_remote = true or workplace_type = 'remote',
-      // or explicit online city / text markers, avoiding blind city IS NULL assumptions.
+      // or explicit online city markers, avoiding heavy text regex scanning.
       conditions.push(
-        `(is_remote = true OR workplace_type = 'remote' OR city ~* '^(онлайн|удал)' OR (title || ' ' || text) ~* 'удал[её]нн(?:ая|ое|ый|ую)\\s+(?:работ|формат|график)|100%\\s+remote|\\btelecommute\\b|работа\\s+из\\s+дома' OR (COALESCE(type, 'gig') <> 'job' AND workplace_type IS NULL AND (city IS NULL OR btrim(city) = '')))`,
+        `(is_remote = true OR workplace_type = 'remote' OR city ~* '^(онлайн|удал)' OR (COALESCE(type, 'gig') <> 'job' AND workplace_type IS NULL AND (city IS NULL OR btrim(city) = '')))`,
       );
     }
     if (options.workplaceType) {
@@ -1362,8 +1363,8 @@ export class PostgresStore implements Store {
       params.push(options.skillsAny.map((skill) => skill.toLowerCase()));
     }
     if (options.language) {
-      const body = `regexp_replace(title, '(Компания|Город|Company|City)\\s*:[^.|\\n]*', '', 'g')`;
-      conditions.push(options.language === 'ru' ? `${body} ~ '[А-Яа-яЁё]'` : `${body} !~ '[А-Яа-яЁё]'`);
+      conditions.push(`lang = $${idx++}`);
+      params.push(options.language);
     }
     if (options.createdAfter) {
       conditions.push(`created_at >= $${idx++}::timestamptz`);
@@ -1788,6 +1789,7 @@ export class PostgresStore implements Store {
       skills: Array.isArray(r.skills_json) ? r.skills_json : (typeof r.skills_json === 'string' ? JSON.parse(r.skills_json) : []),
       isRemote: r.is_remote !== null ? Boolean(r.is_remote) : (r.workplace_type === 'remote'),
       workplaceType: (r.workplace_type as WorkplaceType) || (r.is_remote ? 'remote' : 'onsite'),
+      lang: (r.lang?.trim() as 'ru' | 'en') || (/[А-Яа-яЁё]/.test(titleForLanguage(r.title)) ? 'ru' : 'en'),
       metadata: typeof r.metadata_json === 'object' && r.metadata_json !== null ? r.metadata_json : JSON.parse(r.metadata_json || '{}'),
       publishedAt: r.published_at ? new Date(r.published_at).toISOString() : undefined,
       fingerprint: r.fingerprint,
