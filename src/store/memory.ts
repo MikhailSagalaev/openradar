@@ -286,7 +286,11 @@ export class MemoryStore implements Store {
 
   async listEmployers(options: { limit: number; minPosts: number; query?: string }): Promise<EmployerSummary[]> {
     const groups = new Map<string, Lead[]>();
-    for (const lead of this.openVacancies()) groups.set(lead.companyKey!, [...(groups.get(lead.companyKey!) ?? []), lead]);
+    for (const lead of this.openVacancies()) {
+      const list = groups.get(lead.companyKey!);
+      if (list) list.push(lead);
+      else groups.set(lead.companyKey!, [lead]);
+    }
     const wanted = options.query?.toLowerCase();
     return [...groups.entries()]
       .filter(([, leads]) => leads.length >= options.minPosts && (!wanted || leads.some((l) => l.company?.toLowerCase().includes(wanted))))

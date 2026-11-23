@@ -190,7 +190,9 @@ export async function pollAll(deps: PollDeps, options: PollAllOptions = {}): Pro
     if (!adapter?.poll) continue;
 
     const health = healthById.get(source.id);
-    const baseIntervalSec = Number(source.config.intervalSec) || adapter.defaultPollIntervalSec || 0;
+    const isHhCompanyRss = source.kind === 'rss' && typeof source.config.url === 'string' &&
+      /hh\.ru\/search\/vacancy\/rss\?(?:.*(?:employer_id|search_field=company_name))/i.test(source.config.url);
+    const baseIntervalSec = Number(source.config.intervalSec) || (isHhCompanyRss ? 7200 : adapter.defaultPollIntervalSec) || 0;
     if (health) {
       // The base interval scales the quarantine minimum to the polls the backoff leaves it.
       const q = shouldQuarantineSource(health, { baseIntervalSec, now: new Date(now) });

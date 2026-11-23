@@ -41,7 +41,11 @@ export function computeSalaryMedians(leads: SalaryLead[]): SalaryMedians {
     if (usd === undefined || usd < rubToUsd(SALARY_FLOOR_RUB)) continue;
     groups.get('*')!.push(usd);
     const key = salaryRoleKey(lead);
-    if (key) groups.set(key, [...(groups.get(key) ?? []), usd]);
+    if (key) {
+      const list = groups.get(key);
+      if (list) list.push(usd);
+      else groups.set(key, [usd]);
+    }
   }
   const medians = new Map<string, number>();
   for (const [key, values] of groups) {
