@@ -1932,6 +1932,13 @@ legend {
 .tg-qr ol { margin: 0; padding-left: 18px; }
 .tg-source-form { display: grid; gap: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
 .tg-source-form[hidden] { display: none; }
+.spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--line); border-top-color: var(--ink); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; }
+.spinner.tiny { width: 12px; height: 12px; border-width: 1.5px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.tg-qr-placeholder { width: 220px; height: 220px; border-radius: 8px; border: 1px dashed var(--line); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: var(--surface); color: var(--muted); font-size: 13px; text-align: center; padding: 16px; box-sizing: border-box; }
+.tg-qr-placeholder[hidden] { display: none; }
+.tg-folders-loading { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.tg-folders-loading[hidden] { display: none; }
 .tg-source-form label { display: grid; gap: 4px; font-size: 13px; }
 .tg-source-form .tg-form-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .tg-folders-container { margin: -4px 0 2px; }
@@ -4522,7 +4529,8 @@ function renderUserTelegram(data: NonNullable<ProfilePageData['telegram']>, lang
         <datalist id="tg-folders-datalist"></datalist>
       </label>
       <div class="tg-folders-container" data-tg-folders-container hidden>
-        <span class="muted small">${ru ? 'Папки в аккаунте (нажмите для выбора):' : 'Folders in your account (click to select):'}</span>
+        <div class="muted small tg-folders-loading" data-tg-folders-loading hidden><span class="spinner tiny" aria-hidden="true"></span> ${ru ? 'Загрузка папок из Telegram…' : 'Loading folders from Telegram…'}</div>
+        <span class="muted small" data-tg-folders-hint hidden>${ru ? 'Папки в аккаунте (нажмите для выбора):' : 'Folders in your account (click to select):'}</span>
         <div class="tg-folders-chips" data-tg-folders-list></div>
       </div>
       <label>${ru ? 'Или чаты, по одному в строке' : 'Or chats, one per line'} <textarea name="chats" rows="3" placeholder="@remote_jobs&#10;https://t.me/freelance_orders"></textarea></label>
@@ -4549,7 +4557,11 @@ function renderUserTelegram(data: NonNullable<ProfilePageData['telegram']>, lang
   <div class="tg-connect" data-tg-connect>
     <button class="btn ${accounts ? 'ghost small' : ''}" type="button" data-tg-start>${icon('plus')}${accounts ? (ru ? 'Подключить ещё аккаунт' : 'Link another account') : (ru ? 'Подключить аккаунт Telegram' : 'Link a Telegram account')}</button>
     <div class="tg-qr" data-tg-qr hidden>
-      <img data-tg-qr-img alt="${ru ? 'QR-код для входа в Telegram' : 'Telegram login QR code'}" width="220" height="220">
+      <div class="tg-qr-placeholder" data-tg-qr-loading>
+        <span class="spinner" aria-hidden="true"></span>
+        <div>${ru ? 'Подключение к Telegram…' : 'Connecting to Telegram…'}<br><span class="muted small">${ru ? 'Генерируем QR-код для входа' : 'Generating login QR code'}</span></div>
+      </div>
+      <img data-tg-qr-img alt="${ru ? 'QR-код для входа в Telegram' : 'Telegram login QR code'}" width="220" height="220" hidden>
       <ol class="small">
         <li>${ru ? 'Откройте Telegram на телефоне' : 'Open Telegram on your phone'}</li>
         <li>${ru ? 'Настройки → Устройства → Подключить устройство' : 'Settings → Devices → Link Desktop Device'}</li>
@@ -4608,16 +4620,37 @@ function userTelegramScript(lang: SupportedLang): string {
     else if (st.status === 'expired') { stop(); show(T.expired); start.hidden = false; }
     else if (st.status === 'error') { stop(); show(st.error || T.error); start.hidden = false; }
   };
+  const placeholder = root.querySelector('[data-tg-qr-loading]');
   start.addEventListener('click', async () => {
-    start.disabled = true;
-    const res = await json('/api/tg/auth/start', 'POST');
-    start.disabled = false;
-    if (!res.ok) { qr.hidden = false; img.hidden = true; show(T.unavailable); return; }
-    const data = await res.json();
-    id = data.authSessionId; shown = data.qrUrl;
-    img.src = '/api/tg/auth/qr/' + id + '?v=' + Date.now();
-    qr.hidden = false; img.hidden = false; start.hidden = true; pwd.hidden = true; show(T.waiting);
-    stop(); timer = setInterval(poll, 2000);
+    start.hidden = true;
+    qr.hidden = false;
+    img.hidden = true;
+    if (placeholder) placeholder.hidden = false;
+    show(T.waiting);
+    try {
+      const res = await json('/api/tg/auth/start', 'POST');
+      if (!res.ok) {
+        if (placeholder) placeholder.hidden = true;
+        qr.hidden = true;
+        start.hidden = false;
+        show(T.unavailable);
+        return;
+      }
+      const data = await res.json();
+      id = data.authSessionId; shown = data.qrUrl;
+      img.onload = () => {
+        if (placeholder) placeholder.hidden = true;
+        img.hidden = false;
+      };
+      img.src = '/api/tg/auth/qr/' + id + '?v=' + Date.now();
+      pwd.hidden = true;
+      stop(); timer = setInterval(poll, 2000);
+    } catch (_) {
+      if (placeholder) placeholder.hidden = true;
+      qr.hidden = true;
+      start.hidden = false;
+      show(T.unavailable);
+    }
   });
   pwd.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -4629,6 +4662,8 @@ function userTelegramScript(lang: SupportedLang): string {
     stop();
     if (id) await json('/api/tg/auth/cancel', 'POST', { authSessionId: id });
     id = null; qr.hidden = true; start.hidden = false;
+    if (placeholder) placeholder.hidden = true;
+    img.hidden = true;
   });
   document.querySelectorAll('[data-tg-unlink]').forEach((b) => b.addEventListener('click', async () => {
     if (!(await window.askConfirm(b))) return;
@@ -4651,20 +4686,22 @@ function userTelegramScript(lang: SupportedLang): string {
     const container = form.querySelector('[data-tg-folders-container]');
     const list = form.querySelector('[data-tg-folders-list]');
     const datalist = form.querySelector('#tg-folders-datalist');
+    const loading = form.querySelector('[data-tg-folders-loading]');
+    const hint = form.querySelector('[data-tg-folders-hint]');
     if (!container || !list) return;
-    try {
-      const res = await fetch('/api/tg/folders' + (accId ? '?accountId=' + encodeURIComponent(accId) : ''), { credentials: 'same-origin' });
-      if (!res.ok) return;
-      const data = await res.json();
-      if (!data.folders || !data.folders.length) { container.hidden = true; return; }
+
+    const render = (folders) => {
+      if (!folders || !folders.length) return;
       if (datalist) {
-        datalist.innerHTML = data.folders.map((f) => '<option value="' + f.title.replace(/"/g, '&quot;') + '">').join('');
+        datalist.innerHTML = folders.map((f) => '<option value="' + f.title.replace(/"/g, '&quot;') + '">').join('');
       }
-      list.innerHTML = data.folders.map((f) => {
+      list.innerHTML = folders.map((f) => {
         const title = f.title.replace(/"/g, '&quot;');
         const label = (f.emoticon ? f.emoticon + ' ' : '') + f.title + (f.peers ? ' (' + f.peers + ')' : '');
         return '<button type="button" class="tg-folder-chip" data-folder="' + title + '">' + label.replace(/</g, '&lt;') + '</button>';
       }).join('');
+      if (loading) loading.hidden = true;
+      if (hint) hint.hidden = false;
       container.hidden = false;
       list.querySelectorAll('[data-folder]').forEach((btn) => {
         btn.addEventListener('click', () => {
@@ -4674,7 +4711,36 @@ function userTelegramScript(lang: SupportedLang): string {
           if (titleInput && !titleInput.value.trim()) titleInput.value = btn.dataset.folder;
         });
       });
+    };
+
+    try {
+      const cached = localStorage.getItem('tg_folders_' + accId);
+      if (cached) render(JSON.parse(cached));
     } catch (_) {}
+
+    if (list.children.length === 0) {
+      container.hidden = false;
+      if (loading) loading.hidden = false;
+      if (hint) hint.hidden = true;
+    }
+
+    try {
+      const res = await fetch('/api/tg/folders' + (accId ? '?accountId=' + encodeURIComponent(accId) : ''), { credentials: 'same-origin' });
+      if (!res.ok) {
+        if (loading) loading.hidden = true;
+        return;
+      }
+      const data = await res.json();
+      if (data.folders && data.folders.length) {
+        try { localStorage.setItem('tg_folders_' + accId, JSON.stringify(data.folders)); } catch (_) {}
+        render(data.folders);
+      } else {
+        if (loading) loading.hidden = true;
+        if (list.children.length === 0) container.hidden = true;
+      }
+    } catch (_) {
+      if (loading) loading.hidden = true;
+    }
   };
   if (add) add.addEventListener('click', () => {
     form.hidden = false;

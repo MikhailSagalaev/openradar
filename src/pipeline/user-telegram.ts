@@ -112,7 +112,8 @@ export async function pollUserTelegramSources(deps: UserTelegramDeps): Promise<U
     await readSource(source, shared, deps, round, now);
   }
   if (store.recordRun) {
-    const errorMsg = round.failed
+    const allFailed = round.sources > 0 && round.failed === round.sources;
+    const errorMsg = allFailed
       ? `${round.failed} источников/чатов завершились с ошибкой`
       : undefined;
     await store.recordRun({
