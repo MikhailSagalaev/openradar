@@ -823,10 +823,10 @@ export class PostgresStore implements Store {
     return total;
   }
 
-  /** Writes detected model grades onto active leads still lacking one (catalog backfill in 2k batches). */
-  async applyGradesFromDecisions(): Promise<number> {
+  /** Writes detected model grades onto active leads still lacking one (catalog backfill in safe 500-row batches with throttling). */
+  async applyGradesFromDecisions(batchLimit = 5): Promise<number> {
     let total = 0;
-    for (;;) {
+    for (let i = 0; i < batchLimit; i++) {
       const res = await this.pool.query(
         `WITH batch AS (
            SELECT l.id, d.grade
@@ -837,14 +837,15 @@ export class PostgresStore implements Store {
               AND d.grade IN ('intern', 'junior', 'middle', 'senior', 'lead')
               AND (l.grade IS NULL OR l.grade = '')
               AND l.state = 'active' AND l.status <> 'rejected'
-            LIMIT 2000
+            LIMIT 500
          )
          UPDATE leads l SET grade = batch.grade
            FROM batch WHERE l.id = batch.id`,
       );
       const n = res.rowCount ?? 0;
       total += n;
-      if (n < 2000) break;
+      if (n < 500) break;
+      await new Promise((resolve) => setTimeout(resolve, 200));
     }
     return total;
   }
