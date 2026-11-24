@@ -332,16 +332,16 @@ export async function extractBatchWithModel(
 ): Promise<{ results: (ModelFacts | undefined)[]; model: string } | undefined> {
   const { env } = deps;
   const injected = deps.fetchImpl && deps.fetchImpl !== globalThis.fetch ? deps.fetchImpl : undefined;
-  const proxyUrl = env.RADAR_PROXY_URL?.trim();
-  const dispatcher = !injected && proxyUrl ? getProxyAgent(proxyUrl) : undefined;
-  const fetchImpl = injected ?? (dispatcher ? (undiciFetch as unknown as typeof fetch) : fetch);
-  const callDeps = { env, logger: deps.logger, fetchImpl, dispatcher };
   const cascadeFor = (provider?: ExtractProvider): string[] => {
     if (!provider) return extractModelCascade(env);
     const fallback = provider.fallbackModel?.trim();
     return fallback && fallback !== provider.model ? [provider.model, fallback] : [provider.model];
   };
   const tryProvider = async (provider?: ExtractProvider) => {
+    const proxyUrl = provider?.proxyUrl?.trim() ?? env.RADAR_EXTRACT_PROXY_URL?.trim();
+    const dispatcher = !injected && proxyUrl ? getProxyAgent(proxyUrl) : undefined;
+    const fetchImpl = injected ?? (dispatcher ? (undiciFetch as unknown as typeof fetch) : fetch);
+    const callDeps = { env, logger: deps.logger, fetchImpl, dispatcher };
     for (const model of cascadeFor(provider)) {
       const results = await askModelBatch(leads, model, callDeps, true, provider);
       if (results) return { results, model };
@@ -378,16 +378,16 @@ export async function extractWithModel(
   const { env } = deps;
   const gigachat = env.RADAR_EXTRACT_PROVIDER === 'gigachat';
   const injected = deps.fetchImpl && deps.fetchImpl !== globalThis.fetch ? deps.fetchImpl : undefined;
-  const proxyUrl = env.RADAR_PROXY_URL?.trim();
-  const dispatcher = (!gigachat && !injected && proxyUrl) ? getProxyAgent(proxyUrl) : undefined;
-  const fetchImpl = injected ?? (gigachat ? gigachatFetch : (dispatcher ? (undiciFetch as unknown as typeof fetch) : fetch));
-  const callDeps = { env, logger: deps.logger, fetchImpl, dispatcher };
   const cascadeFor = (provider?: ExtractProvider): string[] => {
     if (!provider) return extractModelCascade(env);
     const fallback = provider.fallbackModel?.trim();
     return fallback && fallback !== provider.model ? [provider.model, fallback] : [provider.model];
   };
   const tryProvider = async (provider?: ExtractProvider): Promise<{ facts: ModelFacts; model: string } | undefined> => {
+    const proxyUrl = provider?.proxyUrl?.trim() ?? env.RADAR_EXTRACT_PROXY_URL?.trim();
+    const dispatcher = (!gigachat && !injected && proxyUrl) ? getProxyAgent(proxyUrl) : undefined;
+    const fetchImpl = injected ?? (gigachat ? gigachatFetch : (dispatcher ? (undiciFetch as unknown as typeof fetch) : fetch));
+    const callDeps = { env, logger: deps.logger, fetchImpl, dispatcher };
     for (const model of cascadeFor(provider)) {
       const facts = await askModel(lead, model, callDeps, !gigachat, provider);
       if (facts) return { facts, model };

@@ -61,12 +61,14 @@ const envSchema = z.object({
         fallbackModel: z.string().min(1).optional(),
         pauseMs: z.coerce.number().int().nonnegative().optional(),
         concurrency: z.coerce.number().int().positive().optional(),
+        proxyUrl: z.string().min(1).optional(),
       })).min(1).parse(JSON.parse(trimmed));
     } catch {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'RADAR_EXTRACT_PROVIDERS must be a non-empty JSON array of {baseUrl, apiKey, model, fallbackModel?, pauseMs?, concurrency?}' });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'RADAR_EXTRACT_PROVIDERS must be a non-empty JSON array of {baseUrl, apiKey, model, fallbackModel?, pauseMs?, concurrency?, proxyUrl?}' });
       return z.NEVER;
     }
   }),
+  RADAR_EXTRACT_PROXY_URL: optionalString,
   RADAR_EXTRACT_PROVIDER_COOLDOWN_MIN: z.coerce.number().int().nonnegative().default(60),
   // Answers are saved either way; figures use them only once their quality is checked.
   RADAR_EXTRACT_APPLY: booleanFromEnv(false),

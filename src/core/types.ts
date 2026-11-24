@@ -31,6 +31,8 @@ export interface ExtractProvider {
   /** Minimum pause between requests: rate-limited free tiers need a slower pace. */
   pauseMs?: number;
   concurrency?: number;
+  /** Optional outbound proxy for this provider endpoint only (e.g. http://proxy:8080). */
+  proxyUrl?: string;
 }
 
 export interface Env {
@@ -48,6 +50,8 @@ export interface Env {
   RADAR_EXTRACT_MODEL?: string;
   /** Second OpenAI-compatible model tried when the primary returns nothing usable. */
   RADAR_EXTRACT_FALLBACK_MODEL?: string;
+  /** Optional proxy dedicated to extraction calls only (leaves general scrapers and Tor untouched). */
+  RADAR_EXTRACT_PROXY_URL?: string;
   RADAR_EXTRACT_PER_HOUR: number;
   RADAR_EXTRACT_APPLY: boolean;
   /** Ordered pool of OpenAI-compatible extraction endpoints; a parked one is skipped for the cooldown. */
