@@ -15,7 +15,7 @@ import type { Lead, LeadStatus, LeadType, RawLead, SourceConfig, SourceHealth, S
 import type { EmployerSummary, ListLeadsOptions } from '../core/store.ts';
 import { pollAll, pollSource } from '../pipeline/poll.ts';
 import { ingestRawLead, type IngestDeps } from '../pipeline/ingest.ts';
-import type { UserTelegramDeps } from '../pipeline/user-telegram.ts';
+import { pollUserTelegramSources, type UserTelegramDeps } from '../pipeline/user-telegram.ts';
 import { renderSVG } from 'uqr';
 import { fetchSafeHttp } from '../pipeline/preview.ts';
 import type { VisaSponsorNote } from '../research/visa-sponsors.ts';
@@ -2901,6 +2901,23 @@ export function createApp(runtime: Runtime): Hono {
     if (!await isAdmin(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
     const source = await runtime.store.getSource(c.req.param('id'));
     if (!source) return c.json({ error: 'not_found' }, 404);
+    if (source.config.userTelegram === true) {
+      const tgDeps = userTelegramDeps(runtime);
+      if (tgDeps) {
+        const round = await pollUserTelegramSources(tgDeps);
+        return c.json({
+          sourceId: source.id,
+          sourceTitle: source.title,
+          found: round.found,
+          inserted: round.inserted,
+          rejected: Math.max(0, round.found - round.inserted),
+          delivered: round.inserted,
+          duplicates: 0,
+          failed: round.failed,
+          durationMs: 0,
+        });
+      }
+    }
     const summary = await pollSource(source, {
       ...deps(runtime),
       sources: runtime.sources,

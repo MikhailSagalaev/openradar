@@ -4040,24 +4040,34 @@ export function renderSourcePage(data: SourcePageData): string {
     .map(([key, value]) => `<div><dt>${escapeHtml(key)}</dt><dd>${escapeHtml(value)}</dd></div>`)
     .join('');
 
-  const webhook = source.kind === 'webhook'
+  const isUserTelegram = source.config.userTelegram === true;
+  const webhook = source.kind === 'webhook' && !isUserTelegram
     ? `<p class="hint" style="margin-top:12px">Приём: <code>POST /api/ingest/${escapeHtml(source.id)}</code> с заголовком <code>x-radar-token</code>.</p>`
     : '';
   const robotsVerdict = data.robots?.item.robots;
-  const robots = !data.robots
-    ? '<p class="muted small">robots.txt ещё не проверялся: проверка идёт раз в сутки, вручную — <code>radar robots</code>.</p>'
-    : !robotsVerdict
-      ? `<p class="muted small">robots.txt не применяется: ${escapeHtml(data.robots.item.note ?? '')}.</p>`
-      : `<p class="small">${robotsVerdict.verdict === 'disallowed'
-          ? `<span class="text-warn">robots.txt запрещает этот адрес</span> (<code>${escapeHtml(robotsVerdict.rule ?? '')}</code>). Защиту сайтов не обходим: источник стоит отложить или перевести на разрешённый адрес.`
-          : robotsVerdict.verdict === 'allowed'
-            ? `robots.txt разрешает этот адрес${robotsVerdict.rule ? ` (<code>${escapeHtml(robotsVerdict.rule)}</code>)` : ''}.`
-            : `robots.txt проверить не удалось: ${escapeHtml(robotsVerdict.reason ?? '')}.`}
-        <span class="muted">Проверено ${formatRelative(data.robots.at, lang)}.</span></p>`;
+  const robots = isUserTelegram || source.kind === 'webhook'
+    ? ''
+    : !data.robots
+      ? '<p class="muted small">robots.txt ещё не проверялся: проверка идёт раз в сутки, вручную — <code>radar robots</code>.</p>'
+      : !robotsVerdict
+        ? `<p class="muted small">robots.txt не применяется: ${escapeHtml(data.robots.item.note ?? '')}.</p>`
+        : `<p class="small">${robotsVerdict.verdict === 'disallowed'
+            ? `<span class="text-warn">robots.txt запрещает этот адрес</span> (<code>${escapeHtml(robotsVerdict.rule ?? '')}</code>). Защиту сайтов не обходим: источник стоит отложить или перевести на разрешённый адрес.`
+            : robotsVerdict.verdict === 'allowed'
+              ? `robots.txt разрешает этот адрес${robotsVerdict.rule ? ` (<code>${escapeHtml(robotsVerdict.rule)}</code>)` : ''}.`
+              : `robots.txt проверить не удалось: ${escapeHtml(robotsVerdict.reason ?? '')}.`}
+          <span class="muted">Проверено ${formatRelative(data.robots.at, lang)}.</span></p>`;
+
+  const userTelegramBanner = isUserTelegram
+    ? `<div class="notice" style="margin-top:14px">${lang === 'ru'
+        ? 'Агрегирующий системный источник для персональных Telegram-папок участников. Опрос выполняется в фоне каждые 15 минут через MTProto-сессии подключённых аккаунтов. Статистика по каналам и управление личными источниками — в <a href="/me">вашем профиле</a>.'
+        : 'System aggregator for members\' personal Telegram folders. Polling runs every 15 minutes in the background via members\' MTProto sessions. Per-channel statistics and personal folder management are located in <a href="/me">your profile</a>.'}</div>`
+    : '';
 
   const body = `
 <a class="back" href="/sources">← ${escapeHtml(t.navSources)}</a>
 ${notice ? `<div class="notice">${escapeHtml(notice)}</div>` : ''}
+${userTelegramBanner}
 <div class="page-head">
   <div>
     <h1>${escapeHtml(source.title)}</h1>

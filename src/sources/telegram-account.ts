@@ -128,10 +128,18 @@ type FolderPeers = { _: string; title?: unknown; includePeers?: Array<{ _: strin
  */
 export async function findFolderByTitle(client: Pick<TelegramClient, 'getFolders'>, title: string): Promise<FolderPeers | undefined> {
   const { filters } = await client.getFolders();
-  return (filters as FolderPeers[]).find((filter) => {
-    if (filter._ !== 'dialogFilter' && filter._ !== 'dialogFilterChatlist') return false;
+  const search = title.trim().toLowerCase();
+  const list = (filters as FolderPeers[]).filter((filter) => {
+    return filter._ === 'dialogFilter' || filter._ === 'dialogFilterChatlist';
+  });
+  const exact = list.find((filter) => {
     const name = typeof filter.title === 'string' ? filter.title : (filter.title as { text?: string } | undefined)?.text;
-    return name === title;
+    return name?.trim().toLowerCase() === search;
+  });
+  if (exact) return exact;
+  return list.find((filter) => {
+    const name = typeof filter.title === 'string' ? filter.title : (filter.title as { text?: string } | undefined)?.text;
+    return name ? name.toLowerCase().includes(search) || search.includes(name.toLowerCase().trim()) : false;
   });
 }
 

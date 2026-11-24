@@ -7,6 +7,7 @@
  * without a public link and dialogs with people are skipped: their members never agreed to a
  * public feed, and the hub would be publishing someone's correspondence.
  */
+import { randomUUID } from 'node:crypto';
 import type { IngestDeps, IngestOutcome } from './ingest.ts';
 import { ingestRawLead } from './ingest.ts';
 import type { TelegramClient } from '@mtcute/node';
@@ -109,6 +110,25 @@ export async function pollUserTelegramSources(deps: UserTelegramDeps): Promise<U
   for (const source of due) {
     round.sources++;
     await readSource(source, shared, deps, round, now);
+  }
+  if (store.recordRun) {
+    const errorMsg = round.failed
+      ? `${round.failed} источников/чатов завершились с ошибкой`
+      : undefined;
+    await store.recordRun({
+      id: randomUUID(),
+      sourceId: shared.id,
+      startedAt: now.toISOString(),
+      finishedAt: (deps.now?.() ?? new Date()).toISOString(),
+      found: round.found,
+      inserted: round.inserted,
+      duplicates: 0,
+      rejected: Math.max(0, round.found - round.inserted),
+      delivered: round.inserted,
+      error: errorMsg,
+    }).catch((err) => {
+      deps.logger.warn('personal Telegram source: could not record run', { error: err instanceof Error ? err.message : String(err) });
+    });
   }
   return round;
 }

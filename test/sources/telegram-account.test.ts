@@ -87,6 +87,8 @@ describe('Telegram account source', () => {
     expect(await folderChats(client, 'k', 'openradar', 1000)).toEqual(['-1001234567890', '-777']);
     expect(await folderChats(client, 'k', 'openradar', 2000)).toEqual(['-1001234567890', '-777']);
     expect(calls).toBe(1);
+    expect(await folderChats(client, 'k2', 'OpenRadar', 3000)).toEqual(['-1001234567890', '-777']);
+    expect(calls).toBe(2);
     expect(folderOf(makeSource({ kind: 'telegram-account', config: { folder: ' openradar ' } }))).toBe('openradar');
     expect(folderOf(makeSource({ kind: 'telegram-account', config: {} }))).toBeUndefined();
   });
