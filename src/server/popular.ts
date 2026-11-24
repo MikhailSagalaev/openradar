@@ -94,7 +94,7 @@ export function createPopularCounters(options: {
       return [...counts.entries()]
         .filter(([, count]) => count >= 2)
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 30)
+        .slice(0, 60)
         .map(([name, count]) => ({ name, count }));
     });
     skillCache.delete(key);

@@ -163,7 +163,7 @@ export const ROLES: RoleDef[] = [
   { slug: 'education', label: 'Преподавание и менторство', plural: 'преподаватели', types: ['job'],
     pattern: rx(`преподавател|учител|ментор|наставник|автор (?:курс|дисциплин)|методист|tutor|teacher`) },
   { slug: 'support', label: 'Техподдержка', plural: 'специалисты техподдержки', types: ['job'],
-    pattern: rx(`поддержк|support|helpdesk|service desk|оператор\\p{L}*\\s+(?:поддержк|техподдержк|колл[- ]?центр|call[- ]?center|контакт[- ]?центр|горяч\\p{L}*\\s+лини|чат)|customer success|customer care|customer reliability|kundenbetreuer`) },
+    pattern: rx(`поддержк|support|helpdesk|service desk|оператор\\p{L}*\\s+(?:поддержк|техподдержк|колл[- ]?центр|call[- ]?center|контакт[- ]?центр|горяч\\p{L}*\\s+лини|входящ\\p{L}*\\s+лини|исходящ\\p{L}*\\s+лини|чат)|customer success|customer care|customer reliability|kundenbetreuer`) },
   { slug: 'marketing', label: 'Маркетинг и реклама', plural: 'маркетологи', types: ['job', 'gig'],
     pattern: rx(`маркетолог|бренд[- ]?менеджер|brand[- ]?manager|marketing|marketer|маркетинг|${W}smm|${W}seo${E}|${W}aso${E}|таргет|директолог|яндекс[. ]директ|реклам|продвижен|авито|инфлюенс|influenc|affiliate|communications manager|${W}pr[- ]менеджер`) },
   { slug: 'content', label: 'Тексты и контент', plural: 'авторы и контент-менеджеры', types: ['job', 'gig'],
@@ -172,6 +172,16 @@ export const ROLES: RoleDef[] = [
     pattern: rx(`продаж|продавец|продавц|торгов\\p{L}*\\s+представител|sales|account manager|account executive|account development|менеджер по работе с клиентами|развити\\p{L}* бизнеса|business development|${W}kam${E}|${W}sdr${E}|${W}bdr${E}|solutions? consult|partnerships?${E}|пресейл|presale|аккаунт`) },
   { slug: 'hr', label: 'HR и рекрутинг', plural: 'HR-специалисты', types: ['job'],
     pattern: rx(`${W}hr${E}|${W}hrbp${E}|рекрутер|рекрутмент|${W}(?:recruiter|recruitment|recruiting|sourcer)${E}|сорсер|${W}talent\\s+(?:acquisition|partner|manager|lead|specialist)|people (?:partner|relations|business)|employer brand|organization development|training & development|подбор\\p{L}*(?:\\s+и\\s+\\p{L}+)?\\s+персонала|специалист\\s+по\\s+персоналу|менеджер\\s+по\\s+персоналу|кадр`) },
+  { slug: 'finance', label: 'Бухгалтерия и финансы', plural: 'бухгалтеры и финансисты', types: ['job', 'gig'],
+    pattern: rx(`бухгалтер|главбух|финанс|экономист|первичк|зарплат|банк-клиент|налог|аудит|казначей|сверк|finance|accountant|financial|tax|cfa|accrual|ledger|bookkeeper|инвестиц|биллинг|billing`) },
+  { slug: 'legal', label: 'Юриспруденция и право', plural: 'юристы', types: ['job', 'gig'],
+    pattern: rx(`юрист|юрисконсульт|адвокат|договорн\\p{L}*\\s+работ|претензионн|комплаенс|compliance|legal|counsel|lawyer|судебн\\p{L}*\\s+(?:практик|защит|дел)|нотариус|правовед`) },
+  { slug: 'logistics', label: 'Логистика, склад и закупки', plural: 'специалисты по логистике и закупкам', types: ['job', 'gig'],
+    pattern: rx(`логист|логистик|вэд|таможенн|закупк|снабжен|склад|кладовщик|товаровед|диспетчер|перевозк|фрахт|грузоперевозк|supply chain|procurement|logistics|warehouse|грузоперевоз|пвз|пункт\\p{L}*\\s+выдач`) },
+  { slug: 'admin', label: 'Административный персонал', plural: 'ассистенты и администраторы', types: ['job', 'gig'],
+    pattern: rx(`ассистент|помощник|секретар|делопроизвод|офис[- ]?менеджер|office manager|personal assistant|executive assistant|бизнес[- ]?ассистент|оператор\\p{L}*\\s+(?:пк|баз\\p{L}*|ввода|1с)|ввод данных|data entry|администратор\\p{L}*\\s+(?:офис|магазин|клиник|салон|гостиниц|отел)`) },
+  { slug: 'engineering', label: 'Инженерия и производство', plural: 'инженеры и технологи', types: ['job', 'gig'],
+    pattern: rx(`инженер[- ]?проектировщик|инженер\\s*пто|инженер[- ]?технолог|инженер[- ]?конструктор|технолог|сметчик|сметн|наладчик|чпу|токар|фрезер|сварщик|cad|autocad|компас[- ]?3d|solidworks|revit|bim|производств|механик|энергетик|электрик|электромонтаж|tooling technician|maintenance technician`) },
   // Orders only: the kinds of work that rarely come as vacancies.
   { slug: 'web', label: 'Сайты', plural: 'веб-разработчики', types: ['gig'],
     pattern: rx(`сайт|лендинг|landing|wordpress|tilda|тильд|битрикс|bitrix|верстк|интернет-магазин|${W}cms${E}|opencart|woocommerce`) },
@@ -219,6 +229,11 @@ export const ROLE_LABELS_EN: Record<string, string> = {
   content: 'Content & Copywriting',
   sales: 'Sales & BizDev',
   hr: 'HR & Recruiting',
+  finance: 'Finance & Accounting',
+  legal: 'Legal & Compliance',
+  logistics: 'Logistics & Procurement',
+  admin: 'Office & Administration',
+  engineering: 'Engineering & Manufacturing',
   web: 'Websites & CMS',
   bots: 'Bots & Chatbots',
   parsing: 'Scraping & Automation',
@@ -233,7 +248,10 @@ export const ROLE_LABELS_EN: Record<string, string> = {
  * Roles whose order of checks needs care in orders: a «бот на нейросетях» is a bot and a
  * «сайт на Битриксе» a site, so for orders the AI role only wins when the title says so.
  */
-const GIG_ORDER = ['1c', 'marketplaces', 'bots', 'parsing', 'qa', 'mobile', 'gamedev', 'design', 'web', 'video', 'content', 'translation', 'marketing', 'analyst-data', 'ai', 'dev-other'];
+const GIG_ORDER = [
+  '1c', 'marketplaces', 'bots', 'parsing', 'qa', 'mobile', 'gamedev', 'design', 'web', 'video',
+  'content', 'translation', 'marketing', 'analyst-data', 'ai', 'finance', 'legal', 'logistics', 'admin', 'engineering', 'dev-other',
+];
 
 export function roleDef(slug: string): RoleDef | undefined {
   return ROLES.find((role) => role.slug === slug);
@@ -249,7 +267,10 @@ export function roleLabel(slug: string, lang: 'ru' | 'en' = 'ru'): string {
 const NON_IT_1C_USER_TITLE = /(?:менеджер\s+по\s+продаж|продавец|торгов\p{L}*\s+представител|бухгалтер|кассир|кладовщик|товаровед|оператор\s+(?:1\s*[-–—]?\s*[сc]|пк|склад|баз)|секретарь|делопроизводител)/iu;
 
 export function classifyRole(type: LeadType, title: string, extra = '', skills?: string[]): string {
-  if (isPhysicalNonItWork(title, extra)) return OTHER_ROLE.slug;
+  if (isPhysicalNonItWork(title, extra)) {
+    if (roleDef('engineering')!.pattern.test(title)) return 'engineering';
+    return OTHER_ROLE.slug;
+  }
   if (type === 'gig') {
     // The title decides; the text helps when the title is «Нужна помощь».
     for (const slug of GIG_ORDER) if (roleDef(slug)!.pattern.test(title)) return slug;

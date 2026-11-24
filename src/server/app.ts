@@ -1355,7 +1355,7 @@ export function createApp(runtime: Runtime): Hono {
       return map;
     },
     loadTopSkills: async () => {
-      const items = (await runtime.store.listTopSkills?.(40)) ?? [];
+      const items = (await runtime.store.listTopSkills?.(300)) ?? [];
       return items.map((i) => ({ name: i.name, count: i.total }));
     },
   });

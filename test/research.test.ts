@@ -80,14 +80,18 @@ describe('role, grade, language and employer', () => {
     expect(classifyRole('job', 'Вайб-кодер на Cursor')).toBe('ai');
     expect(classifyRole('job', 'Team Lead Go')).toBe('backend');
     expect(classifyRole('job', 'Middle/Middle+ iOS разработчик')).toBe('mobile');
-    expect(classifyRole('job', 'Бухгалтер')).toBe('other');
+    expect(classifyRole('job', 'Бухгалтер')).toBe('finance');
+    expect(classifyRole('job', 'Юрист по интеллектуальной собственности')).toBe('legal');
+    expect(classifyRole('job', 'Бизнес-ассистент руководителя')).toBe('admin');
+    expect(classifyRole('job', 'Инженер-конструктор SolidWorks')).toBe('engineering');
+    expect(classifyRole('job', 'Швея-закройщик')).toBe('other');
     // A vague title falls back to the board's specialization.
     expect(classifyRole('job', 'Специалист', 'Бэкенд разработчик')).toBe('backend');
     expect(classifyRole('job', 'Мобильный сборщик заказов', 'Сборка заказов в дарксторе')).toBe('other');
     expect(classifyRole('job', 'Специалист по безопасности (ТЦ Галактика)', 'Охрана ТЦ')).toBe('other');
     expect(classifyRole('job', 'Менеджер по продажам B2B (кассы, маркировка, 1С)')).toBe('sales');
     expect(classifyRole('job', 'Продавец-консультант в Салон оптики', 'Работа в 1С')).toBe('sales');
-    expect(classifyRole('job', 'Оператор 1С на склад')).toBe('other');
+    expect(classifyRole('job', 'Оператор 1С на склад')).toBe('logistics');
     expect(classifyRole('job', 'Разработчик интерфейсов')).toBe('frontend');
     expect(classifyRole('job', 'Next.js разработчик')).toBe('frontend');
     expect(classifyRole('job', 'Senior Software Engineer', '', ['React', 'TypeScript', 'Tailwind'])).toBe('frontend');

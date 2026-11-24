@@ -3348,7 +3348,7 @@ ${intro}
         ${popular.length ? `<div class="suggestions-group">
           <div class="suggestions-header">${escapeHtml(t.popularSkills)}</div>
           <div class="suggestions-chips">
-            ${popular.slice(0, 10).map((item) => `<a class="sug-chip" href="${escapeHtml(hrefWith({ skill: item.name, page: undefined }))}">${escapeHtml(translateSkill(item.name, lang))} <span class="sug-count">${item.count}</span></a>`).join('')}
+            ${popular.slice(0, 20).map((item) => `<a class="sug-chip" href="${escapeHtml(hrefWith({ skill: item.name, page: undefined }))}">${escapeHtml(translateSkill(item.name, lang))} <span class="sug-count">${item.count}</span></a>`).join('')}
           </div>
         </div>` : ''}
         <div class="suggestions-group">
