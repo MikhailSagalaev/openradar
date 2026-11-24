@@ -3503,15 +3503,15 @@ ${POLL_SCRIPT}
     : type === 'gig'
     ? t.gigs
     : lang === 'ru'
-    ? 'Заказы и вакансии для фрилансеров и IT — открытая лента'
-    : 'Freelance orders and IT jobs — an open feed';
+    ? 'Заказы и вакансии в IT, digital и креативе — открытая лента'
+    : 'IT, digital and creative jobs and freelance orders — an open feed';
 
   const typeParam = type ? `?type=${encodeURIComponent(type)}` : '';
   const siteUrl = publicBaseUrl ?? 'https://openradar.fun';
   const pageCanonical = `${siteUrl}/${typeParam}`;
   const metaDesc = lang === 'ru'
-    ? 'openradar — открытая база заказов и вакансий: свежие проекты с бирж и Telegram-каналов, вилки зарплат, фильтры по стеку и RSS на любой запрос.'
-    : 'openradar — open decentralized feed of freelance gigs and IT jobs from freelance boards, Telegram channels and RSS feeds.';
+    ? 'openradar — открытая база заказов и вакансий в IT, digital и креативе: свежие проекты с бирж и Telegram-каналов, вилки зарплат, фильтры по стеку и RSS на любой запрос.'
+    : 'openradar — open decentralized feed of IT jobs and digital/creative freelance gigs from boards, career sites, Telegram channels and RSS feeds.';
   const websiteSchema = {
     '@context': 'https://schema.org',
     '@type': 'WebSite',

@@ -1,4 +1,4 @@
-import { SERVICE_OFFER } from './quality.ts';
+import { hasWorkOfferSignals, SERVICE_OFFER } from './quality.ts';
 import { budgetUsd } from './salary.ts';
 import { extractSkills, normalizeForMatch } from './text.ts';
 import type { LeadStatus, SourceRecord } from './types.ts';
@@ -147,15 +147,39 @@ export function spamReasons(title: string, text: string, currency?: string): str
   return [];
 }
 
+/** Explicit offline / blue-collar / retail-store / medical positions out of scope when focused on IT/digital/creative. */
+const OFFLINE_NON_DIGITAL_TITLE_RE =
+  /(?:^|[^\p{L}])(?:пиццамейкер|сушист|кассир|повар|помощник\s+повара|пекарь|бариста|официант|бармен|хостес|горничн[а-я]*|уборщи[кца]+|клинер|дворник|мойщи[кца]+|грузчик|кладовщик|комплектовщик|сборщик\s+заказов|фасовщи[кца]+|(?:работник|сотрудник)\s+(?:кухни|общепита|пвз|пункта\s+выдач[а-я]*|склада|торгового\s+зала)|(?<!руко|произ)водител[ья](?![\p{L}])|шоф[её]р|авто?курьер|курьер|экспедитор|мерчендайзер|продавец(?:[-\s]+кассир|[-\s]+консультант)?|заведующ[а-я]+\s+(?:кассой|магазином|аптекой|складом)|менеджер\s+(?:в\s+отделение|по\s+работе\s+с\s+залогами|торгового\s+зала)|охранник|сторож|слесарь|токарь|фрезеровщик|сварщик|сантехник|швея|закройщик|маляр|плотник|разнорабочий|электромонтажник|электромеханик|медсестр[а-я]*|медицинск[а-я]+\s+сестр[а-я]*|медбрат|фельдшер|фармацевт|провизор|ветеринар|агроном|зоотехник|инженер\s+пто|геодезист|сметчик|grünflächenpflege|nuclear\s+technician|buitendienstmonteur|forklift|delivery\s+driver|warehouse\s+(?:worker|associate)|housekeeper|cashier|line\s+cook|bartender|waiter|waitress|janitor|security\s+guard|nurse|pharmacist|truck\s+driver)(?![\p{L}])/iu;
+
+/** Digital, IT, product, marketing or creative title words that always belong even if a niche word appears (e.g. «сайт для кофейни»). */
+const DIGITAL_CREATIVE_TITLE_ALLOWLIST_RE =
+  /(?:разработ|программист|developer|software\s+engineer|devops|(?<![\p{L}])(?:sre|qa|ml|ai|ui|ux|bi|pr|smm|seo|aso|it|1[cс]|hr)(?![\p{L}])|тестировщик|аналитик|analyst|data\s+scien|нейросет|дизайнер|designer|арт[-\s]?директор|art\s+director|иллюстратор|3d|моушн|motion|видео|монтаж|копирайтер|редактор|контент|маркетолог|таргетолог|директолог|продакт|product|проджект|project|техническ[а-я]+\s+специалист|сайт|лендинг|(?<![\p{L}])бот[а-я]*(?![\p{L}])|figma|python|golang|java|javascript|typescript|react|php|c\+\+|битрикс|тильд[ае]|tilda|wordpress|gamedev|геймдев|unity|unreal|рекрутер|digital|диджитал|креатив)/iu;
+
+/** Returns a rejection reason when an unambiguous offline blue-collar title appears under IT/digital focus. */
+export function nonDigitalReason(title: string): string | undefined {
+  if (DIGITAL_CREATIVE_TITLE_ALLOWLIST_RE.test(title)) return undefined;
+  if (OFFLINE_NON_DIGITAL_TITLE_RE.test(title)) return 'offtopic:non_digital';
+  return undefined;
+}
+
+const TELEGRAM_CHAT_BANTER_RE =
+  /(?:(?:знакомьтесь|познакомьтесь)[\s\S]{0,40}наш\s+нов(?:ый|ая)|серия\s+подкастов|постер\s+сериала)/iu;
+const TELEGRAM_HIRING_RE = /(?:требу[ею]тся|ищем|ищу|нуж[её]н|нужна|нужны|#?ваканси)/iu;
+
 function includesKeyword(haystack: string, keyword: string): boolean {
   const needle = normalizeForMatch(keyword);
   return needle.length > 0 && haystack.includes(needle);
+}
+
+export interface ApplyRulesOptions {
+  domainFocus?: 'all' | 'it_digital';
 }
 
 export function applyRules(
   lead: PreparedLead,
   source: SourceRecord,
   now: Date,
+  options?: ApplyRulesOptions,
 ): RuleResult {
   const reasons: string[] = [];
   const textForMatch = normalizeForMatch(`${lead.title}\n${lead.text}`);
@@ -168,6 +192,22 @@ export function applyRules(
   // extracted currency stands in for it. Only a post titled as data entry counts; company
   // vacancies (an executive assistant, a benefits analyst) list data entry among the duties.
   reasons.push(...spamReasons(lead.title, lead.text, lead.currency));
+
+  const isFreeTextTelegram =
+    source.kind === 'telegram' || source.kind === 'telegram-account' || source.config.userTelegram === true;
+  if (isFreeTextTelegram && reasons.length === 0) {
+    const rawCombined = `${lead.title}\n${lead.text}`;
+    const explicitBanter = TELEGRAM_CHAT_BANTER_RE.test(rawCombined) && !TELEGRAM_HIRING_RE.test(rawCombined);
+    const noWorkIntent = !hasWorkOfferSignals(lead) && extractSkills(lead.title, lead.text).length === 0;
+    if (explicitBanter || noWorkIntent) {
+      reasons.push('spam:CHAT_NOISE');
+    }
+  }
+
+  if (options?.domainFocus === 'it_digital' && source.config.domainFilter !== false && reasons.length === 0) {
+    const domainIssue = nonDigitalReason(lead.title);
+    if (domainIssue) reasons.push(domainIssue);
+  }
 
   const exclude = source.config.excludeKeywords ?? [];
   for (const keyword of exclude) {

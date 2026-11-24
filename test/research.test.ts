@@ -98,6 +98,8 @@ describe('role, grade, language and employer', () => {
     expect(classifyRole('job', 'Software Engineer', '', ['React', 'Python', 'PostgreSQL'])).toBe('fullstack');
     expect(classifyRole('job', 'Senior Software Engineer', '', ['Python', 'PostgreSQL'])).toBe('backend');
     expect(classifyRole('job', 'Разработчик', 'Ищем frontend разработчика на React')).toBe('frontend');
+    expect(classifyRole('job', 'Мы в поиске Senior Разработчика C++', 'Требования: информационная безопасность и высоконагруженные сервисы')).toBe('backend');
+    expect(classifyRole('job', 'Мы в поиске Middle/Senior/Lead Golang разработчика', 'Опыт настройки инфраструктуры и CI/CD')).toBe('backend');
   });
 
   it('classifies orders by title, then by text', () => {

@@ -1,6 +1,16 @@
 import type { SourcePreset } from './presets.ts';
 
 /**
+ * IT, digital, product, analytics, design and marketing `professional_role` IDs on hh.ru / hh.kz / headhunter.ge.
+ * Filters broad company feeds to tech and creative roles instead of retail, warehouse or couriers.
+ */
+export const HH_DIGITAL_ROLES_QUERY = [
+  96, 160, 124, 116, 112, 113, 114, 10, 148, 150, 156, 164, 165, 104, 125, 126, 73, 34, 25, 12, 68, 3, 163,
+]
+  .map((id) => `professional_role=${id}`)
+  .join('&');
+
+/**
  * Company career sites and niche boards read page by page. One line per site: where its pages
  * are listed, which of those pages are vacancies, and whose they are. Before a line goes in,
  * check that robots.txt allows the pages and that a real page carries the vacancy in its HTML.
@@ -112,9 +122,9 @@ export const HH_EMPLOYER_PRESETS: SourcePreset[] = HH_EMPLOYERS.map(([id, name, 
   id,
   kind: 'rss',
   title: `${name} — вакансии на hh.ru`,
-  description: `Лента вакансий компании ${name} на hh.ru`,
+  description: `Лента IT и digital-вакансий компании ${name} на hh.ru`,
   config: {
-    url: `https://hh.ru/search/vacancy/rss?employer_id=${employer}&order_by=publication_time`,
+    url: `https://hh.ru/search/vacancy/rss?employer_id=${employer}&${HH_DIGITAL_ROLES_QUERY}&order_by=publication_time`,
     company: name,
     intervalSec: 7200,
   },
@@ -355,9 +365,9 @@ export const HH_NAME_EMPLOYER_PRESETS: SourcePreset[] = HH_NAME_EMPLOYERS.map(([
   id,
   kind: 'rss',
   title: `${name} — вакансии на hh.ru`,
-  description: `Лента вакансий группы ${name} на hh.ru: поиск по названию компании собирает все аккаунты группы`,
+  description: `Лента IT и digital-вакансий группы ${name} на hh.ru: поиск по названию компании собирает все аккаунты группы`,
   config: {
-    url: `https://hh.ru/search/vacancy/rss?text=${encodeURIComponent(name)}&search_field=company_name&order_by=publication_time`,
+    url: `https://hh.ru/search/vacancy/rss?text=${encodeURIComponent(name)}&search_field=company_name&${HH_DIGITAL_ROLES_QUERY}&order_by=publication_time`,
     company: name,
     intervalSec: 7200,
   },

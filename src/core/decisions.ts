@@ -127,7 +127,7 @@ export const FLAG_AT = 0.5;
 
 /** How sure the model must be before a post leaves the feed. */
 export const HIDE_SCAM_AT = 0.75;
-export const HIDE_JUNK_AT = 0.9;
+export const HIDE_JUNK_AT = 0.78;
 export const CLOSE_AT = 0.9;
 
 export type DecisionAction = 'hidden_scam' | 'hidden_junk' | 'closed';

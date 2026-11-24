@@ -34,6 +34,8 @@ const envSchema = z.object({
   RADAR_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
   RADAR_POLL_INTERVAL_SEC: z.coerce.number().int().positive().default(300),
   RADAR_POLL_CONCURRENCY: z.coerce.number().int().positive().default(16),
+  // Domain focus: IT, digital and creative trades by default; set 'all' for general boards.
+  RADAR_DOMAIN_FOCUS: z.enum(['all', 'it_digital']).default('it_digital'),
   RADAR_LLM_ENABLED: booleanFromEnv(false),
   RADAR_LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(8_000).optional(),
   OPENAI_API_KEY: optionalString,

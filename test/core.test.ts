@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cleanTitle, extractBudget, extractBudgetAndCurrency, extractCity, stripTitleNoiseAndBudget } from '../src/core/extract.ts';
 import { prepareRawLead } from '../src/core/prepare.ts';
-import { applyRules, recalculateVoteScoreAndStatus, scoreLead } from '../src/core/rules.ts';
+import { applyRules, nonDigitalReason, recalculateVoteScoreAndStatus, scoreLead } from '../src/core/rules.ts';
 import { decodeHtmlEntities, escapeHtml, normalizeTechTokens, stripHtml, stripInvisible } from '../src/core/text.ts';
 import { canonicalizeUrl } from '../src/core/url.ts';
 import { makeSource, TEST_NOW } from './helpers.ts';
@@ -341,5 +341,77 @@ describe('score', () => {
     expect(escapeHtml('<script>alert("xss") & it\'s fine</script>')).toBe(
       '&lt;script&gt;alert(&quot;xss&quot;) &amp; it&#39;s fine&lt;/script&gt;',
     );
+  });
+});
+
+describe('IT, digital & creative domain focus and Telegram noise filtering', () => {
+  const tgSource = makeSource({ kind: 'telegram', title: 'Chat' });
+  const hhSource = makeSource({ kind: 'rss', title: 'hh.ru' });
+
+  it('flags blue-collar/offline roles while allowlisting IT/creative/digital tasks', () => {
+    expect(nonDigitalReason('Кассир-продавец в магазин у дома')).toBeTruthy();
+    expect(nonDigitalReason('Работник торгового зала и кухни')).toBeTruthy();
+    expect(nonDigitalReason('Курьер на личном авто')).toBeTruthy();
+    expect(nonDigitalReason('Медицинская сестра процедурного кабинета')).toBeTruthy();
+
+    expect(nonDigitalReason('Логотип и фирменный стиль для кофейни')).toBeUndefined();
+    expect(nonDigitalReason('В проект врача требуется технический специалист')).toBeUndefined();
+    expect(nonDigitalReason('Маркетолог-аналитик в сеть пекарен')).toBeUndefined();
+    expect(nonDigitalReason('Frontend-разработчик React / TypeScript')).toBeUndefined();
+  });
+
+  it('rejects non-digital trades only when domainFocus=it_digital', () => {
+    const raw = {
+      sourceId: hhSource.id,
+      type: 'job' as const,
+      title: 'Сборщик заказов / Курьер',
+      text: 'Сменный график, оформление по ТК, выплаты каждую неделю.',
+    };
+    const offRes = applyRules(prepareRawLead(raw, hhSource, TEST_NOW), hhSource, TEST_NOW, { domainFocus: 'all' });
+    expect(offRes.accepted).toBe(true);
+
+    const onRes = applyRules(prepareRawLead(raw, hhSource, TEST_NOW), hhSource, TEST_NOW, { domainFocus: 'it_digital' });
+    expect(onRes.accepted).toBe(false);
+    expect(onRes.reasons).toContain('offtopic:non_digital');
+  });
+
+  it('rejects casual Telegram chatter, memes and outstaff bench pitches', () => {
+    const chatter = prepareRawLead(
+      {
+        sourceId: tgSource.id,
+        title: 'Соглашусь, точно клод это ещё та штучка',
+        text: 'Соглашусь, точно клод это ещё та штучка, главное что всё работает ахаха',
+      },
+      tgSource,
+      TEST_NOW,
+    );
+    const chatterRes = applyRules(chatter, tgSource, TEST_NOW, { domainFocus: 'it_digital' });
+    expect(chatterRes.accepted).toBe(false);
+    expect(chatterRes.reasons).toContain('spam:CHAT_NOISE');
+
+    const podcast = prepareRawLead(
+      {
+        sourceId: tgSource.id,
+        title: 'Новая серия подкастов с разбором рынка',
+        text: 'Выпустили новую серию подкастов и постер сериала на выходные, обсуждаем тренды',
+      },
+      tgSource,
+      TEST_NOW,
+    );
+    const podcastRes = applyRules(podcast, tgSource, TEST_NOW, { domainFocus: 'it_digital' });
+    expect(podcastRes.accepted).toBe(false);
+    expect(podcastRes.reasons).toContain('spam:CHAT_NOISE');
+
+    const bench = prepareRawLead(
+      {
+        sourceId: tgSource.id,
+        title: 'Ищем проект для Middle Kotlin-разработчика',
+        text: 'Ищем проект для Middle Kotlin-разработчика, опыт 4 года, свободен со следующей недели.',
+      },
+      tgSource,
+      TEST_NOW,
+    );
+    const benchRes = applyRules(bench, tgSource, TEST_NOW, { domainFocus: 'it_digital' });
+    expect(benchRes.accepted).toBe(false);
   });
 });

@@ -44,6 +44,8 @@ export interface Env {
   RADAR_HTTP_TIMEOUT_MS: number;
   RADAR_POLL_INTERVAL_SEC: number;
   RADAR_POLL_CONCURRENCY: number;
+  /** Feed scope: 'it_digital' filters out non-IT/offline/blue-collar trades; 'all' accepts any trade. */
+  RADAR_DOMAIN_FOCUS?: 'all' | 'it_digital';
   RADAR_LLM_ENABLED: boolean;
   RADAR_LLM_TIMEOUT_MS?: number;
   RADAR_EXTRACT_ENABLED: boolean;
@@ -163,6 +165,8 @@ export interface SourceConfig {
   maxAgeHours?: number;
   limit?: number;
   token?: string;
+  /** Set false on a specific source to bypass RADAR_DOMAIN_FOCUS=it_digital filtering. */
+  domainFilter?: boolean;
   [key: string]: unknown;
 }
 

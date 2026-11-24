@@ -17,6 +17,7 @@ export function testEnv(overrides: Partial<Env> = {}): Env {
     NODE_ENV: 'test',
     RADAR_ADMIN_TOKEN: undefined,
     RADAR_CONSOLE_SINK: false,
+    RADAR_DOMAIN_FOCUS: 'all',
     RADAR_LOG_LEVEL: 'error',
     TELEGRAM_BOT_TOKEN: undefined,
     TELEGRAM_CHAT_ID: undefined,

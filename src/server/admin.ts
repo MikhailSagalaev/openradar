@@ -123,12 +123,92 @@ export function renderAdminPage(data: AdminPageData): string {
     analytics.yandexVerification ? [isEn ? 'Yandex Webmaster' : 'Яндекс Вебмастер', 'https://webmaster.yandex.ru/sites/'] : undefined,
   ].filter((item): item is string[] => Boolean(item));
 
+  const kindGroup = (h: SourceHealth): string => {
+    if (h.source.config.userTelegram === true || h.source.kind === 'telegram-account') {
+      return isEn ? 'Telegram (user accounts)' : 'Telegram (участники)';
+    }
+    if (h.source.kind === 'telegram') return 'Telegram (t.me/s/)';
+    if (h.source.kind === 'rss') return 'RSS';
+    if (h.source.kind === 'ats') return 'ATS';
+    if (h.source.kind === 'sitemap') return 'Sitemap';
+    return 'JSON / API';
+  };
+
+  interface TelemetryBucket {
+    label: string;
+    total: number;
+    enabled: number;
+    runs: number;
+    errors: number;
+    found: number;
+    inserted: number;
+    rejected: number;
+  }
+  const buckets = new Map<string, TelemetryBucket>();
+  const totals: TelemetryBucket = {
+    label: isEn ? 'Total' : 'Итого',
+    total: 0,
+    enabled: 0,
+    runs: 0,
+    errors: 0,
+    found: 0,
+    inserted: 0,
+    rejected: 0,
+  };
+  for (const h of health) {
+    const label = kindGroup(h);
+    let b = buckets.get(label);
+    if (!b) {
+      b = { label, total: 0, enabled: 0, runs: 0, errors: 0, found: 0, inserted: 0, rejected: 0 };
+      buckets.set(label, b);
+    }
+    b.total += 1;
+    totals.total += 1;
+    if (h.source.enabled) {
+      b.enabled += 1;
+      totals.enabled += 1;
+    }
+    b.runs += h.last24h.runs;
+    b.errors += h.last24h.errors;
+    b.found += h.last24h.found;
+    b.inserted += h.last24h.inserted;
+    b.rejected += h.last24h.rejected;
+    totals.runs += h.last24h.runs;
+    totals.errors += h.last24h.errors;
+    totals.found += h.last24h.found;
+    totals.inserted += h.last24h.inserted;
+    totals.rejected += h.last24h.rejected;
+  }
+  const renderTelemetryRow = (b: TelemetryBucket, isTotal = false): string => {
+    const errRate = b.runs > 0 ? Math.round((b.errors / b.runs) * 100) : 0;
+    const errClass = b.errors > 0 && errRate >= 25 ? ' class="num text-warn"' : ' class="num muted"';
+    const tag = isTotal ? 'strong' : 'span';
+    return `<tr>
+      <td><${tag}>${escapeHtml(b.label)}</${tag}></td>
+      <td class="num">${number(b.enabled, lang)} / <span class="muted">${number(b.total, lang)}</span></td>
+      <td class="num">${number(b.runs, lang)}</td>
+      <td${errClass}>${b.runs > 0 ? `${number(b.errors, lang)} (${errRate}%)` : '—'}</td>
+      <td class="num">${number(b.found, lang)}</td>
+      <td class="num">${number(b.inserted, lang)}</td>
+      <td class="num muted">${number(b.rejected, lang)}</td>
+    </tr>`;
+  };
+  const telemetryList = [...buckets.values()].sort((a, b) => b.inserted - a.inserted || b.runs - a.runs);
+  const telemetryRows = telemetryList.length
+    ? `${telemetryList.map((b) => renderTelemetryRow(b)).join('')}${telemetryList.length > 1 ? renderTelemetryRow(totals, true) : ''}`
+    : '';
+
   const body = `<div class="page-head"><div><h1>${isEn ? 'Admin Dashboard' : 'Админка'}</h1>
   <p class="muted small">${isEn ? 'Hub summary. Traffic analytics are in external consoles.' : 'Сводка по хабу. Посещаемость — в системах аналитики.'}</p></div></div>
 ${renderAdminTabs('overview', isEn)}
 <div class="admin-tiles">
   ${tiles.map(([label, value, hint]) => `<div class="admin-tile"><div class="admin-tile-label">${escapeHtml(label)}</div><div class="admin-tile-value">${value}</div>${hint ? `<div class="admin-tile-hint">${escapeHtml(hint)}</div>` : ''}</div>`).join('')}
 </div>
+${telemetryRows ? `<section class="admin-section">
+  <h2>${isEn ? 'Pipeline Telemetry (24h)' : 'Телеметрия парсинга (24ч)'}</h2>
+  <table class="admin-table"><thead><tr><th>${isEn ? 'Channel / Kind' : 'Канал / Тип'}</th><th class="num">${isEn ? 'Enabled' : 'Активно'}</th><th class="num">${isEn ? 'Runs' : 'Опросов'}</th><th class="num">${isEn ? 'Errors' : 'Ошибок'}</th><th class="num">${isEn ? 'Found' : 'Найдено'}</th><th class="num">${isEn ? 'New' : 'Новых'}</th><th class="num">${isEn ? 'Rejected' : 'Отклонено'}</th></tr></thead>
+  <tbody>${telemetryRows}</tbody></table>
+</section>` : ''}
 <section class="admin-section">
   <h2>${isEn ? `Leads by day, ${admin.days.length} days` : `Заказы по дням, ${admin.days.length} дней`}</h2>
   <div class="admin-legend"><span class="seg gigs"></span>${isEn ? 'gigs' : 'заказы'} <span class="seg jobs"></span>${isEn ? 'jobs' : 'вакансии'} <span class="seg rejected"></span>${isEn ? 'rejected' : 'отклонено'}</div>

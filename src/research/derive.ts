@@ -290,8 +290,10 @@ export function classifyRole(type: LeadType, title: string, extra = '', skills?:
   const titleRole = jobRole(title, false) ?? (ai.test(title) ? 'ai' : undefined);
   if (titleRole && titleRole !== 'backend') return titleRole;
 
-  // When title specifically names backend (e.g. "Python Backend Developer"), keep backend
-  const isExplicitBackend = rx(`\\b(?:back[- ]?end|бэкенд|бекенд)\\b`).test(title);
+  // When title specifically names backend or a backend language (e.g. "Python Backend Developer", "Senior Разработчик C++"), keep backend
+  const isExplicitBackend = rx(
+    `${W}(?:back[- ]?end|бэкенд|бекенд|golang|python|java(?!script)|php|rust|scala|ruby)${E}|${W}go(?=$|[\\s/,)|»"]|-(?:разработчик|developer|engineer|инженер|программист))|${W}(?:c\\+\\+|c#)(?![\\p{L}\\d])|(?<![\\p{L}\\d])\\.net(?![\\p{L}\\d])`,
+  ).test(title);
   if (isExplicitBackend) return 'backend';
 
   // If title was a generic developer title or matched default backend, check skills and extra text for specific specialization

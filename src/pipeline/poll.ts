@@ -229,10 +229,17 @@ export async function pollAll(deps: PollDeps, options: PollAllOptions = {}): Pro
   const sources = eligible.sort((a, b) => (lastPolledAt.get(a.id) ?? 0) - (lastPolledAt.get(b.id) ?? 0));
 
   const concurrency = Math.max(1, deps.env.RADAR_POLL_CONCURRENCY ?? 16);
-  const limit = pLimit(concurrency);
+  const fastLimit = pLimit(concurrency);
+  const proxyLimit = pLimit(Math.max(1, Math.min(concurrency, 4)));
+  const heavyLimit = pLimit(Math.max(1, Math.min(concurrency, 2)));
+  const laneFor = (source: SourceRecord) => {
+    if (source.kind === 'ats' || source.kind === 'sitemap') return heavyLimit;
+    if (source.kind === 'telegram' || sourceProxyUrl(source.config)) return proxyLimit;
+    return fastLimit;
+  };
   const results = await Promise.all(
     sources.map((source) =>
-      limit(async () => {
+      laneFor(source)(async () => {
         if (options.deadline !== undefined && Date.now() > options.deadline) return null;
         lastPolledAt.set(source.id, Date.now());
         return pollSource(source, deps);

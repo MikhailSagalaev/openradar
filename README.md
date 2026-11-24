@@ -17,7 +17,7 @@
   <a href="docs/PROTOCOL.md"><img src="https://img.shields.io/badge/protocol-radar%2F2-purple.svg" alt="Protocol: radar/2"></a>
 </p>
 
-openradar is an open base of job vacancies and freelance orders. Parsers, nodes and people add posts from boards, RSS feeds, Telegram channels and email alerts; the hub merges duplicates and keeps one clean feed.
+openradar is an open base of job vacancies and freelance orders in IT, digital and creative industries. Parsers, nodes and people add posts from boards, career sites, RSS feeds, Telegram channels and email alerts; the hub merges duplicates and keeps one clean feed.
 
 Job seekers should not have to pay for subscriptions to parsers or for responding to a vacancy. openradar has no paid tier: the contacts are in the post, and you write to the client directly. Anyone can run their own copy.
 
@@ -29,7 +29,7 @@ Job seekers should not have to pay for subscriptions to parsers or for respondin
 
 ## What it does
 
-- **One feed of every trade.** FL.ru, Kwork, Freelancehunt, Habr Career, hh.ru, Работа России, We Work Remotely, Jobicy, RemoteOK and Telegram channels (public ones as they are, private ones and chats through your own account): development, design, video, writing, ads, sales and more. A post seen on two boards is one lead.
+- **One feed for IT, digital & creative work.** FL.ru, Kwork, Freelancehunt, Habr Career, hh.ru, Работа России, We Work Remotely, Jobicy, RemoteOK and Telegram channels (public ones as they are, private ones and chats through your own account): software, data/AI, product, design, video, content, digital marketing and gamedev. A post seen on two boards is one lead.
 - **Search, filters and a rating.** Budget from, skill, remote only, language. The feed opens with the best recent leads first (rating, fading with age); newest or highest budget are one click away. Each lead gets a 0-100 rating from its pay, skills, detail and a direct contact. A vacancy whose pay is far below the usual for its role shows «check the salary» instead of the number.
 - **Browser extension.** Sign in with GitHub once, then add a vacancy or an order from any site in one click; it also shows what similar work usually pays and whether the pay on the page is below, within or above it. Includes 1-click **X-Ray Direct Outreach** to locate engineering leads and hiring managers across LinkedIn, Telegram, Habr and GitHub.
 - **Votes and submissions.** Signed-in users mark leads as useful, junk, scam or closed, and add posts by link.

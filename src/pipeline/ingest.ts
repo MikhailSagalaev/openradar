@@ -159,7 +159,7 @@ export async function ingestRawLead(
     prepared.normalizedUsdMin = undefined;
     prepared.normalizedUsdMax = undefined;
   }
-  const rules = applyRules(prepared, source, now);
+  const rules = applyRules(prepared, source, now, { domainFocus: deps.env.RADAR_DOMAIN_FOCUS });
   let status: IngestOutcome['status'] = rules.accepted ? 'inserted' : 'rejected';
   const reasons = [...rules.reasons, ...quality.flags.map((flag) => `quality:${flag}`)];
   let city = prepared.city;

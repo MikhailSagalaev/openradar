@@ -73,7 +73,7 @@ const PROMOTION = /openradar\.fun|о\s+рекламодателе|бесплат
  * Someone selling their services, not looking for a contractor: the tags chats use for it and
  * an agency's price list. Works on raw text and on normalizeForMatch() output alike.
  */
-export const SERVICE_OFFER = /(?:^|[^\p{L}\d_])#(?:услуг[аи]|предлагаю|ищузаказ[а-я]*|резюме|resume)(?![\p{L}])|помогаю\s+бизнесу|(?:^|[^\p{L}])ищу\s+(?:проекты|разовые\s+задачи|клиентов)|занимаюсь\s+профессиональн|профессиональн[а-я]*\s+помощь\s+в\s+подготовке|наши\s+(?:тарифы|пакеты|услуги\s+и\s+цены)|(?:агентств[а-я]*|студи[а-я]*)\s+предлагает\s+(?:готов|услуг|пакет)|(?<![a-z])start(?![a-z])[^a-z]{0,40}\d[\s\S]{0,400}?(?<![a-z])(?:business|premium)(?![a-z])[^a-z]{0,40}\d/iu;
+export const SERVICE_OFFER = /(?:^|[^\p{L}\d_])#(?:услуг[аи]|предлагаю|ищузаказ[а-я]*|резюме|resume)(?![\p{L}])|помогаю\s+бизнесу|(?:^|[^\p{L}])ищу\s+(?:проекты|разовые\s+задачи|клиентов)|(?:^|[^\p{L}])ищем?\s+(?:проекты|проект\s+для)(?![\p{L}])|(?:хочу|рады)\s+представить\s+вам\s+(?:ещ[её]\s+одного\s+|нашего\s+)?[\p{L}\d+-]*\s*(?:разработчик|инженер|аналитик|дизайнер|devops|qa|тестировщик)|занимаюсь\s+профессиональн|профессиональн[а-я]*\s+помощь\s+в\s+подготовке|наши\s+(?:тарифы|пакеты|услуги\s+и\s+цены)|(?:агентств[а-я]*|студи[а-я]*)\s+предлагает\s+(?:готов|услуг|пакет)|(?<![a-z])start(?![a-z])[^a-z]{0,40}\d[\s\S]{0,400}?(?<![a-z])(?:business|premium)(?![a-z])[^a-z]{0,40}\d/iu;
 
 /** Channel content that is never an offer of work: course sales, discounts, events, greetings to subscribers. */
 const CHANNEL_CONTENT: RegExp[] = [
@@ -175,6 +175,14 @@ export function detectPostType(lead: QualityInput, source: QualitySource): LeadT
   return vacancy >= 2 || distinctMatches(head.slice(0, 300), COMPANY_INTRO) > 0 ? 'job' : lead.type;
 }
 
+/** True when a post shows concrete work/hiring/task intent rather than casual chatter or news. */
+export function hasWorkOfferSignals(lead: Pick<QualityInput, 'title' | 'text' | 'budget'>): boolean {
+  if (lead.budget !== undefined) return true;
+  if (POSITION_WORD.test(lead.title) || NAMED_VACANCY.test(lead.title)) return true;
+  const head = `${lead.title}\n${lead.text}`.slice(0, 1500);
+  return HIRING.test(head) || GIG_SIGNALS.test(head) || NAMED_VACANCY.test(head.slice(0, 400)) || distinctMatches(head, VACANCY_SIGNALS) > 0;
+}
+
 export function assessQuality(lead: QualityInput, source: QualitySource): QualityAssessment {
   const type = detectPostType(lead, source);
   const text = `${lead.title}\n${lead.text}`;
@@ -190,8 +198,8 @@ export function assessQuality(lead: QualityInput, source: QualitySource): Qualit
   const marked = (AD_MARKING.test(text) || PROMOTION.test(text)) && vacancy < 3 && !hiringOpening;
   const editorial = EDITORIAL_TITLE.test(lead.title.trim()) && vacancy < 2 && !hiring && !gig && lead.budget === undefined;
   const roundup = DIGEST_HEADER.test(lead.title.trim()) || DIGEST_HEADER.test(text.slice(0, 400)) || listedOffers(text) >= 3;
-  // Job channels publish articles between vacancies, and a figure in one must not read as pay.
-  const channelStory = FREE_TEXT_KINDS.has(source.kind) && type === 'job' && vacancy === 0 && !hiring && !gig && !roundup && !POSITION_WORD.test(lead.title);
+  // Job channels publish articles/banter between vacancies, and a figure in one must not read as pay.
+  const channelStory = FREE_TEXT_KINDS.has(source.kind) && vacancy === 0 && !hiring && !gig && !roundup && !POSITION_WORD.test(lead.title) && !NAMED_VACANCY.test(head.slice(0, 250)) && lead.budget === undefined;
   const services = SERVICE_OFFER.test(head);
   if (content || marked || editorial || channelStory || services) flags.push('channel_ad');
 

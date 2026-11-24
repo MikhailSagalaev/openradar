@@ -1,6 +1,6 @@
 import type { SourceConfig, SourceKind } from '../core/types.ts';
 import { ATS_COMPANIES } from './ats-companies.ts';
-import { CAREER_SITE_PRESETS, HH_EMPLOYER_PRESETS, HH_NAME_EMPLOYER_PRESETS } from './career-sites.ts';
+import { CAREER_SITE_PRESETS, HH_DIGITAL_ROLES_QUERY, HH_EMPLOYER_PRESETS, HH_NAME_EMPLOYER_PRESETS } from './career-sites.ts';
 import { JSON_BOARD_PRESETS } from './json-boards.ts';
 
 export interface SourcePreset {
@@ -1082,19 +1082,19 @@ const BASE_PRESETS: SourcePreset[] = [
   {
     id: 'hh-kz',
     kind: 'rss',
-    title: 'HeadHunter Казахстан — Все вакансии',
-    description: 'Поисковый RSS HeadHunter Казахстан (hh.kz): вакансии Казахстана всех направлений',
+    title: 'HeadHunter Казахстан — IT и digital-вакансии',
+    description: 'Поисковый RSS HeadHunter Казахстан (hh.kz): IT, аналитика, дизайн, маркетинг и продакт',
     config: {
-      url: 'https://hh.kz/search/vacancy/rss',
+      url: `https://hh.kz/search/vacancy/rss?${HH_DIGITAL_ROLES_QUERY}&order_by=publication_time`,
     },
   },
   {
     id: 'hh-ge',
     kind: 'rss',
-    title: 'HeadHunter Грузия — Все вакансии',
-    description: 'Поисковый RSS HeadHunter Грузия (headhunter.ge): вакансии Грузии всех направлений',
+    title: 'HeadHunter Грузия — IT и digital-вакансии',
+    description: 'Поисковый RSS HeadHunter Грузия (headhunter.ge): IT, аналитика, дизайн, маркетинг и продакт',
     config: {
-      url: 'https://headhunter.ge/search/vacancy/rss',
+      url: `https://headhunter.ge/search/vacancy/rss?${HH_DIGITAL_ROLES_QUERY}&order_by=publication_time`,
     },
   },
   {

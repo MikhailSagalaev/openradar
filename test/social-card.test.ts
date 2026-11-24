@@ -37,8 +37,8 @@ describe('social link preview card', () => {
     expect(html).toContain('<html lang="en">');
     expect(html).toContain('<meta property="og:image" content="https://hub.example/og-en.png">');
     expect(html).toContain('<meta name="twitter:image" content="https://hub.example/og-en.png">');
-    expect(html).toContain('Freelance orders and IT jobs — an open feed');
-    expect(html).toContain('open decentralized feed of freelance gigs and IT jobs');
+    expect(html).toContain('IT, digital and creative jobs and freelance orders — an open feed');
+    expect(html).toContain('openradar — open decentralized feed of IT jobs and digital/creative freelance gigs');
   });
 
   it('keeps the Russian card for Telegram and Russian visitors', async () => {
