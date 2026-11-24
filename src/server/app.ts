@@ -232,15 +232,10 @@ function loginPage(error?: string, githubEnabled = false, returnTo?: string, lan
     ? `/auth/github?returnTo=${encodeURIComponent(returnTo)}`
     : '/auth/github';
   const githubButton = githubEnabled
-    ? `<a class="github-btn" href="${escapeHtml(ghHref)}">${isEn ? 'Sign in with GitHub' : 'Войти через GitHub'}</a>
-<div class="divider"><span>${isEn ? 'or' : 'или'}</span></div>`
-    : '';
-  const githubStyle = githubEnabled
-    ? `.github-btn{display:block;width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font:inherit;font-size:13px;font-weight:500;text-align:center;text-decoration:none;transition:border-color .15s ease}
-.github-btn:hover{border-color:var(--ink);text-decoration:none}
-.divider{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:11px;margin:14px 0}
-.divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--line)}`
-    : '';
+    ? `<a class="github-btn" href="${escapeHtml(ghHref)}">${isEn ? 'Sign in with GitHub' : 'Войти через GitHub'}</a>`
+    : `<div class="error">${isEn ? 'GitHub sign-in is not configured on this server.' : 'Вход через GitHub не настроен на этом сервере (задайте GITHUB_CLIENT_ID и GITHUB_CLIENT_SECRET).'}</div><a class="github-btn" href="${isEn ? '/en' : '/'}">${isEn ? 'Back to home' : 'На главную'}</a>`;
+  const githubStyle = `.github-btn{display:block;width:100%;box-sizing:border-box;padding:11px;border:1px solid var(--line);border-radius:8px;background:var(--ink);color:var(--bg);font:inherit;font-size:13.5px;font-weight:600;text-align:center;text-decoration:none;transition:opacity .15s ease}
+.github-btn:hover{opacity:0.9;text-decoration:none}`;
   return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>${isEn ? 'openradar — sign in' : 'openradar — вход'}</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -248,25 +243,20 @@ function loginPage(error?: string, githubEnabled = false, returnTo?: string, lan
 :root{--bg:#ffffff;--surface:#ffffff;--ink:#09090b;--muted:#71717a;--line:#e4e4e7;--btn:#09090b;--btn-text:#ffffff;--error:#ef4444}
 @media (prefers-color-scheme: dark){:root{--bg:#09090b;--surface:#121215;--ink:#f4f4f5;--muted:#a1a1aa;--line:#27272a;--btn:#f4f4f5;--btn-text:#09090b;--error:#f87171}}
 body{font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;letter-spacing:-0.01em;background:var(--bg);color:var(--ink);display:grid;place-items:center;min-height:100vh;margin:0}
-form{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:28px 24px;width:min(360px,90vw);box-shadow:0 4px 20px rgba(0,0,0,0.04)}
-.login-logo{margin-bottom:14px;color:var(--ink);display:flex;align-items:center}
-h1{font-size:22px;letter-spacing:-0.03em;margin:0 0 6px;font-weight:600}p{color:var(--muted);font-size:13px;margin:0 0 20px}
-input{width:100%;box-sizing:border-box;padding:9px 14px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:13px;background:var(--bg);color:var(--ink);margin-bottom:14px;transition:all .15s ease}
-input:focus{outline:0;border-color:var(--ink);box-shadow:0 0 0 1px var(--ink),0 1px 2px rgba(0,0,0,.04)}
-button{width:100%;padding:10px;border:0;border-radius:6px;background:var(--btn);color:var(--btn-text);font:inherit;font-size:13px;font-weight:500;cursor:pointer;transition:opacity .15s ease,transform .1s ease}
-button:hover{opacity:0.9}button:active{transform:scale(0.98)}
-.error{color:var(--error);font-size:12.5px;font-weight:500;margin-bottom:12px;background:rgba(239,68,68,0.08);padding:6px 10px;border-radius:5px}
+.login-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:32px 28px;width:min(360px,90vw);box-shadow:0 4px 20px rgba(0,0,0,0.04);box-sizing:border-box}
+.login-logo{margin-bottom:16px;color:var(--ink);display:inline-flex;align-items:center;transition:opacity .15s ease}
+.login-logo:hover{opacity:0.8}
+p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 24px}
+.error{color:var(--error);font-size:12.5px;font-weight:500;margin-bottom:16px;background:rgba(239,68,68,0.08);padding:8px 12px;border-radius:6px}
 ${githubStyle}
 </style></head>
 <body>
-<form method="post" action="/login">
-<div class="login-logo">${renderLogo({ height: 32 })}</div>
-<p>${isEn ? 'Voting and adding leads requires signing in. Admin token is for managing sources.' : 'Голосование и добавление заказов — после входа. Токен администратора — для управления источниками.'}</p>
+<div class="login-card">
+<a href="${isEn ? '/en' : '/'}" class="login-logo" style="text-decoration:none">${renderLogo({ height: 32 })}</a>
+<p>${isEn ? 'Voting, saving searches and participating in the network requires signing in with GitHub.' : 'Голосование, сохранённые поиски и участие в сети — после входа через GitHub.'}</p>
 ${error ? `<div class="error">${escapeHtml(error)}</div>` : ''}
 ${githubButton}
-<label style="display:contents"><input name="token" type="password" autofocus autocomplete="current-password" placeholder="${isEn ? 'Admin token' : 'Токен администратора'}"></label>
-<button type="submit">${isEn ? 'Sign in with token' : 'Войти по токену'}</button>
-</form></body></html>`;
+</div></body></html>`;
 }
 
 function deps(runtime: Runtime): IngestDeps {

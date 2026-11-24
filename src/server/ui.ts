@@ -413,7 +413,6 @@ main {
   min-height: calc(100vh - 180px);
   display: flex;
   flex-direction: column;
-  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .top {
   display: flex;
@@ -733,16 +732,6 @@ a:hover { text-decoration: underline; }
 .search { display: flex; gap: 6px; margin-left: auto; }
 .search input { width: 200px; min-width: 0; min-height: 32px; font-size: 12.5px; }
 .search button { flex: 0 0 auto; }
-@keyframes rowEntrance {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 @keyframes skeletonShimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
@@ -754,21 +743,20 @@ a:hover { text-decoration: underline; }
   border-radius: 4px;
 }
 dialog[open] {
-  animation: modalEntrance 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: modalEntrance 0.12s ease-out;
 }
 @keyframes modalEntrance {
   from {
     opacity: 0;
-    transform: scale(0.97) translateY(-6px);
+    transform: translateY(-4px);
   }
   to {
     opacity: 1;
-    transform: scale(1) translateY(0);
+    transform: translateY(0);
   }
 }
 dialog::backdrop {
   background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(2px);
 }
 .list { border-top: 1px solid var(--line); }
 .row {
@@ -779,20 +767,8 @@ dialog::backdrop {
   border-bottom: 1px solid var(--line);
   text-decoration: none;
   color: inherit;
-  transition: opacity 0.15s ease, transform 0.15s ease;
-  animation: rowEntrance 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transition: opacity 0.15s ease;
 }
-.row:nth-child(1) { animation-delay: 0.02s; }
-.row:nth-child(2) { animation-delay: 0.04s; }
-.row:nth-child(3) { animation-delay: 0.06s; }
-.row:nth-child(4) { animation-delay: 0.08s; }
-.row:nth-child(5) { animation-delay: 0.10s; }
-.row:nth-child(6) { animation-delay: 0.12s; }
-.row:nth-child(7) { animation-delay: 0.14s; }
-.row:nth-child(8) { animation-delay: 0.16s; }
-.row:nth-child(9) { animation-delay: 0.18s; }
-.row:nth-child(10) { animation-delay: 0.20s; }
-.row:nth-child(n+11) { animation-delay: 0.22s; }
 /* Hover only where there is a pointer: on a phone the tap state would stick. */
 @media (hover: hover) {
   .row:hover { text-decoration: none; opacity: 0.72; }
@@ -2180,7 +2156,7 @@ footer {
 .review-note { width: 100%; box-sizing: border-box; padding: 6px 10px; font-size: 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--ink); font-family: inherit; transition: border-color .15s ease; }
 .review-note:focus { outline: none; border-color: var(--ink); }
 .review-modal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 16px; }
-.review-modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.45); backdrop-filter: blur(2px); }
+.review-modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.45); }
 .review-modal-card { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; max-width: 480px; width: 100%; padding: 20px 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); }
 .review-modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
 .review-modal-head h3 { margin: 0; font-size: 16px; font-weight: 600; }
@@ -2661,13 +2637,6 @@ ${input.body}
       <span>${escapeHtml(t.signInGithub)}</span>
     </a>
   </div>
-  <details style="margin-top:16px">
-    <summary class="muted" style="cursor:pointer;font-size:12px;user-select:none">${escapeHtml(lang === 'ru' ? 'Вход для администратора по токену' : 'Admin token sign-in')}</summary>
-    <form method="post" action="/login" style="margin-top:10px;display:grid;gap:8px">
-      <input type="password" name="token" autocomplete="current-password" placeholder="${escapeHtml(lang === 'ru' ? 'Токен администратора' : 'Admin token')}">
-      <button class="btn" type="submit">${escapeHtml(lang === 'ru' ? 'Войти по токену' : 'Sign in with token')}</button>
-    </form>
-  </details>
 </dialog>
 <script>
 function openLoginModal(customReturnTo) {
