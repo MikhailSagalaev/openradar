@@ -2662,7 +2662,8 @@ export function createApp(runtime: Runtime): Hono {
     if (!await canRead(c, runtime)) return c.json({ error: 'unauthorized' }, 401);
     const title = (c.req.query('title') ?? '').trim().slice(0, 300);
     if (title.length < 3) return c.json({ error: 'title_required' }, 400);
-    const type: LeadType = c.req.query('type') === 'job' ? 'job' : 'gig';
+    const rawType = c.req.query('type');
+    const type: LeadType = rawType === 'gig' ? 'gig' : rawType === 'job' ? 'job' : /(?:лендинг|сайт|tilda|тильд|wordpress|битрикс|бот|парс|логотип|баннер|карточ\p{L}*\s+товар|монтаж|перевод|заказ)/iu.test(title) ? 'gig' : 'job';
     const skills = (c.req.query('skills') ?? '').split(',').map((s) => s.trim().slice(0, 40)).filter(Boolean).slice(0, 12);
     const now = new Date();
     const leads = await runtime.store.getLeadsForFeed({
@@ -2672,6 +2673,7 @@ export function createApp(runtime: Runtime): Hono {
       createdAfter: new Date(now.getTime() - MARKET_WINDOW_MS).toISOString(),
       createdBefore: visibleBefore({ tier: 'guest' }, runtime.access, now),
     });
+    c.header('Vary', 'Accept-Encoding');
     c.header('Cache-Control', 'public, max-age=600');
     return c.json(estimateMarket({ title, type, skills }, leads));
   });
@@ -2864,6 +2866,33 @@ export function createApp(runtime: Runtime): Hono {
         const result = await runtime.store.recordUserVote?.(id, agent.id, verdict as VoteSignal);
         if (result) await recordWebSignal(runtime, id, agent.id, result.myVote ?? null);
         return { ok: Boolean(result), myVote: result?.myVote ?? undefined };
+      },
+      getResearchReport: async (options) => {
+        if (options?.period && /^\d{4}-\d{2}$/.test(options.period)) {
+          const snap = await monthSnapshot(runtime.store, options.period);
+          if (!snap) return { error: `No snapshot found for period ${options.period}` };
+          return options?.role ? (snap.jobs.roles.find((r) => r.slug === options.role) ?? { error: `Role ${options.role} not found` }) : snap;
+        }
+        const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+        if (options?.role) {
+          return report.jobs.roles.find((r) => r.slug === options.role) ?? { error: `Role ${options.role} not found` };
+        }
+        if (options?.section === 'econometrics') {
+          return { period: report.period, totals: report.totals, econometrics: report.jobs.econometrics, scientific: report.jobs.scientific, crossMarket: report.jobs.crossMarket };
+        }
+        if (options?.section === 'gigs') {
+          return { period: report.period, totals: report.totals, gigs: report.gigs, cartaCapital: report.cartaCapital, editorialInsight: report.editorialInsight, taskTransformation: report.taskTransformation };
+        }
+        return report;
+      },
+      getResearchIndex: async (options) => {
+        const idx = await openradarIndex(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+        if (options?.scope === 'intl') return { version: idx.version, updatedAt: idx.updatedAt, base: idx.base, intl: idx.intl };
+        if (options?.scope === 'ru') {
+          const { intl: _intl, ...ruOnly } = idx;
+          return ruOnly;
+        }
+        return idx;
       },
     }, {
       // Write confirmations are bound to the caller: another caller cannot confirm this token.
@@ -3553,8 +3582,21 @@ export function createApp(runtime: Runtime): Hono {
           createdBefore,
         }) ?? Promise.resolve([]))
         : [];
+      const liveRoles = runtime.env.RADAR_PUBLIC_READ
+        ? (await liveReport(runtime.store, now, { useModel: runtime.env.RADAR_EXTRACT_APPLY })).report.jobs.roles
+        : [];
+      const snapshots = runtime.env.RADAR_PUBLIC_READ
+        ? ((await runtime.store.listResearchSnapshots?.()) ?? [])
+        : [];
       const roles = runtime.env.RADAR_PUBLIC_READ
-        ? ['/research/index', '/en/research', '/en/research/index', '/en/research/methodology', ...(await liveReport(runtime.store, now, { useModel: runtime.env.RADAR_EXTRACT_APPLY })).report.jobs.roles.map((r) => `/research/roles/${r.slug}`)]
+        ? [
+            '/research/index',
+            '/en/research',
+            '/en/research/index',
+            '/en/research/methodology',
+            ...liveRoles.flatMap((r) => [`/research/roles/${r.slug}`, `/en/research/roles/${r.slug}`]),
+            ...snapshots.flatMap((s) => [`/research/${s.period}`, `/en/research/${s.period}`]),
+          ]
         : [];
       const employers = runtime.env.RADAR_PUBLIC_READ ? ((await runtime.store.listEmployers?.({ limit: 500, minPosts: 3 })) ?? []) : [];
       const employerPaths = runtime.env.RADAR_PUBLIC_READ ? ['/employers', ...employers.map((e) => employerPath(e.key))] : [];
@@ -3646,11 +3688,13 @@ export function createApp(runtime: Runtime): Hono {
     const index = await openradarIndex(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
     countResearch(c, runtime, 'index.json');
     // The index is cached for an hour server-side; clients may hold it for 10 minutes.
+    c.header('Vary', 'Accept-Encoding');
     return c.json(index, 200, { 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=600' });
   });
   app.get('/research/index.csv', async (c) => {
     const index = await openradarIndex(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
     countResearch(c, runtime, 'index.csv');
+    c.header('Vary', 'Accept-Encoding');
     return c.body(indexCsv(index), 200, {
       'content-type': 'text/csv; charset=utf-8',
       'content-disposition': 'attachment; filename="openradar-index.csv"',
@@ -3684,11 +3728,13 @@ export function createApp(runtime: Runtime): Hono {
     const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
     countResearch(c, runtime, 'report.json');
     // The report itself is rebuilt at most every 15 minutes; let clients hold it for 5.
+    c.header('Vary', 'Accept-Encoding');
     return c.json(report, 200, { 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=300' });
   });
   app.get('/research/dataset.csv', async (c) => {
     const csv = await liveDatasetCsv(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
     countResearch(c, runtime, 'dataset.csv');
+    c.header('Vary', 'Accept-Encoding');
     return c.body(csv, 200, {
       'content-type': 'text/csv; charset=utf-8',
       'content-disposition': 'attachment; filename="openradar-dataset.csv"',
@@ -3698,6 +3744,7 @@ export function createApp(runtime: Runtime): Hono {
   });
   app.get('/research/paper.tex', async (c) => {
     const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+    c.header('Vary', 'Accept-Encoding');
     return c.body(renderAcademicPaperLatex(report, seoBaseUrl(c), 'ru'), 200, {
       'content-type': 'application/x-tex; charset=utf-8',
       'content-disposition': 'attachment; filename="openradar-research-ru.tex"',
@@ -3707,6 +3754,7 @@ export function createApp(runtime: Runtime): Hono {
   });
   app.get('/en/research/paper.tex', async (c) => {
     const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+    c.header('Vary', 'Accept-Encoding');
     return c.body(renderAcademicPaperLatex(report, seoBaseUrl(c), 'en'), 200, {
       'content-type': 'application/x-tex; charset=utf-8',
       'content-disposition': 'attachment; filename="openradar-research-en.tex"',
@@ -3728,7 +3776,10 @@ export function createApp(runtime: Runtime): Hono {
     const slug = param.slice(0, 7);
     const report = await monthSnapshot(runtime.store, slug);
     if (!report) return c.html(renderNotFound(VERSION, resolveLang(c), await getAuthDisplay(c, runtime)), 404);
-    if (param.endsWith('.json')) return c.json(report, 200, { 'access-control-allow-origin': '*' });
+    if (param.endsWith('.json')) {
+      c.header('Vary', 'Accept-Encoding');
+      return c.json(report, 200, { 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=3600' });
+    }
     const english = toEnglish(c, `/research/${slug}`);
     if (english) return english;
     return c.html(renderReportPage({ report, baseUrl: seoBaseUrl(c), version: VERSION, snapshots: await researchSnapshots(), auth: await getAuthDisplay(c, runtime) }));

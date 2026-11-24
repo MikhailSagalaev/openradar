@@ -43,6 +43,10 @@ export interface McpBackend {
   voteLead?(id: string, verdict: 'useful' | 'junk' | 'scam' | 'closed', reason?: string): Promise<{ ok: boolean; myVote?: string }>;
   /** Optional custom market compensation estimator. */
   estimateCompensation?(options: { title?: string; type: LeadType; skills?: string[]; grade?: string; currency?: string }): Promise<Record<string, unknown>>;
+  /** Retrieve the empirical labour-market research report (/research/report.json) or a role/period/section slice. */
+  getResearchReport?(options?: { period?: string; role?: string; section?: "all" | "econometrics" | "gigs" }): Promise<unknown>;
+  /** Retrieve the daily openradar panel index (/research/index.json) for Russian-language and International panels. */
+  getResearchIndex?(options?: { scope?: "all" | "ru" | "intl" }): Promise<unknown>;
 }
 
 export interface McpTool {
@@ -204,6 +208,30 @@ export const MCP_TOOLS: McpTool[] = [
         skills: { type: 'array', items: { type: 'string' }, description: 'Relevant tech skills, e.g. ["Go", "Kafka"]' },
       },
       required: ['company'],
+    },
+  },
+  {
+    name: 'get_research_report',
+    description:
+      'Retrieve empirical labour-market research data from /research (role x seniority salary heatmaps, Mincerian OLS log-wage regression with White HC1 SEs, ANOVA variance decomposition, Blinder-Oaxaca decomposition, Gini/Theil/HHI inequality metrics, cross-market PPP comparison, and freelance order budget shares).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        period: { type: 'string', description: 'Optional monthly archive snapshot YYYY-MM (default: live 30-day rolling report)' },
+        role: { type: 'string', description: 'Optional role slug (e.g. "backend", "frontend", "devops", "qa", "ai") to fetch detailed pay slices for one specialization' },
+        section: { type: 'string', enum: ['all', 'econometrics', 'gigs'], description: 'Optional section slice: "all" (default), "econometrics" (Mincer OLS, ANOVA, Oaxaca, Gini, PPP), or "gigs" (freelance order budgets and task transformation)' },
+      },
+    },
+  },
+  {
+    name: 'get_research_index',
+    description:
+      'Retrieve the daily openradar panel index (/research/index.json) tracking new vacancies and freelance orders against a base of 100 across the Russian-language panel and the International (Global & Remote) panel, including 7-day rolling averages, per-role indices, per-board indices, and weekday seasonality.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        scope: { type: 'string', enum: ['all', 'ru', 'intl'], description: 'Panel scope: "all" (default), "ru" (Russian-language panel), or "intl" (International Global & Remote panel)' },
+      },
     },
   },
 ];
@@ -598,6 +626,25 @@ export async function handleMcpRequest(req: McpRequest, backend: McpBackend, opt
       const result = buildXRayResult({ company, role, skills });
       if (!result.cleanCompany) return fail(id, -32602, `«${company}» is a channel or a placeholder, not an employer`);
       return text(id, result);
+    }
+
+    if (name === 'get_research_report') {
+      const period = typeof args.period === 'string' && args.period.trim() ? args.period.trim() : undefined;
+      const role = typeof args.role === 'string' && args.role.trim() ? args.role.trim() : undefined;
+      const section = args.section === 'econometrics' || args.section === 'gigs' ? args.section : 'all';
+      if (backend.getResearchReport) {
+        return text(id, await backend.getResearchReport({ period, role, section }));
+      }
+      const leads = await backend.listLeads({ limit: 300 });
+      return text(id, computeInsights(leads, 30));
+    }
+
+    if (name === 'get_research_index') {
+      const scope = args.scope === 'ru' || args.scope === 'intl' ? args.scope : 'all';
+      if (backend.getResearchIndex) {
+        return text(id, await backend.getResearchIndex({ scope }));
+      }
+      return text(id, { scope, status: 'index_unavailable_in_mock' });
     }
 
     return fail(id, -32601, `Unknown tool: ${String(name)}`);

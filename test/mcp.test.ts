@@ -93,6 +93,8 @@ describe('MCP server', () => {
       'save_search',
       'list_saved_searches',
       'xray_generate_dorks',
+      'get_research_report',
+      'get_research_index',
     ]);
   });
 

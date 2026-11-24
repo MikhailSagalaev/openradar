@@ -589,7 +589,12 @@ function computeCartaCapital(records: ResearchRecord[]): CartaCapitalRow[] {
     label,
     n: g.n,
     capitalRub: g.capital,
-  })).sort((a, b) => b.capitalRub - a.capitalRub || b.n - a.n);
+  })).sort((a, b) => {
+    const aOther = a.label === OTHER_ROLE.label ? 1 : 0;
+    const bOther = b.label === OTHER_ROLE.label ? 1 : 0;
+    if (aOther !== bOther) return aOther - bOther;
+    return b.capitalRub - a.capitalRub || b.n - a.n;
+  });
 
   let displayed: Array<{ label: string; n: number; capitalRub: number }> = [];
   if (sorted.length <= 5) {

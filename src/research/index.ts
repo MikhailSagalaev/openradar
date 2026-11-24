@@ -40,6 +40,7 @@ export const INTL_PANEL: Record<'job' | 'gig', string[]> = {
   ],
   gig: ['freelancer.com'],
 };
+const RU_PANEL_BOARDS = new Set<string>([...PANEL.job, ...PANEL.gig]);
 const INTL_PANEL_BOARDS = new Set<string>([
   ...INTL_PANEL.job,
   ...INTL_PANEL.gig,
@@ -291,7 +292,7 @@ export function buildIndex(rows: ResearchDailyRow[], now: Date = new Date()): Op
   const provisional = today < BASE.to;
   const baseDays = provisional ? days : days.filter((d) => d >= BASE.from && d < BASE.to);
 
-  const panelRows = rows.filter((r) => r.scope === 'ru' && (r.type === 'job' || r.type === 'gig') && (r.panelN ?? 0) > 0);
+  const panelRows = rows.filter((r) => r.scope === 'ru' && (r.type === 'job' || r.type === 'gig') && RU_PANEL_BOARDS.has(r.platform) && (r.panelN ?? 0) > 0);
   const countsOf = (filter: (r: ResearchDailyRow) => boolean): Map<string, number> => {
     const counts = new Map<string, number>();
     for (const r of panelRows) if (filter(r)) counts.set(r.day, (counts.get(r.day) ?? 0) + r.panelN!);
