@@ -1934,6 +1934,10 @@ legend {
 .tg-source-form[hidden] { display: none; }
 .tg-source-form label { display: grid; gap: 4px; font-size: 13px; }
 .tg-source-form .tg-form-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.tg-folders-container { margin: -4px 0 2px; }
+.tg-folders-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.tg-folder-chip { font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 1px dashed var(--line); background: var(--surface); color: var(--ink); cursor: pointer; transition: all 0.15s ease; }
+.tg-folder-chip:hover { border-color: var(--ink); background: var(--soft); }
 .confirm-dialog { border: 1px solid var(--line); border-radius: 12px; padding: 20px; max-width: min(420px, calc(100vw - 32px)); background: var(--bg); color: var(--ink); }
 .confirm-dialog::backdrop { background: rgb(0 0 0 / 45%); }
 .confirm-dialog h3 { margin: 0 0 6px; font-size: 16px; }
@@ -4513,7 +4517,14 @@ function renderUserTelegram(data: NonNullable<ProfilePageData['telegram']>, lang
   const form = active.length ? `<form class="tg-source-form" data-tg-source-form${data.sources.length ? ' hidden' : ''}>
       ${active.length > 1 ? `<label>${ru ? 'Аккаунт' : 'Account'} <select name="accountId">${active.map((a) => `<option value="${escapeHtml(a.id)}">${escapeHtml(a.displayName ?? String(a.tgUserId))}</option>`).join('')}</select></label>` : `<input type="hidden" name="accountId" value="${escapeHtml(active[0]!.id)}">`}
       <label>${ru ? 'Название' : 'Name'} <input name="title" required maxlength="200" placeholder="${ru ? 'Каналы с заказами' : 'Job channels'}"></label>
-      <label>${ru ? 'Папка в Telegram' : 'Telegram folder'} <input name="folder" maxlength="200" placeholder="${ru ? 'например, Работа' : 'e.g. Work'}"></label>
+      <label>${ru ? 'Папка в Telegram' : 'Telegram folder'}
+        <input name="folder" maxlength="200" list="tg-folders-datalist" placeholder="${ru ? 'например, Работа' : 'e.g. Work'}" autocomplete="off">
+        <datalist id="tg-folders-datalist"></datalist>
+      </label>
+      <div class="tg-folders-container" data-tg-folders-container hidden>
+        <span class="muted small">${ru ? 'Папки в аккаунте (нажмите для выбора):' : 'Folders in your account (click to select):'}</span>
+        <div class="tg-folders-chips" data-tg-folders-list></div>
+      </div>
       <label>${ru ? 'Или чаты, по одному в строке' : 'Or chats, one per line'} <textarea name="chats" rows="3" placeholder="@remote_jobs&#10;https://t.me/freelance_orders"></textarea></label>
       <p class="muted small">${ru ? 'Нужна папка или хотя бы один чат. Читаем раз в 15 минут.' : 'A folder or at least one chat. Read every 15 minutes.'}</p>
       <div class="tg-form-actions">
@@ -4632,7 +4643,48 @@ function userTelegramScript(lang: SupportedLang): string {
   }));
   const form = document.querySelector('[data-tg-source-form]');
   const add = document.querySelector('[data-tg-source-add]');
-  if (add) add.addEventListener('click', () => { form.hidden = false; add.hidden = true; form.querySelector('input[name=title]').focus(); });
+  const loadFolders = async () => {
+    if (!form) return;
+    const accountSelect = form.querySelector('select[name=accountId]');
+    const accountInput = form.querySelector('input[name=accountId]');
+    const accId = accountSelect ? accountSelect.value : (accountInput ? accountInput.value : '');
+    const container = form.querySelector('[data-tg-folders-container]');
+    const list = form.querySelector('[data-tg-folders-list]');
+    const datalist = form.querySelector('#tg-folders-datalist');
+    if (!container || !list) return;
+    try {
+      const res = await fetch('/api/tg/folders' + (accId ? '?accountId=' + encodeURIComponent(accId) : ''), { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.folders || !data.folders.length) { container.hidden = true; return; }
+      if (datalist) {
+        datalist.innerHTML = data.folders.map((f) => '<option value="' + f.title.replace(/"/g, '&quot;') + '">').join('');
+      }
+      list.innerHTML = data.folders.map((f) => {
+        const title = f.title.replace(/"/g, '&quot;');
+        const label = (f.emoticon ? f.emoticon + ' ' : '') + f.title + (f.peers ? ' (' + f.peers + ')' : '');
+        return '<button type="button" class="tg-folder-chip" data-folder="' + title + '">' + label.replace(/</g, '&lt;') + '</button>';
+      }).join('');
+      container.hidden = false;
+      list.querySelectorAll('[data-folder]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const folderInput = form.querySelector('input[name=folder]');
+          const titleInput = form.querySelector('input[name=title]');
+          if (folderInput) folderInput.value = btn.dataset.folder;
+          if (titleInput && !titleInput.value.trim()) titleInput.value = btn.dataset.folder;
+        });
+      });
+    } catch (_) {}
+  };
+  if (add) add.addEventListener('click', () => {
+    form.hidden = false;
+    add.hidden = true;
+    form.querySelector('input[name=title]').focus();
+    loadFolders();
+  });
+  if (form && !form.hidden) loadFolders();
+  const accSelect = form ? form.querySelector('select[name=accountId]') : null;
+  if (accSelect) accSelect.addEventListener('change', loadFolders);
   const close = document.querySelector('[data-tg-source-cancel]');
   if (close) close.addEventListener('click', () => { form.hidden = true; if (add) add.hidden = false; });
   if (form) form.addEventListener('submit', async (e) => {

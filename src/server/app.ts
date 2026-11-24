@@ -26,7 +26,7 @@ import { SOURCE_PRESETS, presetSource } from '../sources/presets.ts';
 import { IMAP_PASSWORD_ENV_RE } from '../sources/imap.ts';
 import { ATS_PROVIDERS } from '../sources/ats.ts';
 import { remoteFromText } from '../core/extract.ts';
-import { DEFAULT_SESSION_ENV, TELEGRAM_SESSION_ENV_RE } from '../sources/telegram-account.ts';
+import { DEFAULT_SESSION_ENV, TELEGRAM_SESSION_ENV_RE, listAccountFolders, type TelegramFolderSummary } from '../sources/telegram-account.ts';
 import { VERSION } from '../version.ts';
 import { githubOAuthConfigured, startGitHubOAuth, handleGitHubCallback, secureCookie } from './auth.ts';
 import { renderAdminAnalyticsPage, renderAdminPage, renderAdminUsersPage } from './admin.ts';
@@ -3373,6 +3373,44 @@ export function createApp(runtime: Runtime): Hono {
     const revoked = await tgAuthService().revokeAccount(id, user.id);
     const deleted = (await runtime.store.deleteTelegramAccount?.(id, user.id)) ?? false;
     return c.json({ ok: deleted, revoked });
+  });
+
+  const accountFoldersCache = new Map<string, { at: number; folders: TelegramFolderSummary[] }>();
+  const FOLDERS_CACHE_TTL_MS = 5 * 60_000;
+
+  app.get('/api/tg/folders', rateLimit({ windowMs: 60_000, max: 30 }), async (c) => {
+    const user = await currentUser(c, runtime);
+    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    const masterSecret = runtime.env.RADAR_WEB_KEY_SECRET;
+    if (!masterSecret) return c.json({ folders: [] });
+
+    const accountId = c.req.query('accountId');
+    const accounts = (await runtime.store.listTelegramAccounts?.(user.id)) ?? [];
+    const active = accounts.filter((a) => a.status === 'active');
+    const account = accountId ? active.find((a) => a.id === accountId) : active[0];
+    if (!account) return c.json({ folders: [] });
+
+    const cached = accountFoldersCache.get(account.id);
+    if (cached && Date.now() - cached.at < FOLDERS_CACHE_TTL_MS) {
+      return c.json({ folders: cached.folders });
+    }
+
+    if (!process.env.RADAR_TELEGRAM_API_ID || !process.env.RADAR_TELEGRAM_API_HASH) {
+      return c.json({ folders: [] });
+    }
+
+    try {
+      const folders = await listAccountFolders(
+        { session_encrypted: account.sessionEncrypted, iv: account.iv, tag: account.tag },
+        masterSecret,
+        user.id,
+      );
+      accountFoldersCache.set(account.id, { at: Date.now(), folders });
+      return c.json({ folders });
+    } catch (error) {
+      runtime.logger.warn('could not fetch telegram folders', { accountId: account.id, error: error instanceof Error ? error.message : String(error) });
+      return c.json({ folders: [] });
+    }
   });
 
   app.get('/api/user-sources', async (c) => {

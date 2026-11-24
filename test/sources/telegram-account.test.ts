@@ -1,14 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createSourceRegistry } from '../../src/sources/index.ts';
 import {
   folderChats,
   folderOf,
   chatsOf,
+  listAccountFolders,
   messageToRawLead,
   normalizeChat,
   sessionEnvOf,
   telegramAccountSource,
 } from '../../src/sources/telegram-account.ts';
+import { encryptTelegramSession } from '../../src/core/crypto-session.ts';
 import { makeSource, pollContext } from '../helpers.ts';
 
 const text = 'Ищем дизайнера на лендинг, бюджет 30 000 ₽, пишите в личку';
@@ -95,5 +97,32 @@ describe('Telegram account source', () => {
 
   it('has a default poll interval of 10 minutes to protect account limits', () => {
     expect(telegramAccountSource.defaultPollIntervalSec).toBe(600);
+  });
+
+  it('lists folders of an account, mapping titles, emojis and peer counts', async () => {
+    const fakeClient = {
+      importSession: vi.fn(async () => {}),
+      connect: vi.fn(async () => {}),
+      getFolders: vi.fn(async () => ({
+        filters: [
+          { _: 'dialogFilterDefault' },
+          { _: 'dialogFilter', id: 2, title: 'work', includePeers: [{ _: 'a' }, { _: 'b' }] },
+          { _: 'dialogFilterChatlist', id: 3, title: { text: 'openradar' }, emoticon: '💼', pinnedPeers: [{ _: 'c' }] },
+        ],
+      })),
+      destroy: vi.fn(async () => {}),
+    };
+    const encrypted = encryptTelegramSession('session-xyz', '0123456789abcdef0123456789abcdef', 1);
+    const folders = await listAccountFolders(
+      encrypted,
+      '0123456789abcdef0123456789abcdef',
+      1,
+      async () => fakeClient as any,
+    );
+    expect(folders).toEqual([
+      { id: 2, title: 'work', peers: 2, emoticon: undefined },
+      { id: 3, title: 'openradar', peers: 1, emoticon: '💼' },
+    ]);
+    expect(fakeClient.destroy).toHaveBeenCalled();
   });
 });

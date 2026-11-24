@@ -986,6 +986,7 @@ describe('http server', () => {
     const offSession = await makeUserSession(off, 'octocat');
     const headers = { cookie: `radar_session=${offSession}`, origin: 'http://localhost', 'content-type': 'application/json' };
     expect((await offApp.request('http://localhost/api/tg/accounts', { headers })).status).toBe(404);
+    expect((await offApp.request('http://localhost/api/tg/folders', { headers })).status).toBe(404);
     expect((await offApp.request('http://localhost/api/user-sources', { headers })).status).toBe(404);
     expect((await offApp.request('http://localhost/api/tg/auth/start', { method: 'POST', headers })).status).toBe(404);
 
@@ -1000,6 +1001,7 @@ describe('http server', () => {
     expect(res.status).toBe(503);
     expect(await res.json()).toEqual({ error: 'telegram_auth_unavailable' });
     expect((await onApp.request('http://localhost/api/tg/accounts', { headers: { cookie: `radar_session=${onSession}` } })).status).toBe(200);
+    expect((await onApp.request('http://localhost/api/tg/folders', { headers: { cookie: `radar_session=${onSession}` } })).status).toBe(200);
   });
 
   it('shows the Telegram sources section on /me only when linking is on', async () => {

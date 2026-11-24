@@ -143,6 +143,43 @@ export async function findFolderByTitle(client: Pick<TelegramClient, 'getFolders
   });
 }
 
+export interface TelegramFolderSummary {
+  id: number;
+  title: string;
+  peers: number;
+  emoticon?: string | undefined;
+}
+
+/** Lists user folders for the connected Telegram account (e.g. for folder autocomplete/chips). */
+export async function listAccountFolders(
+  sessionEncrypted: { session_encrypted: string; iv: string; tag: string },
+  masterSecret: string,
+  userId: number,
+  clientFactory?: () => Promise<Pick<TelegramClient, 'importSession' | 'connect' | 'getFolders' | 'destroy'>>,
+): Promise<TelegramFolderSummary[]> {
+  const { decryptTelegramSession } = await import('../core/crypto-session.ts');
+  const session = decryptTelegramSession(sessionEncrypted, masterSecret, userId);
+  const client = await (clientFactory ?? newTelegramClient)();
+  try {
+    await client.importSession(session);
+    await client.connect();
+    const { filters } = await client.getFolders();
+    const list: TelegramFolderSummary[] = [];
+    for (const f of filters as Array<{ _?: string; id?: number; title?: unknown; emoticon?: unknown; pinnedPeers?: unknown[]; includePeers?: unknown[] }>) {
+      if (f._ !== 'dialogFilter' && f._ !== 'dialogFilterChatlist') continue;
+      const title = typeof f.title === 'string' ? f.title : (f.title as { text?: string } | undefined)?.text;
+      const trimmed = title?.trim();
+      if (!trimmed) continue;
+      const peers = (f.pinnedPeers?.length ?? 0) + (f.includePeers?.length ?? 0);
+      const emoticon = typeof f.emoticon === 'string' ? f.emoticon : undefined;
+      list.push({ id: f.id ?? 0, title: trimmed, peers, emoticon });
+    }
+    return list;
+  } finally {
+    await client.destroy().catch(() => {});
+  }
+}
+
 export async function folderChats(
   client: Pick<TelegramClient, 'getFolders'>,
   key: string,
