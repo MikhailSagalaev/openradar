@@ -188,7 +188,7 @@ describe('research report: inference wiring and grouping', () => {
     ] as const) {
       for (const mark of marks) expect(html).toContain(mark);
     }
-    const sections = en.slice(en.indexOf('rs-insight-card'), en.indexOf('Key findings'));
+    const sections = en.slice(en.indexOf('rs-insight-card'), en.indexOf('id="cross-market-comparison"'));
     expect(sections).toContain('Backend developer');
     expect(sections).toContain('Basic copywriting and rewriting');
     expect(sections).not.toMatch(/Встроить|Скопировать|Специализация|Типовые задачи|Неделя|Бэкенд/);

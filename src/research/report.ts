@@ -1360,14 +1360,16 @@ function mincerFromOls(
   const k = specs.length + 1;
   const df = n - k;
   const coefficient = (key: string, label: string, b: number, s: number) => {
-    const t = b / s;
-    const p = studentTTwoSidedP(t, df);
+    const beta = Math.round(b * 1000) / 1000;
+    const se = Math.round(s * 1000) / 1000;
+    const tStat = Math.round((b / s) * 100) / 100;
+    const p = studentTTwoSidedP(beta / se, df);
     return {
       key,
       label,
-      beta: Math.round(b * 1000) / 1000,
-      se: Math.round(s * 1000) / 1000,
-      tStat: Math.round(t * 100) / 100,
+      beta,
+      se,
+      tStat,
       stars: starsOf(p),
       pValue: formatP(p),
       p,
