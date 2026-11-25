@@ -16,6 +16,7 @@ import { renderEconometricsSection,
   renderIntlResearchSection,
   renderFormulaGallerySection,
   renderAcademicCitations,
+  renderJumpNav,
   scholarMetaTags, renderGigBracketsSection, renderGradeMatrixSection, renderLanguageMatrixSection, renderRegionalComparisonSection,
   renderEditorialInsight, renderCartaSection, renderTaskTransformationSection, renderBumpChartSection, renderEmbedDialog, researchLabel,
   rangeChart as rangeChartOf, countBars as countBarsOf, kpi, quoteButton as quoteButtonOf, formatNum, ORIGIN_LABELS, LICENSE, REPO_URL, QUOTE_SCRIPT,
@@ -228,21 +229,15 @@ export function renderReportPageEn(options: { report: Report; baseUrl: string; v
 <p class="small muted">Pay is in Russian roubles a month${report.fx?.USD ? ` (₽${num(Math.round(report.fx.USD))} ≈ $1, the Bank of Russia rate)` : ''}.</p>
 ${report.version === 2 && REPORT_VERSION > 2 ? `<p class="notice">This report is frozen under methodology version 2: p-values in the hypothesis-testing block are approximate, with no multiple-comparison adjustment and no effect-size threshold. All other figures are computed the same way. See the <a href="/en/research/methodology#versions">changes</a>.</p>` : report.version < REPORT_VERSION ? `<p class="notice">This report is frozen under an earlier version of the methodology (${report.version}): its order figures include English-language orders. The figures are kept so that links to them stay true. See the <a href="/en/research/methodology#versions">changes</a>.</p>` : ''}
 
-${renderEditorialInsight(editorialInsightEn(report), 'en')}
+${renderJumpNav('en')}
 
-${renderCartaSection(report.cartaCapital, baseUrl, 'en')}
-
-${renderTaskTransformationSection(report.taskTransformation, baseUrl, 'en')}
-
-${renderBumpChartSection(report.bumpChart, baseUrl, 'en')}
-
-${findings.length ? `<section class="rs-section">
+${findings.length ? `<section class="rs-section" id="findings">
   <h2>Key findings</h2>
   <ul class="rs-findings">${findings.map((f) => `<li><span>${escapeHtml(f.text)}</span>${quoteButton(f.quote)}</li>`).join('')}</ul>
   <p class="muted small">Each quote names the source, the period and the sample. Please link to ${escapeHtml(`${baseUrl}${path}`)}.</p>
 </section>` : ''}
 
-<section class="rs-section"><h2>Pay by role</h2>
+<section class="rs-section" id="roles-grades"><h2>Pay by role</h2>
   <p class="muted small">Vacancies in roubles that state the pay, a month. The role comes from the vacancy title.</p>
   ${rangeChart(translate(jobs.byRole.filter((s) => s.key !== 'other'), ROLE_EN, (key) => `/en/research/roles/${key}`))}</section>
 <section class="rs-section"><h2>By seniority</h2><p class="muted small">Median and interquartile range (25th to 75th percentile) across IT seniority levels.</p>${rangeChart(translate(jobs.itByGrade?.some((s) => s.pay.median !== undefined) ? jobs.itByGrade : jobs.byGrade, GRADE_EN))}</section>
@@ -251,19 +246,23 @@ ${renderGradeMatrixSection(jobs.gradeMatrix, (slug) => (jobs.roles.some((r) => r
 <section class="rs-section"><h2>Location and remote work</h2>${rangeChart(translate(jobs.byRegion, REGION_EN))}
   <p class="small"><b>${pct(jobs.remote.share)}</b> of vacancies allow remote work.${jobs.remote.remote.median && jobs.remote.office.median ? ` Median: ${rub(jobs.remote.remote.median)} remote, ${rub(jobs.remote.office.median)} on site.` : ''}${jobs.remote.adjusted ? ` At the same role and seniority the difference is ${jobs.remote.adjusted.pct > 0 ? '+' : ''}${jobs.remote.adjusted.pct}% (${num(jobs.remote.adjusted.n)} vacancies compared).` : ''}</p></section>
 ${renderRegionalComparisonSection(jobs.regionalComparison, jobs.regionalMatrix, jobs.byCity, (slug) => (jobs.roles.some((r) => r.slug === slug) ? `/en/research/roles/${slug}` : undefined), 'en')}
-${renderEconometricsSection(jobs.econometrics, 'en')}
-${renderScientificSection(jobs.scientific, 'en')}
-<section class="rs-section"><h2>Skills and pay premium</h2><p class="muted small">Concrete technologies and tools in vacancies with stated pay (excluding umbrella categories), with stratified pay premiums at equal role and seniority.</p>${rangeChart(jobs.skills.map((s) => ({ label: s.premiumPct !== undefined && s.premiumPct !== 0 ? `${translateSkill(s.skill, 'en')} (${s.premiumPct > 0 ? '+' : ''}${s.premiumPct}%)` : translateSkill(s.skill, 'en'), pay: s.pay })))}</section>
+<section class="rs-section" id="skills-ai"><h2>Skills and pay premium</h2><p class="muted small">Concrete technologies and tools in vacancies with stated pay (excluding umbrella categories), with stratified pay premiums at equal role and seniority.</p>${rangeChart(jobs.skills.map((s) => ({ label: s.premiumPct !== undefined && s.premiumPct !== 0 ? `${translateSkill(s.skill, 'en')} (${s.premiumPct > 0 ? '+' : ''}${s.premiumPct}%)` : translateSkill(s.skill, 'en'), pay: s.pay })))}</section>
 <section class="rs-section"><h2>AI in vacancies</h2>
   <p class="small">Neural networks, LLMs, GPT, Cursor, Copilot or machine learning appear in <b>${pct(jobs.ai.share)}</b> of vacancies.</p>
   ${rangeChart([{ label: 'Mention AI', pay: jobs.ai.with }, { label: 'Do not', pay: jobs.ai.without }])}</section>
+${renderBumpChartSection(report.bumpChart, baseUrl, 'en')}
 ${(jobs.itCompanies?.length || jobs.companies.length) ? `<section class="rs-section"><h2>Who hires most in IT</h2><p class="muted small">Employers with the highest number of open IT vacancies over the period.</p>${countBars((jobs.itCompanies?.length ? jobs.itCompanies : jobs.companies).slice(0, 12).map((c) => ({ label: translateSourceTitle(c.name, 'en'), n: c.n })))}</section>` : ''}
-<section class="rs-section"><h2>Freelance order budgets</h2>
+<section class="rs-section" id="freelance"><h2>Freelance order budgets</h2>
   <p class="small">Russian-language orders. <b>${pct(gigs.budgetShare)}</b> of them state a budget, for the whole project.${totals.intlGigs ? ` English-language orders (${num(totals.intlGigs)}) stay out.` : ''}</p>
   ${rangeChart(translate(gigs.byCategory.filter((s) => s.key !== 'other'), ROLE_EN))}
   ${renderGigBracketsSection(gigs.brackets, 'en')}</section>
+${renderEditorialInsight(editorialInsightEn(report), 'en')}
+${renderCartaSection(report.cartaCapital, baseUrl, 'en')}
+${renderTaskTransformationSection(report.taskTransformation, baseUrl, 'en')}
 ${renderCrossMarketSection(jobs.crossMarket, (slug) => (jobs.roles.some((r) => r.slug === slug) ? `/en/research/roles/${slug}` : undefined), 'en')}
 ${renderIntlResearchSection(report, (slug) => (jobs.roles.some((r) => r.slug === slug) ? `/en/research/roles/${slug}` : undefined), 'en')}
+${renderEconometricsSection(jobs.econometrics, 'en')}
+${renderScientificSection(jobs.scientific, 'en')}
 <section class="rs-section"><h2>Where the data comes from</h2>
   ${countBars(totals.platforms.slice(0, 12).map((p) => ({ label: p.key, n: p.n })))}
   ${totals.payOrigins && Object.keys(totals.payOrigins).length ? `<p class="small">Where the pay was read: ${Object.entries(totals.payOrigins).map(([o, n]) => `${escapeHtml(ORIGIN_LABELS.en[o] ?? o)} — ${num(n)}`).join(', ')}.</p>` : ''}</section>

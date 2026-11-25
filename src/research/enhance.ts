@@ -54,6 +54,101 @@ const ENHANCE_STYLE = `<style id="rs-enhance-style">
   width: 100%;
   min-width: 520px;
 }
+.rs-table-scroll > table th:first-child,
+.rs-table-scroll > table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--bg);
+  box-shadow: 1px 0 0 var(--line);
+}
+.rs-table-scroll > table td {
+  white-space: nowrap;
+}
+.rs-table-scroll > table td:first-child,
+.rs-table-scroll > table td.small.muted {
+  white-space: normal;
+  min-width: 150px;
+}
+.rs-jump-nav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 8px 0;
+  margin: 12px 0 4px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.rs-jump-nav::-webkit-scrollbar {
+  display: none;
+}
+.rs-jump-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 11px;
+  border-radius: 9999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.rs-jump-chip:hover {
+  border-color: var(--emerald);
+  text-decoration: none;
+}
+details.rs-academic-fold {
+  margin-top: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 10px 14px;
+}
+details.rs-academic-fold > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--ink);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+details.rs-academic-fold > summary::-webkit-details-marker {
+  display: none;
+}
+details.rs-academic-fold > summary::after {
+  content: '↓ Развернуть таблицы';
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--emerald);
+  white-space: nowrap;
+}
+html[lang="en"] details.rs-academic-fold > summary::after {
+  content: '↓ Expand tables';
+}
+details.rs-academic-fold[open] > summary {
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+details.rs-academic-fold[open] > summary::after {
+  content: '↑ Свернуть';
+  color: var(--muted);
+}
+html[lang="en"] details.rs-academic-fold[open] > summary::after {
+  content: '↑ Collapse';
+}
 .rs-formula-card {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -99,6 +194,10 @@ const ENHANCE_STYLE = `<style id="rs-enhance-style">
   .rs-table-scroll > table th {
     white-space: normal;
   }
+  .rs-table-scroll > table td:first-child {
+    max-width: 145px;
+    min-width: 125px;
+  }
   /* Mobile layout fixes: section heads stack, charts and cards breathe. */
   .rs-section-head {
     flex-direction: column;
@@ -118,9 +217,6 @@ const ENHANCE_STYLE = `<style id="rs-enhance-style">
   }
   .rs-kpi b {
     font-size: 18px;
-  }
-  td {
-    overflow-wrap: break-word;
   }
 }
 /* Long tokens (ids, formula names, URLs) must never stretch a page sideways. */

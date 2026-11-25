@@ -539,7 +539,7 @@ export function normalizePay(pay: Pay, type: LeadType, rates: Record<string, num
   if (period === 'month' && pay.period !== 'year' && pay.currency !== 'RUB' && (max ?? min ?? 0) > BOUNDS.month[1] / 2) {
     return normalizePay({ ...pay, period: 'year' }, type, rates);
   }
-  if (pay.origin === 'text' && period === 'month' && max !== undefined && max > TEXT_CEILING && min !== undefined && min <= TEXT_CEILING) {
+  if (pay.origin === 'text' && period === 'month' && max !== undefined && max > TEXT_CEILING && min !== undefined && min >= BOUNDS.month[0] && min <= TEXT_CEILING) {
     // «от 400 000 до 5 000 000»: the lower bound is the offer, the upper one a boast.
     return { min, max: undefined, point: min, period };
   }

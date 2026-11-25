@@ -149,6 +149,34 @@ export function kpi(value: string, label: string): string {
   return `<div class="rs-kpi"><b>${escapeHtml(value)}</b><span>${escapeHtml(label)}</span></div>`;
 }
 
+export function renderJumpNav(lang: SupportedLang = 'ru'): string {
+  const en = lang === 'en';
+  const items = en
+    ? [
+        { href: '#findings', label: 'Key findings' },
+        { href: '#roles-grades', label: 'Roles & grades' },
+        { href: '#heatmap-role-grade', label: 'Heatmaps' },
+        { href: '#regional-analysis', label: 'Regions & cities' },
+        { href: '#skills-ai', label: 'Skills & AI' },
+        { href: '#freelance', label: 'Freelance' },
+        { href: '#cross-market-comparison', label: 'Global vs RU' },
+        { href: '#econometrics', label: 'Econometrics' },
+      ]
+    : [
+        { href: '#findings', label: 'Главное' },
+        { href: '#roles-grades', label: 'Зарплаты и грейды' },
+        { href: '#heatmap-role-grade', label: 'Тепловые карты' },
+        { href: '#regional-analysis', label: 'Регионы и города' },
+        { href: '#skills-ai', label: 'Навыки и ИИ' },
+        { href: '#freelance', label: 'Фриланс' },
+        { href: '#cross-market-comparison', label: 'Мировой рынок' },
+        { href: '#econometrics', label: 'Эконометрика' },
+      ];
+  return `<nav class="rs-jump-nav" aria-label="${en ? 'Report sections' : 'Разделы отчёта'}">${items
+    .map((item) => `<a class="rs-jump-chip" href="${item.href}">${escapeHtml(item.label)}</a>`)
+    .join('')}</nav>`;
+}
+
 function sliceRows(slices: Slice[], href?: (key: string) => string | undefined): BarRow[] {
   return slices.map((s) => ({ label: s.label, href: href?.(s.key), n: s.n, pay: s.pay }));
 }
@@ -885,9 +913,9 @@ export function renderEconometricsSection(
         </tr>${ipwCorrectedIt ? `
         <tr>
           <td><b>${en ? "IPW selection-corrected IT median (Horvitz–Thompson)" : "IPW-медиана IT с поправкой на скрытые вилки (Хорвица — Томпсона)"}</b></td>
-          <td>${fmt(ipwCorrectedIt.rawMedian)} <span class="muted small">(${en ? "observed" : "наблюдаемая"})</span></td>
+          <td>${fmt(ipwCorrectedIt.rawMedian)} <span class="muted small">(${en ? `graded IT, N=${num(ipwCorrectedIt.n)}` : `IT с грейдом, N=${num(ipwCorrectedIt.n)}`})</span></td>
           <td><b>${fmt(ipwCorrectedIt.ipwMedian)}</b> <span class="muted small">(${ipwCorrectedIt.biasPct >= 0 ? "+" : ""}${ipwCorrectedIt.biasPct}%)</span></td>
-          <td class="small muted">${en ? "Weighted by inverse disclosure probability 1 / P(Disclosed | Grade) across N = " + num(ipwCorrectedIt.n) + " graded IT vacancies" : "Взвешивание по обратной вероятности раскрытия вилки 1 / P(Disclosed | Grade), N = " + num(ipwCorrectedIt.n)}</td>
+          <td class="small muted">${en ? "Calculated on the N = " + num(ipwCorrectedIt.n) + " subset of paid IT vacancies with an explicit seniority grade, weighted by 1 / P(Disclosed | Grade)" : "Рассчитано на подвыборке IT-вакансий с явно указанным грейдом (N = " + num(ipwCorrectedIt.n) + " из " + num(it.n) + "), взвешивание по 1 / P(Disclosed | Grade)"}</td>
         </tr>` : ""}
       </tbody>
     </table>
@@ -1003,8 +1031,8 @@ export function renderAcademicCitations(report: Report, baseUrl: string, lang: S
 export function renderFormulaGallerySection(lang: SupportedLang = "ru"): string {
   const en = lang === "en";
   const cards = [{"key":"mincer","num":1,"tex":"\\ln(W_i) = \\beta_0 + \\beta_1\\,\\text{Middle}_i + \\beta_2\\,\\text{Senior}_i + \\beta_3\\,\\text{Lead}_i + \\gamma_1\\,\\text{Moscow}_i + \\gamma_2\\,\\text{SPb}_i + \\gamma_3\\,\\text{Remote}_i + \\delta\\,\\text{AI}_i + \\varepsilon_i","ruTitle":"Уравнение заработной платы Якоба Минсера (Mincer Log-Wage OLS)","enTitle":"Mincerian Log-Wage Regression (OLS)","ruNote":"Зависимая переменная ln(W_i) — натуральный логарифм месячного оклада в рублях; β₀ — базовая оплата Junior/Intern в региональном офисе.","enNote":"Dependent variable ln(W_i) is log monthly pay in RUB; β₀ is the baseline Junior/Intern pay in a regional office.","mathml":"<span class=\"katex\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><mi>ln</mi><mo>⁡</mo><mo stretchy=\"false\">(</mo><msub><mi>W</mi><mi>i</mi></msub><mo stretchy=\"false\">)</mo><mo>=</mo><msub><mi>β</mi><mn>0</mn></msub><mo>+</mo><msub><mi>β</mi><mn>1</mn></msub><mtext> </mtext><msub><mtext>Middle</mtext><mi>i</mi></msub><mo>+</mo><msub><mi>β</mi><mn>2</mn></msub><mtext> </mtext><msub><mtext>Senior</mtext><mi>i</mi></msub><mo>+</mo><msub><mi>β</mi><mn>3</mn></msub><mtext> </mtext><msub><mtext>Lead</mtext><mi>i</mi></msub><mo>+</mo><msub><mi>γ</mi><mn>1</mn></msub><mtext> </mtext><msub><mtext>Moscow</mtext><mi>i</mi></msub><mo>+</mo><msub><mi>γ</mi><mn>2</mn></msub><mtext> </mtext><msub><mtext>SPb</mtext><mi>i</mi></msub><mo>+</mo><msub><mi>γ</mi><mn>3</mn></msub><mtext> </mtext><msub><mtext>Remote</mtext><mi>i</mi></msub><mo>+</mo><mi>δ</mi><mtext> </mtext><msub><mtext>AI</mtext><mi>i</mi></msub><mo>+</mo><msub><mi>ε</mi><mi>i</mi></msub></mrow><annotation encoding=\"application/x-tex\">\\ln(W_i) = \\beta_0 + \\beta_1\\,\\text{Middle}_i + \\beta_2\\,\\text{Senior}_i + \\beta_3\\,\\text{Lead}_i + \\gamma_1\\,\\text{Moscow}_i + \\gamma_2\\,\\text{SPb}_i + \\gamma_3\\,\\text{Remote}_i + \\delta\\,\\text{AI}_i + \\varepsilon_i</annotation></semantics></math></span>"},{"key":"whiteHc1","num":2,"tex":"\\widehat{V}_{\\text{HC1}}(\\hat{\\beta}) = \\frac{n}{n - k}\\,(X^\\top X)^{-1}\\!\\left(\\sum_{i=1}^{n} \\hat{\\varepsilon}_i^{\\,2}\\, x_i x_i^\\top\\right)(X^\\top X)^{-1}, \\qquad \\Delta\\% = \\left(\\exp(\\hat{\\beta}_j) - 1\\right)\\times 100\\%","ruTitle":"Робастная ковариационная матрица Уайта (HC1) и поправка Халворсена — Палмквиста","enTitle":"White HC1 Heteroskedasticity-Robust Covariance & Halvorsen–Palmquist Semi-Elasticity","ruNote":"Устойчивые к гетероскедастичности стандартные ошибки SE_HC1 и точный процентный эффект бинарного фактора при прочих равных.","enNote":"Heteroskedasticity-consistent standard errors SE_HC1 and exact percentage wage premium of binary dummy variables.","mathml":"<span class=\"katex\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><msub><mover accent=\"true\"><mi>V</mi><mo stretchy=\"true\">^</mo></mover><mtext>HC1</mtext></msub><mo stretchy=\"false\">(</mo><mover accent=\"true\"><mi>β</mi><mo>^</mo></mover><mo stretchy=\"false\">)</mo><mo>=</mo><mfrac><mi>n</mi><mrow><mi>n</mi><mo>−</mo><mi>k</mi></mrow></mfrac><mtext> </mtext><mo stretchy=\"false\">(</mo><msup><mi>X</mi><mi mathvariant=\"normal\">⊤</mi></msup><mi>X</mi><msup><mo stretchy=\"false\">)</mo><mrow><mo>−</mo><mn>1</mn></mrow></msup><mtext> ⁣</mtext><mrow><mo fence=\"true\">(</mo><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><msubsup><mover accent=\"true\"><mi>ε</mi><mo>^</mo></mover><mi>i</mi><mrow><mtext> </mtext><mn>2</mn></mrow></msubsup><mtext> </mtext><msub><mi>x</mi><mi>i</mi></msub><msubsup><mi>x</mi><mi>i</mi><mi mathvariant=\"normal\">⊤</mi></msubsup><mo fence=\"true\">)</mo></mrow><mo stretchy=\"false\">(</mo><msup><mi>X</mi><mi mathvariant=\"normal\">⊤</mi></msup><mi>X</mi><msup><mo stretchy=\"false\">)</mo><mrow><mo>−</mo><mn>1</mn></mrow></msup><mo separator=\"true\">,</mo><mspace width=\"2em\"/><mi mathvariant=\"normal\">Δ</mi><mi mathvariant=\"normal\">%</mi><mo>=</mo><mrow><mo fence=\"true\">(</mo><mi>exp</mi><mo>⁡</mo><mo stretchy=\"false\">(</mo><msub><mover accent=\"true\"><mi>β</mi><mo>^</mo></mover><mi>j</mi></msub><mo stretchy=\"false\">)</mo><mo>−</mo><mn>1</mn><mo fence=\"true\">)</mo></mrow><mo>×</mo><mn>100</mn><mi mathvariant=\"normal\">%</mi></mrow><annotation encoding=\"application/x-tex\">\\widehat{V}_{\\text{HC1}}(\\hat{\\beta}) = \\frac{n}{n - k}\\,(X^\\top X)^{-1}\\!\\left(\\sum_{i=1}^{n} \\hat{\\varepsilon}_i^{\\,2}\\, x_i x_i^\\top\\right)(X^\\top X)^{-1}, \\qquad \\Delta\\% = \\left(\\exp(\\hat{\\beta}_j) - 1\\right)\\times 100\\%</annotation></semantics></math></span>"},{"key":"anova","num":3,"tex":"\\eta^2 = \\frac{SS_{\\text{between}}}{SS_{\\text{total}}} = \\frac{\\sum_{g=1}^{G} n_g \\left(\\bar{y}_g - \\bar{y}\\right)^2}{\\sum_{g=1}^{G}\\sum_{i=1}^{n_g}\\left(y_{gi} - \\bar{y}\\right)^2}, \\qquad F = \\frac{SS_{\\text{between}} / (G - 1)}{SS_{\\text{within}} / (N - G)}","ruTitle":"Декомпозиция дисперсии логарифма зарплат (Однофакторный ANOVA, η² и F-критерий)","enTitle":"One-Way ANOVA Log-Wage Variance Decomposition (η² & Fisher’s F-test)","ruNote":"Доля общей дисперсии логарифма зарплат y = ln(W), объясняемая группирующим институциональным фактором из G категорий на выборке N.","enNote":"Proportion of total log-wage variance y = ln(W) explained by an institutional grouping factor with G categories across N observations.","mathml":"<span class=\"katex\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><msup><mi>η</mi><mn>2</mn></msup><mo>=</mo><mfrac><mrow><mi>S</mi><msub><mi>S</mi><mtext>between</mtext></msub></mrow><mrow><mi>S</mi><msub><mi>S</mi><mtext>total</mtext></msub></mrow></mfrac><mo>=</mo><mfrac><mrow><munderover><mo>∑</mo><mrow><mi>g</mi><mo>=</mo><mn>1</mn></mrow><mi>G</mi></munderover><msub><mi>n</mi><mi>g</mi></msub><msup><mrow><mo fence=\"true\">(</mo><msub><mover accent=\"true\"><mi>y</mi><mo>ˉ</mo></mover><mi>g</mi></msub><mo>−</mo><mover accent=\"true\"><mi>y</mi><mo>ˉ</mo></mover><mo fence=\"true\">)</mo></mrow><mn>2</mn></msup></mrow><mrow><munderover><mo>∑</mo><mrow><mi>g</mi><mo>=</mo><mn>1</mn></mrow><mi>G</mi></munderover><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><msub><mi>n</mi><mi>g</mi></msub></munderover><msup><mrow><mo fence=\"true\">(</mo><msub><mi>y</mi><mrow><mi>g</mi><mi>i</mi></mrow></msub><mo>−</mo><mover accent=\"true\"><mi>y</mi><mo>ˉ</mo></mover><mo fence=\"true\">)</mo></mrow><mn>2</mn></msup></mrow></mfrac><mo separator=\"true\">,</mo><mspace width=\"2em\"/><mi>F</mi><mo>=</mo><mfrac><mrow><mi>S</mi><msub><mi>S</mi><mtext>between</mtext></msub><mi mathvariant=\"normal\">/</mi><mo stretchy=\"false\">(</mo><mi>G</mi><mo>−</mo><mn>1</mn><mo stretchy=\"false\">)</mo></mrow><mrow><mi>S</mi><msub><mi>S</mi><mtext>within</mtext></msub><mi mathvariant=\"normal\">/</mi><mo stretchy=\"false\">(</mo><mi>N</mi><mo>−</mo><mi>G</mi><mo stretchy=\"false\">)</mo></mrow></mfrac></mrow><annotation encoding=\"application/x-tex\">\\eta^2 = \\frac{SS_{\\text{between}}}{SS_{\\text{total}}} = \\frac{\\sum_{g=1}^{G} n_g \\left(\\bar{y}_g - \\bar{y}\\right)^2}{\\sum_{g=1}^{G}\\sum_{i=1}^{n_g}\\left(y_{gi} - \\bar{y}\\right)^2}, \\qquad F = \\frac{SS_{\\text{between}} / (G - 1)}{SS_{\\text{within}} / (N - G)}</annotation></semantics></math></span>"},{"key":"mannWhitney","num":4,"tex":"U_1 = R_1 - \\frac{n_1(n_1 + 1)}{2}, \\qquad z = \\frac{U_1 - \\frac{n_1 n_2}{2}}{\\sqrt{\\frac{n_1 n_2}{12}\\!\\left(N + 1 - \\frac{\\sum (t_k^3 - t_k)}{N(N - 1)}\\right)}}, \\qquad \\delta = \\frac{2U_1}{n_1 n_2} - 1","ruTitle":"Ранговый U-критерий Манна — Уитни с поправкой на связки и дельта Клиффа (δ)","enTitle":"Mann–Whitney U Test with Tie Correction & Cliff’s Delta Effect Size (δ)","ruNote":"R₁ — сумма рангов первой выборки объёма n₁; t_k — число совпадающих наблюдений в k-й группе связок; δ ∈ [−1, +1] — непараметрический размер эффекта.","enNote":"R₁ is the rank sum of group 1 (size n₁); t_k is the number of tied observations in tie group k; δ ∈ [−1, +1] is the non-parametric effect size.","mathml":"<span class=\"katex\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><msub><mi>U</mi><mn>1</mn></msub><mo>=</mo><msub><mi>R</mi><mn>1</mn></msub><mo>−</mo><mfrac><mrow><msub><mi>n</mi><mn>1</mn></msub><mo stretchy=\"false\">(</mo><msub><mi>n</mi><mn>1</mn></msub><mo>+</mo><mn>1</mn><mo stretchy=\"false\">)</mo></mrow><mn>2</mn></mfrac><mo separator=\"true\">,</mo><mspace width=\"2em\"/><mi>z</mi><mo>=</mo><mfrac><mrow><msub><mi>U</mi><mn>1</mn></msub><mo>−</mo><mfrac><mrow><msub><mi>n</mi><mn>1</mn></msub><msub><mi>n</mi><mn>2</mn></msub></mrow><mn>2</mn></mfrac></mrow><msqrt><mrow><mfrac><mrow><msub><mi>n</mi><mn>1</mn></msub><msub><mi>n</mi><mn>2</mn></msub></mrow><mn>12</mn></mfrac><mtext> ⁣</mtext><mrow><mo fence=\"true\">(</mo><mi>N</mi><mo>+</mo><mn>1</mn><mo>−</mo><mfrac><mrow><mo>∑</mo><mo stretchy=\"false\">(</mo><msubsup><mi>t</mi><mi>k</mi><mn>3</mn></msubsup><mo>−</mo><msub><mi>t</mi><mi>k</mi></msub><mo stretchy=\"false\">)</mo></mrow><mrow><mi>N</mi><mo stretchy=\"false\">(</mo><mi>N</mi><mo>−</mo><mn>1</mn><mo stretchy=\"false\">)</mo></mrow></mfrac><mo fence=\"true\">)</mo></mrow></mrow></msqrt></mfrac><mo separator=\"true\">,</mo><mspace width=\"2em\"/><mi>δ</mi><mo>=</mo><mfrac><mrow><mn>2</mn><msub><mi>U</mi><mn>1</mn></msub></mrow><mrow><msub><mi>n</mi><mn>1</mn></msub><msub><mi>n</mi><mn>2</mn></msub></mrow></mfrac><mo>−</mo><mn>1</mn></mrow><annotation encoding=\"application/x-tex\">U_1 = R_1 - \\frac{n_1(n_1 + 1)}{2}, \\qquad z = \\frac{U_1 - \\frac{n_1 n_2}{2}}{\\sqrt{\\frac{n_1 n_2}{12}\\!\\left(N + 1 - \\frac{\\sum (t_k^3 - t_k)}{N(N - 1)}\\right)}}, \\qquad \\delta = \\frac{2U_1}{n_1 n_2} - 1</annotation></semantics></math></span>"},{"key":"kruskalWallis","num":5,"tex":"H = \\frac{\\frac{12}{N(N + 1)}\\sum_{g=1}^{G}\\frac{R_g^2}{n_g} - 3(N + 1)}{1 - \\frac{\\sum (t_k^3 - t_k)}{N^3 - N}}, \\qquad \\varepsilon^2 = \\frac{H}{N - 1}","ruTitle":"Ранговый дисперсионный критерий Краскела — Уоллиса (H) и коэффициент ε²","enTitle":"Kruskal–Wallis Rank ANOVA (H) & Epsilon-Squared Effect Size (ε²)","ruNote":"Непараметрический аналог ANOVA для G ≥ 3 независимых групп (регионов или грейдов) с поправкой на связанные ранги.","enNote":"Non-parametric multi-group rank test across G ≥ 3 independent groups (regions or seniority grades) with tie correction.","mathml":"<span class=\"katex\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><mi>H</mi><mo>=</mo><mfrac><mrow><mfrac><mn>12</mn><mrow><mi>N</mi><mo stretchy=\"false\">(</mo><mi>N</mi><mo>+</mo><mn>1</mn><mo stretchy=\"false\">)</mo></mrow></mfrac><munderover><mo>∑</mo><mrow><mi>g</mi><mo>=</mo><mn>1</mn></mrow><mi>G</mi></munderover><mfrac><msubsup><mi>R</mi><mi>g</mi><mn>2</mn></msubsup><msub><mi>n</mi><mi>g</mi></msub></mfrac><mo>−</mo><mn>3</mn><mo stretchy=\"false\">(</mo><mi>N</mi><mo>+</mo><mn>1</mn><mo stretchy=\"false\">)</mo></mrow><mrow><mn>1</mn><mo>−</mo><mfrac><mrow><mo>∑</mo><mo stretchy=\"false\">(</mo><msubsup><mi>t</mi><mi>k</mi><mn>3</mn></msubsup><mo>−</mo><msub><mi>t</mi><mi>k</mi></msub><mo stretchy=\"false\">)</mo></mrow><mrow><msup><mi>N</mi><mn>3</mn></msup><mo>−</mo><mi>N</mi></mrow></mfrac></mrow></mfrac><mo separator=\"true\">,</mo><mspace width=\"2em\"/><msup><mi>ε</mi><mn>2</mn></msup><mo>=</mo><mfrac><mi>H</mi><mrow><mi>N</mi><mo>−</mo><mn>1</mn></mrow></mfrac></mrow><annotation encoding=\"application/x-tex\">H = \\frac{\\frac{12}{N(N + 1)}\\sum_{g=1}^{G}\\frac{R_g^2}{n_g} - 3(N + 1)}{1 - \\frac{\\sum (t_k^3 - t_k)}{N^3 - N}}, \\qquad \\varepsilon^2 = \\frac{H}{N - 1}</annotation></semantics></math></span>"},{"key":"cmhAndGini","num":6,"tex":"\\text{Gap}_{\\text{CMH}} = \\exp\\!\\left(\\frac{\\sum_{c} w_c \\ln(\\tilde{y}_{c,1} / \\tilde{y}_{c,0})}{\\sum_{c} w_c}\\right) - 1, \\qquad G = \\frac{\\sum_{i=1}^{n}(2i - n - 1)\\,x_{(i)}}{n\\sum_{i=1}^{n} x_{(i)}}, \\qquad \\text{QCD} = \\frac{P_{75} - P_{25}}{P_{75} + P_{25}}","ruTitle":"Поправка Кохрана — Мантеля — Хензеля на парадокс Симпсона, индекс Джини (G) и дисперсия (QCD)","enTitle":"Cochran–Mantel–Haenszel Stratified Adjustment, Gini Coefficient (G) & Quartile Dispersion (QCD)","ruNote":"Внутриячеечное сопоставление при равной роли и грейде c = (role, grade) с весами w_c = min(n_{c,1}, n_{c,0}), индекс концентрации Джини и квартильная дисперсия.","enNote":"Within-cell matching across c = (role, grade) strata with weights w_c = min(n_{c,1}, n_{c,0}), Gini inequality index, and quartile dispersion.","mathml":"<span class=\"katex\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><msub><mtext>Gap</mtext><mtext>CMH</mtext></msub><mo>=</mo><mi>exp</mi><mo>⁡</mo><mtext> ⁣</mtext><mrow><mo fence=\"true\">(</mo><mfrac><mrow><munder><mo>∑</mo><mi>c</mi></munder><msub><mi>w</mi><mi>c</mi></msub><mi>ln</mi><mo>⁡</mo><mo stretchy=\"false\">(</mo><msub><mover accent=\"true\"><mi>y</mi><mo>~</mo></mover><mrow><mi>c</mi><mo separator=\"true\">,</mo><mn>1</mn></mrow></msub><mi mathvariant=\"normal\">/</mi><msub><mover accent=\"true\"><mi>y</mi><mo>~</mo></mover><mrow><mi>c</mi><mo separator=\"true\">,</mo><mn>0</mn></mrow></msub><mo stretchy=\"false\">)</mo></mrow><mrow><munder><mo>∑</mo><mi>c</mi></munder><msub><mi>w</mi><mi>c</mi></msub></mrow></mfrac><mo fence=\"true\">)</mo></mrow><mo>−</mo><mn>1</mn><mo separator=\"true\">,</mo><mspace width=\"2em\"/><mi>G</mi><mo>=</mo><mfrac><mrow><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><mo stretchy=\"false\">(</mo><mn>2</mn><mi>i</mi><mo>−</mo><mi>n</mi><mo>−</mo><mn>1</mn><mo stretchy=\"false\">)</mo><mtext> </mtext><msub><mi>x</mi><mrow><mo stretchy=\"false\">(</mo><mi>i</mi><mo stretchy=\"false\">)</mo></mrow></msub></mrow><mrow><mi>n</mi><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><msub><mi>x</mi><mrow><mo stretchy=\"false\">(</mo><mi>i</mi><mo stretchy=\"false\">)</mo></mrow></msub></mrow></mfrac><mo separator=\"true\">,</mo><mspace width=\"2em\"/><mtext>QCD</mtext><mo>=</mo><mfrac><mrow><msub><mi>P</mi><mn>75</mn></msub><mo>−</mo><msub><mi>P</mi><mn>25</mn></msub></mrow><mrow><msub><mi>P</mi><mn>75</mn></msub><mo>+</mo><msub><mi>P</mi><mn>25</mn></msub></mrow></mfrac></mrow><annotation encoding=\"application/x-tex\">\\text{Gap}_{\\text{CMH}} = \\exp\\!\\left(\\frac{\\sum_{c} w_c \\ln(\\tilde{y}_{c,1} / \\tilde{y}_{c,0})}{\\sum_{c} w_c}\\right) - 1, \\qquad G = \\frac{\\sum_{i=1}^{n}(2i - n - 1)\\,x_{(i)}}{n\\sum_{i=1}^{n} x_{(i)}}, \\qquad \\text{QCD} = \\frac{P_{75} - P_{25}}{P_{75} + P_{25}}</annotation></semantics></math></span>"},{"key":"blinderOaxaca","num":7,"tex":"\\Delta\\overline{\\ln W} = \\overline{\\ln W}_A - \\overline{\\ln W}_B = \\underbrace{(\\bar{\\mathbf{X}}_A - \\bar{\\mathbf{X}}_B)^\\top \\hat{\\boldsymbol{\\beta}}^*}_{\\text{Endowments } (E)} + \\underbrace{\\bigl[\\bar{\\mathbf{X}}_A^\\top (\\hat{\\boldsymbol{\\beta}}_A - \\hat{\\boldsymbol{\\beta}}^*) + \\bar{\\mathbf{X}}_B^\\top (\\hat{\\boldsymbol{\\beta}}^* - \\hat{\\boldsymbol{\\beta}}_B)\\bigr]}_{\\text{Coefficients / Pure Returns } (C)}","ruTitle":"Двухфакторная декомпозиция Оахаки — Блайндера (Blinder–Oaxaca Decomposition)","enTitle":"Blinder–Oaxaca Twofold Econometric Wage Decomposition","ruNote":"Разложение межгруппового разрыва логарифмов зарплат на эффект композиции квалификации (Endowments E) и чистую ценовую ренту (Coefficients C).","enNote":"Decomposes mean log-wage differentials into human-capital composition (Endowments E) and pure structural returns (Coefficients C).","mathml":"<span class=\"katex\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><mi mathvariant=\"normal\">Δ</mi><mover accent=\"true\"><mrow><mi>ln</mi><mo>⁡</mo><mi>W</mi></mrow><mo stretchy=\"true\">‾</mo></mover><mo>=</mo><msub><mover accent=\"true\"><mrow><mi>ln</mi><mo>⁡</mo><mi>W</mi></mrow><mo stretchy=\"true\">‾</mo></mover><mi>A</mi></msub><mo>−</mo><msub><mover accent=\"true\"><mrow><mi>ln</mi><mo>⁡</mo><mi>W</mi></mrow><mo stretchy=\"true\">‾</mo></mover><mi>B</mi></msub><mo>=</mo><munder><munder><mrow><mo stretchy=\"false\">(</mo><msub><mover accent=\"true\"><mi mathvariant=\"bold\">X</mi><mo>ˉ</mo></mover><mi>A</mi></msub><mo>−</mo><msub><mover accent=\"true\"><mi mathvariant=\"bold\">X</mi><mo>ˉ</mo></mover><mi>B</mi></msub><msup><mo stretchy=\"false\">)</mo><mi mathvariant=\"normal\">⊤</mi></msup><msup><mover accent=\"true\"><mi mathvariant=\"bold-italic\">β</mi><mo>^</mo></mover><mo>∗</mo></msup></mrow><mo stretchy=\"true\">⏟</mo></munder><mrow><mtext>Endowments </mtext><mo stretchy=\"false\">(</mo><mi>E</mi><mo stretchy=\"false\">)</mo></mrow></munder><mo>+</mo><munder><munder><mrow><mo fence=\"true\" stretchy=\"true\" minsize=\"1.2em\" maxsize=\"1.2em\">[</mo><msubsup><mover accent=\"true\"><mi mathvariant=\"bold\">X</mi><mo>ˉ</mo></mover><mi>A</mi><mi mathvariant=\"normal\">⊤</mi></msubsup><mo stretchy=\"false\">(</mo><msub><mover accent=\"true\"><mi mathvariant=\"bold-italic\">β</mi><mo>^</mo></mover><mi>A</mi></msub><mo>−</mo><msup><mover accent=\"true\"><mi mathvariant=\"bold-italic\">β</mi><mo>^</mo></mover><mo>∗</mo></msup><mo stretchy=\"false\">)</mo><mo>+</mo><msubsup><mover accent=\"true\"><mi mathvariant=\"bold\">X</mi><mo>ˉ</mo></mover><mi>B</mi><mi mathvariant=\"normal\">⊤</mi></msubsup><mo stretchy=\"false\">(</mo><msup><mover accent=\"true\"><mi mathvariant=\"bold-italic\">β</mi><mo>^</mo></mover><mo>∗</mo></msup><mo>−</mo><msub><mover accent=\"true\"><mi mathvariant=\"bold-italic\">β</mi><mo>^</mo></mover><mi>B</mi></msub><mo stretchy=\"false\">)</mo><mo fence=\"true\" stretchy=\"true\" minsize=\"1.2em\" maxsize=\"1.2em\">]</mo></mrow><mo stretchy=\"true\">⏟</mo></munder><mrow><mtext>Coefficients / Pure Returns </mtext><mo stretchy=\"false\">(</mo><mi>C</mi><mo stretchy=\"false\">)</mo></mrow></munder></mrow><annotation encoding=\"application/x-tex\">\\Delta\\overline{\\ln W} = \\overline{\\ln W}_A - \\overline{\\ln W}_B = \\underbrace{(\\bar{\\mathbf{X}}_A - \\bar{\\mathbf{X}}_B)^\\top \\hat{\\boldsymbol{\\beta}}^*}_{\\text{Endowments } (E)} + \\underbrace{\\bigl[\\bar{\\mathbf{X}}_A^\\top (\\hat{\\boldsymbol{\\beta}}_A - \\hat{\\boldsymbol{\\beta}}^*) + \\bar{\\mathbf{X}}_B^\\top (\\hat{\\boldsymbol{\\beta}}^* - \\hat{\\boldsymbol{\\beta}}_B)\\bigr]}_{\\text{Coefficients / Pure Returns } (C)}</annotation></semantics></math></span>"},{"key":"theilAndIpw","num":8,"tex":"T_{\\text{Theil}} = \\frac{1}{n}\\sum_{i=1}^{n}\\frac{W_i}{\\overline{W}}\\ln\\!\\left(\\frac{W_i}{\\overline{W}}\\right), \\qquad \\widehat{M}_{\\text{IPW}} = \\operatorname{median}_{w_i}(W_i), \\quad w_i = \\frac{1}{\\hat{P}(\\text{Disclosed}=1 \\mid \\text{Grade}_i)}","ruTitle":"Индекс энтропии Тейла GE(1) и поправка Хорвица — Томпсона (IPW) на цензурирование вилок","enTitle":"Theil Entropy Index GE(1) & Horvitz–Thompson IPW Selection Bias Correction","ruNote":"Аддитивно разложимый индекс неравенства Тейла и оценка медианы с весами обратной вероятности раскрытия зарплатной вилки по грейдам.","enNote":"Additively decomposable generalized entropy index and inverse-probability-weighted median correcting for non-random salary hiding.","mathml":"<span class=\"katex\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><semantics><mrow><msub><mi>T</mi><mtext>Theil</mtext></msub><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><mfrac><msub><mi>W</mi><mi>i</mi></msub><mover accent=\"true\"><mi>W</mi><mo stretchy=\"true\">‾</mo></mover></mfrac><mi>ln</mi><mo>⁡</mo><mtext> ⁣</mtext><mrow><mo fence=\"true\">(</mo><mfrac><msub><mi>W</mi><mi>i</mi></msub><mover accent=\"true\"><mi>W</mi><mo stretchy=\"true\">‾</mo></mover></mfrac><mo fence=\"true\">)</mo></mrow><mo separator=\"true\">,</mo><mspace width=\"2em\"/><msub><mover accent=\"true\"><mi>M</mi><mo stretchy=\"true\">^</mo></mover><mtext>IPW</mtext></msub><mo>=</mo><msub><mrow><mi mathvariant=\"normal\">median</mi><mo>⁡</mo></mrow><msub><mi>w</mi><mi>i</mi></msub></msub><mo stretchy=\"false\">(</mo><msub><mi>W</mi><mi>i</mi></msub><mo stretchy=\"false\">)</mo><mo separator=\"true\">,</mo><mspace width=\"1em\"/><msub><mi>w</mi><mi>i</mi></msub><mo>=</mo><mfrac><mn>1</mn><mrow><mover accent=\"true\"><mi>P</mi><mo>^</mo></mover><mo stretchy=\"false\">(</mo><mtext>Disclosed</mtext><mo>=</mo><mn>1</mn><mo>∣</mo><msub><mtext>Grade</mtext><mi>i</mi></msub><mo stretchy=\"false\">)</mo></mrow></mfrac></mrow><annotation encoding=\"application/x-tex\">T_{\\text{Theil}} = \\frac{1}{n}\\sum_{i=1}^{n}\\frac{W_i}{\\overline{W}}\\ln\\!\\left(\\frac{W_i}{\\overline{W}}\\right), \\qquad \\widehat{M}_{\\text{IPW}} = \\operatorname{median}_{w_i}(W_i), \\quad w_i = \\frac{1}{\\hat{P}(\\text{Disclosed}=1 \\mid \\text{Grade}_i)}</annotation></semantics></math></span>"}];
-  return `<div style="margin-top:20px" id="mathematical-apparatus">
-  <h3>${en ? "Mathematical apparatus & econometric specification (LaTeX / MathML)" : "Математический аппарат и спецификация эконометрических моделей (LaTeX / MathML)"}</h3>
+  return `<details class="rs-academic-fold" id="mathematical-apparatus">
+  <summary>${en ? "Mathematical apparatus & econometric specification (LaTeX / MathML, 8 equations)" : "Математический аппарат и спецификация эконометрических моделей (LaTeX / MathML, 8 уравнений)"}</summary>
   <p class="muted small">${en
     ? "Exact mathematical formulations used in the automated econometric pipeline. Each equation is typeset via KaTeX/MathML and includes its raw LaTeX source code for direct citation in academic papers and theses:"
     : "Строгая математическая запись уравнений и критериев, заложенных в расчётное ядро openradar. Каждая формула свёрстана в стандарте KaTeX / W3C MathML и снабжена кнопкой копирования исходного кода LaTeX для вставки в научные статьи, диссертации и ВКР:"}</p>
@@ -1030,7 +1058,7 @@ export function renderFormulaGallerySection(lang: SupportedLang = "ru"): string 
       )
       .join("")}
   </div>
-</div>`;
+</details>`;
 }
 
 const MAGNITUDE_TEXT: Record<SupportedLang, Record<EffectMagnitude, string>> = {
@@ -1058,6 +1086,7 @@ export function renderScientificSection(scientific: ScientificAnalysis | undefin
     middle: "Seniority: Middle (vs Junior/Intern)",
     senior: "Seniority: Senior (vs Junior/Intern)",
     lead: "Seniority: Lead / Staff (vs Junior/Intern)",
+    core_eng: "Specialization: Core Engineering & AI/ML (Backend, DevOps, Data, ML, Sec)",
     moscow: "Location: Moscow office/hybrid (vs regions)",
     spb: "Location: St. Petersburg office/hybrid (vs regions)",
     remote: "Work mode: All-Russia Remote (vs regional office)",
@@ -1335,21 +1364,15 @@ ${oldMethod}
   ${kpi(num(totals.companies), 'работодателей')}
 </div>
 
-${renderEditorialInsight(report.editorialInsight)}
+${renderJumpNav('ru')}
 
-${renderCartaSection(report.cartaCapital, baseUrl)}
-
-${renderTaskTransformationSection(report.taskTransformation, baseUrl)}
-
-${renderBumpChartSection(report.bumpChart, baseUrl)}
-
-${report.findings.length ? `<section class="rs-section">
+${report.findings.length ? `<section class="rs-section" id="findings">
   <h2>Главные показатели</h2>
   <ul class="rs-findings">${report.findings.map((f) => `<li><span>${escapeHtml(f.text)}</span>${quoteButton(f.quote)}</li>`).join('')}</ul>
   <p class="muted small">Цитата уже содержит источник, период и размер выборки. При публикации укажите ссылку на ${escapeHtml(`${baseUrl}${reportUrl(report)}`)}.</p>
 </section>` : ''}
 
-<section class="rs-section">
+<section class="rs-section" id="roles-grades">
   <h2>Зарплаты по направлениям</h2>
   <p class="muted small">Вакансии в рублях с указанной зарплатой, в месяц. Направление определяется по названию вакансии.</p>
   ${rangeChart(sliceRows(jobs.byRole.filter((s) => s.key !== 'other'), roleHref))}
@@ -1382,11 +1405,7 @@ ${renderRegionalComparisonSection(jobs.regionalComparison, jobs.regionalMatrix, 
   ${histogram(jobs.histogram)}
 </section>
 
-${renderEconometricsSection(jobs.econometrics, 'ru')}
-
-${renderScientificSection(jobs.scientific, 'ru')}
-
-<section class="rs-section">
+<section class="rs-section" id="skills-ai">
   <h2>Навыки и зарплатная премия</h2>
   <p class="muted small">Конкретные технологии и инструменты в вакансиях с зарплатой (без общих категорий), отсортированные по медиане. Для частых навыков рассчитана стратифицированная премия при той же роли и грейде.</p>
   ${rangeChart(jobs.skills.map((s) => ({ label: s.premiumPct !== undefined && s.premiumPct !== 0 ? `${s.skill} (${signedPct(s.premiumPct)})` : s.skill, n: s.n, pay: s.pay })))}
@@ -1402,6 +1421,8 @@ ${renderScientificSection(jobs.scientific, 'ru')}
   ${jobs.ai.adjusted ? `<p class="small">При той же роли и уровне разница ${signedPct(jobs.ai.adjusted.pct)} (сравнение по ${num(jobs.ai.adjusted.n)} вакансиям).</p>` : ''}
 </section>
 
+${renderBumpChartSection(report.bumpChart, baseUrl)}
+
 <section class="rs-section">
   <h2>Динамика</h2>
   ${weekly(jobs.weekly, jobs.weeklyIndexed)}
@@ -1413,7 +1434,7 @@ ${(jobs.itCompanies?.length || jobs.companies.length) ? `<section class="rs-sect
   ${countBars((jobs.itCompanies?.length ? jobs.itCompanies : jobs.companies).slice(0, 12).map((c) => ({ label: c.name, n: c.n })))}
 </section>` : ''}
 
-<section class="rs-section">
+<section class="rs-section" id="freelance">
   <h2>Фриланс: бюджеты заказов</h2>
   <p class="small">Русскоязычные заказы. Бюджет указан в <b>${formatShare(gigs.budgetShare)}</b> из них. Бюджет — за весь проект; на Kwork это желаемая цена заказчика.${totals.intlGigs ? ` Англоязычные заказы (${num(totals.intlGigs)}) сюда не входят.` : ''}</p>
   ${rangeChart(sliceRows(gigs.byCategory.filter((s) => s.key !== 'other')))}
@@ -1421,8 +1442,15 @@ ${(jobs.itCompanies?.length || jobs.companies.length) ? `<section class="rs-sect
   ${gigs.hourly.median ? `<p class="small" style="margin-top:12px">Почасовая ставка в заказах, где она указана: медиана ${formatRub(gigs.hourly.median)} в час (n = ${gigs.hourly.n}).</p>` : ''}
 </section>
 
+${renderEditorialInsight(report.editorialInsight)}
+${renderCartaSection(report.cartaCapital, baseUrl)}
+${renderTaskTransformationSection(report.taskTransformation, baseUrl)}
+
 ${renderCrossMarketSection(jobs.crossMarket, (slug) => (jobs.roles.some((r) => r.slug === slug) ? `/research/roles/${slug}` : undefined), 'ru')}
 ${renderIntlResearchSection(report, (slug) => (jobs.roles.some((r) => r.slug === slug) ? `/research/roles/${slug}` : undefined), 'ru')}
+
+${renderEconometricsSection(jobs.econometrics, 'ru')}
+${renderScientificSection(jobs.scientific, 'ru')}
 
 <section class="rs-section">
   <h2>Откуда данные</h2>
@@ -1797,6 +1825,9 @@ export function renderIntlResearchSection(
     middle: "Seniority: Middle (vs Junior/Intern)",
     senior: "Seniority: Senior (vs Junior/Intern)",
     lead: "Seniority: Lead / Staff (vs Junior/Intern)",
+    core_eng: "Specialization: Core Engineering & AI/ML (Backend, DevOps, Data, ML, Sec)",
+    north_america: "Location: North America / US-tier pay (vs baseline)",
+    western_europe: "Location: Western Europe / UK / CH (vs baseline)",
     moscow: "Location: North America / US-tier pay (vs baseline)",
     spb: "Location: Western Europe / UK / CH (vs baseline)",
     remote: "Work mode: Global Remote (vs on-site baseline)",
@@ -1807,6 +1838,9 @@ export function renderIntlResearchSection(
     middle: "Грейд: Middle (к Junior/Intern)",
     senior: "Грейд: Senior (к Junior/Intern)",
     lead: "Грейд: Lead / Staff (к Junior/Intern)",
+    core_eng: "Специализация: Core Engineering & AI/ML (Backend, DevOps, Data, ML, ИБ)",
+    north_america: "Макрорегион: Северная Америка / США (к базе)",
+    western_europe: "Макрорегион: Западная Европа / Британия / Швейцария (к базе)",
     moscow: "Макрорегион: Северная Америка / США (к базе)",
     spb: "Макрорегион: Западная Европа / Британия / Швейцария (к базе)",
     remote: "Формат: Глобальная удалёнка / Worldwide Remote (к базе)",
@@ -2015,7 +2049,9 @@ export function renderIntlResearchSection(
     : "Ведущие мировые города и технологические хабы по числу вакансий с медианной годовой зарплатой и межквартильным коридором ($/год)."}</p>
   ${rangeChart(hubRows, { unit: fmtUsdYr, lang })}` : ""}
 
-  ${econ && econ.all.n >= 20 ? `<h3 style="margin-top:20px" id="intl-econometrics">${en ? "Global distributional econometrics & inequality profile ($/year)" : "Эконометрический профиль распределения и неравенства на глобальном рынке ($/год)"}</h3>
+  ${(econ && econ.all.n >= 20) || sci?.mincer || sci?.varianceDecomposition?.length || sci?.oaxaca?.length ? `<details class="rs-academic-fold">
+    <summary>${en ? "Global econometric tables: inequality profile, Mincer OLS, ANOVA η² & Blinder–Oaxaca ($/year)" : "Эконометрические таблицы глобального рынка: распределение, уравнение Минсера, ANOVA η² и Оахака — Блайндер ($/год)"}</summary>
+  ${econ && econ.all.n >= 20 ? `<h3 style="margin-top:8px" id="intl-econometrics">${en ? "Global distributional econometrics & inequality profile ($/year)" : "Эконометрический профиль распределения и неравенства на глобальном рынке ($/год)"}</h3>
   <div style="overflow-x:auto">
     <table class="table">
       <thead>
@@ -2064,7 +2100,7 @@ export function renderIntlResearchSection(
         </tr>${econ.ipwCorrectedIt ? `
         <tr>
           <td><b>${en ? "IPW selection-corrected global IT median" : "IPW-медиана глобального IT с поправкой Хорвица — Томпсона"}</b></td>
-          <td>${fmtUsdYr(econ.ipwCorrectedIt.rawMedian)} <span class="muted small">(${en ? "observed" : "наблюдаемая"})</span></td>
+          <td>${fmtUsdYr(econ.ipwCorrectedIt.rawMedian)} <span class="muted small">(${en ? `graded IT, N=${num(econ.ipwCorrectedIt.n)}` : `IT с грейдом, N=${num(econ.ipwCorrectedIt.n)}`})</span></td>
           <td><b>${fmtUsdYr(econ.ipwCorrectedIt.ipwMedian)}</b> <span class="muted small">(${econ.ipwCorrectedIt.biasPct >= 0 ? "+" : ""}${econ.ipwCorrectedIt.biasPct}%)</span></td>
           <td class="small muted">${en ? `Inverse disclosure probability weighted across N = ${num(econ.ipwCorrectedIt.n)} graded global IT vacancies` : `Взвешивание по обратной вероятности раскрытия вилки 1 / P(Disclosed | Grade), N = ${num(econ.ipwCorrectedIt.n)}`}</td>
         </tr>` : ""}
@@ -2177,6 +2213,7 @@ export function renderIntlResearchSection(
       </tbody>
     </table>
   </div>` : ""}
+  </details>` : ""}
 
   ${jobs.intlCompanies?.length ? `<h3 style="margin-top:18px">${en ? "Top hiring international employers" : "Крупнейшие международные наниматели за период"}</h3>
   ${countBars(jobs.intlCompanies.slice(0, 12).map((c) => ({ label: c.name, n: c.n })))}` : ""}

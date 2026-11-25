@@ -934,6 +934,7 @@ describe('research v0.79.0 native UI & paper.tex', () => {
     const report = buildReport([], monthPeriod('2026-11'), 'month');
     const ruHtml = renderReportPage({ report, baseUrl: 'https://openradar.fun', version: '0.79.0', snapshots: [] });
     expect(ruHtml).toContain('rs-enhance-style');
+    expect(ruHtml).toContain('rs-jump-nav');
     expect(ruHtml).not.toContain('rs-editorial');
     expect(ruHtml).not.toContain('капитал');
 
@@ -943,4 +944,78 @@ describe('research v0.79.0 native UI & paper.tex', () => {
     const texEn = renderAcademicPaperLatex(report, 'https://openradar.fun', 'en');
     expect(texEn).toContain('Blinder--Oaxaca');
   });
+
+  it('guards international econometrics against tiny or zero pay records so Mincer, ANOVA, and Oaxaca never emit NaN or -Infinity', () => {
+    const records: ResearchRecord[] = [];
+    for (let i = 0; i < 12; i++) {
+      records.push(
+        record(10_000 + i, {
+          scope: 'intl',
+          market: 'intl',
+          platform: 'justjoin.it',
+          role: 'backend',
+          grade: 'junior',
+          currency: 'PLN',
+          city: 'Warsaw',
+          pay: 280_000 + i * 5_000,
+        }),
+        record(11_000 + i, {
+          scope: 'intl',
+          market: 'intl',
+          platform: 'ashby',
+          role: 'backend',
+          grade: 'senior',
+          currency: 'USD',
+          city: 'New York',
+          remote: true,
+          pay: 950_000 + i * 10_000,
+        }),
+      );
+    }
+    // Inject pathological sub-threshold records (pay = 7 RUB, pay = 0 RUB) that previously caused Math.log(0) = -Infinity
+    records.push(
+      record(12_001, {
+        scope: 'intl',
+        market: 'intl',
+        platform: 'jobicy',
+        role: 'backend',
+        grade: 'senior',
+        currency: 'USD',
+        pay: 7,
+      }),
+      record(12_002, {
+        scope: 'intl',
+        market: 'intl',
+        platform: 'jobicy',
+        role: 'backend',
+        grade: 'junior',
+        currency: 'USD',
+        pay: 0,
+      }),
+    );
+
+    const report = buildReport(records, monthPeriod('2026-11'), 'month');
+    const ir = report.jobs.intlResearch!;
+    expect(ir).toBeDefined();
+    expect(ir.scientific.mincer).toBeDefined();
+    expect(Number.isFinite(ir.scientific.mincer!.r2)).toBe(true);
+    expect(Number.isFinite(ir.scientific.mincer!.fStat)).toBe(true);
+    for (const c of ir.scientific.mincer!.coefficients) {
+      expect(Number.isFinite(c.beta)).toBe(true);
+      expect(Number.isFinite(c.se)).toBe(true);
+    }
+    for (const v of ir.scientific.varianceDecomposition) {
+      expect(Number.isFinite(v.etaSqPct)).toBe(true);
+      expect(Number.isFinite(v.fStat)).toBe(true);
+    }
+    for (const o of ir.scientific.oaxaca ?? []) {
+      expect(Number.isFinite(o.totalLogGap)).toBe(true);
+      expect(Number.isFinite(o.endowmentSharePct)).toBe(true);
+      expect(Number.isFinite(o.coefficientSharePct)).toBe(true);
+    }
+    const html = renderReportPage({ report, baseUrl: 'https://openradar.fun', version: '0.80.0', snapshots: [] });
+    expect(html).not.toContain('NaN');
+    expect(html).not.toContain('Infinity');
+  });
 });
+

@@ -547,10 +547,10 @@ export function dist(values: number[], minMedian: number = MIN_MEDIAN): Dist {
 function adjustedGap(paid: ResearchRecord[], inGroup: (r: ResearchRecord) => boolean): Adjusted | undefined {
   const cells = new Map<string, { yes: number[]; no: number[] }>();
   for (const r of paid) {
-    if (r.role === OTHER_ROLE.slug || !r.grade) continue;
+    if (r.role === OTHER_ROLE.slug || !r.grade || !r.pay || r.pay <= 0 || !Number.isFinite(r.pay)) continue;
     const key = `${r.role}|${r.grade}`;
     const cell = cells.get(key) ?? { yes: [], no: [] };
-    (inGroup(r) ? cell.yes : cell.no).push(r.pay!);
+    (inGroup(r) ? cell.yes : cell.no).push(r.pay);
     cells.set(key, cell);
   }
   const median = (values: number[]): number => quantile([...values].sort((a, b) => a - b), 0.5);
@@ -563,6 +563,27 @@ function adjustedGap(paid: ResearchRecord[], inGroup: (r: ResearchRecord) => boo
     sum += w * Math.log(median(yes) / median(no));
   }
   return weight >= MIN_ADJUSTED ? { pct: Math.round((Math.exp(sum / weight) - 1) * 100), n: weight } : undefined;
+}
+
+/** Role-stratified fallback when role×grade cells are too sparse, preventing Simpson's paradox across IT vs retail sales. */
+function adjustedRoleGap(paid: ResearchRecord[], inGroup: (r: ResearchRecord) => boolean): Adjusted | undefined {
+  const cells = new Map<string, { yes: number[]; no: number[] }>();
+  for (const r of paid) {
+    if (r.role === OTHER_ROLE.slug || !r.pay || r.pay <= 0 || !Number.isFinite(r.pay)) continue;
+    const cell = cells.get(r.role) ?? { yes: [], no: [] };
+    (inGroup(r) ? cell.yes : cell.no).push(r.pay);
+    cells.set(r.role, cell);
+  }
+  const median = (values: number[]): number => quantile([...values].sort((a, b) => a - b), 0.5);
+  let weight = 0;
+  let sum = 0;
+  for (const { yes, no } of cells.values()) {
+    if (yes.length < 3 || no.length < 3) continue;
+    const w = Math.min(yes.length, no.length);
+    weight += w;
+    sum += w * Math.log(median(yes) / median(no));
+  }
+  return weight >= 8 ? { pct: Math.round((Math.exp(sum / weight) - 1) * 100), n: weight } : undefined;
 }
 
 /** Orders with a budget by direction: both shares come from the same posts in the same unit. */
@@ -940,8 +961,9 @@ function skillStats(
   return candidates
     .map(({ skill, values, pay }) => {
       const matched = records.length >= MIN_ADJUSTED ? adjustedGap(records, (r) => r.skills.includes(skill))?.pct : undefined;
-      const rawPct = pay.median !== undefined && base ? Math.round(((pay.median - base) / base) * 100) : undefined;
-      return { skill, n: values.length, pay, premiumPct: matched ?? rawPct };
+      const roleMatched = matched === undefined && baselineMedian === undefined ? adjustedRoleGap(records, (r) => r.skills.includes(skill))?.pct : undefined;
+      const rawPct = baselineMedian !== undefined && pay.median !== undefined && base ? Math.round(((pay.median - base) / base) * 100) : undefined;
+      return { skill, n: values.length, pay, premiumPct: matched ?? roleMatched ?? rawPct };
     })
     .sort((a, b) => b.pay.median! - a.pay.median!);
 }
@@ -1195,7 +1217,7 @@ function computeMarketEconometrics(jobs: ResearchRecord[], ruJobs: ResearchRecor
 function solveOlsWhiteHc1(y: number[], X: number[][]): { beta: number[]; se: number[]; r2: number; adjR2: number; fStat: number } | undefined {
   const n = y.length;
   const k = X[0]?.length ?? 0;
-  if (n <= k + 2 || k < 2) return undefined;
+  if (n <= k + 2 || k < 2 || !y.every((v) => Number.isFinite(v))) return undefined;
   const XtX = Array.from({ length: k }, () => new Array<number>(k).fill(0));
   const Xty = new Array<number>(k).fill(0);
   for (let i = 0; i < n; i++) {
@@ -1212,7 +1234,7 @@ function solveOlsWhiteHc1(y: number[], X: number[][]): { beta: number[]; se: num
     for (let r = col + 1; r < k; r++) {
       if (Math.abs(A[r]![col]!) > Math.abs(A[pivot]![col]!)) pivot = r;
     }
-    if (Math.abs(A[pivot]![col]!) < 1e-10) return undefined;
+    if (!Number.isFinite(A[pivot]![col]!) || Math.abs(A[pivot]![col]!) < 1e-10) return undefined;
     const tmp = A[col]!;
     A[col] = A[pivot]!;
     A[pivot] = tmp;
@@ -1227,11 +1249,12 @@ function solveOlsWhiteHc1(y: number[], X: number[][]): { beta: number[]; se: num
   }
   const invXtX = A.map((row) => row.slice(k));
   const beta = invXtX.map((row) => row.reduce((s, v, j) => s + v * Xty[j]!, 0));
+  if (!beta.every((b) => Number.isFinite(b))) return undefined;
   const e = y.map((yi, i) => yi - X[i]!.reduce((s, xij, j) => s + xij * beta[j]!, 0));
   const yMean = y.reduce((s, v) => s + v, 0) / n;
   const ssTot = y.reduce((s, v) => s + (v - yMean) ** 2, 0);
   const ssRes = e.reduce((s, v) => s + v ** 2, 0);
-  if (ssTot <= 0 || ssRes <= 0) return undefined;
+  if (!Number.isFinite(ssTot) || !Number.isFinite(ssRes) || ssTot <= 0 || ssRes <= 0) return undefined;
   const r2 = Math.max(0, Math.min(1, 1 - ssRes / ssTot));
   const adjR2 = Math.max(0, 1 - ((1 - r2) * (n - 1)) / (n - k));
   const fStat = ((ssTot - ssRes) / (k - 1)) / (ssRes / (n - k));
@@ -1387,7 +1410,7 @@ function adjustHypothesisFamily(rows: Array<HypothesisTestRow & { p: number; dir
 }
 
 function computeScientificAnalysis(jobs: ResearchRecord[], ruJobs: ResearchRecord[], roles: RoleDetail[]): ScientificAnalysis {
-  const itPaid = ruJobs.filter((r) => TECH_ROLES.has(r.role));
+  const itPaid = ruJobs.filter((r) => TECH_ROLES.has(r.role) && r.pay !== undefined && Number.isFinite(r.pay) && r.pay > 0);
   const gradedIt = itPaid.filter((r) => r.grade !== undefined);
 
   // 1. Mincer Log-Wage Regression
@@ -1397,6 +1420,7 @@ function computeScientificAnalysis(jobs: ResearchRecord[], ruJobs: ResearchRecor
       { key: "middle", label: "Грейд: Middle (к базе Junior/Intern)", fn: (r) => (r.grade === "middle" ? 1 : 0) },
       { key: "senior", label: "Грейд: Senior (к базе Junior/Intern)", fn: (r) => (r.grade === "senior" ? 1 : 0) },
       { key: "lead", label: "Грейд: Lead / Staff (к базе Junior/Intern)", fn: (r) => (r.grade === "lead" ? 1 : 0) },
+      { key: "core_eng", label: "Специализация: Core Engineering & AI/ML (Backend, DevOps, Data, ML, ИБ)", fn: (r) => (["backend", "ml", "ai", "devops", "architect", "data-engineer", "security"].includes(r.role) ? 1 : 0) },
       { key: "moscow", label: "Локация: Москва, офис/гибрид (к регионам)", fn: (r) => (!r.remote && r.region === "Москва" ? 1 : 0) },
       { key: "spb", label: "Локация: Санкт-Петербург, офис/гибрид (к регионам)", fn: (r) => (!r.remote && r.region === "Санкт-Петербург" ? 1 : 0) },
       { key: "remote", label: "Режим: Всероссийская удалёнка (к офису в регионах)", fn: (r) => (r.remote ? 1 : 0) },
@@ -1429,6 +1453,7 @@ function computeScientificAnalysis(jobs: ResearchRecord[], ruJobs: ResearchRecor
   ): VarianceFactorRow | undefined => {
     const grouped = new Map<string, number[]>();
     for (const r of pool) {
+      if (r.pay === undefined || !Number.isFinite(r.pay) || r.pay <= 0) continue;
       const g = groupFn(r);
       if (!g) continue;
       let arr = grouped.get(g);
@@ -1436,7 +1461,7 @@ function computeScientificAnalysis(jobs: ResearchRecord[], ruJobs: ResearchRecor
         arr = [];
         grouped.set(g, arr);
       }
-      arr.push(Math.log(r.pay!));
+      arr.push(Math.log(r.pay));
     }
     const validGroups = [...grouped.values()].filter((g) => g.length >= 5);
     if (validGroups.length < 2) return undefined;
@@ -1452,7 +1477,7 @@ function computeScientificAnalysis(jobs: ResearchRecord[], ruJobs: ResearchRecor
       ssBetween += g.length * (gMean - grandMean) ** 2;
       for (const v of g) ssTot += (v - grandMean) ** 2;
     }
-    if (ssTot <= 0) return undefined;
+    if (!Number.isFinite(ssTot) || ssTot <= 0) return undefined;
     const ssWithin = Math.max(1e-9, ssTot - ssBetween);
     const etaSqPct = Math.round((ssBetween / ssTot) * 1000) / 10;
     const f = (ssBetween / (G - 1)) / (ssWithin / (N - G));
@@ -1589,9 +1614,11 @@ function computeScientificAnalysis(jobs: ResearchRecord[], ruJobs: ResearchRecor
   const computeOaxaca = (
     key: OaxacaDecompositionRow["key"],
     label: string,
-    groupA: ResearchRecord[],
-    groupB: ResearchRecord[],
+    rawGroupA: ResearchRecord[],
+    rawGroupB: ResearchRecord[],
   ): OaxacaDecompositionRow | undefined => {
+    const groupA = rawGroupA.filter((r) => r.pay !== undefined && Number.isFinite(r.pay) && r.pay > 0);
+    const groupB = rawGroupB.filter((r) => r.pay !== undefined && Number.isFinite(r.pay) && r.pay > 0);
     if (groupA.length < 8 || groupB.length < 8) return undefined;
     const covFns: Array<(r: ResearchRecord) => number> = [
       (r) => (r.grade === "middle" ? 1 : 0),
@@ -1616,7 +1643,7 @@ function computeScientificAnalysis(jobs: ResearchRecord[], ruJobs: ResearchRecor
     const meanLogA = yA.reduce((a, b) => a + b, 0) / yA.length;
     const meanLogB = yB.reduce((a, b) => a + b, 0) / yB.length;
     const totalLogGap = meanLogA - meanLogB;
-    if (Math.abs(totalLogGap) < 1e-4) return undefined;
+    if (!Number.isFinite(totalLogGap) || Math.abs(totalLogGap) < 1e-4) return undefined;
 
     const xPoolWithDummy = pooled.map((r) => [1, ...activeFns.map((fn) => fn(r)), setA.has(r.id) ? 1 : 0]);
     const olsPool = solveOlsWhiteHc1(yPool, xPoolWithDummy);
@@ -1855,8 +1882,11 @@ function classifyIntlMacroRegion(r: ResearchRecord): IntlMacroRegionRow["key"] {
 
 function toUsdYrRecord(r: ResearchRecord, usdRate: number): ResearchRecord {
   const factor = 12 / (usdRate > 0 ? usdRate : 80);
-  const conv = (v: number | undefined): number | undefined =>
-    v !== undefined ? Math.round((v * factor) / 100) * 100 : undefined;
+  const conv = (v: number | undefined): number | undefined => {
+    if (v === undefined || !Number.isFinite(v) || v <= 0) return undefined;
+    const usdYr = Math.round((v * factor) / 100) * 100;
+    return usdYr >= 1800 ? usdYr : undefined;
+  };
   return {
     ...r,
     pay: conv(r.pay),
@@ -1875,13 +1905,13 @@ function computeIntlMarketResearch(
   const repeated = new Set<string>();
   const seen = new Set<string>();
   for (const r of intlAll) {
-    if (!r.company || r.pay === undefined) continue;
+    if (!r.company || r.pay === undefined || r.pay <= 0) continue;
     const key = `${r.company.toLowerCase()}|${r.role}|${r.grade ?? ""}|${r.pay}`;
     if (seen.has(key)) repeated.add(r.id);
     else seen.add(key);
   }
   const intlPaidPred = (r: ResearchRecord): boolean =>
-    r.market === "intl" && r.payPeriod === "month" && r.pay !== undefined && !repeated.has(r.id);
+    r.market === "intl" && r.payPeriod === "month" && r.pay !== undefined && Number.isFinite(r.pay) && r.pay > 0 && !repeated.has(r.id);
   const intlPaid = intlAll.filter(intlPaidPred);
   if (intlPaid.length < 10) return undefined;
 
@@ -1946,6 +1976,7 @@ function computeIntlMarketResearch(
       { key: "middle", label: "Грейд: Middle (к базе Junior/Intern)", fn: (r) => (r.grade === "middle" ? 1 : 0) },
       { key: "senior", label: "Грейд: Senior (к базе Junior/Intern)", fn: (r) => (r.grade === "senior" ? 1 : 0) },
       { key: "lead", label: "Грейд: Lead / Staff / Principal (к базе Junior/Intern)", fn: (r) => (r.grade === "lead" ? 1 : 0) },
+      { key: "core_eng", label: "Специализация: Core Engineering & AI/ML (Backend, DevOps, Data, ML, ИБ)", fn: (r) => (["backend", "ml", "ai", "devops", "architect", "data-engineer", "security"].includes(r.role) ? 1 : 0) },
       { key: "north_america", label: "Локация: Северная Америка / USD-хаб (к CEE/базе)", fn: (r) => (classifyIntlMacroRegion(r) === "north_america" ? 1 : 0) },
       { key: "western_europe", label: "Локация: Западная Европа / UK (EUR/GBP/CHF)", fn: (r) => (classifyIntlMacroRegion(r) === "western_europe" ? 1 : 0) },
       { key: "remote", label: "Режим: Глобальная удалёнка (Worldwide Remote)", fn: (r) => (r.remote ? 1 : 0) },
@@ -2198,12 +2229,12 @@ export function buildReport(
     else seen.add(key);
   }
   // Russian-market monthly pay is the headline figure; international boards pay in USD and are kept apart.
-  const ruPaid = (r: ResearchRecord): boolean => r.market === 'ru' && r.payPeriod === 'month' && r.pay !== undefined && !repeated.has(r.id);
+  const ruPaid = (r: ResearchRecord): boolean => r.market === 'ru' && r.payPeriod === 'month' && r.pay !== undefined && Number.isFinite(r.pay) && r.pay >= 12_000 && !repeated.has(r.id);
   const ruJobs = jobs.filter(ruPaid);
-  const intlPaid = (r: ResearchRecord): boolean => r.market === 'intl' && r.payPeriod === 'month' && r.pay !== undefined;
+  const intlPaid = (r: ResearchRecord): boolean => r.market === 'intl' && r.payPeriod === 'month' && r.pay !== undefined && Number.isFinite(r.pay) && r.pay >= 12_000;
   const intlJobs = intlScope.filter(intlPaid);
   const intlGigsScope = records.filter((r) => r.type === 'gig' && r.scope === 'intl');
-  const projectPaid = (r: ResearchRecord): boolean => r.payPeriod === 'project' && r.pay !== undefined;
+  const projectPaid = (r: ResearchRecord): boolean => r.payPeriod === 'project' && r.pay !== undefined && Number.isFinite(r.pay) && r.pay > 0;
   const gigsPaid = gigs.filter(projectPaid);
 
   const bins: Array<{ from: number; to?: number; n: number }> = [];

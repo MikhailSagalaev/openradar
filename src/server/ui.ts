@@ -3270,7 +3270,6 @@ export function renderLeadsPage(data: LeadsPageData): string {
   const body = `
 ${intro}
 <div class="search-hero">
-  <h1 class="feed-title">${escapeHtml(delay > 0 ? t.heroTitleDelayed : t.heroTitle)}</h1>
   <div class="type-tabs">${tabs}</div>
   <p class="feed-meta">${feedMeta}</p>
   <form class="search-form" method="get" action="/">
