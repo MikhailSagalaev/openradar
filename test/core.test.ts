@@ -353,11 +353,16 @@ describe('IT, digital & creative domain focus and Telegram noise filtering', () 
     expect(nonDigitalReason('Работник торгового зала и кухни')).toBeTruthy();
     expect(nonDigitalReason('Курьер на личном авто')).toBeTruthy();
     expect(nonDigitalReason('Медицинская сестра процедурного кабинета')).toBeTruthy();
+    expect(nonDigitalReason('Оператор 1С/Бухгалтер на первичную документацию')).toBeTruthy();
+    expect(nonDigitalReason('Инженер-монтажник в Благовещенск')).toBeTruthy();
+    expect(nonDigitalReason('Менеджер по продажам автомобилей')).toBeTruthy();
 
     expect(nonDigitalReason('Логотип и фирменный стиль для кофейни')).toBeUndefined();
     expect(nonDigitalReason('В проект врача требуется технический специалист')).toBeUndefined();
     expect(nonDigitalReason('Маркетолог-аналитик в сеть пекарен')).toBeUndefined();
     expect(nonDigitalReason('Frontend-разработчик React / TypeScript')).toBeUndefined();
+    expect(nonDigitalReason('Программист 1С:Предприятие 8')).toBeUndefined();
+    expect(nonDigitalReason('1С-разработчик')).toBeUndefined();
   });
 
   it('rejects non-digital trades only when domainFocus=it_digital', () => {
