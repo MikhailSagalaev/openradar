@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.85.0 — 2026-11-25
+
+- **Cleaner feed header & mobile layout across all pages**: removed the redundant main feed `<h1>` heading and eliminated horizontal mobile overflow on `/sources`, `/sources/quality`, `/network`, `/docs`, `/contribute`, and `/leads/:id`.
+- **Research methodology & econometrics hardening (`/research`)**: filtered sub-threshold USD/yr records before log-wage regressions to prevent `NaN`/`-Infinity` in international Mincer OLS, ANOVA, and Blinder–Oaxaca decompositions; fixed `normalizePay` lower-bound checks when upper bounds exceed ceiling; added role-stratified fallback (`adjustedRoleGap`) for skill premiums to eliminate Simpson's paradox; added `core_eng` specialization control to Mincer OLS; clarified IPW sample funnel.
+- **Research UX & navigation**: added sticky jump-navigation bar (`.rs-jump-nav`), unified freelance market section (`#freelance`), sticky first column on wide tables, and collapsible `<details class="rs-academic-fold">` drawers for heavy econometric tables on mobile.
+
 ## 0.84.0 — 2026-11-21
 
 - **One color-theme button in the site header** — a circular sun/moon toggle next to the sign-in area switches light ↔ dark and remembers the choice on every page (the feed had no toggle before; only research pages did, buried in their page head as a three-button pill that has now been removed).
