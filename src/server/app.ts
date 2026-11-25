@@ -1760,8 +1760,8 @@ export function createApp(runtime: Runtime): Hono {
     return rows.length ? rows : undefined;
   };
 
-  /** The profile page; `agentToken` is a token just issued, shown this once. */
-  const renderProfile = async (c: Context, extra: { agentToken?: string } = {}): Promise<string> => {
+  /** The profile page; `agentToken` / `telegramLinkCode` are shown once when just issued. */
+  const renderProfile = async (c: Context, extra: { agentToken?: string; telegramLinkCode?: string } = {}): Promise<string> => {
     const viewer = await viewerFromRequest(c, runtime);
     const participant = viewer.pubkey ? await runtime.store.getParticipant(viewer.pubkey) : null;
     const { admin: _admin, ...delays } = runtime.access.delays;
@@ -1815,6 +1815,7 @@ export function createApp(runtime: Runtime): Hono {
               telegramLinked: Boolean(await runtime.store.getTelegramChat?.(viewer.userId)),
               botAvailable: Boolean(subscriptionBotUsername),
               botUsername: subscriptionBotUsername,
+              linkCode: extra.telegramLinkCode,
               notice: c.req.query('subscriptions') ?? undefined,
             }
           : undefined,
@@ -1887,7 +1888,7 @@ export function createApp(runtime: Runtime): Hono {
     return c.redirect('/me?agent=revoked#agent');
   });
 
-  app.post('/subscriptions', rateLimit({ windowMs: 60_000, max: 10 }), async (c) => {
+  app.post('/subscriptions', rateLimit({ windowMs: 60_000, max: 15, onLimit: (c) => c.redirect('/me?subscriptions=rate_limited#subscriptions') }), async (c) => {
     const user = await currentUser(c, runtime);
     if (!user) return c.redirect('/login?returnTo=/');
     if (!runtime.store.createSubscription || !runtime.store.listSubscriptions) return c.text('Subscriptions are not supported by this store', 501);
@@ -1939,13 +1940,16 @@ export function createApp(runtime: Runtime): Hono {
     return c.redirect('/me?subscriptions=webhook#subscriptions');
   });
 
-  app.post('/me/telegram', rateLimit({ windowMs: 60_000, max: 5 }), async (c) => {
+  app.get('/me/telegram', (c) => c.redirect('/me#subscriptions'));
+
+  app.post('/me/telegram', rateLimit({ windowMs: 60_000, max: 20, onLimit: (c) => c.redirect('/me?subscriptions=rate_limited#subscriptions') }), async (c) => {
     const user = await currentUser(c, runtime);
     if (!user) return c.redirect('/login?returnTo=/me');
     if (!subscriptionBotUsername || !runtime.store.setTelegramLinkCode) return c.redirect('/me?subscriptions=no_bot#subscriptions');
     const code = randomBytes(18).toString('base64url');
     await runtime.store.setTelegramLinkCode(user.id, code, new Date(Date.now() + 60 * 60_000).toISOString());
-    return c.redirect(`https://t.me/${subscriptionBotUsername}?start=${code}`);
+    c.header('Cache-Control', 'no-store');
+    return c.html(await renderProfile(c, { telegramLinkCode: code }));
   });
 
   // The version of the extension this server hands out, shown on /extension.

@@ -11,7 +11,7 @@ import {
 } from '../src/core/subscriptions.ts';
 import type { Lead } from '../src/core/types.ts';
 import { deliverDueSubscriptions, handleTelegramUpdate, pollTelegramUpdates, type SubscriptionDeps } from '../src/pipeline/subscriptions.ts';
-import { createApp, subscriptionDeps } from '../src/server/app.ts';
+import { createApp, startSubscriptionBot, subscriptionDeps } from '../src/server/app.ts';
 import { MemoryStore } from '../src/store/memory.ts';
 import { createTestStore, makeTestRuntime, makeUserSession } from './helpers.ts';
 
@@ -324,6 +324,45 @@ describe('subscription routes', () => {
     expect(guest.headers.get('location')).toContain('/login');
     const page = await (await app.request('/?skill=Python')).text();
     expect(page).toContain('href="/login?returnTo=%2F%3Fskill%3DPython"');
+    await runtime.store.close();
+  });
+
+  it('renders direct tg://, t.me and manual /start code on /me/telegram and redirects smoothly on rate limit', async () => {
+    const runtime = makeTestRuntime({ TELEGRAM_BOT_TOKEN: 'bot-token', RADAR_SUBSCRIPTION_BOT: true, RADAR_PUBLIC_READ: true });
+    const ctrl = new AbortController();
+    runtime.fetchImpl = (async (url: string) => {
+      const endpoint = String(url).split('/').pop();
+      if (endpoint === 'getMe') {
+        return new Response(JSON.stringify({ ok: true, result: { username: 'openradarsbot' } }), { status: 200 });
+      }
+      if (endpoint === 'getUpdates') {
+        ctrl.abort();
+        return new Response(JSON.stringify({ ok: true, result: [] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: true, result: true }), { status: 200 });
+    }) as typeof fetch;
+
+    await startSubscriptionBot(runtime, ctrl.signal);
+    const app = createApp(runtime);
+    const session = await makeUserSession(runtime);
+
+    const getRes = await app.request('/me/telegram');
+    expect(getRes.status).toBe(302);
+    expect(getRes.headers.get('location')).toBe('/me#subscriptions');
+
+    let lastHtml = '';
+    for (let i = 0; i < 20; i++) {
+      const res = await app.request('/me/telegram', post('/me/telegram', session, {}));
+      expect(res.status).toBe(200);
+      lastHtml = await res.text();
+    }
+    expect(lastHtml).toContain('tg://resolve?domain=openradarsbot&amp;start=');
+    expect(lastHtml).toContain('https://t.me/openradarsbot?start=');
+    expect(lastHtml).toContain('/start ');
+
+    const limited = await app.request('/me/telegram', post('/me/telegram', session, {}));
+    expect(limited.status).toBe(302);
+    expect(limited.headers.get('location')).toBe('/me?subscriptions=rate_limited#subscriptions');
     await runtime.store.close();
   });
 

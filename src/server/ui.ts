@@ -4357,6 +4357,8 @@ export interface ProfilePageData {
     /** The hub runs a subscription bot (RADAR_SUBSCRIPTION_BOT). */
     botAvailable: boolean;
     botUsername?: string;
+    /** Fresh one-time link code for /start in the bot, shown right after clicking Connect. */
+    linkCode?: string;
     /** Result of the last action: created, deleted, limit, bad_url… */
     notice?: string;
   };
@@ -4792,6 +4794,7 @@ const SUBSCRIPTION_NOTICES: Record<SupportedLang, Record<string, string>> = {
     bad_url: 'Адрес вебхука не подходит: нужен https-адрес в интернете, не во внутренней сети.',
     no_bot: 'На этом узле Telegram-бот не настроен.',
     not_found: 'Такой подписки нет.',
+    rate_limited: 'Слишком много попыток — подождите минуту и попробуйте снова.',
   },
   en: {
     created: 'Subscription created. Its new leads arrive no earlier than they appear in your feed.',
@@ -4806,6 +4809,7 @@ const SUBSCRIPTION_NOTICES: Record<SupportedLang, Record<string, string>> = {
     bad_url: 'That webhook URL will not do: it must be a public https address.',
     no_bot: 'This node has no Telegram bot.',
     not_found: 'No such subscription.',
+    rate_limited: 'Too many attempts — wait a minute and try again.',
   },
 };
 
@@ -4813,11 +4817,22 @@ function renderSubscriptions(data: NonNullable<ProfilePageData['subscriptions']>
   const ru = lang === 'ru';
   const notice = data.notice ? SUBSCRIPTION_NOTICES[lang][data.notice] : undefined;
   const bot = data.botUsername ? `@${data.botUsername}` : (ru ? 'бот' : 'the bot');
+  const linkCard = data.linkCode && data.botUsername
+    ? (() => {
+        const deepLink = `tg://resolve?domain=${encodeURIComponent(data.botUsername)}&start=${encodeURIComponent(data.linkCode)}`;
+        const webLink = `https://t.me/${encodeURIComponent(data.botUsername)}?start=${encodeURIComponent(data.linkCode)}`;
+        return `<div class="notice">
+          <p><strong>${ru ? 'Код привязки готов (действует 1 час):' : 'Link code ready (valid for 1 hour):'}</strong></p>
+          <p><a class="btn" href="${escapeHtml(deepLink)}">${icon('send')}${ru ? 'Открыть в приложении Telegram' : 'Open in Telegram app'}</a> <a class="btn ghost" href="${escapeHtml(webLink)}" target="_blank" rel="noopener noreferrer">${ru ? 'Через браузер (t.me)' : 'Open via t.me'}</a></p>
+          <p class="muted small">${ru ? `Если клиент не открылся автоматически, отправьте ${escapeHtml(bot)} команду вручную:` : `If the app did not open, send ${escapeHtml(bot)} this command:`} <code>/start ${escapeHtml(data.linkCode)}</code></p>
+        </div>`;
+      })()
+    : '';
   const telegram = data.telegramLinked
     ? `<p class="small">${ru ? `Подписки приходят в Telegram от ${escapeHtml(bot)}. Отключить — командой /stop боту.` : `Subscriptions arrive in Telegram from ${escapeHtml(bot)}. Unlink with /stop to the bot.`}</p>`
-    : data.botAvailable
-      ? `<form method="post" action="/me/telegram"><button class="btn ghost" type="submit">${icon('send')}${ru ? 'Получать подписки в Telegram' : 'Get subscriptions in Telegram'}</button> <span class="muted small">${ru ? `откроется ${escapeHtml(bot)}, нажмите «Start»` : `${escapeHtml(bot)} opens, press Start`}</span></form>`
-      : `<p class="muted small">${ru ? 'Telegram-бот на этом узле не настроен: подписки можно получать на вебхук.' : 'This node has no Telegram bot: use a webhook.'}</p>`;
+    : linkCard || (data.botAvailable
+      ? `<form method="post" action="/me/telegram"><button class="btn ghost" type="submit">${icon('send')}${ru ? 'Получать подписки в Telegram' : 'Get subscriptions in Telegram'}</button> <span class="muted small">${ru ? `появится кнопка для ${escapeHtml(bot)}` : `creates a link for ${escapeHtml(bot)}`}</span></form>`
+      : `<p class="muted small">${ru ? 'Telegram-бот на этом узле не настроен: подписки можно получать на вебхук.' : 'This node has no Telegram bot: use a webhook.'}</p>`);
   const rows = data.list.map((s) => {
     const feed = `/?${feedQuery(s.filters)}`;
     const where = s.channel === 'webhook'

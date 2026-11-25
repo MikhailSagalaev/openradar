@@ -12,6 +12,8 @@ interface RateLimitOptions {
   keyFrom?: (c: Context) => string | undefined;
   /** Per-route override of the process-wide trusted-proxy setting. */
   trustProxy?: boolean;
+  /** Optional HTML/redirect response when a form endpoint exceeds its limit. */
+  onLimit?: (c: Context, retryAfterSec: number) => Response | Promise<Response>;
 }
 
 // Deployment invariant: forwarded headers are only trustworthy behind a proxy that
@@ -62,6 +64,7 @@ export function rateLimit(options: RateLimitOptions) {
       const retryAfterSec = Math.ceil((hits[0]! + options.windowMs - now) / 1000);
       c.header('retry-after', String(Math.max(1, retryAfterSec)));
       c.header('x-ratelimit-remaining', '0');
+      if (options.onLimit) return options.onLimit(c, Math.max(1, retryAfterSec));
       return c.json({ error: 'rate_limited' }, 429);
     }
     hits.push(now);
