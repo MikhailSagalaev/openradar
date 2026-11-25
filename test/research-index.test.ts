@@ -118,4 +118,13 @@ describe('openradar index', () => {
     expect(indexCsv(index)).toContain(`,intl-job,`);
     expect(indexCsv(index)).toContain(`,intl-gig,`);
   });
+  it("excludes international boards from RU panel byPlatform even if scope is ru", () => {
+    const days = ["2026-11-10", "2026-11-11", "2026-11-12", "2026-11-13", "2026-11-14", "2026-11-15", "2026-11-16"];
+    const rows = days.flatMap((day) => [
+      { day, type: "job" as const, platform: "hh.ru", role: "backend", scope: "ru" as const, n: 20, panelN: 18 },
+      { day, type: "job" as const, platform: "himalayas.app", role: "backend", scope: "ru" as const, n: 10, panelN: 10 },
+    ]);
+    const built = buildIndex(rows, new Date("2026-11-17T12:00:00Z"));
+    expect((built.byPlatform ?? []).map((p) => p.platform)).toEqual(["hh.ru"]);
+  });
 });

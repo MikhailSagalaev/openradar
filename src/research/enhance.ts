@@ -33,6 +33,11 @@ const ENHANCE_STYLE = `<style id="rs-enhance-style">
   flex: 1 1 320px;
   min-width: 0;
 }
+@media (max-width: 700px) {
+  .page-head > div:first-child {
+    flex: 0 1 auto;
+  }
+}
 .page-head .actions {
   flex-wrap: wrap;
   align-items: center;
@@ -54,6 +59,8 @@ const ENHANCE_STYLE = `<style id="rs-enhance-style">
   border-radius: 8px;
   background: var(--surface);
   padding: 14px 16px;
+  min-width: 0;
+  overflow: hidden;
 }
 .rs-formula-math {
   overflow-x: auto;
@@ -113,7 +120,7 @@ const ENHANCE_STYLE = `<style id="rs-enhance-style">
     font-size: 18px;
   }
   td {
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
   }
 }
 /* Long tokens (ids, formula names, URLs) must never stretch a page sideways. */

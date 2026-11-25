@@ -1235,9 +1235,20 @@ function buildProgram(): Command {
       // The stdio loop outlives this action: keep the runtime open until stdin closes.
       const runtime = await createRuntime();
       const { startMcpStdio } = await import('../mcp/server.ts');
+      const { liveReport, monthSnapshot } = await import('../research/service.ts');
+      const { openradarIndex } = await import('../research/index.ts');
       await startMcpStdio({
         listLeads: (options) => runtime.store.listLeads(options),
         getLead: (id) => runtime.store.getLead(id),
+        getResearchReport: async (options) => {
+          if (options?.period && /^\d{4}-\d{2}$/.test(options.period)) {
+            return (await monthSnapshot(runtime.store, options.period)) ?? { error: `No snapshot found for period ${options.period}` };
+          }
+          const { report } = await liveReport(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY });
+          if (options?.role) return report.jobs.roles.find((r) => r.slug === options.role) ?? { error: `Role ${options.role} not found` };
+          return report;
+        },
+        getResearchIndex: async () => openradarIndex(runtime.store, new Date(), { useModel: runtime.env.RADAR_EXTRACT_APPLY }),
       });
       await runtime.store.close();
     });

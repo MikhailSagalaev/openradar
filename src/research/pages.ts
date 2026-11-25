@@ -1481,6 +1481,7 @@ ${scholarMetaTags({ title, baseUrl, path: reportUrl(report), dateIso: report.gen
 <link rel="canonical" href="${escapeHtml(`${baseUrl}${reportUrl(report)}`)}">
 <link rel="alternate" hreflang="ru" href="${escapeHtml(`${baseUrl}${reportUrl(report)}`)}">
 <link rel="alternate" hreflang="en" href="${escapeHtml(`${baseUrl}/en${reportUrl(report)}`)}">
+<link rel="alternate" hreflang="x-default" href="${escapeHtml(`${baseUrl}${reportUrl(report)}`)}">
 <script type="application/ld+json">
 ${jsonForScript(dataset)}
 </script>`,
@@ -1576,7 +1577,7 @@ export function renderEmbedPage(options: { chartId: string; report: Report; base
     .rs-diff-down { color: var(--rose); font-weight: 600; font-family: monospace; }
     .rs-diff-up { color: var(--emerald); font-weight: 600; font-family: monospace; }
     .rs-bump-box { border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: var(--bg); overflow-x: auto; }
-    .rs-bump-svg { width: 100%; height: auto; min-width: 460px; }
+    .rs-bump-svg { width: 100%; height: auto; display: block; }
     .bump-spline { transition: d 0.45s cubic-bezier(0.4, 0, 0.2, 1); }
     .embed-footer { margin-top: 14px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; align-items: center; }
     .embed-footer a { color: var(--ink); text-decoration: none; font-weight: 500; }
@@ -2350,7 +2351,7 @@ export function renderMethodologyPage(options: { baseUrl: string; version: strin
   </ul>
 
   <h2>6. Классификация направлений, грейдов и навыков</h2>
-  <p>Направление (25 специализаций для вакансий и заказов: ${escapeHtml(roles)}) определяется приоритетным каскадом регулярных выражений по заголовку, а при размытом заголовке («Специалист», «Инженер») — по полю специализации площадки и первым строкам описания. Физический и линейный персонал розницы, складов и курьерских служб жёстко изолируется в категорию «Другое» и исключается из лестницы IT-грейдов.</p>
+  <p>Направление (39 специализаций для вакансий и заказов: ${escapeHtml(roles)}) определяется приоритетным каскадом регулярных выражений по заголовку, а при размытом заголовке («Специалист», «Инженер») — по полю специализации площадки и первым строкам описания. Физический и линейный персонал розницы, складов и курьерских служб жёстко изолируется в категорию «Другое» и исключается из лестницы IT-грейдов.</p>
   <p>Грейд (<code>Стажёр</code>, <code>Junior</code>, <code>Middle</code>, <code>Senior</code>, <code>Lead</code>) определяется по заголовку, полю квалификации площадки, явным строкам <code>Грейд: / Уровень:</code> в описании и тегам <code>#junior..#lead</code>. При указании смежного грейда («Middle+/Senior») фиксируется верхний уровень. В общей лестнице грейдов русскоязычные прилагательные «старший / ведущий / руководитель» не применяются к не-IT ролям и рознице, чтобы линейные позиции («Старший кассир», «Старший смены») не занижали медиану уровня Senior (эффект парадокса Симпсона).</p>
   <p>В рейтинге навыков обобщённые названия рубрик («Разработка», «Маркетинг», «Продажи», «Дизайн») отфильтровываются — остаются только конкретные технологии, языки, фреймворки и инструменты. Исходный код правил открыт: <a href="${REPO_URL}/blob/main/src/research/derive.ts" target="_blank" rel="noopener">src/research/derive.ts</a>.</p>
 
@@ -2415,7 +2416,7 @@ export function renderMethodologyPage(options: { baseUrl: string; version: strin
         <tr><td><code>date</code></td><td>YYYY-MM-DD</td><td>Дата публикации вакансии или заказа (UTC)</td></tr>
         <tr><td><code>type</code></td><td>enum</td><td>Тип публикации: <code>job</code> (вакансия в штат) или <code>gig</code> (проектный фриланс-заказ)</td></tr>
         <tr><td><code>platform</code></td><td>string</td><td>Код площадки или источника (например, <code>hh.ru</code>, <code>career.habr.com</code>, <code>kwork.ru</code>, <code>telegram</code>)</td></tr>
-        <tr><td><code>role</code></td><td>enum</td><td>Код специализации (25 направлений: <code>backend</code>, <code>frontend</code>, <code>devops</code>, <code>data</code>, <code>qa</code> и др.)</td></tr>
+        <tr><td><code>role</code></td><td>enum</td><td>Код специализации (39 направлений + <code>other</code>: <code>backend</code>, <code>frontend</code>, <code>devops</code>, <code>data-engineer</code>, <code>qa</code> и др.)</td></tr>
         <tr><td><code>grade</code></td><td>enum</td><td>Квалификационный грейд: <code>intern</code>, <code>junior</code>, <code>middle</code>, <code>senior</code>, <code>lead</code> (пусто, если не указан)</td></tr>
         <tr><td><code>language</code></td><td>string</td><td>Основной язык программирования для разработчиков (<code>Go</code>, <code>Python</code>, <code>TypeScript</code>, <code>Rust</code>, <code>1С</code> и др.)</td></tr>
         <tr><td><code>region</code></td><td>enum</td><td>Макрорегион РФ: <code>Москва</code>, <code>Санкт-Петербург</code>, <code>Другие города</code>, <code>Не указан</code></td></tr>
@@ -2423,9 +2424,9 @@ export function renderMethodologyPage(options: { baseUrl: string; version: strin
         <tr><td><code>company</code></td><td>string</td><td>Нормализованное название работодателя (для вакансий)</td></tr>
         <tr><td><code>pay_min_rub</code> / <code>pay_max_rub</code></td><td>integer</td><td>Нижняя и верхняя границы заявленной вилки в рублях (по курсу Банка России на месяц публикации)</td></tr>
         <tr><td><code>pay_rub</code></td><td>integer</td><td>Точечная оценка оплаты в рублях (середина полной вилки или единственная указанная граница)</td></tr>
-        <tr><td><code>pay_period</code></td><td>enum</td><td>Расчётный период: <code>month</code> (в месяц), <code>project</code> (за проект), <code>hour</code> (в час), <code>day</code> (в смену)</td></tr>
+        <tr><td><code>pay_period</code></td><td>enum</td><td>Расчётный период: <code>month</code> (в месяц), <code>project</code> (за проект), <code>hour</code> (в час)</td></tr>
         <tr><td><code>currency</code></td><td>ISO 4217</td><td>Исходная валюта публикации (<code>RUB</code>, <code>USD</code>, <code>EUR</code>, <code>KZT</code>, <code>BYN</code>)</td></tr>
-        <tr><td><code>pay_origin</code></td><td>enum</td><td>Источник извлечения цены: <code>page</code> (schema.org), <code>board</code> (поле биржи), <code>text</code> (парсер), <code>model</code> (LLM)</td></tr>
+        <tr><td><code>pay_origin</code></td><td>enum</td><td>Источник извлечения цены: <code>page</code> (разметка страницы), <code>budget</code> (поле биржи), <code>text</code> (парсер), <code>model</code> (LLM)</td></tr>
         <tr><td><code>ai_mention</code></td><td>0 | 1</td><td>Индикатор упоминания технологий ИИ / LLM / RAG / ML в требованиях (<code>1</code> — да, <code>0</code> — нет)</td></tr>
         <tr><td><code>skills</code></td><td>string</td><td>Список нормализованных технологических навыков и инструментов через точку с запятой (<code>;</code>)</td></tr>
         <tr><td><code>scope</code></td><td>enum</td><td>Языковой контур рынка: <code>ru</code> (русскоязычный рынок) или <code>intl</code> (международный англоязычный рынок)</td></tr>
@@ -2504,7 +2505,7 @@ export function renderAcademicPaperLatex(report: Report, baseUrl = "https://open
       ? [
           "\\begin{table}[htbp]",
           "\\centering",
-          `\\caption{Mincerian Log-Wage OLS Regression (N = ${mincer.n}, R^2 = ${mincer.r2.toFixed(3)}, F = ${mincer.fStat})}`,
+          `\\caption{Mincerian Log-Wage OLS Regression ($N = ${mincer.n}$, $R^2 = ${mincer.r2.toFixed(3)}$, $F = ${mincer.fStat}$)}`,
           "\\begin{tabular}{lrrrrr}",
           "\\toprule",
           "Variable & Coeff. $\\hat{\\beta}$ & Robust SE (HC1) & $t$-stat & $p$-value & Semi-elasticity $\\Delta\\%$ \\\\",
