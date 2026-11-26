@@ -1,6 +1,6 @@
 # openradar
 
-<p align="right"><a href="README.md">English</a> · <b>Русский</b></p>
+<p align="right"><a href="README.md">English</a> · <b>Русский</b> · <a href="README.zh-CN.md">简体中文</a></p>
 
 <p align="center">
   <picture>

@@ -1,0 +1,10 @@
+{
+  "name": "openradar",
+  "version": "0.85.0",
+  "description": "Open base of IT, digital & creative job vacancies and freelance orders. Search leads, benchmark posted pay, generate X-Ray sourcing dorks, and contribute leads.",
+  "mcpServers": {
+    "openradar": {
+      "httpUrl": "https://openradar.fun/mcp"
+    }
+  }
+}

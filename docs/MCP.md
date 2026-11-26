@@ -18,11 +18,45 @@ claude mcp add --transport http openradar https://openradar.fun/mcp
 { "mcpServers": { "openradar": { "url": "https://openradar.fun/mcp" } } }
 ```
 
-**Gemini CLI**, файл `~/.gemini/settings.json`:
+**Gemini CLI**, одной командой как расширение или в файле `~/.gemini/settings.json`:
+
+```bash
+gemini extensions install https://github.com/MikhailSagalaev/openradar
+```
 
 ```json
 { "mcpServers": { "openradar": { "httpUrl": "https://openradar.fun/mcp" } } }
 ```
+
+**OpenCode**, файл `opencode.json` (в проекте или `~/.config/opencode/opencode.json`):
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "openradar": {
+      "type": "remote",
+      "url": "https://openradar.fun/mcp",
+      "enabled": true
+    }
+  }
+}
+```
+
+**Qwen Code / iFlow CLI / Kimi CLI / Trae**, например в `~/.qwen/settings.json` или `~/.iflow/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "openradar": {
+      "httpUrl": "https://openradar.fun/mcp",
+      "timeout": 30000
+    }
+  }
+}
+```
+
+В **Trae** и **Kimi CLI** добавьте удалённый Streamable HTTP сервер с тем же адресом `https://openradar.fun/mcp`.
 
 **VS Code**, файл `.vscode/mcp.json`:
 
