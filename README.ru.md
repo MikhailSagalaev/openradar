@@ -14,6 +14,7 @@
   <a href="https://openradar.fun"><img src="https://img.shields.io/badge/live-openradar.fun-10b981.svg" alt="Хаб: openradar.fun"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPLv3-blue.svg" alt="Лицензия: AGPL v3"></a>
   <a href="docs/PROTOCOL.md"><img src="https://img.shields.io/badge/protocol-radar%2F2-purple.svg" alt="Протокол: radar/2"></a>
+  <a href="https://glama.ai/mcp/servers/MikhailSagalaev/openradar"><img src="https://glama.ai/mcp/servers/MikhailSagalaev/openradar/badges/score.svg" alt="MikhailSagalaev/openradar MCP server"></a>
 </p>
 
 openradar — открытая база вакансий и заказов в IT, digital и креативных индустриях. Парсеры, узлы и люди добавляют посты с бирж, карьерных сайтов, из RSS-лент, Telegram-каналов и почтовых рассылок; хаб склеивает дубли и держит одну чистую ленту.

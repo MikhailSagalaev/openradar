@@ -2056,6 +2056,23 @@ legend {
 .subscription-actions .inline-form { display: flex; gap: 6px; margin: 0; }
 .subscription-actions input[type=url] { width: 220px; max-width: 100%; min-height: 30px; font-size: 12px; padding: 0 12px; }
 .btn.small { font-size: 12px; padding: 4px 10px; }
+.filter-bar .btn.ghost.filter-follow {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+  border-color: var(--line);
+  background: var(--surface);
+  box-sizing: border-box;
+}
+.filter-bar .btn.ghost.filter-follow:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-hover);
+  box-shadow: none;
+}
+.tg-connect-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 14px; }
+.tg-link-card { display: grid; gap: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 14px; background: var(--surface); margin-bottom: 16px; }
+.tg-link-title { font-size: 13px; font-weight: 600; }
 .code-block { overflow-x: auto; margin: 8px 0 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--soft); font-size: 12px; line-height: 1.5; }
 .follow-form { display: inline; margin: 0; }
 .ai-box {
@@ -2372,6 +2389,7 @@ footer {
   .custom-dropdown-btn { width: 100%; justify-content: space-between; height: 38px; min-height: 38px; font-size: 14px; }
   .custom-dropdown-menu { max-width: calc(100vw - 32px); width: 100%; }
   .filter-check { flex: 1 1 calc(50% - 4px); justify-content: center; height: 38px; min-height: 38px; }
+  .filter-bar .btn.ghost.filter-follow { height: 38px; min-height: 38px; padding: 0 14px; }
   .filter-rss { display: inline-flex; align-items: center; height: 38px; padding: 0 14px; border: 1px solid var(--line); border-radius: 9999px; font-size: 13px; color: var(--ink); }
   .search-bar .search-kbd, .search-bar .search-rss-inside { display: none; }
   /* The feed starts higher: a smaller title and tighter gaps above it. */
@@ -4390,7 +4408,6 @@ const ICON_PATHS: Record<string, string> = {
   plus: '<path d="M12 5v14M5 12h14"/>',
   trash: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
-  send: '<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>',
   folder: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
 };
 
@@ -4824,17 +4841,20 @@ function renderSubscriptions(data: NonNullable<ProfilePageData['subscriptions']>
     ? (() => {
         const deepLink = `tg://resolve?domain=${encodeURIComponent(data.botUsername)}&start=${encodeURIComponent(data.linkCode)}`;
         const webLink = `https://t.me/${encodeURIComponent(data.botUsername)}?start=${encodeURIComponent(data.linkCode)}`;
-        return `<div class="notice">
-          <p><strong>${ru ? 'Код привязки готов (действует 1 час):' : 'Link code ready (valid for 1 hour):'}</strong></p>
-          <p><a class="btn" href="${escapeHtml(deepLink)}">${icon('send')}${ru ? 'Открыть в приложении Telegram' : 'Open in Telegram app'}</a> <a class="btn ghost" href="${escapeHtml(webLink)}" target="_blank" rel="noopener noreferrer">${ru ? 'Через браузер (t.me)' : 'Open via t.me'}</a></p>
-          <p class="muted small">${ru ? `Если клиент не открылся автоматически, отправьте ${escapeHtml(bot)} команду вручную:` : `If the app did not open, send ${escapeHtml(bot)} this command:`} <code>/start ${escapeHtml(data.linkCode)}</code></p>
+        return `<div class="tg-link-card">
+          <div class="tg-link-title">${ru ? 'Код привязки готов' : 'Link code ready'} <span class="muted small">· ${ru ? 'действует 1 час' : 'valid for 1 hour'}</span></div>
+          <div class="subscription-actions">
+            <a class="btn small" href="${escapeHtml(deepLink)}">${ru ? 'Открыть в Telegram' : 'Open in Telegram'}</a>
+            <a class="btn ghost small" href="${escapeHtml(webLink)}" target="_blank" rel="noopener noreferrer">${ru ? 'Через браузер (t.me)' : 'Open via t.me'}</a>
+          </div>
+          <div class="muted small">${ru ? `Если клиент не открылся — отправьте ${escapeHtml(bot)} вручную:` : `If the app did not open, send ${escapeHtml(bot)}:`} <code>/start ${escapeHtml(data.linkCode)}</code></div>
         </div>`;
       })()
     : '';
   const telegram = data.telegramLinked
     ? `<p class="small">${ru ? `Подписки приходят в Telegram от ${escapeHtml(bot)}. Отключить — командой /stop боту.` : `Subscriptions arrive in Telegram from ${escapeHtml(bot)}. Unlink with /stop to the bot.`}</p>`
     : linkCard || (data.botAvailable
-      ? `<form method="post" action="/me/telegram"><button class="btn ghost" type="submit">${icon('send')}${ru ? 'Получать подписки в Telegram' : 'Get subscriptions in Telegram'}</button> <span class="muted small">${ru ? `появится кнопка для ${escapeHtml(bot)}` : `creates a link for ${escapeHtml(bot)}`}</span></form>`
+      ? `<form method="post" action="/me/telegram" class="tg-connect-row"><button class="btn ghost small" type="submit">${ru ? 'Получать подписки в Telegram' : 'Get subscriptions in Telegram'}</button><span class="muted small">${ru ? `бот ${escapeHtml(bot)}` : `via ${escapeHtml(bot)}`}</span></form>`
       : `<p class="muted small">${ru ? 'Telegram-бот на этом узле не настроен: подписки можно получать на вебхук.' : 'This node has no Telegram bot: use a webhook.'}</p>`);
   const rows = data.list.map((s) => {
     const feed = `/?${feedQuery(s.filters)}`;

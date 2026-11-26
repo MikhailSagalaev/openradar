@@ -15,6 +15,7 @@
   <a href="docs/stories.json"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FMikhailSagalaev%2Fopenradar%2Fmain%2Fdocs%2Fstories.json&query=%24.count&label=%F0%9F%8E%89%20found%20work%20through%20openradar&suffix=%20on%20the%20record&color=2ea44f" alt="Stories of work found through openradar"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPLv3-blue.svg" alt="License: AGPL v3"></a>
   <a href="docs/PROTOCOL.md"><img src="https://img.shields.io/badge/protocol-radar%2F2-purple.svg" alt="Protocol: radar/2"></a>
+  <a href="https://glama.ai/mcp/servers/MikhailSagalaev/openradar"><img src="https://glama.ai/mcp/servers/MikhailSagalaev/openradar/badges/score.svg" alt="MikhailSagalaev/openradar MCP server"></a>
 </p>
 
 openradar is an open base of job vacancies and freelance orders in IT, digital and creative industries. Parsers, nodes and people add posts from boards, career sites, RSS feeds, Telegram channels and email alerts; the hub merges duplicates and keeps one clean feed.
