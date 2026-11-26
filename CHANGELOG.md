@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.87.0 — 2026-11-26
+
+- **Stage 1 — Structural Offer Gate & hard non-offer rejection**: tightened `hasWorkOfferSignals` so editorial/question titles and course/promo posts in job channels are no longer treated as work offers merely for mentioning a profession or seniority word in the title; added structural candidate-CV detection (`Желаемая должность:`, `Ожидаемая ЗП:`, `Мой стек:`, `Моё портфолио:`, `В активном поиске работы`, `Открыт к предложениям о работе`, `#opentowork`); posts flagged as `channel_ad`, `mlm`, or `mystery_shopper` now automatically receive `status = 'rejected'` at ingest and during `rescoreLeads`/`refilterLeads` instead of only a score penalty.
+- **Stage 2 — Closed feedback loop from background LLM (`isPost: false`) to feed status**: `saveLeadModelFacts` in Postgres and Memory stores (as well as startup `refilterLeads`) now automatically transitions leads to `status = 'rejected'` (`model:not_a_post:<confidence>`) whenever the background LLM classifies a post as `isPost: false` with `confidence >= 0.8`.
+- **Stage 3 — Digest isolation**: multi-vacancy roundups (`digest`) no longer receive a false single-vacancy seniority `grade` at ingest and are demoted below single vacancies in default `sort=score` feed ranking.
+
 ## 0.86.0 — 2026-11-26
 
 - **High-density typewriter / agent-first UI pass**: removed circular border and background plate from the header theme toggle icon (`.theme-btn`), removed background plates and pill borders from main-page filter dropdown triggers and checkboxes (`.custom-dropdown-btn`, `.filter-check`, `.custom-dropdown-count`), removed the plate and border from card seniority badges (`.tag-grade`), tightened vertical row padding so ~40% more leads fit above the fold, and switched scores/counts/grades to tabular monospace numerals.

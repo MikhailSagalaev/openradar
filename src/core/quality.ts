@@ -181,10 +181,13 @@ export function hasWorkOfferSignals(lead: Pick<QualityInput, 'title' | 'text' | 
   if (lead.budget !== undefined) return true;
   const head = `${lead.title}\n${lead.text}`.slice(0, 1500);
   if (SERVICE_OFFER.test(head)) return false;
-  const explicitOffer = HIRING.test(head) || GIG_SIGNALS.test(head) || NAMED_VACANCY.test(head.slice(0, 400)) || distinctMatches(head, VACANCY_SIGNALS) > 0;
-  if (explicitOffer) return true;
-  if (EDITORIAL_TITLE.test(lead.title.trim()) || distinctMatches(head, CHANNEL_CONTENT) > 0) return false;
-  return POSITION_WORD.test(lead.title) || NAMED_VACANCY.test(lead.title);
+  const vacancySignals = distinctMatches(head, VACANCY_SIGNALS);
+  const isPromoOrEditorial = EDITORIAL_TITLE.test(lead.title.trim()) || distinctMatches(head, CHANNEL_CONTENT) > 0;
+  if (isPromoOrEditorial) {
+    return HIRING.test(head) || GIG_SIGNALS.test(head) || NAMED_VACANCY.test(head.slice(0, 400)) || vacancySignals >= 3;
+  }
+  if (POSITION_WORD.test(lead.title) || NAMED_VACANCY.test(lead.title)) return true;
+  return HIRING.test(head) || GIG_SIGNALS.test(head) || NAMED_VACANCY.test(head.slice(0, 400)) || vacancySignals > 0;
 }
 
 export function assessQuality(lead: QualityInput, source: QualitySource): QualityAssessment {
