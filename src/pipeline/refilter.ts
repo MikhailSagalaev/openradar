@@ -1,4 +1,6 @@
+import { isRejectedQuality, qualityFlagsOf } from '../core/quality.ts';
 import { auditSpamReasons, spamReasons } from '../core/rules.ts';
+import { MIN_CONFIDENCE, modelFactsOf } from '../research/derive.ts';
 import type { Store } from '../core/store.ts';
 
 /** Leads read per store call: the stores cap a listing at 5000. */
@@ -56,8 +58,18 @@ export async function refilterLeads(
       checked += 1;
       if (lead.status !== 'rejected') {
         const reasons = options.all
-          ? spamReasons(lead.title, lead.text, lead.currency)
-          : auditSpamReasons(lead.title, lead.text);
+          ? [...spamReasons(lead.title, lead.text, lead.currency)]
+          : [...auditSpamReasons(lead.title, lead.text)];
+        const model = modelFactsOf(lead);
+        if (model && model.isPost === false && model.confidence >= MIN_CONFIDENCE) {
+          reasons.push(`model:not_a_post:${model.confidence.toFixed(2)}`);
+        }
+        const qFlags = qualityFlagsOf(lead);
+        if (isRejectedQuality(qFlags)) {
+          for (const f of qFlags) {
+            if (isRejectedQuality([f])) reasons.push(`quality:${f}`);
+          }
+        }
         if (reasons.length > 0) {
           matched += 1;
           if (samples.length < 25) samples.push({ id: lead.id, title: lead.title, reasons });

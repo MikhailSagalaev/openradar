@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assessQuality, detectPostType, qualityFlagsOf, qualityPenaltyOf } from '../src/core/quality.ts';
+import { assessQuality, detectPostType, hasWorkOfferSignals, isRejectedQuality, qualityFlagsOf, qualityPenaltyOf } from '../src/core/quality.ts';
 import { ingestRawLead } from '../src/pipeline/ingest.ts';
 import { rescoreLeads } from '../src/pipeline/rescore.ts';
 import { makeTestRuntime, TEST_NOW } from './helpers.ts';
@@ -93,6 +93,8 @@ describe('quality stage', () => {
     );
 
     const adLead = (await runtime.store.getLead(ad.lead!.id))!;
+    expect(ad.status).toBe('rejected');
+    expect(adLead.status).toBe('rejected');
     expect(qualityFlagsOf(adLead)).toEqual(['channel_ad']);
     expect(ad.reasons).toContain('quality:channel_ad');
     expect((await runtime.store.getLead(vacancy.lead!.id))!.type).toBe('job');
@@ -120,5 +122,28 @@ describe('quality stage', () => {
       'job',
     );
     expect(weekend.flags).toContain('digest');
+  });
+  it('rejects editorial and course posts in hasWorkOfferSignals even when title names a role, and clears single grade on digests', async () => {
+    expect(hasWorkOfferSignals({ title: 'Как Системному аналитику вырасти до Senior?', text: 'Разбираем кейсы на вебинаре' })).toBe(false);
+    expect(hasWorkOfferSignals({ title: 'Системный аналитик в финтех', text: 'Оклад от 250 000 руб, удаленно' })).toBe(true);
+    expect(isRejectedQuality(['channel_ad'])).toBe(true);
+    expect(isRejectedQuality(['mlm'])).toBe(true);
+    expect(isRejectedQuality(['digest'])).toBe(false);
+
+    const runtime = makeTestRuntime();
+    const source = await runtime.store.createSource({ kind: 'telegram', title: 'Jobs', config: { channel: 'devjobs' } });
+    const deps = { store: runtime.store, sinks: runtime.sinks, logger: runtime.logger, env: runtime.env, now: () => TEST_NOW };
+    const digestOut = await ingestRawLead(
+      {
+        sourceId: source.id,
+        externalId: 'dig-1',
+        title: 'Дайджест выходного дня: 5 вакансий',
+        text: 'Дайджест выходного дня:\n- Senior Go Developer в Acme\n- Junior QA в Beta\n- Middle Python в Gamma',
+      },
+      source,
+      deps,
+    );
+    expect(digestOut.lead?.grade).toBeUndefined();
+    await runtime.store.close();
   });
 });

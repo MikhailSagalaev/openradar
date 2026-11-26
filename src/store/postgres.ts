@@ -1346,7 +1346,7 @@ export class PostgresStore implements Store {
       feedOnly && options.after
         ? 'created_at ASC, id ASC'
         : options.sort === 'score'
-          ? `(score::double precision + EXTRACT(EPOCH FROM (created_at AT TIME ZONE 'UTC')) / ${3600 / SCORE_DECAY_PER_HOUR === 21600 ? '21600.0' : 3600 / SCORE_DECAY_PER_HOUR}) DESC, created_at DESC, id DESC`
+          ? `((CASE WHEN COALESCE(metadata_json->'qualityFlags', '[]'::jsonb) ? 'digest' THEN score - 25 ELSE score END)::double precision + EXTRACT(EPOCH FROM (created_at AT TIME ZONE 'UTC')) / ${3600 / SCORE_DECAY_PER_HOUR === 21600 ? '21600.0' : 3600 / SCORE_DECAY_PER_HOUR}) DESC, created_at DESC, id DESC`
           : options.sort === 'budget'
             ? 'COALESCE(normalized_usd_max, normalized_usd_min) DESC NULLS LAST, created_at DESC, id DESC'
             : options.sort === 'relevance' && queryTsIdx !== undefined
@@ -3250,6 +3250,20 @@ export class PostgresStore implements Store {
 
     const rawStored = stored as { facts?: ModelFacts } | undefined;
     const facts = rawStored?.facts;
+    if (facts && facts.confidence >= MIN_CONFIDENCE && facts.isPost === false) {
+      const reason = `model:not_a_post:${facts.confidence.toFixed(2)}`;
+      await this.pool.query(
+        `UPDATE leads
+            SET status = CASE WHEN status IN ('new', 'delivered') THEN 'rejected' ELSE status END,
+                reasons_json = CASE
+                  WHEN COALESCE(reasons_json, '[]'::jsonb) @> jsonb_build_array($2::text) THEN reasons_json
+                  ELSE COALESCE(reasons_json, '[]'::jsonb) || jsonb_build_array($2::text)
+                END
+          WHERE id = $1`,
+        [id, reason],
+      );
+      return;
+    }
     if (options?.applyToLead && facts && facts.confidence >= MIN_CONFIDENCE && facts.isPost !== false) {
       await this.applyLeadModelEnrichment(id, facts);
     }

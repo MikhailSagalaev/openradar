@@ -851,6 +851,16 @@ export class MemoryStore implements Store {
     lead.metadata = { ...(lead.metadata ?? {}), model: stored };
     const rawStored = stored as { facts?: ModelFacts } | undefined;
     const facts = rawStored?.facts;
+    if (facts && facts.confidence >= MIN_CONFIDENCE && facts.isPost === false) {
+      if (lead.status === 'new' || lead.status === 'delivered') {
+        lead.status = 'rejected';
+      }
+      const reason = `model:not_a_post:${facts.confidence.toFixed(2)}`;
+      if (!lead.reasons.some((r) => r.startsWith('model:not_a_post'))) {
+        lead.reasons = [...lead.reasons, reason];
+      }
+      return;
+    }
     if (options?.applyToLead && facts && facts.confidence >= MIN_CONFIDENCE && facts.isPost !== false) {
       if (facts.skills && Array.isArray(facts.skills) && facts.skills.length > 0) {
         const merged = Array.from(
@@ -1098,7 +1108,8 @@ export class MemoryStore implements Store {
       const order = a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
       if (ascending) return order;
       if (options.sort === 'score') {
-        const ranked = (l: Lead) => l.score - ((now - Date.parse(l.createdAt)) / 3_600_000) * SCORE_DECAY_PER_HOUR;
+        const isDigest = (l: Lead) => Array.isArray(l.metadata?.qualityFlags) && (l.metadata.qualityFlags as string[]).includes('digest');
+        const ranked = (l: Lead) => (isDigest(l) ? l.score - 25 : l.score) - ((now - Date.parse(l.createdAt)) / 3_600_000) * SCORE_DECAY_PER_HOUR;
         if (ranked(a) !== ranked(b)) return ranked(b) - ranked(a);
       }
       if (options.sort === 'budget' && usd(a) !== usd(b)) return usd(b) - usd(a);

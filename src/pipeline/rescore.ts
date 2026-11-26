@@ -1,7 +1,7 @@
 import { cleanTitle, extractBudgetAndCurrency } from '../core/extract.ts';
 import { titleKeyOf } from '../core/fingerprint.ts';
 import { payNotOffered, prepareRawLead } from '../core/prepare.ts';
-import { assessQuality, offersNoPay, qualityFlagsOf, type QualityFlag } from '../core/quality.ts';
+import { assessQuality, isRejectedQuality, offersNoPay, qualityFlagsOf, type QualityFlag } from '../core/quality.ts';
 import { scoreLead } from '../core/rules.ts';
 import { normalizeSalary } from '../core/salary.ts';
 import type { LeadMoney, Store } from '../core/store.ts';
@@ -152,6 +152,10 @@ export async function rescoreLeads(
     if (store.updateLeadQuality && (quality.type !== (lead.type ?? 'gig') || before.join() !== quality.flags.join())) {
       await store.updateLeadQuality(lead.id, quality.type, quality.flags);
       requalified += 1;
+    }
+    if (isRejectedQuality(quality.flags) && lead.status !== 'rejected' && store.updateLeadStatusAndReasons) {
+      const rejectReasons = Array.from(new Set([...(lead.reasons ?? []), ...quality.flags.filter((f) => isRejectedQuality([f])).map((f) => `quality:${f}`)]));
+      await store.updateLeadStatusAndReasons(lead.id, 'rejected', rejectReasons);
     }
     if (options.money && store.updateLeadTitle && (/&[a-z]+;/i.test(lead.title) || /\*\*|__/.test(lead.title) || /\s+(?:Вакансия компании|Создана|Регион|Company|Location):/i.test(lead.title))) {
       const cleaned = /\*\*|__/.test(lead.title)

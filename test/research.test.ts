@@ -677,6 +677,24 @@ describe('research data consistency & honest visual metrics', () => {
     expect(updated!.direction).toBe('backend');
     expect(updated!.normalizedUsdMin).toBeGreaterThan(0);
     expect(updated!.normalizedUsdMax).toBeGreaterThan(0);
+
+    // When the background model flags a post as isPost: false with high confidence, it auto-rejects the lead from the feed.
+    await runtime.store.insertLead(lead('non-post-1', {
+      sourceId: source.id,
+      type: 'job',
+      status: 'new',
+      title: 'Резюме аналитика',
+      text: 'Опыт 4 года, ищу команду',
+    }));
+    await runtime.store.saveLeadModelFacts!('non-post-1', {
+      v: 2,
+      model: 'qwen/qwen3.8-27b',
+      at: new Date().toISOString(),
+      facts: { isPost: false, confidence: 0.92 },
+    }, { applyToLead: false });
+    const rejectedLead = await runtime.store.getLead('non-post-1');
+    expect(rejectedLead!.status).toBe('rejected');
+    expect(rejectedLead!.reasons).toContain('model:not_a_post:0.92');
   });
 
   it('computes international salary breakdowns by role, seniority, companies, and global freelance budgets', () => {

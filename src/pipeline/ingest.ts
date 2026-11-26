@@ -3,7 +3,7 @@ import { employerOf } from '../core/company.ts';
 import { randomUUID } from 'node:crypto';
 import { prepareRawLead } from '../core/prepare.ts';
 import { applyRules } from '../core/rules.ts';
-import { assessQuality, offersNoPay } from '../core/quality.ts';
+import { assessQuality, isRejectedQuality, offersNoPay } from '../core/quality.ts';
 import { classifyWorkplace, extractSkills, titleForLanguage } from '../core/text.ts';
 import { emitLeadCreated } from '../core/events.ts';
 import { estimateJaccardFromSketches } from '../core/fingerprint.ts';
@@ -160,7 +160,7 @@ export async function ingestRawLead(
     prepared.normalizedUsdMax = undefined;
   }
   const rules = applyRules(prepared, source, now, { domainFocus: deps.env.RADAR_DOMAIN_FOCUS });
-  let status: IngestOutcome['status'] = rules.accepted ? 'inserted' : 'rejected';
+  let status: IngestOutcome['status'] = rules.accepted && !isRejectedQuality(quality.flags) ? 'inserted' : 'rejected';
   const reasons = [...rules.reasons, ...quality.flags.map((flag) => `quality:${flag}`)];
   let city = prepared.city;
   let score = Math.max(0, rules.score - quality.penalty);
@@ -239,7 +239,7 @@ export async function ingestRawLead(
     company: employer?.name,
     companyKey: employer?.key,
     direction: classifyRole(prepared.type ?? 'gig', prepared.title, (prepared.type ?? 'gig') === 'gig' || scopeOf(prepared.title, prepared.text) === 'ru' ? prepared.text.slice(0, 600) : '', skills),
-    grade: prepared.grade ?? detectGrade(prepared.title, prepared.text, undefined, classifyRole(prepared.type ?? 'gig', prepared.title, (prepared.type ?? 'gig') === 'gig' || scopeOf(prepared.title, prepared.text) === 'ru' ? prepared.text.slice(0, 600) : '', skills)),
+    grade: quality.flags.includes('digest') ? undefined : (prepared.grade ?? detectGrade(prepared.title, prepared.text, undefined, classifyRole(prepared.type ?? 'gig', prepared.title, (prepared.type ?? 'gig') === 'gig' || scopeOf(prepared.title, prepared.text) === 'ru' ? prepared.text.slice(0, 600) : '', skills))),
     city,
     budget: prepared.budget,
     currency: prepared.currency ?? 'RUB',
