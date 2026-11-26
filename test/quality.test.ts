@@ -107,4 +107,18 @@ describe('quality stage', () => {
     expect(requalified.score).toBeLessThan(70 - 40);
     await runtime.store.close();
   });
+  it('flags multi-vacancy compilations with adjectives and bulleted company lists as digest', () => {
+    const roundUp = assess(
+      'Подборка джуновских вакансий',
+      'Подборка джуновских вакансий\n\n- Junior Backend в Acme\n- Junior QA в Beta\n- Стажёр Data Analyst в Gamma',
+      'gig',
+    );
+    expect(roundUp.flags).toContain('digest');
+    const weekend = assess(
+      'Дайджест выходного дня: 12 свежих вакансий',
+      'Дайджест выходного дня:\n1. Senior Go в X\n2. Team Lead в Y\n3. DevOps в Z',
+      'job',
+    );
+    expect(weekend.flags).toContain('digest');
+  });
 });

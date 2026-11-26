@@ -73,14 +73,14 @@ const PROMOTION = /openradar\.fun|о\s+рекламодателе|бесплат
  * Someone selling their services, not looking for a contractor: the tags chats use for it and
  * an agency's price list. Works on raw text and on normalizeForMatch() output alike.
  */
-export const SERVICE_OFFER = /(?:^|[^\p{L}\d_])#(?:услуг[аи]|предлагаю|ищузаказ[а-я]*|резюме|resume)(?![\p{L}])|помогаю\s+бизнесу|(?:^|[^\p{L}])ищу\s+(?:проекты|разовые\s+задачи|клиентов)|(?:^|[^\p{L}])ищем?\s+(?:проекты|проект\s+для)(?![\p{L}])|(?:хочу|рады)\s+представить\s+вам\s+(?:ещ[её]\s+одного\s+|нашего\s+)?[\p{L}\d+-]*\s*(?:разработчик|инженер|аналитик|дизайнер|devops|qa|тестировщик)|занимаюсь\s+профессиональн|профессиональн[а-я]*\s+помощь\s+в\s+подготовке|наши\s+(?:тарифы|пакеты|услуги\s+и\s+цены)|(?:агентств[а-я]*|студи[а-я]*)\s+предлагает\s+(?:готов|услуг|пакет)|(?<![a-z])start(?![a-z])[^a-z]{0,40}\d[\s\S]{0,400}?(?<![a-z])(?:business|premium)(?![a-z])[^a-z]{0,40}\d/iu;
+export const SERVICE_OFFER = /(?:^|[^\p{L}\d_])#(?:услуг[аи]|предлагаю|ищузаказ[а-я]*|резюме|resume)(?![\p{L}])|помогаю\s+бизнесу|как\s+(?:психолог|коуч|ментор|консультант)(?:\s+и\s+(?:психолог|коуч|ментор|консультант))?\s+работает\s+именно\s+с\s+этим|(?:^|[^\p{L}])ищу\s+(?:проекты|разовые\s+задачи|клиентов)|(?:^|[^\p{L}])ищем?\s+(?:проекты|проект\s+для)(?![\p{L}])|(?:хочу|рады)\s+представить\s+вам\s+(?:ещ[её]\s+одного\s+|нашего\s+)?[\p{L}\d+-]*\s*(?:разработчик|инженер|аналитик|дизайнер|devops|qa|тестировщик)|занимаюсь\s+профессиональн|профессиональн[а-я]*\s+помощь\s+в\s+подготовке|наши\s+(?:тарифы|пакеты|услуги\s+и\s+цены)|(?:агентств[а-я]*|студи[а-я]*)\s+предлагает\s+(?:готов|услуг|пакет)|(?<![a-z])start(?![a-z])[^a-z]{0,40}\d[\s\S]{0,400}?(?<![a-z])(?:business|premium)(?![a-z])[^a-z]{0,40}\d/iu;
 
 /** Channel content that is never an offer of work: course sales, discounts, events, greetings to subscribers. */
 const CHANNEL_CONTENT: RegExp[] = [
   /(?:нов(?:ый|ого)|следующ[а-я]+|(?:^|[^\p{L}])[ivx]+|\d+[-‑]?(?:й|ий))\s+поток|ид[её]т\s+набор\s+(?:на|в)\s+(?:[\p{L}-]+\s+){0,2}(?:поток|курс|обучени|программ)|набор\s+(?:на|в)\s+(?:курс|поток|программ|обучени)/iu,
-  /(?:^|[^\p{L}])курс[а-я]*(?![\p{L}])[\s\S]{0,160}?(?:скидк|акци|бесплатн|в\s+подарок|промокод|по\s+той\s+же\s+цене|повышени[ея]\s+цен|старт|начал[оа]\s+\d)/iu,
+  /(?:^|[^\p{L}])курс[а-я]*(?![\p{L}])[\s\S]{0,160}?(?:скидк|акци|бесплатн|в\s+подарок|промокод|по\s+той\s+же\s+цене|повышени[ея]\s+цен|старт|начал[оа]\s+\d)|(?:запустили|открыли)\s+(?:новый\s+)?курс[-\s]?буткемп|сотн[ия]\s+откликов,\s*а\s+в\s+ответ\s+тишина/iu,
   /второй\s+(?:курс\s+)?(?:получаешь\s+)?(?:бесплатно|в\s+подарок)|повышени[ея]\s+цен[ыа]/iu,
-  /(?:вебинар|митап|мастер[-\s]класс|воркшоп|workshop|интенсив|конференци|эфир)[а-я]*[\s\S]{0,200}?(?:регистрац|приглаша|начинаем|собираемся|начало|ждём\s+вас|ждем\s+вас|\d{1,2}[:.]\d{2}\s*(?:мск|по\s+мск))/iu,
+  /(?:вебинар|митап|мастер[-\s]класс|воркшоп|workshop|интенсив|конференци|эфир)[а-я]*[\s\S]{0,200}?(?:зарегистрир|регистрац|приглаша|начинаем|собираемся|начало|ждём\s+вас|ждем\s+вас|\d{1,2}[:.]\d{2}\s*(?:мск|по\s+мск))|в\s+новом\s+дайджесте\s+(?:от\s+)?yandex|куда\s+сходить[\s\S]{0,40}?\d{1,2}\s+(?:январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр)/iu,
   /уважаемые\s+подписчики|с\s+вами\s+ваш|#оффтоп|по\s+цене\s+одного|вечная\s+память/iu,
   /акция\s+действует|возвращаем\s+до\s+\d+\s*%|скидк[аиу]\s+(?:до\s+)?\d+\s*%|зарегистрируйтесь\s+в\s/iu,
 ];
@@ -93,7 +93,7 @@ const EDITORIAL_TITLE = /\?\s*$|^(?:как|почему|зачем|что\s+(?:�
 
 /** Roundup headers of job channels: «Вакансии в разработке», «Вот ваш топ», «ловите вакансий». */
 const DIGEST_HEADER =
-  /^(?:новые\s+вакансии|вакансии\s+(?:в|для|на)\s|работа\s+(?:для|в)\s[^\n]{0,60}?на\s+хабр\s+карьере)|ваш\s+топ|подготовили\s+(?:эти|для\s+вас)\s+ваканси|ловите\s+ваканси|подборк[аеу]\s+ваканси/iu;
+  /^(?:новые\s+вакансии|вакансии\s+(?:в|для|на|за)\s|работа\s+(?:для|в)\s[^\n]{0,60}?на\s+хабр\s+карьере|дайджест\s+(?:ваканси|стажиров|выходного\s+дня|недели|дня)|(?:лучшие|свежие)\s+(?:резюме\s+и\s+)?вакансии\s+за\s+\d)|ваш\s+топ|подготовили\s+(?:эти|для\s+вас)\s+ваканси|ловите\s+ваканси|подборк[аеуи]\s+(?:[\p{L}-]+\s+){0,3}(?:ваканси|стажиров)/iu;
 
 const MLM: RegExp[] = [
   /в\s+возрасте\s+(?:от\s+)?\d{2}\s*(?:[-–—]|до)\s*\d{2}\s*лет/iu,
@@ -129,9 +129,10 @@ function distinctMatches(text: string, patterns: RegExp[]): number {
 /** How many separate vacancy entries a post lists, by its «Подробнее» links. */
 function listedOffers(text: string): number {
   const links = text.match(/подробнее/giu)?.length ?? 0;
-  // A roundup without links: a line per position, each opening with its grade.
+  // A roundup without links: a line per position, each opening with its grade or a bulleted «- Role в Company».
   const grades = text.match(/(?:^|\n)\s*(?:junior|middle\+?|senior|lead|стаж[её]р|c-level)\s+[\p{L}]/giu)?.length ?? 0;
-  return Math.max(links, grades);
+  const bullets = text.match(/(?:^|\n)\s*[-•–—]\s*[\p{L}][^\n]{3,60}?\s+в\s+[A-ZА-ЯЁ«"]/gu)?.length ?? 0;
+  return Math.max(links, grades, bullets);
 }
 
 export interface QualityInput {
@@ -197,7 +198,7 @@ export function assessQuality(lead: QualityInput, source: QualitySource): Qualit
   const hiringOpening = HIRING.test(head.slice(0, 200));
   const marked = (AD_MARKING.test(text) || PROMOTION.test(text)) && vacancy < 3 && !hiringOpening;
   const editorial = EDITORIAL_TITLE.test(lead.title.trim()) && vacancy < 2 && !hiring && !gig && lead.budget === undefined;
-  const roundup = DIGEST_HEADER.test(lead.title.trim()) || DIGEST_HEADER.test(text.slice(0, 400)) || listedOffers(text) >= 3;
+  const roundup = DIGEST_HEADER.test(lead.title.trim()) || DIGEST_HEADER.test(text.slice(0, 400)) || listedOffers(lead.text) >= 3;
   // Job channels publish articles/banter between vacancies, and a figure in one must not read as pay.
   const channelStory = FREE_TEXT_KINDS.has(source.kind) && vacancy === 0 && !hiring && !gig && !roundup && !POSITION_WORD.test(lead.title) && !NAMED_VACANCY.test(head.slice(0, 250)) && lead.budget === undefined;
   const services = SERVICE_OFFER.test(head);

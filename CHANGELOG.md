@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.86.0 — 2026-11-26
+
+- **High-density typewriter / agent-first UI pass**: removed circular border and background plate from the header theme toggle icon (`.theme-btn`), removed background plates and pill borders from main-page filter dropdown triggers and checkboxes (`.custom-dropdown-btn`, `.filter-check`, `.custom-dropdown-count`), removed the plate and border from card seniority badges (`.tag-grade`), tightened vertical row padding so ~40% more leads fit above the fold, and switched scores/counts/grades to tabular monospace numerals.
+- **Filter dropdown UX fixes**: pressing `Enter` inside a dropdown search field (`Стек` / `Направление`) now selects the first visible option instead of submitting the outer form empty; empty query parameters are stripped before form submission to keep feed URLs clean; right-edge dropdown menus flip automatically when near the viewport edge.
+- **Resume, compilation, and promo noise filtering**: expanded `JOB_SEEKER`, `SERVICE_OFFER`, `CHANNEL_NOISE`, and `AUDIT_2026_11_PATTERNS` to reject Telegram resume posts and compilations (`Резюме за <date>`, `Лучшие резюме и вакансии за <date>`, `Дайджест резюме`, `Резюме <Role> от @handle`), bootcamp/coaching ads, and event digests; expanded `DIGEST_HEADER` and `listedOffers` to flag multi-vacancy roundups (`Подборка <adj> вакансий`, `Дайджест выходного дня`, bulleted `- Role в Company` lists) as `digest` while eliminating false-positive `digest` flags on single-vacancy posts whose title begins with a seniority grade.
+- **Automatic startup retroactive refilter**: added `refilterLeads(runtime.store, { days: 30, apply: true })` to the server startup data-hygiene pass so existing resume/promo posts in the database are rejected automatically upon deploy.
+
 ## 0.85.0 — 2026-11-25
 
 - **Cleaner feed header & mobile layout across all pages**: removed the redundant main feed `<h1>` heading and eliminated horizontal mobile overflow on `/sources`, `/sources/quality`, `/network`, `/docs`, `/contribute`, and `/leads/:id`.

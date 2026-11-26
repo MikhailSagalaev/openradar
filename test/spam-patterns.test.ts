@@ -42,4 +42,12 @@ describe('spam patterns tightened after the 2026-11 audit', () => {
   it('still catches the unambiguous money-mule term', () => {
     expect(spamReasons('Нужен дроповод', 'Обнал карт, дроповод с опытом')).toContain('spam:GREY_FINANCE');
   });
+  it('rejects Telegram resume compilations, candidate digests, and bootcamp/event ads', () => {
+    expect(spamReasons('Резюме за 25 ноября (1/2)', '1. Резюме Fullstack Developer от @candidate, от 80 000₽')).toContain('spam:JOB_SEEKER');
+    expect(spamReasons('Лучшие резюме и вакансии за 25 ноября (1/6)', 'Подборка резюме и вакансий')).toContain('spam:JOB_SEEKER');
+    expect(spamReasons('Дайджест резюме | На расхват у HR — 8 кандидатов!', '1. Резюме: Backend Developer')).toContain('spam:JOB_SEEKER');
+    expect(spamReasons('Сотни откликов, а в ответ тишина', 'Мы запустили новый курс-буткемп для аналитиков')).toContain('spam:CHANNEL_NOISE');
+    expect(spamReasons('Коучинг для лидеров', 'Евгений как психолог и ментор работает именно с этим запросом')).toContain('spam:SERVICE_OFFER');
+    expect(spamReasons('Куда сходить 28 ноября — 4 декабря', 'Собрали митапы в новом дайджесте от Yandex for Developers')).toContain('spam:CHANNEL_NOISE');
+  });
 });

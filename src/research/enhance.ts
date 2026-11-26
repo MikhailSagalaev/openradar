@@ -91,19 +91,21 @@ const ENHANCE_STYLE = `<style id="rs-enhance-style">
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  padding: 5px 11px;
-  border-radius: 9999px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink);
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 12px;
   font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: color 0.15s ease, background 0.15s ease;
 }
 .rs-jump-chip:hover {
-  border-color: var(--emerald);
+  color: var(--ink);
+  background: var(--surface-hover, var(--soft));
   text-decoration: none;
 }
 details.rs-academic-fold {
