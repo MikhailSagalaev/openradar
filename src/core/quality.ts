@@ -166,7 +166,7 @@ export interface QualityAssessment {
 export function detectPostType(lead: QualityInput, source: QualitySource): LeadType {
   if (!FREE_TEXT_KINDS.has(source.kind) || lead.type === 'job') return lead.type;
   const head = `${lead.title}\n${lead.text}`.slice(0, 1500);
-  const vacancy = distinctMatches(text, VACANCY_SIGNALS);
+  const vacancy = distinctMatches(head, VACANCY_SIGNALS);
   if (vacancy >= 3 || NAMED_VACANCY.test(head.slice(0, 250))) return 'job';
   if (GIG_SIGNALS.test(head)) return lead.type;
   if (isJobChannel(lead, source)) return 'job';
@@ -196,7 +196,7 @@ export function assessQuality(lead: QualityInput, source: QualitySource): Qualit
   const head = text.slice(0, 1500);
   const flags: QualityFlag[] = [];
 
-  const vacancy = distinctMatches(head, VACANCY_SIGNALS);
+  const vacancy = distinctMatches(text, VACANCY_SIGNALS);
   const hiring = HIRING.test(head);
   const gig = GIG_SIGNALS.test(head);
   const content = distinctMatches(text, CHANNEL_CONTENT) > 0 && vacancy < 3 && !hiring;
