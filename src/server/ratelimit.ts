@@ -27,6 +27,15 @@ export function configureRateLimit(settings: { trustProxy: boolean }): void {
   defaultTrustProxy = settings.trustProxy;
 }
 
+/** The bucket key for a request: the proxy-derived client IP (see rateLimit) or a custom one. */
+function bucketKey(c: Context, options: { keyFrom?: (c: Context) => string | undefined; trustProxy?: boolean }): string {
+  const trustProxy = options.trustProxy ?? defaultTrustProxy;
+  const forwardedParts = trustProxy
+    ? c.req.header('x-forwarded-for')?.split(',').map((p) => p.trim()).filter(Boolean) ?? []
+    : [];
+  return options.keyFrom?.(c) || forwardedParts[forwardedParts.length - 1] || (trustProxy ? c.req.header('x-real-ip') : undefined) || 'local';
+}
+
 /**
  * Fixed in-memory sliding-window limiter. State lives in the limiter instance,
  * so each route (and each app instance in tests) has its own bucket set.
@@ -46,15 +55,7 @@ export function rateLimit(options: RateLimitOptions) {
       }
     }
 
-    // Behind a trusted proxy, nginx APPENDS the real client IP to X-Forwarded-For,
-    // so the LAST value is the only one the client cannot spoof by sending its own
-    // header. Without a trusted proxy the headers are ignored entirely.
-    const trustProxy = options.trustProxy ?? defaultTrustProxy;
-    const forwardedParts = trustProxy
-      ? c.req.header('x-forwarded-for')?.split(',').map((p) => p.trim()).filter(Boolean) ?? []
-      : [];
-    const client = options.keyFrom?.(c) || forwardedParts[forwardedParts.length - 1] || (trustProxy ? c.req.header('x-real-ip') : undefined) || 'local';
-    const key = client;
+    const key = bucketKey(c, options);
     const hits = (buckets.get(key) ?? []).filter((ts) => now - ts < options.windowMs);
     // Agents pace themselves by these headers instead of discovering 429s blind.
     c.header('x-ratelimit-limit', String(options.max));
@@ -70,5 +71,33 @@ export function rateLimit(options: RateLimitOptions) {
     hits.push(now);
     buckets.set(key, hits);
     await next();
+  };
+}
+
+/**
+ * Caps concurrent requests per client, not the rate: a crawler that fires 15 parallel
+ * search reads fits inside a per-minute budget yet pins the database anyway, because
+ * every read runs the heavy BM25 ranking. Excess requests get 429 before the store is
+ * touched. The counter releases in `finally`, so a cancelled or failed read never
+ * leaks a slot.
+ */
+export function concurrencyLimit(options: { max: number; keyFrom?: (c: Context) => string | undefined; trustProxy?: boolean }) {
+  const active = new Map<string, number>();
+
+  return async (c: Context, next: Next): Promise<Response | void> => {
+    const key = bucketKey(c, options);
+    const running = active.get(key) ?? 0;
+    if (running >= options.max) {
+      c.header('retry-after', '5');
+      return c.json({ error: 'rate_limited' }, 429);
+    }
+    active.set(key, running + 1);
+    try {
+      await next();
+    } finally {
+      const left = (active.get(key) ?? 1) - 1;
+      if (left <= 0) active.delete(key);
+      else active.set(key, left);
+    }
   };
 }

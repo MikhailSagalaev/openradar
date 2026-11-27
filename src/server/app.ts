@@ -34,7 +34,7 @@ import { analyticsFromEnv, contentSecurityPolicy } from './analytics.ts';
 import { filterOptions, IT_SKILLS, parseFeedFilters, type FeedFilters } from './filters.ts';
 import { computeInsights, estimateMarket } from '../core/market.ts';
 import { COLLECTOR_MAX_ORDERS, COLLECTOR_PLATFORMS, collectedOrderToRaw, type CollectorPlatform, COLLECTOR_SITES, collectedVacancyToRaw, type CollectorSite } from './collector.ts';
-import { configureRateLimit, rateLimit } from './ratelimit.ts';
+import { configureRateLimit, concurrencyLimit, rateLimit } from './ratelimit.ts';
 import { countResearch, countTokenDay, countUsage, pathTemplate, tierOf, usageDim, viaFrom } from './usage.ts';
 import { createPopularCounters } from './popular.ts';
 import { indexCsv, openradarIndex } from '../research/index.ts';
@@ -1369,6 +1369,14 @@ export function createApp(runtime: Runtime): Hono {
   const rssLimit = rateLimit({ windowMs: 60_000, max: runtime.env.RADAR_RSS_RATE_PER_MIN });
   const deltaLimit = rateLimit({ windowMs: 60_000, max: runtime.env.RADAR_DELTA_RATE_PER_MIN });
   const sitemapLimit = rateLimit({ windowMs: 60_000, max: runtime.env.RADAR_SITEMAP_RATE_PER_MIN });
+  // A search read (?q=) runs BM25 ranking over the whole feed window; a crawler firing a
+  // dozen in parallel fits the per-minute budgets above yet pins the database anyway
+  // (2026-11-26: PerplexityBot, ~370 statements cancelled per day at 15 s each). Cap the
+  // parallelism per IP instead: excess requests get 429 before the store is touched.
+  // Plain filter paging stays on the hot-rank index and is not gated.
+  const searchConcurrency = concurrencyLimit({ max: runtime.env.RADAR_SEARCH_CONCURRENCY });
+  const expensiveSearch = (c: Context, next: Next): Promise<Response | void> =>
+    (c.req.query('q') ?? '').trim() ? searchConcurrency(c, next) : next();
 
   // Store-wide counters change slowly; /health (Docker probes every 30 s), the feed header
   // and /api/stats all read the same numbers. One shared 30-second cache with a single
@@ -1467,7 +1475,7 @@ export function createApp(runtime: Runtime): Hono {
     }
   };
   void refreshSalaryMedians();
-  app.get('/', feedLimit, async (c) => {
+  app.get('/', expensiveSearch, feedLimit, async (c) => {
     if (!await canRead(c, runtime)) return c.redirect('/login');
     void refreshSalaryMedians();
     const lang = resolveLang(c);
@@ -3531,9 +3539,9 @@ export function createApp(runtime: Runtime): Hono {
     });
   };
 
-  app.get('/feed.rss', rssLimit, serveFeed);
-  app.get('/feed.xml', rssLimit, serveFeed);
-  app.get('/api/feed.rss', rssLimit, serveFeed);
+  app.get('/feed.rss', expensiveSearch, rssLimit, serveFeed);
+  app.get('/feed.xml', expensiveSearch, rssLimit, serveFeed);
+  app.get('/api/feed.rss', expensiveSearch, rssLimit, serveFeed);
 
   const seoBaseUrl = (c: Context): string => publicBaseUrl(c, runtime);
 
