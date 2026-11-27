@@ -12,9 +12,18 @@ BACKUP_FILE="${BACKUP_DIR}/radar_${TIMESTAMP}.dump"
 ENCRYPTED_FILE="${BACKUP_FILE}.age"
 
 # 1. Загрузка переменных окружения если есть .env
+#    Ключи читаются по одному, без `source .env`: в файле есть JSON-значения с пробелами
+#    (OPENAI_EXTRA_BODY, RADAR_EXTRACT_PROVIDERS). Для bash это команда, а при `set -e`
+#    ошибка «command not found» прекращала скрипт до дампа.
 if [ -f .env ]; then
-  # shellcheck disable=SC1091
-  source .env
+  while IFS= read -r line; do
+    key=${line%%=*}
+    value=${line#*=}
+    case $value in
+      \"*\" | \'*\') value=${value#?}; value=${value%?} ;;
+    esac
+    printf -v "$key" '%s' "$value"
+  done < <(grep -E '^[A-Za-z_][A-Za-z0-9_]*=' .env | tr -d '\r')
 fi
 
 POSTGRES_USER="${POSTGRES_USER:-radar}"
