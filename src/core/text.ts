@@ -104,10 +104,11 @@ export function normalizeWhitespace(input: string): string {
 /** Strips application form boilerplate and telephone code chains from vacancy text. */
 export function stripFormBoilerplate(input: string): string {
   const cutMarkers = [
-    /\n\s*Отклик на вакансию:[\s\S]*$/iu,
+    /\n\s*Отклик на вакансию(?::|\s+Ваше\s+имя)[\s\S]*$/iu,
     /\n\s*Откликнуться на вакансию[\s\S]*$/iu,
-    /\n\s*(?:Ваше имя\s+Фамилия|Фамилия\s+Телефон)\s+\+\d[\s\S]*$/iu,
-    /\n\s*Я даю согласие на обработку перс\S*\s+данных[\s\S]*$/iu,
+    /\n\s*(?:Ваше имя\s+Фамилия|Фамилия\s+Телефон)(?:\s+\+\d|\s+Адрес\s+эл\.)[\s\S]*$/iu,
+    /\n\s*(?:Я даю согласие|Откликаясь на вакансию,\s*вы да[её]те согласие) на обработку (?:ваших\s+)?перс\S*\s+данных[\s\S]*$/iu,
+    /\n\s*(?:Affirmative Action and Equal Employment Opportunity Policy Statement|Voluntary Self-Identification)[\s\S]*$/iu,
   ];
   let cleaned = input;
   for (const marker of cutMarkers) {

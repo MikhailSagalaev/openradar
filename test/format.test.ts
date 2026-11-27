@@ -36,6 +36,26 @@ describe('lead text formatting', () => {
     expect(out.tags).toEqual(['Angular', 'TypeScript', 'Machine Learning (ML)']);
   });
 
+  it('strips duplicate title+company lines, ASCII dividers, EEO/Huntflow tails, and splits glued section headers', () => {
+    const raw = [
+      'Senior Python Backend Developer в Хантфлоу',
+      '──────────────────────────────',
+      'Грейд: Senior Стек: Python, FastAPI, PostgreSQL',
+      'ОбязанностиРазрабатывать высоконагруженные сервисы.ТребованияОпыт коммерческой разработки от 3 лет.',
+      '****Важно: полная удалёнка по РФ и миру без бюрократии.****',
+      'Отклик на вакансию Ваше имя Фамилия Телефон Адрес эл. почты Сопроводительное письмо undefined',
+    ].join('\n');
+    const out = formatLeadText(raw, 'ru', 'Senior Python Backend Developer');
+    expect(out.html).not.toContain('Senior Python Backend Developer в Хантфлоу');
+    expect(out.html).not.toContain('──────');
+    expect(out.html).not.toContain('Отклик на вакансию');
+    expect(out.html).not.toContain('**');
+    expect(out.html).toContain('<strong>Важно: полная удалёнка по РФ и миру без бюрократии.</strong>');
+    expect(out.html).toContain('Грейд: Senior<br>Стек: Python, FastAPI, PostgreSQL');
+    expect(out.html).toContain('Обязанности:');
+    expect(out.html).toContain('Требования:');
+  });
+
   it('splits a long wall of text into paragraphs', () => {
     const wall = Array.from({ length: 12 }, (_, i) => `Предложение номер ${i} про задачу и детали проекта.`).join(' ');
     expect(formatLeadText(wall).html.match(/<p>/g)?.length).toBeGreaterThan(1);

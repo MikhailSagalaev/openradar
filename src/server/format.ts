@@ -14,7 +14,11 @@ const FREELANCER_TRAILER_RE = /\s*\(\s*Budget\s*:[^,]+,\s*Jobs\s*:\s*(.+)\)\s*$/
 const HASHTAG_RE = /#([\p{L}\p{N}_+.\/-]{2,40})/gu;
 const BULLET_RE = /^\s*(?:[-–—•*·▪●]|\d{1,2}[.)])\s+/u;
 const MD_HEADING_RE = /^#{1,6}\s+(.+)$/u;
-const BOLD_HEADING_RE = /^\*\*([^*\n]{2,75})\*\*:?\s*$/u;
+const BOLD_HEADING_RE = /^\*{2,}\s*([^*\n]{2,90}?)\s*\*{2,}:?\s*$/u;
+const ASCII_DIVIDER_LINE_RE = /^[ \t]*[─━═_*]{4,}[ \t]*$/gmu;
+const SCRAPED_FORM_TAIL_RE = /\n\s*(?:Отклик\s+на\s+вакансию\s+Ваше\s+имя(?:\s+Фамилия)?|Откликаясь\s+на\s+вакансию,\s*вы\s+да[её]те\s+согласие\s+на\s+обработку\s+ваших\s+персональных\s+данных|Affirmative\s+Action\s+and\s+Equal\s+Employment\s+Opportunity\s+Policy\s+Statement|Voluntary\s+Self-Identification)[\s\S]*$/iu;
+const GLUED_SECTION_HEADER_RE = /(?:^|\n|(?<=[.!?]))[ \t]*(Обязанности|Требования|Условия(?:\s+работы)?|Этапы\s+найма|Что\s+мы\s+предлагаем|Будет\s+плюсом)(?=[А-ЯЁ][а-яё])/gu;
+const GLUED_GRADE_STACK_RE = /((?:^|\n)\s*(?:\*{2,})?Грейд(?:\*{2,})?\s*:\s*[^\n]+?)\s+((?:\*{2,})?Стек(?:\*{2,})?\s*:)/giu;
 const ADAPTER_HEADER_LINE_RE = /^(?:Вакансия\s+компании|Создана|Регион|Предполагаемый\s+уровень\s+месячного\s+дохода|Компания|Город|Работодатель|Company|Location|City|Department|Team|Type|Category|Model)\s*:\s*[^\n]{1,140}$/iu;
 const STANDALONE_REMOTE_LINE_RE = /^(?:Удалённо|Удаленно|Remote)$/iu;
 
@@ -23,7 +27,7 @@ const WALL_LENGTH = 420;
 const PARAGRAPH_TARGET = 280;
 
 function formatEscapedSegment(raw: string): string {
-  return escapeHtml(raw).replace(/\*\*([^*\n]{1,120})\*\*/g, '<strong>$1</strong>');
+  return escapeHtml(raw).replace(/\*{2,}\s*([^*\n]{1,400}?)\s*\*{2,}/g, '<strong>$1</strong>');
 }
 
 /** Escapes text, turns URLs into links, renders **bold**, and turns the contact placeholder into a muted label. */
@@ -62,7 +66,7 @@ function splitWall(block: string): string[] {
 }
 
 function normalizeTitleCompare(s: string): string {
-  return s.trim().toLowerCase().replace(/[\s.,;:!?…—–-]+$/g, '');
+  return s.trim().replace(/^\*+|\*+$/g, '').trim().toLowerCase().replace(/[\s.,;:!?…—–-]+$/g, '');
 }
 
 /**
@@ -82,7 +86,8 @@ export function stripLeadingMetadata(text: string, title?: string): string {
       continue;
     }
     const normLine = normalizeTitleCompare(trimmed);
-    const isDupTitle = Boolean(normTitle && normLine && (normLine === normTitle || (normTitle.length >= 25 && normLine.startsWith(normTitle.slice(0, 35)))));
+    const isTitleAtCompany = Boolean(normTitle && normTitle.length >= 8 && normLine.length <= normTitle.length + 45 && normLine.startsWith(`${normTitle} в `));
+    const isDupTitle = Boolean(normTitle && normLine && (normLine === normTitle || isTitleAtCompany || (normTitle.length >= 25 && normLine.startsWith(normTitle.slice(0, 35)))));
     if (isDupTitle || ADAPTER_HEADER_LINE_RE.test(trimmed) || (strippedAny && STANDALONE_REMOTE_LINE_RE.test(trimmed))) {
       strippedAny = true;
       idx += 1;
@@ -91,7 +96,16 @@ export function stripLeadingMetadata(text: string, title?: string): string {
     break;
   }
   if (!strippedAny) return text;
-  const rest = lines.slice(idx).join('\n').trim();
+  let rest = lines.slice(idx).join('\n').trim();
+  if (normTitle && normTitle.length >= 12) {
+    const firstRestLine = rest.split('\n')[0]?.trim() ?? '';
+    if (normalizeTitleCompare(firstRestLine).startsWith(normTitle) && firstRestLine.length > (title?.trim().length ?? 0) + 4) {
+      const afterTitle = firstRestLine.slice(title!.trim().length).replace(/^[.\s—–-]+/, '').trim();
+      if (afterTitle.length >= 15) {
+        rest = [afterTitle, ...rest.split('\n').slice(1)].join('\n').trim();
+      }
+    }
+  }
   return rest.length >= 15 ? rest : text;
 }
 
@@ -142,6 +156,10 @@ export function formatLeadText(text: string, lang: SupportedLang = 'ru', title?:
   const tags: string[] = [];
   let cleaned = (text || '').replace(/\r\n?/g, '\n');
   cleaned = stripLeadingMetadata(cleaned, title);
+  cleaned = cleaned.replace(SCRAPED_FORM_TAIL_RE, '');
+  cleaned = cleaned.replace(ASCII_DIVIDER_LINE_RE, '');
+  cleaned = cleaned.replace(GLUED_SECTION_HEADER_RE, '\n\n$1:\n');
+  cleaned = cleaned.replace(GLUED_GRADE_STACK_RE, '$1\n$2');
   cleaned = cleaned.replace(SKILLS_LINE_RE, (_all, list: string) => {
     for (const match of list.matchAll(HASHTAG_RE)) tags.push(match[1]!.replace(/[.,;\/-]+$/, ''));
     return '';

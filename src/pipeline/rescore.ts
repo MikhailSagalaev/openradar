@@ -1,3 +1,4 @@
+import { classifyRole, detectGrade } from '../research/derive.ts';
 import { cleanTitle, extractBudgetAndCurrency } from '../core/extract.ts';
 import { titleKeyOf } from '../core/fingerprint.ts';
 import { payNotOffered, prepareRawLead } from '../core/prepare.ts';
@@ -46,7 +47,7 @@ function moneyOf(lead: Lead, type: LeadType, flags: QualityFlag[], source: Sourc
   // A Telegram post has no budget field: whatever it holds came from its text. A webhook may send one.
   const fromText = lead.budget !== undefined && (source.kind.startsWith('telegram') || extractBudgetAndCurrency(post, { keepNotPay: true }).budget === lead.budget || (/https?:\/\/\S*[$€£]\d+/i.test(post) && extractBudgetAndCurrency(post).budget !== lead.budget));
   const read = fromText ? extractBudgetAndCurrency(post) : undefined;
-  const budget = fromText ? read!.budget : lead.budget;
+  const budget = fromText ? read!.budget : (lead.budget ?? extractBudgetAndCurrency(post).budget);
   const model = modelFactsOf(lead);
   const currency =
     (fromText ? read!.currency : undefined) ??
@@ -151,6 +152,10 @@ export async function rescoreLeads(
     const before = qualityFlagsOf(lead);
     if (store.updateLeadQuality && (quality.type !== (lead.type ?? 'gig') || before.join() !== quality.flags.join())) {
       await store.updateLeadQuality(lead.id, quality.type, quality.flags);
+      if (before.includes('digest') && !quality.flags.includes('digest') && !lead.grade && store.applyLeadGrade) {
+        const restoredGrade = detectGrade(lead.title, lead.text, undefined, classifyRole(quality.type, lead.title, '', lead.skills ?? []));
+        if (restoredGrade) await store.applyLeadGrade(lead.id, restoredGrade);
+      }
       requalified += 1;
     }
     if (isRejectedQuality(quality.flags) && lead.status !== 'rejected' && store.updateLeadStatusAndReasons) {

@@ -16,6 +16,12 @@ describe('url canonicalization', () => {
   it('rejects non-http urls', () => {
     expect(canonicalizeUrl('javascript:alert(1)')).toBeUndefined();
   });
+
+  it('normalizes HeadHunter regional mirror vacancy URLs to canonical hh.ru', () => {
+    expect(canonicalizeUrl('https://hh.kz/vacancy/139012222?from=share')).toBe('https://hh.ru/vacancy/139012222');
+    expect(canonicalizeUrl('https://headhunter.ge/vacancy/139012222/')).toBe('https://hh.ru/vacancy/139012222');
+    expect(canonicalizeUrl('https://rabota.by/vacancy/139083132')).toBe('https://hh.ru/vacancy/139083132');
+  });
 });
 
 describe('extraction', () => {

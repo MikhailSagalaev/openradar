@@ -55,7 +55,7 @@ const VACANCY_SIGNALS: RegExp[] = [
   /#ваканси|(?:^|[^\p{L}])вакансия\s*:|(?:^|[^\p{L}])(?:hiring|vacancy)(?![\p{L}])/iu,
   /(?:^|[^\p{L}])о\s+нас\s*:|(?:^|[^\p{L}])о\s+компании\s*:|в\s+команд[уы](?![\p{L}])/iu,
   /(?:^|[^\p{L}])(?:junior|middle|senior|джун|мидл|сеньор|стаж[её]р)(?![\p{L}])/iu,
-  /(?:^|[^\p{L}])(?:обязанности|(?:чем|что)\s+предстоит\s+(?:заниматься|делать)|(?:что\s+)?мы\s+предлагаем|условия\s*:|задачи\s*:)/iu,
+  /(?:^|[^\p{L}])(?:обязанности|(?:чем|что)\s+предстоит\s+(?:заниматься|делать)|что\s+(?:именно\s+)?нужно\s+делать|мы\s+(?:точно\s+)?ожидаем|(?:что\s+)?мы\s+предлагаем|условия\s*:|задачи\s*:|вакансия\s+компании\s*:)/iu,
   ...COMPANY_INTRO,
 ];
 
@@ -130,8 +130,8 @@ function distinctMatches(text: string, patterns: RegExp[]): number {
 function listedOffers(text: string): number {
   const links = text.match(/подробнее/giu)?.length ?? 0;
   // A roundup without links: a line per position, each opening with its grade or a bulleted «- Role в Company».
-  const grades = text.match(/(?:^|\n)\s*(?:junior|middle\+?|senior|lead|стаж[её]р|c-level)\s+[\p{L}]/giu)?.length ?? 0;
-  const bullets = text.match(/(?:^|\n)\s*[-•–—]\s*[\p{L}][^\n]{3,60}?\s+в\s+[A-ZА-ЯЁ«"]/gu)?.length ?? 0;
+  const grades = text.match(/(?:^|\n)[ \t]*(?:[-•–—]|\d+[.)])?[ \t]*(?:(?:junior|middle\+?|senior|стаж[её]р|c-level|(?:team|tech|qa|dev|design|product)[ \t]+lead)[ \t]+[\p{L}]|lead[ \t]+(?:разработчик|программист|инженер|дизайнер|аналитик|тестировщик|менеджер|маркетолог|developer|engineer|designer|analyst|architect))[^\n]{0,80}(?=\n|$)/giu)?.length ?? 0;
+  const bullets = text.match(/(?:^|\n)[ \t]*[-•–—][ \t]*[\p{L}][^\n]{3,60}?[ \t]+в[ \t]+[A-ZА-ЯЁ«"]/gu)?.length ?? 0;
   return Math.max(links, grades, bullets);
 }
 
@@ -166,7 +166,7 @@ export interface QualityAssessment {
 export function detectPostType(lead: QualityInput, source: QualitySource): LeadType {
   if (!FREE_TEXT_KINDS.has(source.kind) || lead.type === 'job') return lead.type;
   const head = `${lead.title}\n${lead.text}`.slice(0, 1500);
-  const vacancy = distinctMatches(head, VACANCY_SIGNALS);
+  const vacancy = distinctMatches(text, VACANCY_SIGNALS);
   if (vacancy >= 3 || NAMED_VACANCY.test(head.slice(0, 250))) return 'job';
   if (GIG_SIGNALS.test(head)) return lead.type;
   if (isJobChannel(lead, source)) return 'job';
@@ -204,7 +204,7 @@ export function assessQuality(lead: QualityInput, source: QualitySource): Qualit
   const hiringOpening = HIRING.test(head.slice(0, 200));
   const marked = (AD_MARKING.test(text) || PROMOTION.test(text)) && vacancy < 3 && !hiringOpening;
   const editorial = EDITORIAL_TITLE.test(lead.title.trim()) && vacancy < 2 && !hiring && !gig && lead.budget === undefined;
-  const roundup = DIGEST_HEADER.test(lead.title.trim()) || DIGEST_HEADER.test(text.slice(0, 400)) || listedOffers(lead.text) >= 3;
+  const roundup = DIGEST_HEADER.test(lead.title.trim()) || DIGEST_HEADER.test(text.slice(0, 400)) || (FREE_TEXT_KINDS.has(source.kind) && listedOffers(lead.text) >= 3);
   // Job channels publish articles/banter between vacancies, and a figure in one must not read as pay.
   const channelStory = FREE_TEXT_KINDS.has(source.kind) && vacancy === 0 && !hiring && !gig && !roundup && !POSITION_WORD.test(lead.title) && !NAMED_VACANCY.test(head.slice(0, 250)) && lead.budget === undefined;
   const services = SERVICE_OFFER.test(head);

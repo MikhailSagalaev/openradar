@@ -13,6 +13,8 @@ const TRACKING_PARAMS = new Set([
   '_openstat',
 ]);
 
+const HH_MIRROR_HOST = /^(?:[\w-]+\.)?(?:hh\.(?:ru|kz|uz)|headhunter\.(?:ge|kg)|rabota\.by)$/i;
+
 export function isHttpUrl(value: string): boolean {
   try {
     const url = new URL(value);
@@ -34,6 +36,11 @@ export function canonicalizeUrl(raw: string, base?: string): string | undefined 
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined;
     url.hash = '';
     url.hostname = url.hostname.toLowerCase();
+    if (HH_MIRROR_HOST.test(url.hostname) && /^\/vacancy\/\d+(?:\/|$)/.test(url.pathname)) {
+      url.protocol = 'https:';
+      url.hostname = 'hh.ru';
+      url.port = '';
+    }
 
     for (const key of [...url.searchParams.keys()]) {
       const lower = key.toLowerCase();

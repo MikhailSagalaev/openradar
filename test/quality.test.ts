@@ -55,6 +55,20 @@ describe('quality stage', () => {
     expect(assess('#ищу #вакансия', 'Менеджер по продажам, 60 000 ₽. Промокод на курс в конце поста.').flags).toEqual([]);
   });
 
+  it('does not flag English vacancies with Lead duty bullets or corporate university perks', () => {
+    const englishDuties = [
+      'Senior Mechanical Engineer, Ground Maneuver',
+      'WHAT YOU WILL DO:',
+      'Lead the mechanical content of design reviews (SRR, PDR, CDR)',
+      'Lead cross-functional integration and test across vehicle classes',
+      'Lead root cause investigations for test and field failures',
+    ].join('\n');
+    expect(assess('Senior Mechanical Engineer, Ground Maneuver', englishDuties, 'job').flags).toEqual([]);
+
+    const longCorporateVacancy = `${'Описание команды и стека MWS AI. '.repeat(60)}\nЧто именно нужно делать:\n- Автоматизация тестирования Python\nМы точно ожидаем:\n- Опыт QA от 3 лет\nЧто мы предлагаем:\n- Официальное трудоустройство, ДМС, оклад\n- Полезные курсы и вебинары в корпоративном университете и 30 дней бесплатного пользования подпиской`;
+    expect(assess('Fullstack QA (Python) / Инженер по тестированию', longCorporateVacancy, 'job').flags).toEqual([]);
+  });
+
   it('flags vacancy roundups', () => {
     const text = 'Разработчик C/C++ в Vital Partners. До 320 000 ₽. Python-разработчик в IT_One. Можно удаленно.';
     expect(assess('Вакансии для бэкендеров на Хабр Карьере.', text, 'job').flags).toEqual(['digest']);

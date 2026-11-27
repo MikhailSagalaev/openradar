@@ -812,7 +812,7 @@ function buildProgram(): Command {
             try {
               const { fillDirections } = await import('../pipeline/redirections.ts');
               const refilterSummary = await refilterLeads(runtime.store, { days: 30, apply: true });
-              const rescoreSummary = await rescoreLeads(runtime.store, { limit: 3000, days: 14, money: true });
+              const rescoreSummary = await rescoreLeads(runtime.store, { limit: 5000, days: 30, money: true });
               const dirSummary = await fillDirections(runtime.store);
               const empSummary = await fillEmployers(runtime.store);
               runtime.logger.info('startup data hygiene completed', {

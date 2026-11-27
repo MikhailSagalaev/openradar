@@ -1261,9 +1261,9 @@ function directionPicker(name: string, label: string, items: DirectionItem[], se
   }).join('\n');
   return `<div class="custom-dropdown review-picker">
     ${asLink ? '' : `<input type="hidden" name="${escapeHtml(name)}" value="">`}
-    <button type="button" class="custom-dropdown-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="${escapeHtml(label)}"><span class="custom-dropdown-label">${escapeHtml(current?.label ?? label)}</span></button>
+    <button type="button" class="custom-dropdown-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="${escapeHtml(label)}"><span class="custom-dropdown-label">${escapeHtml(current?.label ?? label)}</span><svg class="custom-dropdown-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l4 4 4-4"/></svg></button>
     <div class="custom-dropdown-menu" role="listbox" style="display:none">
-      <input type="search" class="review-picker-search" placeholder="${str.search}" aria-label="${str.search}">
+      <input type="search" class="review-picker-search dropdown-filter-search" placeholder="${str.search}" aria-label="${str.search}">
       ${rows}
     </div>
   </div>`;
@@ -1447,7 +1447,7 @@ export function renderReviewPage(options: {
   const location = [lead?.city, remote].filter(Boolean).join(' · ');
   const relativeDate = lead ? formatRelative(lead.createdAt, options.lang ?? 'ru') : '';
   const metaLine = [host, salary, location, relativeDate].filter(Boolean).join(' · ');
-  const formatted = lead ? formatLeadText(lead.text) : { html: '', tags: [] };
+  const formatted = lead ? formatLeadText(lead.text, options.lang ?? 'ru', leadTitle(lead)) : { html: '', tags: [] };
   const reviewAnswers = ru ? REVIEW_ANSWERS_RU : REVIEW_ANSWERS_EN;
   const issueNames = ru ? ISSUE_NAMES_RU : ISSUE_NAMES_EN;
 
@@ -1466,7 +1466,7 @@ export function renderReviewPage(options: {
 <div class="detail-grid review-grid">
   <section class="review-lead-col">
     <h2>${lead.type === 'job' ? str.jobDescription : str.gigDescription}</h2>
-    <div class="lead-text review-lead-scroll">${formatted.html}</div>
+    <div class="lead-text review-lead-scroll">${formatted.html}${formatted.tags.length ? `<div class="tags">${formatted.tags.map((tag) => `<span class="tag">#${escapeHtml(tag)}</span>`).join('')}</div>` : ''}</div>
   </section>
 
   <aside class="review-actions-col">
