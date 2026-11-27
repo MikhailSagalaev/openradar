@@ -1346,7 +1346,7 @@ export class PostgresStore implements Store {
       feedOnly && options.after
         ? 'created_at ASC, id ASC'
         : options.sort === 'score'
-          ? `((CASE WHEN COALESCE(metadata_json->'qualityFlags', '[]'::jsonb) ? 'digest' THEN score - 25 ELSE score END)::double precision + EXTRACT(EPOCH FROM (created_at AT TIME ZONE 'UTC')) / ${3600 / SCORE_DECAY_PER_HOUR === 21600 ? '21600.0' : 3600 / SCORE_DECAY_PER_HOUR}) DESC, created_at DESC, id DESC`
+          ? `(score::double precision + EXTRACT(EPOCH FROM (created_at AT TIME ZONE 'UTC')) / ${3600 / SCORE_DECAY_PER_HOUR === 21600 ? '21600.0' : 3600 / SCORE_DECAY_PER_HOUR}) DESC, created_at DESC, id DESC`
           : options.sort === 'budget'
             ? 'COALESCE(normalized_usd_max, normalized_usd_min) DESC NULLS LAST, created_at DESC, id DESC'
             : options.sort === 'relevance' && queryTsIdx !== undefined

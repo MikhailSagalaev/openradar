@@ -1108,8 +1108,7 @@ export class MemoryStore implements Store {
       const order = a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
       if (ascending) return order;
       if (options.sort === 'score') {
-        const isDigest = (l: Lead) => Array.isArray(l.metadata?.qualityFlags) && (l.metadata.qualityFlags as string[]).includes('digest');
-        const ranked = (l: Lead) => (isDigest(l) ? l.score - 25 : l.score) - ((now - Date.parse(l.createdAt)) / 3_600_000) * SCORE_DECAY_PER_HOUR;
+        const ranked = (l: Lead) => l.score - ((now - Date.parse(l.createdAt)) / 3_600_000) * SCORE_DECAY_PER_HOUR;
         if (ranked(a) !== ranked(b)) return ranked(b) - ranked(a);
       }
       if (options.sort === 'budget' && usd(a) !== usd(b)) return usd(b) - usd(a);

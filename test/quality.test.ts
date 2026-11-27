@@ -72,7 +72,7 @@ describe('quality stage', () => {
   it('reads stored flags from metadata and ignores unknown ones', () => {
     const lead = { metadata: { qualityFlags: ['digest', 'bogus', 7] } };
     expect(qualityFlagsOf(lead)).toEqual(['digest']);
-    expect(qualityPenaltyOf(lead)).toBe(20);
+    expect(qualityPenaltyOf(lead)).toBe(45);
     expect(qualityFlagsOf({ metadata: {} })).toEqual([]);
   });
 
@@ -143,7 +143,20 @@ describe('quality stage', () => {
       source,
       deps,
     );
+    const singleOut = await ingestRawLead(
+      {
+        sourceId: source.id,
+        externalId: 'dig-0',
+        title: 'Senior Go Developer в Acme',
+        text: 'Senior Go Developer в Acme. Обязанности: высоконагруженные сервисы, PostgreSQL, Go, Python. Условия: удалённо, полная занятость, от 250 000 ₽ на руки, писать @hr_acme.',
+      },
+      source,
+      deps,
+    );
     expect(digestOut.lead?.grade).toBeUndefined();
+    expect(digestOut.lead!.score).toBeLessThanOrEqual(singleOut.lead!.score - 45);
+    const ranked = await runtime.store.listLeads({ sort: 'score' });
+    expect(ranked.map((l) => l.id)).toEqual([singleOut.lead!.id, digestOut.lead!.id]);
     await runtime.store.close();
   });
 });

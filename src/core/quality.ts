@@ -22,7 +22,7 @@ export type QualityFlag =
 export const QUALITY_PENALTY: Record<QualityFlag, number> = {
   channel_ad: 50,
   mlm: 40,
-  digest: 20,
+  digest: 45,
   outstaff: 10,
   mystery_shopper: 30,
 };
