@@ -139,6 +139,8 @@ export interface Env {
   RADAR_RSS_RATE_PER_MIN: number;
   RADAR_DELTA_RATE_PER_MIN: number;
   RADAR_SITEMAP_RATE_PER_MIN: number;
+  /** Concurrent ?q= search reads per IP on the feed and RSS; excess requests get 429 before the store. */
+  RADAR_SEARCH_CONCURRENCY: number;
   /** Recycle pooled PG connections after this many seconds (0 = never); see PostgresStore. */
   RADAR_PG_CONN_MAX_AGE_SEC: number;
   /** Recycle pooled PG connections after this many queries (0 = never). */

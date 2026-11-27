@@ -139,6 +139,10 @@ const envSchema = z.object({
   RADAR_RSS_RATE_PER_MIN: z.coerce.number().int().positive().default(60),
   RADAR_DELTA_RATE_PER_MIN: z.coerce.number().int().positive().default(30),
   RADAR_SITEMAP_RATE_PER_MIN: z.coerce.number().int().positive().default(10),
+  // Concurrent search reads (?q=) per IP on the feed and RSS: a crawler firing 15 parallel
+  // searches fits a per-minute budget yet pins the database with BM25 ranking (2026-11-26:
+  // PerplexityBot, ~370 cancelled statements/day). Excess requests get 429 before the store.
+  RADAR_SEARCH_CONCURRENCY: z.coerce.number().int().positive().default(3),
   // Pooled PG connections are recycled after this age/usage: a pg_search backend keeps its
   // Tantivy caches and allocator high-water mark for the life of the connection, so recycling
   // is the only way to hand that memory back (docs/OPS_BOT_AND_MEMORY.md). 0 disables a limit.

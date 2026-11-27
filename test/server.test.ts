@@ -189,6 +189,30 @@ describe('http server', () => {
     expect((await get()).status).toBe(429);
   });
 
+  it('caps concurrent search reads per IP while plain feed pages pass', async () => {
+    const runtime = makeRuntime({ RADAR_SEARCH_CONCURRENCY: 1, RADAR_PUBLIC_READ: true });
+    const app = createApp(runtime);
+
+    // Three parallel ?q= reads: one runs, the others are rejected before the store is touched.
+    const search = () => app.request('/?q=react&type=job');
+    const [first, second, third] = await Promise.all([search(), search(), search()]);
+    expect([first.status, second.status, third.status].sort((a, b) => a - b)).toEqual([200, 429, 429]);
+    expect(Number(second.headers.get('retry-after'))).toBeGreaterThan(0);
+
+    // Once the slot is released, the next search goes through again.
+    expect((await search()).status).toBe(200);
+
+    // A read without ?q= stays on the hot-rank index and is not gated.
+    expect((await app.request('/?type=job&remote=1')).status).toBe(200);
+
+    // RSS searches are gated the same way.
+    const rss = () => app.request('/feed.rss?q=react');
+    const [rssFirst, rssSecond] = await Promise.all([rss(), rss()]);
+    expect([rssFirst.status, rssSecond.status].sort((a, b) => a - b)).toEqual([200, 429]);
+
+    await runtime.store.close();
+  });
+
   it('tells the extension which version the server hands out', async () => {
     const runtime = makeRuntime();
     const app = createApp(runtime);
